@@ -1,0 +1,128 @@
+# Local development stack.
+#
+#   pnpm infra:up                      -> postgres + redis + minio only (run apps on the host with `pnpm dev`)
+#   docker compose --profile app up    -> + migrate, api, worker, scheduler, webhook-worker in containers
+#   docker compose --profile app --profile observability up   -> + prometheus, jaeger
+#
+# Host ports can be overridden (e.g. POSTGRES_PORT=5433) if something already listens on them.
+
+name: oms
+
+x-app-env: &app-env
+  NODE_ENV: development
+  DATABASE_URL: postgres://oms_app:oms_app@postgres:5432/oms
+  DATABASE_MIGRATION_URL: postgres://oms_owner:oms_owner@postgres:5432/oms
+  REDIS_URL: redis://redis:6379
+  STORAGE_ENDPOINT: http://minio:9000
+  STORAGE_ACCESS_KEY_ID: minioadmin
+  STORAGE_SECRET_ACCESS_KEY: minioadmin
+  STORAGE_FORCE_PATH_STYLE: "true"
+  JWT_ACCESS_SECRET: change-me-dev-only-change-me-dev-only-change-me
+  ENCRYPTION_KEYS: dev1:AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=
+  LOG_LEVEL: debug
+  CORS_ORIGINS: http://localhost:5173,http://localhost:3001
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+  EMAIL_VERIFICATION_REQUIRED: "false"
+
+x-app: &app
+  profiles: [app]
+  restart: unless-stopped
+  depends_on:
+    migrate: { condition: service_completed_successfully }
+    redis: { condition: service_healthy }
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: oms_owner
+      POSTGRES_PASSWORD: oms_owner
+      POSTGRES_DB: oms
+    ports: ["${POSTGRES_PORT:-5432}:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U oms_owner -d oms"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]  # noeviction: BullMQ requires it
+    ports: ["${REDIS_PORT:-6379}:6379"]
+    volumes: [redisdata:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment: { MINIO_ROOT_USER: minioadmin, MINIO_ROOT_PASSWORD: minioadmin }
+    ports: ["9000:9000", "9001:9001"]
+    volumes: [miniodata:/data]
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on: { minio: { condition: service_healthy } }
+    entrypoint: >
+      /bin/sh -c "mc alias set local http://minio:9000 minioadmin minioadmin &&
+                  mc mb --ignore-existing local/oms-media &&
+                  mc anonymous set none local/oms-media"
+    restart: "no"
+
+  migrate:
+    profiles: [app]
+    build: { context: ., dockerfile: infrastructure/docker/Dockerfile, target: migrate, args: { APP: api } }
+    environment: *app-env
+    depends_on: { postgres: { condition: service_healthy } }
+    restart: "no"
+
+  api:
+    <<: *app
+    build: { context: ., dockerfile: infrastructure/docker/Dockerfile, args: { APP: api } }
+    environment: { <<: *app-env, PORT: "3000", PUBLIC_BASE_URL: "http://localhost:3000" }
+    ports: ["3000:3000"]
+
+  worker:
+    <<: *app
+    build: { context: ., dockerfile: infrastructure/docker/Dockerfile, args: { APP: worker } }
+    environment: *app-env
+
+  scheduler:
+    <<: *app
+    build: { context: ., dockerfile: infrastructure/docker/Dockerfile, args: { APP: scheduler } }
+    environment: *app-env
+
+  webhook-worker:
+    <<: *app
+    build: { context: ., dockerfile: infrastructure/docker/Dockerfile, args: { APP: webhook-worker } }
+    environment: *app-env
+
+  prometheus:
+    profiles: [observability]
+    image: prom/prometheus:latest
+    volumes:
+      - ./infrastructure/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infrastructure/observability/alerts.yml:/etc/prometheus/alerts.yml:ro
+    ports: ["9090:9090"]
+
+  jaeger:
+    profiles: [observability]
+    image: jaegertracing/all-in-one:latest
+    environment: { COLLECTOR_OTLP_ENABLED: "true" }
+    ports: ["16686:16686", "4318:4318"]
+
+volumes:
+  pgdata:
+  redisdata:
+  miniodata:

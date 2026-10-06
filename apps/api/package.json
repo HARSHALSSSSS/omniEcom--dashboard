@@ -1,0 +1,43 @@
+{
+  "name": "@oms/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "tsup",
+    "start": "node dist/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "fastify": "^5.12.5",
+    "fastify-plugin": "^6.0.0",
+    "fastify-type-provider-zod": "^7.0.0",
+    "@fastify/swagger": "^9.9.1",
+    "@fastify/swagger-ui": "^6.1.1",
+    "@fastify/helmet": "^13.1.1",
+    "@fastify/cors": "^11.3.0",
+    "@fastify/rate-limit": "^11.2.0",
+    "@fastify/sensible": "^6.0.6",
+    "zod": "^4.6.5",
+    "@oms/shared": "workspace:*",
+    "@oms/config": "workspace:*",
+    "@oms/logging": "workspace:*",
+    "@oms/observability": "workspace:*",
+    "@oms/database": "workspace:*",
+    "@oms/auth": "workspace:*",
+    "@oms/contracts": "workspace:*",
+    "@oms/messaging": "workspace:*",
+    "@oms/module-kit": "workspace:*",
+    "@oms/modules-registry": "workspace:*",
+    "@oms/connectors": "workspace:*",
+    "@oms/marketplace-core": "workspace:*",
+    "@oms/storage": "workspace:*",
+    "@oms/runtime": "workspace:*",
+    "ioredis": "^6.0.0",
+    "drizzle-orm": "^0.45.3"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "@oms/module-kit",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "fastify": "^5.12.5",
+    "@oms/shared": "workspace:*",
+    "@oms/database": "workspace:*",
+    "@oms/config": "workspace:*",
+    "@oms/logging": "workspace:*",
+    "@oms/messaging": "workspace:*",
+    "@oms/marketplace-core": "workspace:*",
+    "@oms/storage": "workspace:*"
+  }
+}

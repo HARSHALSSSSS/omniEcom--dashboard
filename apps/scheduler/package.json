@@ -1,0 +1,25 @@
+{
+  "name": "@oms/scheduler",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "tsup",
+    "start": "node dist/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@oms/shared": "workspace:*",
+    "@oms/config": "workspace:*",
+    "@oms/logging": "workspace:*",
+    "@oms/observability": "workspace:*",
+    "@oms/database": "workspace:*",
+    "@oms/messaging": "workspace:*",
+    "@oms/marketplace-core": "workspace:*",
+    "@oms/modules-registry": "workspace:*",
+    "@oms/connectors": "workspace:*",
+    "@oms/module-kit": "workspace:*",
+    "@oms/runtime": "workspace:*"
+  }
+}

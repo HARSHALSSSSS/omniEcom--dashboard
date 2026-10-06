@@ -1,0 +1,26 @@
+# One Deployment per workload so each scales independently. Queue depth (KEDA Redis/BullMQ scaler), not CPU,
+# is the real scaling signal for workers. `WORKER_QUEUES` splits the generic worker into dedicated pools
+# (e.g. marketplacePush) without code changes.
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: oms-worker, labels: { app: oms-worker } }
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: oms-worker } }
+  template:
+    metadata: { labels: { app: oms-worker } }
+    spec:
+      terminationGracePeriodSeconds: 60      # in-flight jobs finish on SIGTERM (BullMQ worker.close())
+      securityContext: { runAsNonRoot: true, runAsUser: 1000 }
+      containers:
+        - name: worker
+          image: registry.example.com/oms-worker:REPLACED_BY_OVERLAY
+          ports: [{ containerPort: 3100, name: ops }]
+          envFrom: [{ secretRef: { name: oms-secrets } }, { configMapRef: { name: oms-config } }]
+          env: [{ name: NODE_ENV, value: production }]
+          resources: { requests: { cpu: 250m, memory: 256Mi }, limits: { memory: 768Mi } }
+          livenessProbe: { httpGet: { path: /health/live, port: ops }, periodSeconds: 10 }
+          readinessProbe: { httpGet: { path: /health/ready, port: ops }, periodSeconds: 10 }
+---
+# Scheduler (1-2 replicas) and webhook-worker (2+ replicas) follow the same shape.
+# Scheduler replicas are safe to run in parallel: BullMQ job schedulers are idempotent upserts in Redis.

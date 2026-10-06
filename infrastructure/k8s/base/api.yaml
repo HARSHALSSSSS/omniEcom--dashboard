@@ -1,0 +1,51 @@
+# Reference Kubernetes manifests (Kustomize base). Environment overlays supply image tags, replicas, secrets.
+# Secrets come from your secret manager (External Secrets / CSI driver) as the `oms-secrets` Secret - never from git.
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: oms-api, labels: { app: oms-api } }
+spec:
+  replicas: 2
+  strategy: { type: RollingUpdate, rollingUpdate: { maxUnavailable: 0, maxSurge: 1 } }
+  selector: { matchLabels: { app: oms-api } }
+  template:
+    metadata:
+      labels: { app: oms-api }
+      annotations: { prometheus.io/scrape: "true", prometheus.io/port: "3000", prometheus.io/path: /metrics }
+    spec:
+      terminationGracePeriodSeconds: 30
+      securityContext: { runAsNonRoot: true, runAsUser: 1000, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: api
+          image: registry.example.com/oms-api:REPLACED_BY_OVERLAY
+          ports: [{ containerPort: 3000, name: http }]
+          envFrom: [{ secretRef: { name: oms-secrets } }, { configMapRef: { name: oms-config } }]
+          env: [{ name: NODE_ENV, value: production }, { name: TRUST_PROXY, value: "true" }]
+          resources: { requests: { cpu: 250m, memory: 256Mi }, limits: { memory: 512Mi } }
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+          startupProbe: { httpGet: { path: /health/live, port: http }, periodSeconds: 2, failureThreshold: 30 }
+          livenessProbe: { httpGet: { path: /health/live, port: http }, periodSeconds: 10 }
+          readinessProbe: { httpGet: { path: /health/ready, port: http }, periodSeconds: 5, failureThreshold: 3 }
+          lifecycle: { preStop: { exec: { command: ["sleep", "5"] } } }   # let the LB deregister before SIGTERM
+---
+apiVersion: v1
+kind: Service
+metadata: { name: oms-api }
+spec:
+  selector: { app: oms-api }
+  ports: [{ port: 80, targetPort: http, name: http }]
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata: { name: oms-api }
+spec:
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: oms-api }
+  minReplicas: 2
+  maxReplicas: 20
+  metrics: [{ type: Resource, resource: { name: cpu, target: { type: Utilization, averageUtilization: 65 } } }]
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: { name: oms-api }
+spec:
+  minAvailable: 1
+  selector: { matchLabels: { app: oms-api } }

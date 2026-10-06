@@ -1,0 +1,29 @@
+{
+  "name": "@oms/testing",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@oms/api": "workspace:*",
+    "@oms/auth": "workspace:*",
+    "@oms/config": "workspace:*",
+    "@oms/shared": "workspace:*",
+    "@oms/observability": "workspace:*",
+    "@oms/logging": "workspace:*",
+    "@oms/module-kit": "workspace:*",
+    "@oms/marketplace-core": "workspace:*",
+    "@oms/connectors": "workspace:*",
+    "fastify": "^5.12.5",
+    "@oms/database": "workspace:*",
+    "@oms/storage": "workspace:*",
+    "@oms/modules-registry": "workspace:*",
+    "@electric-sql/pglite": "^0.5.8",
+    "drizzle-orm": "^0.45.3"
+  }
+}

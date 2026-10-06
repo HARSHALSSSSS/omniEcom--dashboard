@@ -1,0 +1,17 @@
+{
+  "name": "@oms/mod-returns",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@oms/module-kit": "workspace:*",
+    "@oms/mod-orders": "workspace:*",
+    "@oms/mod-inventory": "workspace:*"
+  }
+}

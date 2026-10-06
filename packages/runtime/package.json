@@ -1,0 +1,26 @@
+{
+  "name": "@oms/runtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@oms/config": "workspace:*",
+    "@oms/logging": "workspace:*",
+    "@oms/observability": "workspace:*",
+    "@oms/database": "workspace:*",
+    "@oms/messaging": "workspace:*",
+    "@oms/storage": "workspace:*",
+    "@oms/marketplace-core": "workspace:*",
+    "@oms/connectors": "workspace:*",
+    "@oms/module-kit": "workspace:*",
+    "ioredis": "^6.0.0",
+    "bullmq": "^6.3.11",
+    "drizzle-orm": "^0.45.3"
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "name": "@oms/modules-registry",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@oms/module-kit": "workspace:*",
+    "@oms/mod-vendors": "workspace:*",
+    "@oms/mod-identity": "workspace:*",
+    "@oms/mod-users": "workspace:*",
+    "@oms/mod-categories": "workspace:*",
+    "@oms/mod-attributes": "workspace:*",
+    "@oms/mod-catalog": "workspace:*",
+    "@oms/mod-documents": "workspace:*",
+    "@oms/mod-warehouses": "workspace:*",
+    "@oms/mod-inventory": "workspace:*",
+    "@oms/mod-marketplace-accounts": "workspace:*",
+    "@oms/mod-marketplace-connectors": "workspace:*",
+    "@oms/mod-listings": "workspace:*",
+    "@oms/mod-pricing": "workspace:*",
+    "@oms/mod-orders": "workspace:*",
+    "@oms/mod-fulfillment": "workspace:*",
+    "@oms/mod-shipping": "workspace:*",
+    "@oms/mod-returns": "workspace:*",
+    "@oms/mod-notifications": "workspace:*",
+    "@oms/mod-jobs": "workspace:*",
+    "@oms/mod-sync": "workspace:*",
+    "@oms/mod-webhooks": "workspace:*",
+    "@oms/mod-reports": "workspace:*",
+    "@oms/mod-analytics": "workspace:*",
+    "@oms/mod-billing": "workspace:*",
+    "@oms/mod-ai": "workspace:*",
+    "@oms/mod-automation": "workspace:*",
+    "@oms/mod-audit": "workspace:*",
+    "@oms/mod-platform-admin": "workspace:*"
+  }
+}
