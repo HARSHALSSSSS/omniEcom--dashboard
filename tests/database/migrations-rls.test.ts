@@ -115,7 +115,7 @@ describe('integrity guards', () => {
   it('marketplace order ingestion is idempotent per (account, external order id)', async () => {
     await db.exec('RESET ROLE');
     await db.exec(`insert into marketplace_accounts (id, vendor_id, marketplace, display_name) values ('33333333-3333-7333-8333-333333333333', '${A}', 'flipkart', 'FK main')`);
-    const ins = `insert into orders (vendor_id, marketplace_account_id, external_order_id, order_number, placed_at) values ('${A}', '33333333-3333-7333-8333-333333333333', 'OD123', 'ORD-1', now())`;
+    const ins = `insert into orders (vendor_id, marketplace_account_id, marketplace, external_order_id, order_number, placed_at) values ('${A}', '33333333-3333-7333-8333-333333333333', 'mock', 'OD123', 'ORD-1', now())`;
     await db.exec(ins);
     await expect(db.query(ins.replace('ORD-1', 'ORD-2'))).rejects.toThrow(/unique/i);
   });

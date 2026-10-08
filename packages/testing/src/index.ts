@@ -10,14 +10,14 @@ import { parseConfig, type AppConfig } from '@oms/config';
 import { createLogger } from '@oms/logging';
 import { createMetrics, HealthRegistry, type ErrorTracker } from '@oms/observability';
 import { signAccessToken, SYSTEM_ROLES } from '@oms/auth';
-import { createConnectorRegistry, mockControl } from '@oms/connectors';
+import { amazonControl, createConnectorRegistry, flipkartControl, mockControl, myntraControl, snapdealControl } from '@oms/connectors';
 import { MemoryMailer, type Container, type ModuleDefinition } from '@oms/module-kit';
 import { allModules } from '@oms/modules-registry';
 import { MemoryStorage } from '@oms/storage';
-import { schema, seedReferenceData, type Database, type Db } from '@oms/database';
+import { asc, eq, isNull, schema, seedReferenceData, withSystem, type Database, type Db } from '@oms/database';
 import { newId } from '@oms/shared';
 
-export { mockControl, MemoryMailer, MemoryStorage };
+export { mockControl, amazonControl, flipkartControl, myntraControl, snapdealControl, MemoryMailer, MemoryStorage };
 
 /** Deterministic test configuration. Secrets here are test-only constants. */
 export const TEST_ENV: Record<string, string> = {
@@ -30,6 +30,12 @@ export const TEST_ENV: Record<string, string> = {
   RATE_LIMIT_MAX: '100000',
   AUTH_RATE_LIMIT_MAX: '100000',
   STORAGE_DRIVER: 'memory',
+  // fast, deterministic retries: no real sleeping in tests
+  CONNECTOR_RETRY_BASE_MS: '1',
+  CONNECTOR_RETRY_MAX_MS: '2',
+  CONNECTOR_RETRY_AFTER_CAP_MS: '2',
+  SYNC_BACKOFF_BASE_MS: '0',
+  SYNC_BACKOFF_MAX_MS: '0',
 };
 
 export const testConfig = (overrides: Record<string, string> = {}): AppConfig => parseConfig({ ...TEST_ENV, ...overrides });
@@ -80,13 +86,15 @@ export async function createTestDatabase(): Promise<TestDatabase> {
 // ------------------------------------------------------------------------------------------------
 // queues: record jobs; tests run them on demand through the modules' real job handlers
 // ------------------------------------------------------------------------------------------------
-export interface RecordedJob { queue: string; name: string; envelope: { vendorId: string | null; correlationId: string; idempotencyKey?: string; data: unknown } }
+export interface RecordedJob { queue: string; name: string; envelope: { vendorId: string | null; correlationId: string; idempotencyKey?: string; data: unknown }; opts?: { delay?: number } }
 
 class FakeQueues {
   readonly jobs: RecordedJob[] = [];
-  async enqueue(queue: string, name: string, envelope: RecordedJob['envelope']) {
+  async enqueue(queue: string, name: string, envelope: RecordedJob['envelope'], opts?: { delay?: number }) {
+    // BullMQ semantics: a job id may be used once (a duplicate add is a no-op) and may not contain ':'
+    if (envelope.idempotencyKey?.includes(':')) throw new Error(`BullMQ job ids cannot contain ':' (got ${envelope.idempotencyKey})`);
     if (envelope.idempotencyKey && this.jobs.some((j) => j.envelope.idempotencyKey === envelope.idempotencyKey)) return { id: envelope.idempotencyKey };
-    this.jobs.push({ queue, name, envelope });
+    this.jobs.push({ queue, name, envelope, opts });
     return { id: String(this.jobs.length) };
   }
   queue() { return { add: async () => ({}) }; }
@@ -119,6 +127,14 @@ export interface TestApp {
   tokenFor(input: { userId?: string; vendorId?: string | null; roles?: string[]; userType?: 'vendor' | 'platform'; sessionId?: string }): Promise<string>;
   /** Execute recorded background jobs through the real handlers (what apps/worker does). Returns how many ran. */
   runJobs(filter?: (j: RecordedJob) => boolean): Promise<number>;
+  /** Relay committed outbox events to the modules' event consumers (what apps/worker's relay + domain-events queue do). Returns how many events were delivered. */
+  relayEvents(): Promise<number>;
+  /** relay events + run jobs until nothing is left to do (bounded). The whole async pipeline, deterministically. */
+  pump(opts?: { maxRounds?: number; filter?: (j: RecordedJob) => boolean }): Promise<{ jobs: number; events: number }>;
+  /** jobs recorded but not run yet */
+  pendingJobs(filter?: (j: RecordedJob) => boolean): RecordedJob[];
+  /** every domain event written so far (optionally one type), oldest first */
+  outbox(type?: string): Promise<Array<{ id: string; type: string; vendorId: string | null; aggregateType: string; aggregateId: string; payload: any }>>;
   close(): Promise<void>;
 }
 
@@ -157,8 +173,9 @@ export async function buildTestApp(opts: TestAppOptions = {}): Promise<TestApp> 
   const tokenCfg = { issuer: config.JWT_ISSUER, audience: config.JWT_AUDIENCE, secret: config.JWT_ACCESS_SECRET, accessTtlSeconds: 900 };
   const handlers = new Map(modules.flatMap((m) => m.jobs ?? []).map((h) => [`${h.queue}/${h.name}`, h]));
   const ran = new Set<RecordedJob>();
+  const consumers = modules.flatMap((m) => m.consumers ?? []);
 
-  return {
+  const self: TestApp = {
     app, config, container, mailer, storage, queues, database, vendorId,
     tokenFor: async ({ userId = newId(), vendorId: vid = vendorId, roles = ['vendor_admin'], userType = 'vendor', sessionId = newId() }) =>
       (await signAccessToken(tokenCfg, { sub: userId, vid: userType === 'platform' ? null : vid, utp: userType, rol: roles, sid: sessionId })).token,
@@ -174,8 +191,42 @@ export async function buildTestApp(opts: TestAppOptions = {}): Promise<TestApp> 
       }
       return n;
     },
+    relayEvents: async () => {
+      if (!database) return 0;
+      let delivered = 0;
+      for (;;) {
+        const batch = await withSystem(database.db, (tx) => tx.select().from(schema.outboxEvents).where(isNull(schema.outboxEvents.publishedAt)).orderBy(asc(schema.outboxEvents.occurredAt)).limit(100));
+        if (batch.length === 0) return delivered;
+        for (const e of batch) {
+          await withSystem(database.db, (tx) => tx.update(schema.outboxEvents).set({ publishedAt: new Date() }).where(eq(schema.outboxEvents.id, e.id)));
+          const event = { id: e.id, type: e.type, vendorId: e.vendorId, aggregateType: e.aggregateType, aggregateId: e.aggregateId, payload: e.payload, occurredAt: e.occurredAt.toISOString() };
+          // production isolates consumers; tests surface the first failure so bugs are not swallowed
+          for (const consumer of consumers.filter((x) => x.event === e.type || x.event === '*')) await consumer.handle(event, container);
+          delivered++;
+        }
+      }
+    },
+    pendingJobs: (filter = () => true) => queues.jobs.filter((j) => !ran.has(j) && filter(j)),
+    outbox: async (type) => {
+      if (!database) return [];
+      const rows = await withSystem(database.db, (tx) => tx.select().from(schema.outboxEvents).where(type ? eq(schema.outboxEvents.type, type) : undefined).orderBy(asc(schema.outboxEvents.occurredAt)));
+      return rows.map((r) => ({ id: r.id, type: r.type, vendorId: r.vendorId, aggregateType: r.aggregateType, aggregateId: r.aggregateId, payload: r.payload }));
+    },
+    pump: async ({ maxRounds = 25, filter } = {}) => {
+      let jobs = 0;
+      let events = 0;
+      for (let round = 0; round < maxRounds; round++) {
+        const e = await self.relayEvents();
+        const j = await self.runJobs(filter);
+        events += e;
+        jobs += j;
+        if (e === 0 && j === 0) return { jobs, events };
+      }
+      throw new Error(`pump did not settle after ${maxRounds} rounds (a job or consumer keeps producing work)`);
+    },
     close: async () => { await app.close(); await database?.close(); },
   };
+  return self;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -236,6 +287,55 @@ export class Client {
     const acc = await this.post('/api/v1/invitations/accept', { token, fullName: 'Team Member', password });
     if (acc.status !== 201) throw new Error(`accept failed: ${acc.status} ${JSON.stringify(acc.body)}`);
     return this.login(to, password);
+  }
+
+
+  /** a product with ONE variant; returns ids. Defaults make it listable (price, MRP, brand, GST, origin). */
+  async makeVariant(as: Actor, o: { sku?: string; title?: string; priceMinor?: number; mrpMinor?: number; brand?: string; barcode?: string; categoryId?: string; status?: 'draft' | 'active'; description?: string } = {}) {
+    const n = newId().slice(-8).toUpperCase();
+    const sku = o.sku ?? `SKU-${n}`;
+    const r = await this.post('/api/v1/products', {
+      productCode: `P-${sku}`, title: o.title ?? `Test Tee ${sku}`, brand: o.brand ?? 'Acme', description: o.description ?? 'A comfortable cotton tee', countryOfOrigin: 'IN', hsnCode: '6109', gstRateBps: 1200,
+      status: o.status ?? 'active', ...(o.categoryId ? { categoryId: o.categoryId } : {}),
+      variants: [{ sku, sellingPriceMinor: o.priceMinor ?? 49900, mrpMinor: o.mrpMinor ?? 59900, ...(o.barcode ? { barcode: o.barcode } : {}), optionValues: { color: 'Blue', size: 'M' } }],
+    }, as);
+    if (r.status !== 201) throw new Error(`makeVariant failed: ${r.status} ${JSON.stringify(r.body)}`);
+    return { productId: r.body.data.id as string, variantId: r.body.data.variants[0].id as string, sku };
+  }
+
+  async makeWarehouse(as: Actor, o: { code?: string; name?: string; priority?: number } = {}) {
+    const code = o.code ?? `WH-${newId().slice(-6).toUpperCase()}`;
+    const r = await this.post('/api/v1/warehouses', { code, name: o.name ?? `Warehouse ${code}`, ...(o.priority !== undefined ? { priority: o.priority } : {}) }, as);
+    if (r.status !== 201) throw new Error(`makeWarehouse failed: ${r.status} ${JSON.stringify(r.body)}`);
+    return r.body.data as { id: string; code: string; isDefault: boolean };
+  }
+
+  /** puts stock on a shelf (a receive movement) */
+  async stock(as: Actor, variantId: string, warehouseId: string, quantity: number) {
+    const r = await this.post('/api/v1/inventory/receive', { variantId, warehouseId, quantity, reason: 'test stock' }, as);
+    if (r.status !== 200) throw new Error(`stock failed: ${r.status} ${JSON.stringify(r.body)}`);
+    return r.body.data;
+  }
+
+  async available(as: Actor, variantId: string): Promise<number> {
+    return (await this.get(`/api/v1/inventory/variants/${variantId}`, as)).body.data.totals.available;
+  }
+
+  /** creates a sandbox account on a marketplace and connects it; returns the account */
+  async connectAccount(as: Actor, marketplace = 'mock', o: { sellerId?: string; displayName?: string; config?: Record<string, unknown> } = {}) {
+    const sellerId = o.sellerId ?? `SELLER${newId().slice(-8).toUpperCase()}`;
+    const acc = await this.post('/api/v1/marketplace-accounts', { marketplace, displayName: o.displayName ?? `${marketplace} ${sellerId}`, mode: 'sandbox', ...(o.config ? { config: o.config } : {}) }, as);
+    if (acc.status !== 201) throw new Error(`create account failed: ${acc.status} ${JSON.stringify(acc.body)}`);
+    const credentials: Record<string, Record<string, string>> = {
+      mock: { sellerId, apiKey: 'sandbox_key' },
+      amazon_in: { sellerId, refreshToken: `Atzr|sandbox:${sellerId}` },
+      flipkart: { appId: `fk-sandbox-${sellerId}`, appSecret: 'secret' },
+      myntra: { apiKey: `myn-sandbox-${sellerId}`, apiSecret: 'secret' },
+      snapdeal: { sellerId, authToken: `sd-sandbox-${sellerId}` },
+    };
+    const r = await this.post(`/api/v1/marketplace-accounts/${acc.body.data.id}/authorize`, { credentials: credentials[marketplace] }, as);
+    if (r.status !== 200) throw new Error(`authorize failed: ${r.status} ${JSON.stringify(r.body)}`);
+    return { ...r.body.data, sellerId: r.body.data.externalAccountId as string } as { id: string; marketplace: string; externalAccountId: string; sellerId: string; status: string };
   }
 
   /** Inserts a platform admin directly (the only way they exist) and signs in. */

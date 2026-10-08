@@ -4,11 +4,11 @@ import { defineModule } from '@oms/module-kit';
 export const manifest = defineModule({
   name: "webhooks",
   title: "Webhooks",
-  responsibility: "Inbound marketplace webhook receipt, signature verification, dedupe, durable enqueue; outbound vendor webhooks (future).",
-  owns: ["webhook_events (future)"],
-  dependsOn: ["marketplace-accounts", "marketplace-connectors", "jobs"],
-  api: ["/api/v1/webhooks"],
-  publishes: ["webhook.received", "webhook.rejected"],
+  responsibility: "Inbound marketplace webhooks: raw-body receipt, per-account signature verification, idempotent persistence (duplicate deliveries dropped), fast ack, async processing with retry and dead-lettering; webhook secret management.",
+  owns: ["webhook_events"],
+  dependsOn: ["marketplace-accounts", "marketplace-connectors", "jobs", "sync", "orders", "listings"],
+  api: ["/api/v1/webhooks", "/api/v1/marketplace-accounts/:id/webhook-secret", "/api/v1/marketplace-accounts/:id/webhook-config"],
+  publishes: ["webhook.received", "webhook.rejected", "webhook.dead_lettered"],
   consumes: [],
   extraction: "early",
 });

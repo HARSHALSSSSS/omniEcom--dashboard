@@ -107,6 +107,15 @@ export const API_TAGS = [
   { name: 'Data Jobs', description: 'Bulk import / export jobs' },
   { name: 'Marketplace Accounts', description: 'A vendor\'s seller accounts on marketplaces (credentials are never exposed)' },
   { name: 'Connectors', description: 'Marketplace connector catalogue, capability matrix, authorization, health and credential lifecycle' },
+  { name: 'Warehouses', description: 'Fulfilment locations (default / priority / activation)' },
+  { name: 'Inventory', description: 'Stock levels, the append-only movement ledger, reservations, adjustments and warehouse transfers' },
+  { name: 'Listings', description: 'Master product -> marketplace listing: validate, preview, merchant approval, publish, status tracking' },
+  { name: 'Mappings', description: 'Marketplace category taxonomy, category mappings and attribute mappings' },
+  { name: 'Catalog Import', description: 'Import products that already exist on a marketplace (normalised) and turn them into master products' },
+  { name: 'Channel Inventory', description: 'Per-marketplace sellable quantity: safety buffer, allocation, caps and push history' },
+  { name: 'Orders', description: 'Normalised marketplace orders: import, status model, timeline, cancellation, status sync back to the marketplace' },
+  { name: 'Sync Jobs', description: 'Asynchronous marketplace synchronisation: job status, progress, logs, retries and dead letters' },
+  { name: 'Webhooks', description: 'Inbound marketplace webhooks (signature-verified, idempotent) and webhook secret management' },
   { name: 'Audit', description: 'Audit trail' },
 ] as const;
 

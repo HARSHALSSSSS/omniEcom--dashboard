@@ -27,12 +27,15 @@ export interface ModuleManifest {
   extraction: 'keep' | 'later' | 'early';
 }
 
+/** The event as delivered to a consumer (a DomainEvent from @oms/messaging). */
+export interface DomainEventLike { id: string; type: string; vendorId: string | null; aggregateType: string; aggregateId: string; payload: unknown; occurredAt: string }
+
 export interface EventConsumer {
   /** event type, e.g. "order.created" */
   event: string;
   /** stable consumer name: idempotency scope + queue consumer id */
   name: string;
-  handle(event: { id: string; type: string; vendorId: string | null; payload: unknown; occurredAt: string }, container: Container): Promise<void>;
+  handle(event: DomainEventLike, container: Container): Promise<void>;
 }
 
 /** Background job handler. `queue` + `name` form the routing key; unknown jobs fail permanently (no retry storm). */
@@ -211,3 +214,4 @@ export function strictRateLimit(app: import('fastify').FastifyInstance, max: num
     if (!res.isAllowed && res.isExceeded) throw new AppError('RATE_LIMITED', undefined, { details: { limit: res.max ?? max, retryAfterSeconds: res.ttlInSeconds ?? 60 } });
   };
 }
+export { opCtxFromRequest, systemOpCtx, effects, type OpCtx, type Effects as OpEffects } from './opctx';

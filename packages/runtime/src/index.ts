@@ -64,7 +64,11 @@ export async function createRuntime(service: string): Promise<Runtime> {
   const runtime: Runtime = {
     config, logger, metrics, health, redis, redisFast,
     errorTracker: logErrorTracker(logger),
-    container: { config, logger, database: database satisfies Database, queues, storage, connectors: createConnectorRegistry({ mock: config.mockMarketplaceEnabled }), mailer: new LogMailer(logger, !config.isProd) },
+    container: { config, logger, database: database satisfies Database, queues, storage, connectors: createConnectorRegistry({
+      mock: config.mockMarketplaceEnabled,
+      amazon: config.AMAZON_IN_LWA_CLIENT_ID && config.AMAZON_IN_LWA_CLIENT_SECRET ? { clientId: config.AMAZON_IN_LWA_CLIENT_ID, clientSecret: config.AMAZON_IN_LWA_CLIENT_SECRET } : undefined,
+      flipkart: config.FLIPKART_APP_ID && config.FLIPKART_APP_SECRET ? { appId: config.FLIPKART_APP_ID, appSecret: config.FLIPKART_APP_SECRET } : undefined,
+    }), mailer: new LogMailer(logger, !config.isProd) },
     onShutdown: (name, fn) => void hooks.push({ name, fn }),
     shutdown: (reason) =>
       (shuttingDown ??= (async () => {

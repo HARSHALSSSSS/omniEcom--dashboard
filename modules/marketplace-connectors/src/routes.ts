@@ -39,6 +39,7 @@ const AuthorizeBody = z
     code: z.string().min(1).max(2000).optional().describe('Authorization code returned by the marketplace (redirect flow)'),
     state: z.string().min(10).max(1000).optional().describe('The `state` from GET .../authorization-url (required with `code`)'),
     redirectUri: z.url().optional(),
+    externalAccountId: z.string().min(1).max(100).optional().describe('Seller id returned with the authorization code, for marketplaces that send it separately (e.g. Amazon selling_partner_id)'),
     credentials: z.record(z.string(), z.unknown()).optional().describe('Direct credentials for marketplaces that use API keys (sent once, stored encrypted, never returned)'),
   })
   .refine((b) => (b.code !== undefined) !== (b.credentials !== undefined), { message: 'Provide either `code` (+ `state`) or `credentials`' })
@@ -170,6 +171,43 @@ export const connectorRoutes: FastifyPluginAsync = async (app) => {
   }, async (req) => {
     const vendorId = requireVendor(req);
     return ok(req, await host.healthCheck(vendorId, req.params.id));
+  });
+
+  const TestSchema = z
+    .object({
+      ok: z.boolean(), marketplace: z.string(), mode: z.enum(['live', 'sandbox']), checkedAt: IsoDate,
+      steps: z.array(z.object({ name: z.string(), ok: z.boolean(), skipped: z.boolean(), durationMs: z.number().int(), message: z.string().nullable() })),
+    })
+    .meta({ id: 'ConnectionTest' });
+
+  r.post('/marketplace-accounts/:id/test', {
+    config: { access: { permission: 'marketplace_accounts:write' } },
+    schema: {
+      tags: TAGS,
+      summary: 'Test the connection end to end (read-only)',
+      description: 'Runs harmless read-only calls against the marketplace with the stored credentials: credentials, seller profile, catalogue read, order read. Each step reports success, latency and a message; steps the marketplace does not support are skipped. Nothing is changed on the marketplace.',
+      params: Params,
+      response: { 200: successEnvelope(TestSchema) },
+    },
+  }, async (req) => {
+    const vendorId = requireVendor(req);
+    const acc = await vendorTx(req, (tx, vid) => getAccountRow(tx, vid, req.params.id));
+    const steps: Array<{ name: string; ok: boolean; skipped: boolean; durationMs: number; message: string | null }> = [];
+    const step = async (name: string, supported: (c: MarketplaceConnector) => boolean, fn: (c: MarketplaceConnector, ctx: import('@oms/marketplace-core').ConnectorContext) => Promise<string | null>) => {
+      const started = Date.now();
+      try {
+        const message = await host.run(vendorId, acc.id, async (connector, ctx) => (supported(connector) ? { run: true as const, message: await fn(connector, ctx) } : { run: false as const, message: null }), { requestId: req.id });
+        steps.push({ name, ok: true, skipped: !message.run, durationMs: Date.now() - started, message: message.message });
+      } catch (e) {
+        if (!(e instanceof AppError)) throw e;
+        steps.push({ name, ok: false, skipped: false, durationMs: Date.now() - started, message: e.message });
+      }
+    };
+    await step('credentials', () => true, async (c, ctx) => { const r2 = await c.verifyConnection(ctx); if (!r2.ok) throw new AppError('UPSTREAM_ERROR', r2.message ?? 'The marketplace did not accept the connection'); return r2.message ?? 'Connected'; });
+    await step('profile', (c) => c.capabilities.account.fetchProfile && Boolean(c.getAccount), async (c, ctx) => { const a = await c.getAccount!(ctx); return `Seller ${a.externalAccountId} (${a.displayName})`; });
+    await step('catalog', (c) => c.capabilities.catalog.import && Boolean(c.importProducts), async (c, ctx) => { const p = await c.importProducts!(ctx, { limit: 1 }); return `Catalogue readable (${p.items.length > 0 ? 'products found' : 'empty'})`; });
+    await step('orders', (c) => c.capabilities.orders.fetch && Boolean(c.fetchOrders), async (c, ctx) => { const o = await c.fetchOrders!(ctx, { since: new Date(Date.now() - 3600_000) }); return `Orders readable (${o.items.length} in the last hour)`; });
+    return ok(req, { ok: steps.every((x) => x.ok), marketplace: acc.marketplace, mode: acc.mode as 'live' | 'sandbox', checkedAt: new Date().toISOString(), steps });
   });
 
   r.post('/marketplace-accounts/:id/disconnect', {

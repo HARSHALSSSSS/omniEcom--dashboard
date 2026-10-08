@@ -73,10 +73,12 @@ describe('products, listings, inventory and pricing', () => {
   });
 
   it('creates and updates listings; duplicate SKUs are a permanent error', async () => {
-    const created = await mock.createListing(ctx, { externalSku: 'NEW-1', title: 'New', priceMinor: 1000, currency: 'INR', quantity: 5 });
-    expect(created).toMatchObject({ status: 'live' });
-    await expect(mock.createListing(ctx, { externalSku: 'NEW-1', title: 'New', priceMinor: 1000, currency: 'INR' })).rejects.toMatchObject({ kind: 'permanent', code: 'duplicate_sku' });
-    const upd = await mock.updateListing(ctx, { externalListingId: created.externalListingId, externalSku: 'NEW-1', title: 'Renamed', priceMinor: 1200, currency: 'INR' });
+    const input = { externalSku: 'NEW-1', title: 'A brand new listing', priceMinor: 1000, currency: 'INR', quantity: 5, marketplaceCategoryId: 'mock-apparel', attributes: { brand: 'Acme', color: 'Red', size: 'M' } };
+    const created = await mock.createListing(ctx, input);
+    // listings are REVIEWED by the marketplace: a valid submission is `pending` until the status check passes
+    expect(created).toMatchObject({ status: 'pending' });
+    await expect(mock.createListing(ctx, input)).rejects.toMatchObject({ kind: 'permanent', code: 'duplicate_sku' });
+    const upd = await mock.updateListing(ctx, { ...input, externalListingId: created.externalListingId, title: 'A renamed listing', priceMinor: 1200 });
     expect(upd.externalListingId).toBe(created.externalListingId);
     await expect(mock.updateListing(ctx, { externalListingId: 'MP-NOPE', externalSku: 'x', title: 'x', priceMinor: 1, currency: 'INR' })).rejects.toMatchObject({ code: 'listing_not_found' });
   });
@@ -119,8 +121,8 @@ describe('orders, returns and shipping', () => {
 
   it('updates order status, ships, and refuses to cancel shipped orders', async () => {
     const [o1, o2] = (await mock.fetchOrders(ctx, { since: new Date(0) })).items;
-    expect(await mock.updateOrderStatus(ctx, { externalOrderId: o1!.externalOrderId, status: 'confirmed' })).toEqual({ ok: true });
-    expect(await mock.updateOrderStatus(ctx, { externalOrderId: 'nope', status: 'x' })).toMatchObject({ ok: false, errorCode: 'ORDER_NOT_FOUND' });
+    expect(await mock.updateOrderStatus(ctx, { externalOrderId: o1!.externalOrderId, status: 'confirmed' })).toEqual({ ok: true, marketplaceStatus: 'accepted' });
+    expect(await mock.updateOrderStatus(ctx, { externalOrderId: 'nope', status: 'confirmed' })).toMatchObject({ ok: false, errorCode: 'ORDER_NOT_FOUND' });
     const shipment = await mock.createShipment(ctx, { externalOrderId: o2!.externalOrderId });
     expect(shipment).toMatchObject({ carrier: 'SandboxExpress', trackingNumber: expect.stringMatching(/^MOCKTRK/) });
     expect(await mock.cancelOrder(ctx, { externalOrderId: o2!.externalOrderId })).toMatchObject({ ok: false, errorCode: 'NOT_CANCELLABLE' });
@@ -171,7 +173,7 @@ describe('webhooks', () => {
     expect(mock.verifyWebhook({ headers: { 'x-mock-signature': sig }, rawBody: body, secret })).toBe(true);
     expect(mock.verifyWebhook({ headers: { 'x-mock-signature': sig }, rawBody: Buffer.from('{"event":"x"}'), secret })).toBe(false);
     expect(mock.verifyWebhook({ headers: {}, rawBody: body, secret })).toBe(false);
-    expect(mock.parseWebhook({ headers: {}, body: JSON.parse(body.toString()) })).toMatchObject({ eventType: 'order.created', idempotencyKey: 'mock:evt_1' });
+    expect(mock.parseWebhook({ headers: {}, body: JSON.parse(body.toString()) })).toMatchObject({ eventType: 'order.created', idempotencyKey: 'mock-evt_1' });
   });
 });
 

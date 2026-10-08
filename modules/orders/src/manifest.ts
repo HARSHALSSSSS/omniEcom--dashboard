@@ -4,11 +4,11 @@ import { defineModule } from '@oms/module-kit';
 export const manifest = defineModule({
   name: "orders",
   title: "Orders",
-  responsibility: "Normalised order aggregate across marketplaces, order state machine, cancellations, idempotent ingestion keyed by (account, external id).",
-  owns: ["orders", "order_items"],
-  dependsOn: ["catalog", "marketplace-accounts", "inventory"],
-  api: ["/api/v1/orders"],
-  publishes: ["order.created", "order.updated", "order.cancelled", "order.ready_to_ship", "order.delivered"],
-  consumes: ["sync.orders_fetched", "shipment.delivered", "return.completed"],
+  responsibility: "Normalised order aggregate across marketplaces: idempotent import (unique per vendor + marketplace + marketplace order id), inventory reservation, status model + timeline, manual and marketplace-reported transitions, and outbound status sync (requested/sent/successful/failed/retrying).",
+  owns: ["orders", "order_items", "order_status_events", "order_status_updates"],
+  dependsOn: ["catalog", "marketplace-accounts", "marketplace-connectors", "inventory", "listings", "sync"],
+  api: ["/api/v1/orders", "/api/v1/marketplace-accounts/:id/sync-orders"],
+  publishes: ["order.created", "order.updated", "order.status_changed", "order.cancelled", "order.dispatched", "order.delivered", "order.returned", "order.needs_attention"],
+  consumes: ["inventory.adjusted", "inventory.released"],
   extraction: "early",
 });

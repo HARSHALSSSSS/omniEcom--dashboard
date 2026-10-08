@@ -4,11 +4,11 @@ import { defineModule } from '@oms/module-kit';
 export const manifest = defineModule({
   name: "inventory",
   title: "Inventory",
-  responsibility: "Stock levels per variant per warehouse, reservations, adjustments, movement ledger, availability calculation and publish-to-marketplace triggers.",
-  owns: ["inventory", "inventory_movements (future)"],
+  responsibility: "Stock per variant per warehouse (on hand / reserved / incoming / damaged / returned), the append-only movement ledger, reservations, adjustments, transfers and availability. Never changes a quantity without a movement.",
+  owns: ["inventory", "inventory_movements", "inventory_reservations", "stock_transfers", "stock_transfer_items", "vendor_counters"],
   dependsOn: ["catalog", "warehouses"],
   api: ["/api/v1/inventory"],
-  publishes: ["inventory.adjusted", "inventory.reserved", "inventory.released", "inventory.low_stock"],
-  consumes: ["order.created", "order.cancelled", "return.received", "warehouse.deactivated"],
+  publishes: ["inventory.adjusted", "inventory.reserved", "inventory.released", "inventory.low_stock", "inventory.transferred"],
+  consumes: [],
   extraction: "early",
 });

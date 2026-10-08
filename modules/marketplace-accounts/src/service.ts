@@ -202,3 +202,21 @@ export async function markAuthorizationExpiring(tx: Tx, vendorId: string, accoun
   await tx.update(Z).set({ status: 'expiring' }).where(and(eq(Z.vendorId, vendorId), eq(Z.marketplaceAccountId, accountId), eq(Z.status, 'active')));
 }
 
+
+// ------------------------------------------------------------------------------------------------
+// inbound-webhook signing secret (one per account; shown to the vendor ONCE, stored encrypted, AAD-bound)
+// ------------------------------------------------------------------------------------------------
+const webhookAad = (vendorId: string, accountId: string) => `webhook_secret:${vendorId}:${accountId}`;
+
+export async function saveWebhookSecret(tx: Tx, c: Container, vendorId: string, accountId: string, secret: string): Promise<Date> {
+  await getAccountRow(tx, vendorId, accountId);
+  const at = new Date();
+  await tx.update(A).set({ webhookSecretCiphertext: getSecretBox(c.config.ENCRYPTION_KEYS).encrypt(secret, webhookAad(vendorId, accountId)), webhookSecretRotatedAt: at }).where(and(eq(A.id, accountId), eq(A.vendorId, vendorId)));
+  return at;
+}
+
+/** decrypts the account's webhook secret (null when none was generated). Used only by webhook verification. */
+export function readWebhookSecret(c: Container, account: Pick<AccountRow, 'id' | 'vendorId' | 'webhookSecretCiphertext'>): string | null {
+  if (!account.webhookSecretCiphertext) return null;
+  return getSecretBox(c.config.ENCRYPTION_KEYS).decrypt(account.webhookSecretCiphertext, webhookAad(account.vendorId, account.id));
+}

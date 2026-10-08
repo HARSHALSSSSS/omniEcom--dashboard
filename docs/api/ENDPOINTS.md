@@ -206,8 +206,147 @@ Marketplace connector catalogue, capability matrix, authorization, health and cr
 | POST | `/api/v1/marketplace-accounts/{id}/refresh` | `marketplace_accounts:write` | Rotate (refresh) the access token now |
 | GET | `/api/v1/marketplace-accounts/{id}/remote-account` | `marketplace_accounts:read` | Fetch the seller profile from the marketplace |
 | GET | `/api/v1/marketplace-accounts/{id}/remote-products` | `marketplace_accounts:read` | Preview products that already exist on the marketplace (import products) |
+| POST | `/api/v1/marketplace-accounts/{id}/test` | `marketplace_accounts:write` | Test the connection end to end (read-only) |
 | GET | `/api/v1/marketplaces` | `connectors:read` | Marketplace connectors and their capability matrix |
 | GET | `/api/v1/marketplaces/{code}` | `connectors:read` | One connector and its capabilities |
+
+## Warehouses
+
+Fulfilment locations (default / priority / activation)
+
+| Method | Path | Access | Summary |
+|---|---|---|---|
+| GET | `/api/v1/warehouses` | `warehouses:read` | List warehouses |
+| POST | `/api/v1/warehouses` | `warehouses:write` | Create a warehouse |
+| DELETE | `/api/v1/warehouses/{id}` | `warehouses:write` | Delete a warehouse |
+| GET | `/api/v1/warehouses/{id}` | `warehouses:read` | Get a warehouse |
+| PATCH | `/api/v1/warehouses/{id}` | `warehouses:write` | Update / deactivate a warehouse |
+
+## Inventory
+
+Stock levels, the append-only movement ledger, reservations, adjustments and warehouse transfers
+
+| Method | Path | Access | Summary |
+|---|---|---|---|
+| GET | `/api/v1/inventory` | `inventory:read` | Stock levels (per variant per warehouse) |
+| POST | `/api/v1/inventory/adjust` | `inventory:write` | Adjust stock (delta) or record a stock count |
+| POST | `/api/v1/inventory/damage` | `inventory:write` | Move stock to / from the damaged bucket |
+| POST | `/api/v1/inventory/incoming` | `inventory:write` | Record stock that is on its way |
+| GET | `/api/v1/inventory/ledger-check` | `inventory:read` | Verify stock equals the movement ledger |
+| GET | `/api/v1/inventory/movements` | `inventory:read` | Movement ledger (append-only) |
+| POST | `/api/v1/inventory/receive` | `inventory:write` | Receive stock into a warehouse |
+| PUT | `/api/v1/inventory/reorder-level` | `inventory:write` | Set the low-stock threshold of a variant in a warehouse |
+| GET | `/api/v1/inventory/reservations` | `inventory:read` | Stock reservations |
+| POST | `/api/v1/inventory/returns` | `inventory:write` | Receive a customer return |
+| POST | `/api/v1/inventory/returns/resolve` | `inventory:write` | Inspect held returns: restock or write off |
+| GET | `/api/v1/inventory/transfers` | `inventory:read` | List stock transfers |
+| POST | `/api/v1/inventory/transfers` | `inventory:write` | Create a stock transfer between warehouses (draft) |
+| GET | `/api/v1/inventory/transfers/{id}` | `inventory:read` | Get a stock transfer |
+| POST | `/api/v1/inventory/transfers/{id}/cancel` | `inventory:write` | Cancel a transfer |
+| POST | `/api/v1/inventory/transfers/{id}/receive` | `inventory:write` | Receive a transfer |
+| POST | `/api/v1/inventory/transfers/{id}/ship` | `inventory:write` | Ship a transfer |
+| GET | `/api/v1/inventory/variants/{id}` | `inventory:read` | Stock of one variant across all warehouses |
+
+## Listings
+
+Master product -> marketplace listing: validate, preview, merchant approval, publish, status tracking
+
+| Method | Path | Access | Summary |
+|---|---|---|---|
+| GET | `/api/v1/listings` | `listings:read` | List listings |
+| POST | `/api/v1/listings` | `listings:write` | Start a listing: master variant -> marketplace account |
+| DELETE | `/api/v1/listings/{id}` | `listings:write` | Delete a listing that never reached the marketplace |
+| GET | `/api/v1/listings/{id}` | `listings:read` | Get a listing |
+| PATCH | `/api/v1/listings/{id}` | `listings:write` | Edit a listing (category, price, attribute values, stock limits) |
+| POST | `/api/v1/listings/{id}/approve` | `listings:write` | Merchant approval |
+| GET | `/api/v1/listings/{id}/preview` | `listings:read` | Preview exactly what will be sent to the marketplace |
+| POST | `/api/v1/listings/{id}/publish` | `listings:write` | Publish (submit) an approved listing |
+| POST | `/api/v1/listings/{id}/refresh-status` | `listings:write` | Check this listing's status on the marketplace now |
+| POST | `/api/v1/listings/{id}/unpublish` | `listings:write` | Take a listing down from the marketplace |
+| POST | `/api/v1/listings/{id}/validate` | `listings:write` | Validate against the marketplace category rules |
+| POST | `/api/v1/marketplace-accounts/{id}/refresh-listing-status` | `listings:write` | Check the status of every pending listing on the account |
+
+## Mappings
+
+Marketplace category taxonomy, category mappings and attribute mappings
+
+| Method | Path | Access | Summary |
+|---|---|---|---|
+| GET | `/api/v1/attribute-mappings` | `listings:read` | List attribute mappings |
+| PUT | `/api/v1/attribute-mappings` | `listings:write` | Map a marketplace attribute to a source |
+| DELETE | `/api/v1/attribute-mappings/{id}` | `listings:write` | Delete an attribute mapping |
+| GET | `/api/v1/category-mappings` | `listings:read` | List category mappings |
+| PUT | `/api/v1/category-mappings` | `listings:write` | Map one of your categories to a marketplace category |
+| DELETE | `/api/v1/category-mappings/{id}` | `listings:write` | Delete a category mapping |
+| GET | `/api/v1/marketplace-accounts/{id}/categories` | `listings:read` | Search the marketplace category tree |
+| GET | `/api/v1/marketplace-accounts/{id}/categories/{categoryId}/mapping-suggestions` | `listings:read` | Suggested attribute mappings for a marketplace category |
+| GET | `/api/v1/marketplace-accounts/{id}/categories/{categoryId}/requirements` | `listings:read` | What the marketplace category requires for a listing |
+
+## Catalog Import
+
+Import products that already exist on a marketplace (normalised) and turn them into master products
+
+| Method | Path | Access | Summary |
+|---|---|---|---|
+| GET | `/api/v1/imported-products` | `listings:read` | Imported (normalised) marketplace products |
+| POST | `/api/v1/imported-products/{id}/create-product` | `products:write` | Create a MASTER product from an imported marketplace product |
+| POST | `/api/v1/imported-products/{id}/ignore` | `listings:write` | Ignore an imported product |
+| POST | `/api/v1/imported-products/{id}/link` | `listings:write` | Link an imported product to an existing master variant |
+| POST | `/api/v1/marketplace-accounts/{id}/import-products` | `listings:write` | Import the products that already exist on the marketplace |
+
+## Channel Inventory
+
+Per-marketplace sellable quantity: safety buffer, allocation, caps and push history
+
+| Method | Path | Access | Summary |
+|---|---|---|---|
+| GET | `/api/v1/listings/{id}/stock-updates` | `listings:read` | Quantity pushes for this listing |
+| GET | `/api/v1/marketplace-accounts/{id}/inventory-policy` | `listings:read` | Channel inventory policy |
+| PUT | `/api/v1/marketplace-accounts/{id}/inventory-policy` | `marketplace_accounts:write` | Set the channel inventory policy |
+| POST | `/api/v1/marketplace-accounts/{id}/inventory-sync` | `listings:write` | Recompute and push every live listing's quantity now |
+
+## Orders
+
+Normalised marketplace orders: import, status model, timeline, cancellation, status sync back to the marketplace
+
+| Method | Path | Access | Summary |
+|---|---|---|---|
+| POST | `/api/v1/marketplace-accounts/{id}/sync-orders` | `orders:write` | Import orders from the marketplace now |
+| GET | `/api/v1/orders` | `orders:read` | List orders (all marketplaces, one dashboard) |
+| GET | `/api/v1/orders/{id}` | `orders:read` | Get an order with its items |
+| POST | `/api/v1/orders/{id}/allocate` | `orders:write` | Hold stock for the lines that are still short |
+| POST | `/api/v1/orders/{id}/cancel` | `orders:write` | Cancel an order |
+| GET | `/api/v1/orders/{id}/status-updates` | `orders:read` | Status pushes to the marketplace |
+| POST | `/api/v1/orders/{id}/status-updates/{updateId}/retry` | `orders:write` | Retry a failed status push |
+| GET | `/api/v1/orders/{id}/timeline` | `orders:read` | Order timeline |
+| POST | `/api/v1/orders/{id}/transition` | `orders:write` | Move an order to its next status |
+| GET | `/api/v1/orders/summary` | `orders:read` | Central dashboard numbers |
+
+## Sync Jobs
+
+Asynchronous marketplace synchronisation: job status, progress, logs, retries and dead letters
+
+| Method | Path | Access | Summary |
+|---|---|---|---|
+| GET | `/api/v1/sync/jobs` | `sync:read` | List sync jobs |
+| GET | `/api/v1/sync/jobs/{id}` | `sync:read` | One sync job (status, attempts, progress, failure details) |
+| POST | `/api/v1/sync/jobs/{id}/cancel` | `sync:write` | Cancel a queued / retrying job |
+| GET | `/api/v1/sync/jobs/{id}/logs` | `sync:read` | Sync log of one job |
+| POST | `/api/v1/sync/jobs/{id}/retry` | `sync:write` | Retry a failed / dead-lettered job |
+| GET | `/api/v1/sync/summary` | `sync:read` | Sync health summary (last 24 hours) |
+
+## Webhooks
+
+Inbound marketplace webhooks (signature-verified, idempotent) and webhook secret management
+
+| Method | Path | Access | Summary |
+|---|---|---|---|
+| GET | `/api/v1/marketplace-accounts/{id}/webhook-config` | `webhooks:read` | Webhook callback URL and signing scheme for an account |
+| POST | `/api/v1/marketplace-accounts/{id}/webhook-secret` | `marketplace_accounts:write` | Generate or rotate the webhook signing secret |
+| POST | `/api/v1/webhooks/{marketplace}/{accountId}` | public | Receive a marketplace notification (called by the marketplace) |
+| GET | `/api/v1/webhooks/events` | `webhooks:read` | Received webhook events |
+| GET | `/api/v1/webhooks/events/{id}` | `webhooks:read` | One webhook event (with its payload) |
+| POST | `/api/v1/webhooks/events/{id}/retry` | `webhooks:write` | Process a failed / dead-lettered event again |
 
 ## Audit
 

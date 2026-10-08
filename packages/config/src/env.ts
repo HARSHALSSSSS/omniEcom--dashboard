@@ -64,6 +64,24 @@ export const envSchema = z.object({
   /** Built-in mock/sandbox marketplace connector. Always allowed outside production; opt-in in production. */
   MOCK_MARKETPLACE_ENABLED: bool.optional(),
 
+  // ---- marketplace connectors / sync engine
+  /** Bounded in-call retries (transient / 429) inside the connector host. */
+  CONNECTOR_RETRY_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(3),
+  CONNECTOR_RETRY_BASE_MS: z.coerce.number().int().min(0).default(250),
+  CONNECTOR_RETRY_MAX_MS: z.coerce.number().int().min(0).default(5000),
+  /** Upper bound on how long we honour a marketplace Retry-After inside one call (longer waits belong to the job retry). */
+  CONNECTOR_RETRY_AFTER_CAP_MS: z.coerce.number().int().min(0).default(10_000),
+  /** Sync jobs: attempts before dead-lettering, and the exponential backoff between attempts. */
+  SYNC_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(5),
+  SYNC_BACKOFF_BASE_MS: z.coerce.number().int().min(0).default(30_000),
+  SYNC_BACKOFF_MAX_MS: z.coerce.number().int().min(0).default(15 * 60_000),
+  /** Webhook processing: attempts before dead-lettering. */
+  WEBHOOK_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(6),
+  /** Days of webhook event history kept. */
+  WEBHOOK_RETENTION_DAYS: z.coerce.number().int().min(1).default(30),
+  /** Public base URL marketplaces call back (shown in webhook configuration). */
+  PUBLIC_API_URL: z.string().url().default('http://localhost:3000'),
+
   // ---- observability
   OTEL_ENABLED: bool.default(false),
   OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),

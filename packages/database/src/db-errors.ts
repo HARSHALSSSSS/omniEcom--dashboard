@@ -35,6 +35,14 @@ export const CONSTRAINT_FIELDS: Record<string, string> = {
   invitations_pending_uq: 'email',
   marketplace_accounts_external_uq: 'externalAccountId',
   warehouses_vendor_code_uq: 'code',
+  marketplace_listings_account_variant_uq: 'variantId',
+  marketplace_listings_account_sku_uq: 'externalSku',
+  category_mappings_uq: 'categoryId',
+  attribute_mappings_uq: 'marketplaceAttribute',
+  stock_transfers_vendor_number_uq: 'number',
+  orders_vendor_marketplace_external_uq: 'externalOrderId',
+  orders_account_external_uq: 'externalOrderId',
+  imported_products_account_sku_uq: 'externalSku',
 };
 
 const NET_CODES = new Set(['ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND', 'EPIPE']);

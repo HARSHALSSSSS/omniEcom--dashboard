@@ -5,3 +5,6 @@ export * from './marketplace';
 export * from './operations';
 export * from './platform';
 export * from './catalog-ext';
+export * from './channel';
+export * from './ledger';
+export * from './order-ext';

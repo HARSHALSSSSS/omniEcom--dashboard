@@ -1,15 +1,16 @@
 import { manifest } from './manifest';
+import { orderRoutes } from './routes';
+import { orderConsumers, orderJobHandlers } from './runners';
 
 export { manifest };
+export { orderRoutes, OrderSchema } from './routes';
+export { importNormalizedOrder, applyMarketplaceUpdate, type ImportResult, type AccountRow } from './ingest';
+export { importOrderForAccount, ingestOrderById, getOrderDetail, toOrderDto, allocateOrder } from './service';
+export { requestOrderSync } from './runners';
+export { inventoryStatusFor, itemStatusFor, orderNumber } from './domain';
 
 /**
- * Public surface of the Orders module.
- * Other modules may import ONLY from this entry point (enforced by ESLint + scripts/check-modules.ts).
- *
- * Layering inside the module (dependencies point downward only):
- *   http/            Fastify routes + zod schemas (OpenAPI source). Calls application services.
- *   application/     Use-cases / services. Transaction + tenant-context aware. Emits events via outbox.
- *   domain/          Entities, value objects, policies, state machines. Pure, no I/O.
- *   infrastructure/  Repositories (tenant-scoped), external clients.
+ * Orders: the normalised order aggregate. Import (poll or webhook) is idempotent per (vendor, marketplace, marketplace
+ * order id) and reserves inventory in the same transaction; status changes keep a timeline and tell the marketplace.
  */
-export const ordersModule = { manifest };
+export const ordersModule = { manifest, routes: orderRoutes, jobs: orderJobHandlers, consumers: orderConsumers };

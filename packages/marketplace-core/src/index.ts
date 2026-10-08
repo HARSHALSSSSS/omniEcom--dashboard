@@ -1,4 +1,11 @@
 import { AppError, Errors } from '@oms/shared';
+import type { InternalListingStatus, InternalOrderStatus } from './statuses';
+
+export * from './connector-error';
+export * from './statuses';
+export * from './money';
+export * from './http';
+export * from './simulation';
 
 /**
  * Marketplace connector contract.
@@ -8,8 +15,8 @@ import { AppError, Errors } from '@oms/shared';
  * A connector implements only what its marketplace supports.
  *
  * Connectors are pure adapters: no database access, no business rules. They receive a short-lived
- * `ConnectorContext` (decrypted credentials injected by the host at call time) and return NORMALISED data.
- * All marketplace-specific shapes stay inside the connector package.
+ * `ConnectorContext` (decrypted credentials injected by the host at call time) and return NORMALISED
+ * data. All marketplace-specific shapes (DTOs, status vocabularies, field names) stay inside the connector package.
  */
 
 /** `mock` is the built-in sandbox adapter used for development/testing without marketplace approval. */
@@ -23,7 +30,13 @@ export interface ConnectorCapabilities {
   auth: { type: AuthType; refreshable: boolean; /** supports a redirect-based seller authorization flow */ redirectFlow?: boolean };
   account: { fetchProfile: boolean };
   catalog: { import: boolean };
-  listings: { create: boolean; update: boolean; deactivate: boolean; fetch: boolean; requiresCategoryMapping: boolean };
+  listings: {
+    create: boolean; update: boolean; deactivate: boolean; fetch: boolean; requiresCategoryMapping: boolean;
+    /** marketplace category tree / product types can be searched through the API */
+    categorySearch: boolean;
+    /** the status (pending/active/rejected...) of a submitted listing can be looked up */
+    statusLookup: boolean;
+  };
   inventory: { push: boolean; pull: boolean; batch: boolean };
   pricing: { push: boolean; pull: boolean };
   orders: { fetch: boolean; webhook: boolean; acknowledge: boolean; updateStatus: boolean; cancel: boolean; maxLookbackDays?: number };
@@ -37,7 +50,7 @@ export interface ConnectorCapabilities {
 export const NO_CAPABILITIES: Omit<ConnectorCapabilities, 'auth'> = {
   account: { fetchProfile: false },
   catalog: { import: false },
-  listings: { create: false, update: false, deactivate: false, fetch: false, requiresCategoryMapping: false },
+  listings: { create: false, update: false, deactivate: false, fetch: false, requiresCategoryMapping: false, categorySearch: false, statusLookup: false },
   inventory: { push: false, pull: false, batch: false },
   pricing: { push: false, pull: false },
   orders: { fetch: false, webhook: false, acknowledge: false, updateStatus: false, cancel: false },
@@ -49,7 +62,7 @@ export const NO_CAPABILITIES: Omit<ConnectorCapabilities, 'auth'> = {
 /** Dotted capability path, e.g. "orders.fetch", "inventory.push". */
 export type CapabilityPath =
   | 'account.fetchProfile' | 'catalog.import'
-  | 'listings.create' | 'listings.update' | 'listings.deactivate' | 'listings.fetch'
+  | 'listings.create' | 'listings.update' | 'listings.deactivate' | 'listings.fetch' | 'listings.categorySearch' | 'listings.statusLookup'
   | 'inventory.push' | 'inventory.pull' | 'pricing.push' | 'pricing.pull'
   | 'orders.fetch' | 'orders.webhook' | 'orders.acknowledge' | 'orders.updateStatus' | 'orders.cancel'
   | 'returns.fetch' | 'returns.webhook'
@@ -80,56 +93,6 @@ export function requireCapability(c: Pick<MarketplaceConnector, 'capabilities' |
   if (!hasCapability(c, path)) throw new CapabilityUnsupportedError(c.code, path);
 }
 
-// ---- errors ----------------------------------------------------------------------------------
-export type ConnectorErrorKind =
-  | 'auth' // credentials rejected/expired: host refreshes once, then marks the authorization expired
-  | 'rate_limited' // 429 / throttled: retry after delay
-  | 'transient' // 5xx / network: retry with backoff
-  | 'permanent' // 4xx validation etc.: never retry
-  | 'unsupported';
-
-export class ConnectorError extends Error {
-  readonly retryable: boolean;
-  constructor(
-    readonly kind: ConnectorErrorKind,
-    message: string,
-    readonly opts: { code?: string; retryAfterMs?: number; cause?: unknown } = {},
-  ) {
-    super(message, opts.cause ? { cause: opts.cause } : undefined);
-    this.name = 'ConnectorError';
-    this.retryable = kind === 'rate_limited' || kind === 'transient';
-  }
-  get code(): string { return this.opts.code ?? this.kind; }
-}
-
-export interface RetryOptions {
-  attempts?: number;
-  baseDelayMs?: number;
-  maxDelayMs?: number;
-  /** injectable for tests */
-  sleep?: (ms: number) => Promise<void>;
-  random?: () => number;
-  onRetry?: (info: { attempt: number; delayMs: number; error: ConnectorError }) => void;
-}
-
-/** Exponential backoff with full jitter; honours `retryAfterMs`; retries only retryable ConnectorErrors. */
-export async function withRetry<T>(fn: (attempt: number) => Promise<T>, o: RetryOptions = {}): Promise<T> {
-  const attempts = o.attempts ?? 3;
-  const sleep = o.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
-  const rnd = o.random ?? Math.random;
-  for (let attempt = 1; ; attempt++) {
-    try {
-      return await fn(attempt);
-    } catch (e) {
-      if (!(e instanceof ConnectorError) || !e.retryable || attempt >= attempts) throw e;
-      const backoff = Math.min(o.maxDelayMs ?? 5_000, (o.baseDelayMs ?? 200) * 2 ** (attempt - 1));
-      const delayMs = Math.max(e.opts.retryAfterMs ?? 0, Math.round(rnd() * backoff));
-      o.onRetry?.({ attempt, delayMs, error: e });
-      await sleep(delayMs);
-    }
-  }
-}
-
 // ---- credentials / context -------------------------------------------------------------------
 export interface ConnectorCredentials {
   /** opaque to core; shape defined by the connector's own validation */
@@ -149,8 +112,25 @@ export interface ConnectorContext {
   externalAccountId: string | null;
   mode: 'live' | 'sandbox';
   credentials: ConnectorCredentials;
+  /** the account's (non-secret) configuration, e.g. { sandbox: { target: 'simulator' }, marketplaceId: 'A21TJRUUN4KGV' } */
+  config?: Record<string, unknown>;
   signal?: AbortSignal;
   requestId?: string;
+}
+
+/** Whether (and where) a connector may talk to the real marketplace. `live: false` is enforced by the host. */
+export interface ConnectorReadiness {
+  /** can run against its in-process simulator and/or the marketplace's official sandbox */
+  sandbox: boolean;
+  /** verified against the real marketplace with real credentials. NEVER set without that verification. */
+  live: boolean;
+  notes: string;
+}
+
+/** How core obtains data from marketplaces that cannot push it (or as a safety net next to webhooks). */
+export interface PollingStrategy {
+  orders?: { intervalSeconds: number; lookbackMinutes: number; overlapMinutes: number };
+  listingStatus?: { intervalSeconds: number };
 }
 
 // ---- normalised models -----------------------------------------------------------------------
@@ -158,33 +138,131 @@ export interface Paged<T> { items: T[]; nextCursor: string | null }
 
 export interface RemoteAccount { externalAccountId: string; displayName: string; region?: string; status?: string; scopes?: string[] }
 
-export interface RemoteProduct {
+/** Marketplace product -> (connector mapper) -> NormalizedProduct -> (core) -> master product. */
+export interface NormalizedProduct {
   externalListingId: string;
   externalSku: string;
   title: string;
+  description?: string;
   brand?: string;
+  barcode?: string;
+  category?: { id: string; name?: string };
   priceMinor?: number;
+  mrpMinor?: number;
   currency?: string;
   quantity?: number;
   imageUrls?: string[];
   attributes?: Record<string, unknown>;
+  /** normalised listing state on the marketplace */
+  status?: 'active' | 'pending' | 'rejected' | 'correction_required' | 'inactive';
+  marketplaceStatus?: string;
   raw?: unknown;
 }
+/** @deprecated name kept for Stage 2 call sites */
+export type RemoteProduct = NormalizedProduct;
 
-export interface ListingInput { externalSku: string; title: string; priceMinor: number; currency: string; quantity?: number; attributes?: Record<string, unknown>; marketplaceCategoryId?: string; imageUrls?: string[] }
-export interface ListingResult { externalListingId: string; status: 'live' | 'pending' | 'inactive' | 'error'; message?: string }
+export type CoreListingField = 'title' | 'description' | 'brand' | 'barcode' | 'sku' | 'price' | 'mrp' | 'quantity' | 'images' | 'hsn_code' | 'country_of_origin' | 'weight_grams' | 'manufacturer';
 
-export interface NormalizedOrderItem { externalItemId: string; sku: string; title: string; quantity: number; unitPriceMinor: number; taxMinor: number; discountMinor: number }
-export interface NormalizedOrder {
-  externalOrderId: string; status: string; placedAt: Date; currency: string; totalMinor: number;
-  items: NormalizedOrderItem[]; shippingAddress?: Record<string, unknown>; raw: unknown;
+/** What a marketplace category demands for a listing. */
+export interface ListingRequirement {
+  /** marketplace attribute name exactly as the marketplace calls it */
+  name: string;
+  label?: string;
+  required: boolean;
+  type: 'string' | 'number' | 'boolean' | 'enum';
+  allowedValues?: string[];
+  maxLength?: number;
+  description?: string;
+  /** suggestion: this attribute is normally fed from this core field (used to auto-propose mappings) */
+  coreField?: CoreListingField;
 }
+
+export interface MarketplaceCategory { id: string; name: string; path?: string; parentId?: string | null; leaf: boolean }
+
+export interface ListingInput {
+  externalSku: string;
+  title: string;
+  description?: string;
+  brand?: string;
+  barcode?: string;
+  priceMinor: number;
+  mrpMinor?: number;
+  currency: string;
+  quantity?: number;
+  /** marketplace attribute name -> value, already resolved from the vendor's mappings */
+  attributes?: Record<string, string | number | boolean>;
+  marketplaceCategoryId?: string;
+  imageUrls?: string[];
+}
+
+export interface ListingIssue { code: string; message: string; attribute?: string; severity: 'error' | 'warning' }
+export type ListingReportStatus = 'active' | 'pending' | 'rejected' | 'correction_required' | 'inactive';
+
+export interface ListingResult {
+  externalListingId: string;
+  status: ListingReportStatus;
+  /** the marketplace's own status text, kept for debugging */
+  marketplaceStatus: string;
+  issues: ListingIssue[];
+}
+
+export interface ListingStatusReport extends ListingResult { externalSku: string }
+
+/** What WOULD be sent to the marketplace (no network). */
+export interface ListingPreview { payload: unknown; warnings: string[]; endpoint: string }
+
+export interface NormalizedOrderItem {
+  externalItemId: string;
+  externalListingId?: string;
+  sku: string;
+  title: string;
+  quantity: number;
+  unitPriceMinor: number;
+  taxMinor: number;
+  discountMinor: number;
+}
+
+export interface NormalizedOrder {
+  externalOrderId: string;
+  /** internal status, mapped by the connector */
+  status: InternalOrderStatus;
+  /** the marketplace's own status text, kept for debugging and support */
+  marketplaceStatus: string;
+  placedAt: Date;
+  currency: string;
+  subtotalMinor?: number;
+  taxMinor?: number;
+  shippingMinor?: number;
+  discountMinor?: number;
+  totalMinor: number;
+  buyer?: { name?: string; email?: string; phone?: string };
+  shippingAddress?: Record<string, unknown>;
+  payment?: { method: 'prepaid' | 'cod' | 'unknown'; status?: string; codAmountMinor?: number };
+  items: NormalizedOrderItem[];
+  raw: unknown;
+}
+
 export interface NormalizedReturn { externalReturnId: string; externalOrderId: string; status: string; reason?: string; requestedAt: Date; raw?: unknown }
-export interface InventoryUpdate { externalSku: string; quantity: number }
+export interface InventoryUpdate { externalSku: string; quantity: number; externalListingId?: string }
 export interface PriceUpdate { externalSku: string; priceMinor: number; currency: string }
-export interface OperationResult { externalSku?: string; ok: boolean; errorCode?: string; message?: string }
+export interface OperationResult { externalSku?: string; ok: boolean; errorCode?: string; message?: string; retryable?: boolean }
 export interface ShipmentInput { externalOrderId: string; carrier?: string; weightGrams?: number }
 export interface ShipmentResult { trackingNumber: string; carrier: string; labelUrl?: string }
+
+export const WEBHOOK_EVENT_TYPES = ['order.created', 'order.updated', 'order.cancelled', 'listing.status_changed', 'inventory.updated', 'return.created'] as const;
+export type WebhookEventType = (typeof WEBHOOK_EVENT_TYPES)[number];
+
+export interface NormalizedWebhook {
+  eventType: WebhookEventType;
+  /** the marketplace's own event id (used for de-duplication) */
+  externalId: string;
+  idempotencyKey: string;
+  payload: unknown;
+  /** present when the event carries the order */
+  order?: NormalizedOrder;
+  externalOrderId?: string;
+  listing?: ListingStatusReport;
+}
 
 export interface MarketplaceConnector {
   readonly code: MarketplaceCode;
@@ -192,35 +270,54 @@ export interface MarketplaceConnector {
   /** planned = contract + capability declaration only (core refuses to schedule work); beta/ga = implemented and conformance-tested */
   readonly implementation: ImplementationStatus;
   readonly capabilities: ConnectorCapabilities;
+  /** sandbox / live access state; `live: false` blocks live accounts at the host (never fake production access) */
+  readonly readiness: ConnectorReadiness;
+  /** polling plan for data that cannot be pushed to us */
+  readonly polling?: PollingStrategy;
+  /** how this marketplace's notifications are signed (shown in the webhook configuration) */
+  readonly webhook?: { signatureHeader: string; algorithm: string; description: string };
 
   // -- authenticate / authorize seller
   buildAuthorizationUrl?(input: { state: string; redirectUri: string }): string;
-  exchangeAuthorizationCode?(input: { code: string; redirectUri?: string }): Promise<CredentialSet & { externalAccountId: string }>;
+  exchangeAuthorizationCode?(input: { code: string; redirectUri?: string; /** seller id returned by the marketplace's redirect (e.g. selling_partner_id), when the token response does not carry it */ externalAccountId?: string; mode?: 'live' | 'sandbox'; config?: Record<string, unknown> }): Promise<CredentialSet & { externalAccountId: string }>;
   /** direct credential validation + normalisation (API-key style marketplaces) */
-  authenticate?(input: { credentials: ConnectorCredentials }): Promise<CredentialSet & { externalAccountId: string }>;
+  authenticate?(input: { credentials: ConnectorCredentials; mode?: 'live' | 'sandbox'; config?: Record<string, unknown> }): Promise<CredentialSet & { externalAccountId: string }>;
   refreshCredentials?(ctx: ConnectorContext): Promise<CredentialSet>;
   verifyConnection(ctx: ConnectorContext): Promise<{ ok: boolean; message?: string }>;
 
   // -- account / catalogue
   getAccount?(ctx: ConnectorContext): Promise<RemoteAccount>;
-  importProducts?(ctx: ConnectorContext, input: { cursor?: string | null; limit?: number }): Promise<Paged<RemoteProduct>>;
+  importProducts?(ctx: ConnectorContext, input: { cursor?: string | null; limit?: number }): Promise<Paged<NormalizedProduct>>;
 
-  // -- listings, inventory, pricing
+  // -- categories and listing requirements
+  searchCategories?(ctx: ConnectorContext, input: { query?: string; parentId?: string | null }): Promise<MarketplaceCategory[]>;
+  getCategoryRequirements?(ctx: ConnectorContext, input: { marketplaceCategoryId: string }): Promise<ListingRequirement[]>;
+
+  // -- listings
+  previewListing?(input: ListingInput): ListingPreview;
   createListing?(ctx: ConnectorContext, input: ListingInput): Promise<ListingResult>;
   updateListing?(ctx: ConnectorContext, input: ListingInput & { externalListingId: string }): Promise<ListingResult>;
+  deactivateListing?(ctx: ConnectorContext, input: { externalSku: string; externalListingId?: string }): Promise<OperationResult>;
+  getListingStatus?(ctx: ConnectorContext, input: { externalSku: string; externalListingId?: string }): Promise<ListingStatusReport>;
+
+  // -- inventory, pricing
   pushInventory?(ctx: ConnectorContext, updates: InventoryUpdate[]): Promise<OperationResult[]>;
   pushPrices?(ctx: ConnectorContext, updates: PriceUpdate[]): Promise<OperationResult[]>;
 
   // -- orders, returns, shipping
   fetchOrders?(ctx: ConnectorContext, input: { since: Date; cursor?: string | null }): Promise<Paged<NormalizedOrder>>;
-  updateOrderStatus?(ctx: ConnectorContext, input: { externalOrderId: string; status: string }): Promise<OperationResult>;
+  /** a single order by marketplace id (webhook notifications often carry only the id) */
+  getOrder?(ctx: ConnectorContext, input: { externalOrderId: string }): Promise<NormalizedOrder | null>;
+  /** internal status -> the marketplace status/operation to request, or null when it cannot be requested */
+  canRequestOrderStatus?(status: InternalOrderStatus): boolean;
+  updateOrderStatus?(ctx: ConnectorContext, input: { externalOrderId: string; status: InternalOrderStatus; items?: Array<{ externalItemId: string; sku: string; quantity: number }>; tracking?: { number: string; carrier: string } }): Promise<OperationResult & { marketplaceStatus?: string }>;
   cancelOrder?(ctx: ConnectorContext, input: { externalOrderId: string; reason?: string }): Promise<OperationResult>;
   fetchReturns?(ctx: ConnectorContext, input: { since: Date; cursor?: string | null }): Promise<Paged<NormalizedReturn>>;
   createShipment?(ctx: ConnectorContext, input: ShipmentInput): Promise<ShipmentResult>;
 
   // -- webhooks
   verifyWebhook?(input: { headers: Record<string, string | undefined>; rawBody: Buffer; secret: string }): boolean;
-  parseWebhook?(input: { headers: Record<string, string | undefined>; body: unknown }): { eventType: string; externalId: string; idempotencyKey: string; payload: unknown };
+  parseWebhook?(input: { headers: Record<string, string | undefined>; body: unknown }): NormalizedWebhook | null;
 }
 
 /** Throw when core calls an operation the connector doesn't support; always check capabilities first. */
@@ -248,3 +345,5 @@ export class ConnectorRegistry {
   /** e.g. registry.supporting(c => c.capabilities.orders.fetch) */
   supporting(pred: (c: MarketplaceConnector) => boolean): MarketplaceConnector[] { return this.list().filter(pred); }
 }
+
+export type { InternalListingStatus, InternalOrderStatus };

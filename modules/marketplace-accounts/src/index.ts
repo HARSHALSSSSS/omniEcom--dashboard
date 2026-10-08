@@ -5,7 +5,7 @@ export { manifest };
 export { accountRoutes, AccountSchema };
 export {
   toAccountDto, getAccount, getAccountRow, getAuthorizationRow, saveAuthorization, loadCredentials, recordSuccess, recordFailure, clearAuthorization,
-  markAuthorizationExpiring, type AccountRow, type AuthorizationRow, type SaveAuthorizationInput,
+  markAuthorizationExpiring, saveWebhookSecret, readWebhookSecret, type AccountRow, type AuthorizationRow, type SaveAuthorizationInput,
 } from './service';
 
 /**

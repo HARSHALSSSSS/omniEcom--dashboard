@@ -4,9 +4,10 @@ import { createdAt, inList, pk, tenantId, timestamps, tz } from './_helpers';
 import { vendors } from './identity';
 import { marketplaceAccounts } from './marketplace';
 
-export const SYNC_TYPES = ['orders', 'inventory', 'prices', 'listings', 'returns', 'full'] as const;
-export const SYNC_STATUSES = ['queued', 'running', 'succeeded', 'partially_failed', 'failed', 'cancelled'] as const;
-export const SYNC_TRIGGERS = ['schedule', 'manual', 'webhook', 'event', 'system'] as const;
+export const SYNC_TYPES = ['orders', 'inventory', 'prices', 'listings', 'listing_publish', 'listing_status', 'catalog_import', 'order_status', 'returns', 'full'] as const;
+/** retrying = failed an attempt, waiting for the next one; dead_lettered = out of attempts, needs an operator (manual retry) */
+export const SYNC_STATUSES = ['queued', 'running', 'retrying', 'succeeded', 'partially_failed', 'failed', 'dead_lettered', 'cancelled'] as const;
+export const SYNC_TRIGGERS = ['schedule', 'manual', 'webhook', 'event', 'system', 'retry'] as const;
 export const LOG_LEVELS = ['debug', 'info', 'warn', 'error'] as const;
 export const ACTOR_TYPES = ['user', 'api_key', 'system', 'webhook'] as const;
 
@@ -23,17 +24,28 @@ export const syncJobs = pgTable('sync_jobs', {
   startedAt: tz('started_at'),
   finishedAt: tz('finished_at'),
   attempts: integer('attempts').notNull().default(0),
+  maxAttempts: integer('max_attempts').notNull().default(5),
+  nextRetryAt: tz('next_retry_at'),
+  deadLetteredAt: tz('dead_lettered_at'),
+  /** what to run: parameters for the job type (listing ids, order id, cursor...) */
+  payload: jsonb('payload').$type<Record<string, unknown>>().notNull().default({}),
   /** resumable position: marketplace cursor / watermark */
   cursor: jsonb('cursor').$type<Record<string, unknown>>(),
+  /** { total, done, failed } while running */
+  progress: jsonb('progress').$type<{ total: number; done: number; failed: number }>().notNull().default({ total: 0, done: 0, failed: 0 }),
   stats: jsonb('stats').$type<Record<string, number>>().notNull().default({}),
   error: jsonb('error').$type<{ code: string; message: string }>(),
+  /** per-item failures of the last attempt (bounded) */
+  failureDetails: jsonb('failure_details').$type<Array<{ ref: string; code?: string; message: string }>>().notNull().default([]),
+  requestedBy: uuid('requested_by'),
   queueJobId: text('queue_job_id'),
   ...timestamps(),
 }, (t) => [
   unique('sync_jobs_vendor_id_id_uq').on(t.vendorId, t.id),
   uniqueIndex('sync_jobs_vendor_idem_uq').on(t.vendorId, t.idempotencyKey),
   index('sync_jobs_vendor_account_idx').on(t.vendorId, t.marketplaceAccountId, t.createdAt.desc()),
-  index('sync_jobs_status_idx').on(t.status, t.scheduledAt).where(sql`${t.status} IN ('queued','running')`),
+  index('sync_jobs_status_idx').on(t.status, t.scheduledAt).where(sql`${t.status} IN ('queued','running','retrying')`),
+  index('sync_jobs_vendor_status_idx').on(t.vendorId, t.status, t.createdAt.desc()),
   foreignKey({ columns: [t.vendorId, t.marketplaceAccountId], foreignColumns: [marketplaceAccounts.vendorId, marketplaceAccounts.id], name: 'sync_jobs_account_fk' }),
   check('sync_jobs_type_chk', inList('type', SYNC_TYPES)),
   check('sync_jobs_status_chk', inList('status', SYNC_STATUSES)),

@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { char, check, foreignKey, index, integer, jsonb, pgTable, text, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { boolean, char, check, foreignKey, index, integer, jsonb, pgTable, text, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { inList, minor, pk, tenantId, timestamps, tz, version } from './_helpers';
 import { vendors } from './identity';
 import { productVariants } from './catalog';
@@ -9,7 +9,9 @@ export const CONNECTION_STATUSES = ['unknown', 'connected', 'degraded', 'disconn
 export const ACCOUNT_MODES = ['live', 'sandbox'] as const;
 export const ACCOUNT_STATUSES = ['pending_authorization', 'active', 'paused', 'error', 'revoked'] as const;
 export const AUTHORIZATION_STATUSES = ['active', 'expiring', 'expired', 'revoked', 'error'] as const;
-export const LISTING_STATUSES = ['draft', 'pending', 'live', 'inactive', 'error', 'suppressed'] as const;
+/** Internal listing lifecycle (marketplace statuses are mapped to these; the original word is `external_status`). */
+export const LISTING_STATUSES = ['draft', 'ready', 'approved', 'pending', 'active', 'rejected', 'correction_required', 'unpublished'] as const;
+export const LISTING_SOURCES = ['created', 'imported'] as const;
 
 /** A vendor's seller account on one marketplace. Many accounts per vendor, many vendors per marketplace. */
 export const marketplaceAccounts = pgTable('marketplace_accounts', {
@@ -30,6 +32,11 @@ export const marketplaceAccounts = pgTable('marketplace_accounts', {
   lastSuccessAt: tz('last_success_at'),
   lastFailureAt: tz('last_failure_at'),
   lastFailureMessage: text('last_failure_message'),
+  /** per-account sync watermarks, e.g. { ordersSince: ISO } (jobs are per run; the watermark lives with the account) */
+  syncState: jsonb('sync_state').$type<Record<string, unknown>>().notNull().default({}),
+  /** AES-256-GCM envelope of the inbound-webhook signing secret (AAD-bound); the plaintext is shown once on creation/rotation */
+  webhookSecretCiphertext: text('webhook_secret_ciphertext'),
+  webhookSecretRotatedAt: tz('webhook_secret_rotated_at'),
   version: version(),
   ...timestamps(),
 }, (t) => [
@@ -83,12 +90,39 @@ export const marketplaceListings = pgTable('marketplace_listings', {
   status: text('status').notNull().default('draft'),
   currency: char('currency', { length: 3 }).notNull().default('INR'),
   priceMinor: minor('price_minor'),
-  /** marketplace-specific attributes/overrides */
+  /** the payload last SUBMITTED to the marketplace (what the merchant approved) */
   payload: jsonb('payload').$type<Record<string, unknown>>().notNull().default({}),
   /** hash of last pushed state; skip no-op pushes */
   syncHash: text('sync_hash'),
   lastSyncedAt: tz('last_synced_at'),
   lastErrorCode: text('last_error_code'),
+  source: text('source').notNull().default('created'),
+  /** the marketplace's own status word, verbatim (never interpreted by core) */
+  externalStatus: text('external_status'),
+  /** marketplace errors/warnings from the last submission or status check */
+  issues: jsonb('issues').$type<Array<{ code: string; message: string; attribute?: string; severity: 'error' | 'warning' }>>().notNull().default([]),
+  marketplaceCategoryId: text('marketplace_category_id'),
+  /** marketplace attribute name -> value, resolved from mappings at validation time and editable per listing */
+  attributeValues: jsonb('attribute_values').$type<Record<string, string | number | boolean>>().notNull().default({}),
+  /** last validation result { ready, errors[], warnings[] } */
+  validation: jsonb('validation').$type<Record<string, unknown>>().notNull().default({}),
+  /** hash of the payload the merchant approved; a later change invalidates the approval */
+  approvedHash: text('approved_hash'),
+  approvedBy: uuid('approved_by'),
+  approvedAt: tz('approved_at'),
+  publishedAt: tz('published_at'),
+  lastPolledAt: tz('last_polled_at'),
+  mrpMinor: minor('mrp_minor'),
+  // ---- channel inventory (see inventory sync)
+  /** per-listing override of the channel safety buffer / cap (null = use the account policy) */
+  bufferOverride: integer('buffer_override'),
+  maxQuantityOverride: integer('max_quantity_override'),
+  /** last quantity we computed for this channel and the last one the marketplace confirmed */
+  sellableQuantity: integer('sellable_quantity'),
+  pushedQuantity: integer('pushed_quantity'),
+  quantityDirty: boolean('quantity_dirty').notNull().default(false),
+  quantityDirtyAt: tz('quantity_dirty_at'),
+  quantityPushedAt: tz('quantity_pushed_at'),
   version: version(),
   ...timestamps(),
 }, (t) => [
@@ -98,7 +132,11 @@ export const marketplaceListings = pgTable('marketplace_listings', {
   uniqueIndex('marketplace_listings_account_variant_uq').on(t.marketplaceAccountId, t.variantId),
   index('marketplace_listings_vendor_variant_idx').on(t.vendorId, t.variantId),
   index('marketplace_listings_vendor_status_idx').on(t.vendorId, t.status),
+  index('marketplace_listings_dirty_idx').on(t.marketplaceAccountId).where(sql`${t.quantityDirty}`),
+  index('marketplace_listings_poll_idx').on(t.marketplaceAccountId, t.lastPolledAt).where(sql`${t.status} = 'pending'`),
   foreignKey({ columns: [t.vendorId, t.marketplaceAccountId], foreignColumns: [marketplaceAccounts.vendorId, marketplaceAccounts.id], name: 'marketplace_listings_account_fk' }),
   foreignKey({ columns: [t.vendorId, t.variantId], foreignColumns: [productVariants.vendorId, productVariants.id], name: 'marketplace_listings_variant_fk' }),
   check('marketplace_listings_status_chk', inList('status', LISTING_STATUSES)),
+  check('marketplace_listings_source_chk', inList('source', LISTING_SOURCES)),
+  check('marketplace_listings_override_chk', sql`(buffer_override IS NULL OR buffer_override >= 0) AND (max_quantity_override IS NULL OR max_quantity_override >= 0)`),
 ]);

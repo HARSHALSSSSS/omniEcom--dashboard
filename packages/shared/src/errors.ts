@@ -32,6 +32,9 @@ export const ErrorCodes = {
   // domain-specific
   CAPABILITY_UNSUPPORTED: { status: 422, message: 'This marketplace does not support the requested capability' },
   ACCOUNT_NOT_CONNECTED: { status: 409, message: 'Marketplace account is not connected' },
+  INSUFFICIENT_STOCK: { status: 409, message: 'Not enough available stock' },
+  INVALID_STATE: { status: 409, message: 'The resource is not in a state that allows this action' },
+  LISTING_NOT_READY: { status: 422, message: 'The listing is not ready for this step' },
   EMAIL_NOT_VERIFIED: { status: 403, message: 'Verify your e-mail address to perform this action' },
   INVALID_CREDENTIALS: { status: 401, message: 'Invalid e-mail or password' },
   ACCOUNT_LOCKED: { status: 423, message: 'Account temporarily locked after repeated failed sign-ins' },

@@ -25,6 +25,7 @@ export const PERMISSIONS = [
   'pricing:read', 'pricing:write',
   'reports:read', 'analytics:read',
   'sync:read', 'sync:write',
+  'webhooks:read', 'webhooks:write',
   'jobs:read',
   'audit:read',
   'billing:read', 'billing:write',
@@ -50,7 +51,7 @@ export const SYSTEM_ROLES: Record<string, { name: string; userType: 'vendor' | '
     permissions: vendorAll.filter(
       (p) =>
         (['products', 'inventory', 'orders', 'fulfillment', 'shipping', 'returns', 'listings', 'documents', 'warehouses', 'categories', 'attributes'].some((r) => p.startsWith(`${r}:`)) && p !== 'products:delete') ||
-        ['vendors:read', 'marketplace_accounts:read', 'connectors:read', 'sync:read', 'reports:read', 'analytics:read', 'notifications:read'].includes(p),
+        ['vendors:read', 'marketplace_accounts:read', 'connectors:read', 'sync:read', 'webhooks:read', 'reports:read', 'analytics:read', 'notifications:read'].includes(p),
     ),
   },
   vendor_viewer: { name: 'Vendor Viewer', userType: 'vendor', permissions: vendorAll.filter((p) => p.endsWith(':read') && p !== 'users:read' && p !== 'audit:read' && p !== 'billing:read') },

@@ -23,9 +23,21 @@ importers:
       '@oms/config':
         specifier: workspace:*
         version: link:packages/config
+      '@oms/connector-amazon-in':
+        specifier: workspace:*
+        version: link:integrations/marketplace/amazon-in
+      '@oms/connector-flipkart':
+        specifier: workspace:*
+        version: link:integrations/marketplace/flipkart
       '@oms/connector-mock':
         specifier: workspace:*
         version: link:integrations/marketplace/mock
+      '@oms/connector-myntra':
+        specifier: workspace:*
+        version: link:integrations/marketplace/myntra
+      '@oms/connector-snapdeal':
+        specifier: workspace:*
+        version: link:integrations/marketplace/snapdeal
       '@oms/connectors':
         specifier: workspace:*
         version: link:integrations/marketplace/registry
@@ -47,9 +59,27 @@ importers:
       '@oms/mod-catalog':
         specifier: workspace:*
         version: link:modules/catalog
+      '@oms/mod-inventory':
+        specifier: workspace:*
+        version: link:modules/inventory
+      '@oms/mod-listings':
+        specifier: workspace:*
+        version: link:modules/listings
       '@oms/mod-marketplace-connectors':
         specifier: workspace:*
         version: link:modules/marketplace-connectors
+      '@oms/mod-orders':
+        specifier: workspace:*
+        version: link:modules/orders
+      '@oms/mod-sync':
+        specifier: workspace:*
+        version: link:modules/sync
+      '@oms/mod-warehouses':
+        specifier: workspace:*
+        version: link:modules/warehouses
+      '@oms/mod-webhooks':
+        specifier: workspace:*
+        version: link:modules/webhooks
       '@oms/module-kit':
         specifier: workspace:*
         version: link:packages/module-kit
@@ -635,12 +665,21 @@ importers:
       '@oms/mod-catalog':
         specifier: workspace:*
         version: link:../catalog
+      '@oms/mod-inventory':
+        specifier: workspace:*
+        version: link:../inventory
       '@oms/mod-marketplace-accounts':
         specifier: workspace:*
         version: link:../marketplace-accounts
       '@oms/mod-marketplace-connectors':
         specifier: workspace:*
         version: link:../marketplace-connectors
+      '@oms/mod-sync':
+        specifier: workspace:*
+        version: link:../sync
+      '@oms/mod-warehouses':
+        specifier: workspace:*
+        version: link:../warehouses
       '@oms/module-kit':
         specifier: workspace:*
         version: link:../../packages/module-kit
@@ -725,9 +764,18 @@ importers:
       '@oms/mod-inventory':
         specifier: workspace:*
         version: link:../inventory
+      '@oms/mod-listings':
+        specifier: workspace:*
+        version: link:../listings
       '@oms/mod-marketplace-accounts':
         specifier: workspace:*
         version: link:../marketplace-accounts
+      '@oms/mod-marketplace-connectors':
+        specifier: workspace:*
+        version: link:../marketplace-connectors
+      '@oms/mod-sync':
+        specifier: workspace:*
+        version: link:../sync
       '@oms/module-kit':
         specifier: workspace:*
         version: link:../../packages/module-kit
@@ -971,12 +1019,21 @@ importers:
       '@oms/mod-jobs':
         specifier: workspace:*
         version: link:../jobs
+      '@oms/mod-listings':
+        specifier: workspace:*
+        version: link:../listings
       '@oms/mod-marketplace-accounts':
         specifier: workspace:*
         version: link:../marketplace-accounts
       '@oms/mod-marketplace-connectors':
         specifier: workspace:*
         version: link:../marketplace-connectors
+      '@oms/mod-orders':
+        specifier: workspace:*
+        version: link:../orders
+      '@oms/mod-sync':
+        specifier: workspace:*
+        version: link:../sync
       '@oms/module-kit':
         specifier: workspace:*
         version: link:../../packages/module-kit

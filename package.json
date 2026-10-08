@@ -63,7 +63,17 @@
     "typescript-eslint": "^8.71.1",
     "vitest": "^5.0.3",
     "zod": "^4.6.5",
+    "@oms/connector-amazon-in": "workspace:*",
+    "@oms/connector-flipkart": "workspace:*",
+    "@oms/connector-myntra": "workspace:*",
+    "@oms/connector-snapdeal": "workspace:*",
     "@oms/connector-mock": "workspace:*",
+    "@oms/mod-sync": "workspace:*",
+    "@oms/mod-warehouses": "workspace:*",
+    "@oms/mod-inventory": "workspace:*",
+    "@oms/mod-listings": "workspace:*",
+    "@oms/mod-orders": "workspace:*",
+    "@oms/mod-webhooks": "workspace:*",
     "@oms/mod-marketplace-connectors": "workspace:*",
     "@oms/mod-catalog": "workspace:*"
   }

@@ -33,11 +33,15 @@ describe('connector catalogue and capability matrix', () => {
     expect(Object.keys(byCode).sort()).toEqual(['amazon_in', 'flipkart', 'mock', 'myntra', 'snapdeal']);
     expect(byCode.mock).toMatchObject({ implementation: 'beta', redirectFlow: true });
     expect(byCode.mock.enabledCapabilities).toEqual(expect.arrayContaining(['orders.fetch', 'inventory.push', 'listings.create', 'shipping.createShipment', 'catalog.import']));
-    expect(byCode.amazon_in.implementation).toBe('planned');
-    // differences are real: Myntra cannot create listings, Amazon IN has no ack requirement, Snapdeal inventory push is not batchable
-    expect(byCode.myntra.enabledCapabilities).not.toContain('listings.create');
+    // every launch connector is implemented against its sandbox/simulator; none is verified for LIVE use yet
+    for (const code of ['amazon_in', 'flipkart', 'myntra', 'snapdeal']) expect(byCode[code].implementation).toBe('beta');
+    // differences are real: Amazon updates one SKU per call, Flipkart/Myntra/Snapdeal batch; only some marketplaces push webhooks or accept cancellations
     expect(byCode.amazon_in.capabilities.auth.type).toBe('oauth2_lwa');
-    expect(byCode.snapdeal.capabilities.inventory.batch).toBe(false);
+    expect(byCode.amazon_in.capabilities.inventory.batch).toBe(false);
+    expect(byCode.flipkart.capabilities.inventory.batch).toBe(true);
+    expect(byCode.myntra.enabledCapabilities).not.toContain('orders.webhook');
+    expect(byCode.flipkart.enabledCapabilities).toContain('orders.webhook');
+    expect(byCode.snapdeal.capabilities.auth.refreshable).toBe(false);
     expect((await c.get('/api/v1/marketplaces/flipkart', admin)).body.data.code).toBe('flipkart');
     expect((await c.get('/api/v1/marketplaces/ebay', admin)).status).toBe(404);
   });
@@ -52,13 +56,13 @@ describe('connector catalogue and capability matrix', () => {
     expect((await c.get(`/api/v1/marketplace-accounts/${fk.id}/capabilities`, admin)).body.data.code).toBe('flipkart');
   });
 
-  it('refuses unknown marketplaces and gates planned connectors behind a clear error', async () => {
+  it('refuses unknown marketplaces and never fakes live access for a connector that is not verified', async () => {
     expect((await c.post('/api/v1/marketplace-accounts', { marketplace: 'ebay', displayName: 'Ebay' }, admin)).status).toBe(404);
     const amazon = await newAccount(admin, 'amazon_in', 'Amazon IN');
     expect(amazon).toMatchObject({ mode: 'live', status: 'pending_authorization' });
     const r = await c.post(`/api/v1/marketplace-accounts/${amazon.id}/authorize`, { credentials: { refreshToken: 'x' } }, admin);
     expect(r.status).toBe(422);
-    expect(r.body.error).toMatchObject({ code: 'CAPABILITY_UNSUPPORTED', details: { implementation: 'planned' } });
+    expect(r.body.error).toMatchObject({ code: 'CAPABILITY_UNSUPPORTED', details: { marketplace: 'amazon_in', reason: 'live_not_verified' } });
   });
 
   it('the mock marketplace is sandbox-only and can be switched off (production default)', async () => {

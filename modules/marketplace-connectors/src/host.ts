@@ -55,6 +55,11 @@ class TokenBuckets {
 
 export interface HostOptions { retry?: RetryOptions; now?: () => Date }
 
+/** Retry policy from configuration (CONNECTOR_RETRY_*), overridable per host instance. */
+const retryFrom = (c: Container, o: HostOptions): RetryOptions => ({
+  attempts: c.config.CONNECTOR_RETRY_ATTEMPTS, baseDelayMs: c.config.CONNECTOR_RETRY_BASE_MS, maxDelayMs: c.config.CONNECTOR_RETRY_MAX_MS, retryAfterCapMs: c.config.CONNECTOR_RETRY_AFTER_CAP_MS, ...o.retry,
+});
+
 /**
  * Runtime host for connectors. It is the ONLY code that decrypts marketplace credentials, and it:
  *   - checks the account is connected and the connector is usable (not `planned`)
@@ -71,16 +76,20 @@ export class ConnectorHost {
   private get now(): Date { return this.opts.now?.() ?? new Date(); }
   private db() { return this.c.database.db; }
 
-  connectorFor(account: Pick<AccountRow, 'marketplace'>): MarketplaceConnector {
+  connectorFor(account: Pick<AccountRow, 'marketplace' | 'mode'>): MarketplaceConnector {
     const connector = this.c.connectors.get(account.marketplace);
     if (connector.implementation === 'planned') {
       throw new AppError('CAPABILITY_UNSUPPORTED', `${connector.displayName} integration is not available yet`, { details: { marketplace: connector.code, implementation: 'planned' } });
+    }
+    // never fake production access: a connector is only usable against a LIVE marketplace once it declares readiness.live
+    if (account.mode === 'live' && !connector.readiness.live) {
+      throw new AppError('CAPABILITY_UNSUPPORTED', `${connector.displayName} is not verified for live use yet; connect a sandbox account`, { details: { marketplace: connector.code, reason: 'live_not_verified', notes: connector.readiness.notes } });
     }
     return connector;
   }
 
   private context(account: AccountRow, credentials: ConnectorCredentials, requestId?: string): ConnectorContext {
-    return { vendorId: account.vendorId, marketplaceAccountId: account.id, externalAccountId: account.externalAccountId, mode: account.mode as 'live' | 'sandbox', credentials, requestId };
+    return { vendorId: account.vendorId, marketplaceAccountId: account.id, externalAccountId: account.externalAccountId, mode: account.mode as 'live' | 'sandbox', config: account.config as Record<string, unknown>, credentials, requestId };
   }
 
   /** Run `fn` against a connected account with full lifecycle handling. */
@@ -121,7 +130,7 @@ export class ConnectorHost {
           }
           throw e;
         }
-      }, this.opts.retry ?? {});
+      }, retryFrom(this.c, this.opts));
       await withVendor(this.db(), vendorId, (tx) => recordSuccess(tx, vendorId, accountId));
       return result;
     } catch (e) {
@@ -145,7 +154,7 @@ export class ConnectorHost {
 
   private async refreshInternal(account: AccountRow, connector: MarketplaceConnector, credentials: ConnectorCredentials): Promise<CredentialSet> {
     const refresher = connector.refreshCredentials!;
-    const next = await withRetry(() => refresher.call(connector, this.context(account, credentials)), this.opts.retry ?? {});
+    const next = await withRetry(() => refresher.call(connector, this.context(account, credentials)), retryFrom(this.c, this.opts));
     await withVendor(this.db(), account.vendorId, async (tx) => {
       await saveAuthorization(tx, this.c, {
         vendorId: account.vendorId, accountId: account.id, authType: connector.capabilities.auth.type, credentials: next.credentials,
@@ -177,7 +186,7 @@ export class ConnectorHost {
 
   // ------------------------------------------------------------------ authorization lifecycle
   /** Connect (or reconnect) an account from an authorization code (redirect flow) or direct credentials. */
-  async authorize(vendorId: string, accountId: string, input: { code?: string; redirectUri?: string; credentials?: ConnectorCredentials }) {
+  async authorize(vendorId: string, accountId: string, input: { code?: string; redirectUri?: string; externalAccountId?: string; credentials?: ConnectorCredentials }) {
     const account = await withVendor(this.db(), vendorId, (tx) => getAccountRow(tx, vendorId, accountId));
     const connector = this.connectorFor(account);
 
@@ -185,10 +194,10 @@ export class ConnectorHost {
     try {
       if (input.code !== undefined) {
         if (!connector.exchangeAuthorizationCode) throw new AppError('CAPABILITY_UNSUPPORTED', `${connector.displayName} has no redirect authorization flow`, { details: { capability: 'auth.redirectFlow' } });
-        result = await withRetry(() => connector.exchangeAuthorizationCode!({ code: input.code!, redirectUri: input.redirectUri }), this.opts.retry ?? {});
+        result = await withRetry(() => connector.exchangeAuthorizationCode!({ code: input.code!, redirectUri: input.redirectUri, externalAccountId: input.externalAccountId, mode: account.mode as 'live' | 'sandbox', config: account.config as Record<string, unknown> }), retryFrom(this.c, this.opts));
       } else {
         if (!connector.authenticate) throw new AppError('CAPABILITY_UNSUPPORTED', `${connector.displayName} does not accept direct credentials`, { details: { capability: 'auth.credentials' } });
-        result = await withRetry(() => connector.authenticate!({ credentials: input.credentials ?? {} }), this.opts.retry ?? {});
+        result = await withRetry(() => connector.authenticate!({ credentials: input.credentials ?? {}, mode: account.mode as 'live' | 'sandbox', config: account.config as Record<string, unknown> }), retryFrom(this.c, this.opts));
       }
       // prove the credentials work before storing them
       const probe = await connector.verifyConnection({ ...this.context({ ...account, externalAccountId: result.externalAccountId }, result.credentials) });

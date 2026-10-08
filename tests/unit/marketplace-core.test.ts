@@ -31,9 +31,13 @@ describe('capability matrix', () => {
     const r = createConnectorRegistry();
     const caps = Object.fromEntries(r.list().map((c) => [c.code, new Set(enabledCapabilities(c))]));
     expect(caps.mock!.size).toBeGreaterThan(caps.myntra!.size);
-    expect(caps.flipkart!.has('shipping.generateLabel')).toBe(true);
-    expect(caps.amazon_in!.has('shipping.generateLabel')).toBe(false);
-    expect(caps.myntra!.has('listings.create')).toBe(false);
+    // real differences, not a uniform matrix: bulk vs one-SKU-per-call inventory, cancellable orders, push vs polling
+    expect(caps.flipkart!.has('inventory.batch')).toBe(true);
+    expect(caps.amazon_in!.has('inventory.batch')).toBe(false);
+    expect(caps.snapdeal!.has('orders.cancel')).toBe(true);
+    expect(caps.myntra!.has('orders.cancel')).toBe(false);
+    expect(caps.amazon_in!.has('orders.cancel')).toBe(false);
+    expect(caps.myntra!.has('orders.webhook')).toBe(false);
     expect(r.supporting((c) => hasCapability(c, 'orders.webhook')).map((c) => c.code).sort()).toEqual(['amazon_in', 'flipkart', 'mock']);
   });
 

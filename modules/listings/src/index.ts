@@ -1,15 +1,18 @@
 import { manifest } from './manifest';
+import { listingRoutes } from './routes';
+import { listingJobHandlers } from './runners';
+import { listingConsumers } from './consumers';
 
 export { manifest };
+export { listingRoutes } from './routes';
+export { applyStatusReport, getListingDto, listingsByStatus, toListingDto } from './service';
+export { computeSellable, DEFAULT_POLICY, fromReport, validateListingInput, stableHash, type ChannelPolicy, type ListingStatus } from './domain';
+export { markDirty, requestInventorySync } from './channel';
+export { getListingRow, type ListingRow } from './context';
+export { systemCtx, type Ctx } from './ctx';
 
 /**
- * Public surface of the Listings module.
- * Other modules may import ONLY from this entry point (enforced by ESLint + scripts/check-modules.ts).
- *
- * Layering inside the module (dependencies point downward only):
- *   http/            Fastify routes + zod schemas (OpenAPI source). Calls application services.
- *   application/     Use-cases / services. Transaction + tenant-context aware. Emits events via outbox.
- *   domain/          Entities, value objects, policies, state machines. Pure, no I/O.
- *   infrastructure/  Repositories (tenant-scoped), external clients.
+ * Listings & Channels: the master-product -> marketplace-listing flow, category/attribute mapping, marketplace catalogue
+ * import, and event-driven channel inventory/price synchronisation.
  */
-export const listingsModule = { manifest };
+export const listingsModule = { manifest, routes: listingRoutes, jobs: listingJobHandlers, consumers: listingConsumers };

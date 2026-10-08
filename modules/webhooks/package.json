@@ -13,6 +13,9 @@
     "@oms/module-kit": "workspace:*",
     "@oms/mod-marketplace-accounts": "workspace:*",
     "@oms/mod-marketplace-connectors": "workspace:*",
-    "@oms/mod-jobs": "workspace:*"
+    "@oms/mod-jobs": "workspace:*",
+    "@oms/mod-sync": "workspace:*",
+    "@oms/mod-orders": "workspace:*",
+    "@oms/mod-listings": "workspace:*"
   }
 }

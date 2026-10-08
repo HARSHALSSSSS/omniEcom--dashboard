@@ -4,11 +4,11 @@ import { defineModule } from '@oms/module-kit';
 export const manifest = defineModule({
   name: "sync",
   title: "Synchronization",
-  responsibility: "Orchestrates marketplace synchronisation runs (orders, inventory, listings, prices): scheduling, cursors, idempotent runs, sync job + log history.",
+  responsibility: "Async sync job engine: durable job rows (API -> job -> queue -> worker -> connector -> marketplace -> normalise -> DB -> sync log), idempotent enqueue, retries with exponential backoff, dead-lettering, progress, failure details, manual retry. Domain modules own their runners; this module owns the engine, history and scheduling.",
   owns: ["sync_jobs", "sync_logs"],
   dependsOn: ["marketplace-accounts", "marketplace-connectors", "jobs"],
   api: ["/api/v1/sync"],
-  publishes: ["sync.started", "sync.completed", "sync.failed", "sync.orders_fetched"],
-  consumes: ["marketplace_account.connected", "inventory.adjusted", "variant.price_changed"],
+  publishes: ["sync.started", "sync.completed", "sync.failed", "sync.dead_lettered"],
+  consumes: [],
   extraction: "early",
 });
