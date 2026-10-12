@@ -7,6 +7,9 @@ export { orderRoutes, OrderSchema } from './routes';
 export { importNormalizedOrder, applyMarketplaceUpdate, type ImportResult, type AccountRow } from './ingest';
 export { importOrderForAccount, ingestOrderById, getOrderDetail, toOrderDto, allocateOrder } from './service';
 export { requestOrderSync } from './runners';
+export { transitionWithin, transitionOrder, recordShortage, clearAttention } from './service';
+export { performTransition, requestMarketplaceStatus, getOrderRow, type OrderRow } from './status';
+export { CANCELLATION_REASONS } from './cancellations';
 export { inventoryStatusFor, itemStatusFor, orderNumber } from './domain';
 
 /**

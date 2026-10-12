@@ -12,6 +12,7 @@
   "dependencies": {
     "@oms/module-kit": "workspace:*",
     "@oms/mod-vendors": "workspace:*",
+    "@oms/mod-rules": "workspace:*",
     "@oms/mod-identity": "workspace:*",
     "@oms/mod-users": "workspace:*",
     "@oms/mod-categories": "workspace:*",

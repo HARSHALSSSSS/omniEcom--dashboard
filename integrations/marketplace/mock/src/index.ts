@@ -1,4 +1,4 @@
-import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import {
   ConnectorError,
   NO_CAPABILITIES,
@@ -497,9 +497,7 @@ export class MockConnector implements MarketplaceConnector {
     const sig = headers[WEBHOOK_SECRET_HEADER];
     if (!sig) return false;
     const expected = createHmac('sha256', secret).update(rawBody).digest('hex');
-    const a = Buffer.from(sig);
-    const b = Buffer.from(expected);
-    return a.length === b.length && timingSafeEqual(a, b);
+    return timingSafeEqual(createHash('sha256').update(sig).digest(), createHash('sha256').update(expected).digest());
   }
 
   parseWebhook({ body }: { headers: Record<string, string | undefined>; body: unknown }): NormalizedWebhook | null {

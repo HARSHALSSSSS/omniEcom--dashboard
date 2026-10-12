@@ -217,8 +217,18 @@ export async function updateProduct(tx: Tx, vendorId: string, id: string, patch:
 }
 
 /** Soft delete: product and its variants disappear from every API; rows stay for audit/order history. */
+/** a variant with reserved stock or a live listing cannot be deleted: orders / marketplaces still point at it */
+async function assertNoCommitments(tx: Tx, vendorId: string, variantIds: string[]): Promise<void> {
+  if (variantIds.length === 0) return;
+  const [res] = await tx.select({ n: sql<number>`coalesce(sum(${schema.inventory.quantityReserved}), 0)::int` }).from(schema.inventory).where(and(eq(schema.inventory.vendorId, vendorId), inArray(schema.inventory.variantId, variantIds)));
+  if ((res?.n ?? 0) > 0) throw new AppError('CONFLICT', 'Units of this item are reserved for open orders', { details: { rule: 'has_reservations', reserved: res!.n } });
+  const [live] = await tx.select({ id: schema.marketplaceListings.id }).from(schema.marketplaceListings).where(and(eq(schema.marketplaceListings.vendorId, vendorId), inArray(schema.marketplaceListings.variantId, variantIds), inArray(schema.marketplaceListings.status, ['active', 'pending', 'approved']))).limit(1);
+  if (live) throw new AppError('CONFLICT', 'This item still has a live marketplace listing; unpublish it first', { details: { rule: 'has_live_listing', listingId: live.id } });
+}
+
 export async function deleteProduct(tx: Tx, vendorId: string, id: string, fx: Effects) {
   const p = await getProductRow(tx, vendorId, id);
+  await assertNoCommitments(tx, vendorId, (await tx.select({ id: V.id }).from(V).where(and(liveVariant(vendorId), eq(V.productId, id)))).map((r) => r.id));
   const now = new Date();
   await tx.update(V).set({ deletedAt: now }).where(and(liveVariant(vendorId), eq(V.productId, id)));
   await tx.update(P).set({ deletedAt: now, status: 'archived' }).where(eq(P.id, id));
@@ -259,7 +269,7 @@ export async function updateVariant(tx: Tx, vendorId: string, id: string, patch:
   const cols = variantColumns(patch);
   const [after] = await tx.update(V).set({ ...cols, version: sql`${V.version} + 1` as never }).where(eq(V.id, id)).returning();
   const priceChanged = after!.sellingPriceMinor !== before.sellingPriceMinor || after!.mrpMinor !== before.mrpMinor;
-  await fx.event({ type: priceChanged ? 'variant.price_changed' : 'variant.updated', aggregateType: 'variant', aggregateId: id, payload: { productId: before.productId, sku: after!.sku, fields: Object.keys(cols) } });
+  await fx.event({ type: priceChanged ? 'variant.price_changed' : 'variant.updated', aggregateType: 'variant', aggregateId: id, payload: { productId: before.productId, sku: after!.sku, fields: Object.keys(cols), ...(priceChanged ? { price: { before: { sellingPriceMinor: before.sellingPriceMinor, mrpMinor: before.mrpMinor }, after: { sellingPriceMinor: after!.sellingPriceMinor, mrpMinor: after!.mrpMinor } } } : {}) } });
   await fx.audit({
     action: 'variant.update', resourceType: 'variant', resourceId: id,
     before: { sku: before.sku, sellingPriceMinor: before.sellingPriceMinor, mrpMinor: before.mrpMinor, status: before.status },
@@ -270,6 +280,7 @@ export async function updateVariant(tx: Tx, vendorId: string, id: string, patch:
 
 export async function deleteVariant(tx: Tx, vendorId: string, id: string, fx: Effects) {
   const v = await getVariantRow(tx, vendorId, id);
+  await assertNoCommitments(tx, vendorId, [id]);
   const p = await getProductRow(tx, vendorId, v.productId);
   if (p.status === 'active' && v.status === 'active') {
     const [other] = await tx.select({ id: V.id }).from(V).where(and(liveVariant(vendorId), eq(V.productId, p.id), eq(V.status, 'active'), sql`${V.id} <> ${id}`)).limit(1);

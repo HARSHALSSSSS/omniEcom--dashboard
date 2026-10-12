@@ -4,11 +4,11 @@ import { defineModule } from '@oms/module-kit';
 export const manifest = defineModule({
   name: "shipping",
   title: "Shipping",
-  responsibility: "Carrier integrations, labels, manifests, tracking and delivery status.",
-  owns: ["shipments (future)"],
-  dependsOn: ["fulfillment"],
-  api: ["/api/v1/shipments"],
-  publishes: ["shipment.created", "shipment.in_transit", "shipment.delivered", "shipment.failed"],
-  consumes: ["fulfillment.packed"],
+  responsibility: "Provider-neutral shipping: vendor shipping providers (manual, sandbox courier; real couriers plug into the same interface), shipments, labels, AWB/tracking, manifests, dispatch, delivery tracking, and delivery exceptions (failed delivery, NDR, RTO).",
+  owns: ["vendor_shipping_providers", "shipments", "shipment_tracking_events", "manifests", "ndr_cases"],
+  dependsOn: ["fulfillment", "orders", "warehouses", "inventory"],
+  api: ["/api/v1/shipping", "/api/v1/shipments", "/api/v1/manifests", "/api/v1/ndr-cases"],
+  publishes: ["shipment.created", "shipment.dispatched", "shipment.in_transit", "shipment.delivered", "shipment.failed", "shipment.ndr_raised", "shipment.rto_started", "shipment.rto_delivered"],
+  consumes: ["order.cancelled"],
   extraction: "later",
 });

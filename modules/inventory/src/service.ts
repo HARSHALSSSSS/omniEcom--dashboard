@@ -1,5 +1,5 @@
 import { and, desc, eq, ilike, inArray, isNull, keyset, or, schema, sql, escapeLike, type Tx } from '@oms/database';
-import { AppError, Errors } from '@oms/shared';
+import { AppError, Errors, newId } from '@oms/shared';
 import { allocationOrder } from '@oms/mod-warehouses';
 import { applyMovement, assertStockTargets, availableOf, nextCounter, type MovementResult, type StockRow } from './ledger';
 
@@ -161,12 +161,19 @@ export async function reserveForOrderItem(tx: Tx, input: ReserveInput): Promise<
     if (avail <= 0) continue;
     const take = Math.min(avail, remaining);
     const prior = existing.find((r) => r.warehouseId === w.id);
-    const mv = await applyMovement(tx, {
-      vendorId: input.vendorId, variantId: input.variantId, warehouseId: w.id, type: 'reserve', reserved: take, referenceType: 'order', referenceId: input.orderId,
-      reason: 'reserved for order', idempotencyKey: `reserve:${input.orderItemId}:${w.id}:${(prior?.quantity ?? 0) + take}`, actor: input.actor,
-    });
+    let mv;
+    try {
+      mv = await applyMovement(tx, {
+        vendorId: input.vendorId, variantId: input.variantId, warehouseId: w.id, type: 'reserve', reserved: take, referenceType: 'order', referenceId: input.orderId,
+        reason: 'reserved for order', idempotencyKey: `reserve:${input.orderItemId}:${w.id}:${newId()}`, actor: input.actor,
+      });
+    } catch (e) {
+      if (e instanceof AppError && e.code === 'INSUFFICIENT_STOCK') continue; // another order took the unit between our read and the lock: reserve what is left elsewhere
+      throw e;
+    }
     if (mv.duplicate) continue;
     if (prior) await tx.update(R).set({ quantity: prior.quantity + take }).where(eq(R.id, prior.id));
+    else if ((await tx.select({ id: R.id }).from(R).where(and(eq(R.vendorId, input.vendorId), eq(R.orderItemId, input.orderItemId), eq(R.warehouseId, w.id))))[0]) await tx.update(R).set({ quantity: take, status: 'active', releasedAt: null, committedAt: null }).where(and(eq(R.vendorId, input.vendorId), eq(R.orderItemId, input.orderItemId), eq(R.warehouseId, w.id)));
     else await tx.insert(R).values({ vendorId: input.vendorId, orderId: input.orderId, orderItemId: input.orderItemId, variantId: input.variantId, warehouseId: w.id, quantity: take, status: 'active' });
     const a = allocations.find((x) => x.warehouseId === w.id);
     if (a) a.quantity += take; else allocations.push({ warehouseId: w.id, quantity: take });
@@ -249,8 +256,9 @@ const T = schema.stockTransfers;
 const TI = schema.stockTransferItems;
 export type TransferRow = typeof T.$inferSelect;
 
-export async function loadTransfer(tx: Tx, vendorId: string, id: string) {
-  const [t] = await tx.select().from(T).where(and(eq(T.id, id), eq(T.vendorId, vendorId)));
+export async function loadTransfer(tx: Tx, vendorId: string, id: string, lock = false) {
+  const q = tx.select().from(T).where(and(eq(T.id, id), eq(T.vendorId, vendorId)));
+  const [t] = await (lock ? q.for('update') : q);
   if (!t) throw Errors.notFound('Stock transfer', id);
   const items = await tx.select({ i: TI, sku: V.sku }).from(TI).innerJoin(V, and(eq(V.id, TI.variantId), eq(V.vendorId, TI.vendorId))).where(and(eq(TI.vendorId, vendorId), eq(TI.transferId, id)));
   return { t, items };
@@ -280,7 +288,7 @@ export async function createTransfer(tx: Tx, vendorId: string, input: { fromWare
 
 /** stock leaves the source warehouse now; the destination sees it as incoming until it is received */
 export async function shipTransfer(tx: Tx, vendorId: string, id: string, actor?: Actor) {
-  const { t, items } = await loadTransfer(tx, vendorId, id);
+  const { t, items } = await loadTransfer(tx, vendorId, id, true);
   if (t.status !== 'draft') throw new AppError('INVALID_STATE', `A ${t.status} transfer cannot be shipped`, { details: { status: t.status } });
   for (const { i } of items) {
     await applyMovement(tx, { vendorId, variantId: i.variantId, warehouseId: t.fromWarehouseId, type: 'transfer_out', onHand: -i.quantity, referenceType: 'transfer', referenceId: t.id, reason: `transfer ${t.number} out`, idempotencyKey: `transfer-out:${t.id}:${i.variantId}`, actor });
@@ -292,7 +300,7 @@ export async function shipTransfer(tx: Tx, vendorId: string, id: string, actor?:
 
 /** receive the shipped quantities (default: everything). Anything not received is written back to the source. */
 export async function receiveTransfer(tx: Tx, vendorId: string, id: string, received?: Array<{ variantId: string; quantity: number }>, actor?: Actor) {
-  const { t, items } = await loadTransfer(tx, vendorId, id);
+  const { t, items } = await loadTransfer(tx, vendorId, id, true);
   if (t.status !== 'in_transit') throw new AppError('INVALID_STATE', `A ${t.status} transfer cannot be received`, { details: { status: t.status } });
   const byVariant = new Map(received?.map((r) => [r.variantId, r.quantity]));
   for (const { i } of items) {
@@ -314,7 +322,7 @@ export async function receiveTransfer(tx: Tx, vendorId: string, id: string, rece
 }
 
 export async function cancelTransfer(tx: Tx, vendorId: string, id: string, actor?: Actor) {
-  const { t, items } = await loadTransfer(tx, vendorId, id);
+  const { t, items } = await loadTransfer(tx, vendorId, id, true);
   if (t.status === 'draft') {
     await tx.update(T).set({ status: 'cancelled', version: sql`${T.version} + 1` }).where(eq(T.id, id));
     return loadTransfer(tx, vendorId, id);
@@ -337,3 +345,73 @@ export async function listTransfers(tx: Tx, vendorId: string, q: { limit: number
 }
 
 export { applyMovement, availableOf, nextCounter };
+
+// ------------------------------------------------------------------------------------------------
+// routing support: move (part of) a reservation to another warehouse
+// ------------------------------------------------------------------------------------------------
+export interface MoveReservationInput { vendorId: string; orderId: string; orderItemId: string; variantId: string; fromWarehouseId: string; toWarehouseId: string; quantity: number; actor?: Actor }
+
+/**
+ * Re-homes `quantity` units a reservation holds in one warehouse to another one (order routing chose a different warehouse
+ * than the one that was reserved at import). Atomic: the units are released from the source and reserved at the target in
+ * the same transaction, both through the ledger; if the target cannot cover it nothing changes (INSUFFICIENT_STOCK).
+ */
+export async function moveReservation(tx: Tx, i: MoveReservationInput): Promise<void> {
+  if (i.fromWarehouseId === i.toWarehouseId) return;
+  const [from] = await tx.select().from(R).where(and(eq(R.vendorId, i.vendorId), eq(R.orderItemId, i.orderItemId), eq(R.warehouseId, i.fromWarehouseId), eq(R.status, 'active')));
+  if (!from || from.quantity < i.quantity) throw new AppError('INVALID_STATE', 'The order line does not hold that many units in the source warehouse', { details: { held: from?.quantity ?? 0, requested: i.quantity } });
+  await applyMovement(tx, { vendorId: i.vendorId, variantId: i.variantId, warehouseId: i.fromWarehouseId, type: 'release', reserved: -i.quantity, referenceType: 'order', referenceId: i.orderId, reason: 'rerouted to another warehouse', actor: i.actor });
+  await applyMovement(tx, { vendorId: i.vendorId, variantId: i.variantId, warehouseId: i.toWarehouseId, type: 'reserve', reserved: i.quantity, referenceType: 'order', referenceId: i.orderId, reason: 'rerouted from another warehouse', actor: i.actor });
+  if (from.quantity === i.quantity) await tx.update(R).set({ status: 'released', releasedAt: new Date() }).where(eq(R.id, from.id));
+  else await tx.update(R).set({ quantity: from.quantity - i.quantity }).where(eq(R.id, from.id));
+  const [to] = await tx.select().from(R).where(and(eq(R.vendorId, i.vendorId), eq(R.orderItemId, i.orderItemId), eq(R.warehouseId, i.toWarehouseId)));
+  if (to) await tx.update(R).set({ quantity: to.status === 'active' ? to.quantity + i.quantity : i.quantity, status: 'active', releasedAt: null }).where(eq(R.id, to.id));
+  else await tx.insert(R).values({ vendorId: i.vendorId, orderId: i.orderId, orderItemId: i.orderItemId, variantId: i.variantId, warehouseId: i.toWarehouseId, quantity: i.quantity, status: 'active' });
+}
+
+/** how many units of each variant are reservable in each ACTIVE warehouse for this order (its own reservations count as free) */
+export async function availabilityByWarehouse(tx: Tx, vendorId: string, variantIds: string[], orderId?: string): Promise<Map<string, Map<string, number>>> {
+  const out = new Map<string, Map<string, number>>();
+  if (variantIds.length === 0) return out;
+  const rows = await tx
+    .select({ variantId: I.variantId, warehouseId: I.warehouseId, available: sql<number>`${I.quantityOnHand} - ${I.quantityReserved}` })
+    .from(I)
+    .innerJoin(W, and(eq(W.id, I.warehouseId), eq(W.vendorId, I.vendorId)))
+    .where(and(eq(I.vendorId, vendorId), inArray(I.variantId, variantIds), eq(W.status, 'active'), isNull(W.deletedAt)));
+  for (const r of rows) (out.get(r.variantId) ?? out.set(r.variantId, new Map()).get(r.variantId)!).set(r.warehouseId, r.available);
+  if (orderId) {
+    const mine = await tx.select().from(R).where(and(eq(R.vendorId, vendorId), eq(R.orderId, orderId), eq(R.status, 'active')));
+    for (const m of mine) { const wm = out.get(m.variantId) ?? out.set(m.variantId, new Map()).get(m.variantId)!; wm.set(m.warehouseId, (wm.get(m.warehouseId) ?? 0) + m.quantity); }
+  }
+  return out;
+}
+
+// ------------------------------------------------------------------------------------------------
+// returned goods: final disposal + manual outbound
+// ------------------------------------------------------------------------------------------------
+/** returned (awaiting inspection) units that are scrapped / sent back to the supplier: they leave the books */
+export async function disposeReturned(tx: Tx, t: Target & { quantity: number }): Promise<MovementResult> {
+  await assertStockTargets(tx, t.vendorId, t.variantId, t.warehouseId);
+  return applyMovement(tx, { ...t, type: 'adjust', returned: -t.quantity, referenceType: t.referenceType ?? 'return' });
+}
+
+/** damaged stock written off (scrapped, returned to supplier) */
+export async function writeOffDamaged(tx: Tx, t: Target & { quantity: number }): Promise<MovementResult> {
+  await assertStockTargets(tx, t.vendorId, t.variantId, t.warehouseId);
+  return applyMovement(tx, { ...t, type: 'adjust', damaged: -t.quantity, referenceType: t.referenceType ?? 'adjustment' });
+}
+
+/** Stock leaving without an order (B2B issue, sample, internal use): an explicit, reasoned, ledger-backed outbound. */
+export async function issueOutbound(tx: Tx, t: Target & { quantity: number }): Promise<MovementResult> {
+  await assertStockTargets(tx, t.vendorId, t.variantId, t.warehouseId);
+  return applyMovement(tx, { ...t, type: 'adjust', onHand: -t.quantity, referenceType: t.referenceType ?? 'manual', reason: t.reason ?? 'outbound issue' });
+}
+
+/** give back part of one order line's reservation in one warehouse (e.g. units that turned out not to exist) */
+export async function releaseReservedUnits(tx: Tx, i: { vendorId: string; orderId: string; orderItemId: string; warehouseId: string; quantity: number; reason: string; actor?: Actor }): Promise<void> {
+  const [row] = await tx.select().from(R).where(and(eq(R.vendorId, i.vendorId), eq(R.orderItemId, i.orderItemId), eq(R.warehouseId, i.warehouseId), eq(R.status, 'active')));
+  if (!row || row.quantity < i.quantity) throw new AppError('INVALID_STATE', 'The order line does not hold that many units in this warehouse', { details: { held: row?.quantity ?? 0, requested: i.quantity } });
+  await applyMovement(tx, { vendorId: i.vendorId, variantId: row.variantId, warehouseId: i.warehouseId, type: 'release', reserved: -i.quantity, referenceType: 'order', referenceId: i.orderId, reason: i.reason, actor: i.actor });
+  if (row.quantity === i.quantity) await tx.update(R).set({ status: 'released', releasedAt: new Date() }).where(eq(R.id, row.id));
+  else await tx.update(R).set({ quantity: row.quantity - i.quantity }).where(eq(R.id, row.id));
+}

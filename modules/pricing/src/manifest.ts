@@ -4,11 +4,11 @@ import { defineModule } from '@oms/module-kit';
 export const manifest = defineModule({
   name: "pricing",
   title: "Pricing",
-  responsibility: "Price lists, marketplace-specific pricing rules, margin guards, repricing proposals.",
-  owns: ["price_rules (future)"],
-  dependsOn: ["catalog", "listings"],
+  responsibility: "Base / marketplace / sale prices, price rules (through the rules engine), bulk updates and the price history. Not every marketplace takes prices through an API: pushes go through the listing layer and respect each connector's capabilities.",
+  owns: ["marketplace_prices", "price_history"],
+  dependsOn: ["catalog", "listings", "rules"],
   api: ["/api/v1/pricing"],
-  publishes: ["pricing.rule_changed", "pricing.price_proposed"],
-  consumes: ["variant.updated", "order.created"],
+  publishes: ["pricing.changed", "pricing.sale_started", "pricing.sale_ended"],
+  consumes: ["variant.price_changed"],
   extraction: "later",
 });

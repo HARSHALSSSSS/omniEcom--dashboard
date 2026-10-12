@@ -19,6 +19,8 @@ export const SCHEDULES: ScheduleDef[] = [
   { id: 'maintenance:sync-orders-fanout', queue: 'maintenance', job: 'sync.schedule-orders', every: 60 * 1000 },
   { id: 'maintenance:sync-listing-status-fanout', queue: 'maintenance', job: 'sync.schedule-listing-status', every: 2 * 60 * 1000 },
   { id: 'maintenance:sync-inventory-reconcile', queue: 'maintenance', job: 'sync.schedule-inventory', every: 2 * 60 * 1000 },
+  { id: 'maintenance:shipping-tracking', queue: 'maintenance', job: 'shipping.poll-tracking', every: 5 * 60 * 1000 },
+  { id: 'maintenance:pricing-sales', queue: 'maintenance', job: 'pricing.process-sales', every: 60 * 1000 },
   { id: 'maintenance:sync-sweep', queue: 'maintenance', job: 'sync.sweep', every: 5 * 60 * 1000 },
   { id: 'maintenance:webhooks-sweep', queue: 'maintenance', job: 'webhooks.sweep', every: 2 * 60 * 1000 },
   { id: 'maintenance:purge-idempotency-keys', queue: 'maintenance', job: 'purge-idempotency-keys', every: 60 * 60 * 1000 },

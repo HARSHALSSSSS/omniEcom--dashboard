@@ -11,6 +11,9 @@
   },
   "dependencies": {
     "@oms/module-kit": "workspace:*",
-    "@oms/mod-fulfillment": "workspace:*"
+    "@oms/mod-fulfillment": "workspace:*",
+    "@oms/mod-orders": "workspace:*",
+    "@oms/mod-warehouses": "workspace:*",
+    "@oms/mod-inventory": "workspace:*"
   }
 }

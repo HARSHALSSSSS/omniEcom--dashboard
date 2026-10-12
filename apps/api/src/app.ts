@@ -42,7 +42,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     loggerInstance: deps.logger,
     genReqId,
     logController: new LogController({ requestIdLogLabel: 'requestId', disableRequestLogging: config.isTest }),
-    trustProxy: config.TRUST_PROXY,
+    // a number means "believe exactly that many proxy hops" (proxy-addr semantics: hop index < n); never the whole X-Forwarded-For chain
+    trustProxy: typeof config.TRUST_PROXY === 'number' ? ((_addr: string, hop: number) => hop < (config.TRUST_PROXY as number)) : config.TRUST_PROXY,
     bodyLimit: 1_048_576,
     forceCloseConnections: 'idle',
   });

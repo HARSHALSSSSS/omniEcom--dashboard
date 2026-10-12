@@ -4,11 +4,11 @@ import { defineModule } from '@oms/module-kit';
 export const manifest = defineModule({
   name: "fulfillment",
   title: "Fulfillment",
-  responsibility: "Pick/pack workflow, allocation of order items to warehouses, packing and handover readiness.",
-  owns: ["fulfillments (future)"],
-  dependsOn: ["orders", "warehouses", "inventory"],
-  api: ["/api/v1/fulfillments"],
-  publishes: ["fulfillment.allocated", "fulfillment.packed"],
-  consumes: ["order.created", "order.cancelled"],
+  responsibility: "What happens in a warehouse after an order is confirmed: order routing (rules + availability + priority, explainable), picking (pick lists, tasks, barcode verification, partial picks, exceptions), packing (packages, dimensions, weight), and the fulfillment state machine that drives the order status. Connected to the inventory and order engines.",
+  owns: ["fulfillments", "fulfillment_items", "fulfillment_events", "pick_lists", "pick_tasks", "fulfillment_exceptions", "packages", "package_items"],
+  dependsOn: ["orders", "warehouses", "inventory", "rules", "sync"],
+  api: ["/api/v1/fulfillments", "/api/v1/pick-lists", "/api/v1/pick-tasks", "/api/v1/packages", "/api/v1/packing-tasks", "/api/v1/fulfillment-exceptions", "/api/v1/orders/:id/fulfillment"],
+  publishes: ["fulfillment.created", "fulfillment.picked", "fulfillment.packed", "fulfillment.ready", "fulfillment.shipped", "fulfillment.delivered", "fulfillment.cancelled", "fulfillment.exception_raised"],
+  consumes: ["order.cancelled"],
   extraction: "later",
 });

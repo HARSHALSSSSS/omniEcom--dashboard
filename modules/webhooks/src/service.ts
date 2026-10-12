@@ -23,10 +23,13 @@ const REJECT_CAP_PER_HOUR = 200;
 export async function receiveWebhook(c: Container, input: { marketplace: string; accountId: string; headers: Record<string, string | undefined>; rawBody: Buffer; body: unknown }): Promise<Received> {
   const db = c.database.db;
   const account = await withSystem(db, async (tx) => (await tx.select().from(A).where(and(eq(A.id, input.accountId), eq(A.marketplace, input.marketplace))))[0]);
-  // an unknown endpoint looks exactly like a known one with a bad signature to a prober: always 404 here only when it really does not exist
-  if (!account || account.status === 'revoked') throw Errors.notFound('Webhook endpoint');
-  const connector = c.connectors.get(account.marketplace);
-  if (!connector.verifyWebhook || !connector.parseWebhook) throw Errors.notFound('Webhook endpoint');
+  // An unknown / revoked endpoint must look EXACTLY like a known one with a bad signature (same status, same body, similar work),
+  // otherwise the URL is an oracle for "does this account exist".
+  const connector = account ? c.connectors.get(account.marketplace) : null;
+  if (!account || account.status === 'revoked' || !connector?.verifyWebhook || !connector.parseWebhook) {
+    connector?.verifyWebhook?.({ headers: input.headers, rawBody: input.rawBody, secret: 'dummy-secret-for-equal-work' });
+    throw new AppError('UNAUTHENTICATED', 'Invalid webhook signature');
+  }
 
   const secret = readWebhookSecret(c, account);
   const verified = secret !== null && connector.verifyWebhook({ headers: input.headers, rawBody: input.rawBody, secret });

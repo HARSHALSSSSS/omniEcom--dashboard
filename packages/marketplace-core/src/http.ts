@@ -41,16 +41,21 @@ export function buildUrl(base: string, url: string, query?: HttpRequest['query']
 export function parseRetryAfter(headers: Record<string, string>, now = Date.now()): number | undefined {
   const raw = headers['retry-after'];
   if (!raw) return undefined;
+  // a hostile / buggy upstream must not be able to park a job for years (or make a Date invalid): cap at 10 minutes
+  const CAP = 10 * 60_000;
   const secs = Number(raw);
-  if (Number.isFinite(secs)) return Math.max(0, Math.round(secs * 1000));
+  if (Number.isFinite(secs)) return Math.min(CAP, Math.max(0, Math.round(secs * 1000)));
   const at = Date.parse(raw);
-  return Number.isNaN(at) ? undefined : Math.max(0, at - now);
+  return Number.isNaN(at) ? undefined : Math.min(CAP, Math.max(0, at - now));
 }
 
 /** Generic HTTP-status -> ConnectorError mapping; connectors refine it with their own error codes first. */
 export function defaultHttpError(res: HttpResponse, what = 'request'): ConnectorError {
   const msg = extractMessage(res.body) ?? `${what} failed with HTTP ${res.status}`;
-  if (res.status === 401 || res.status === 403) return new ConnectorError('auth', msg, { code: `http_${res.status}` });
+  // only 401 means "the credentials are no good". A 403 is usually "not allowed to do THIS" (one listing, one feature) and must not
+  // switch the whole account off.
+  if (res.status === 401) return new ConnectorError('auth', msg, { code: 'http_401' });
+  if (res.status === 403) return new ConnectorError('permanent', msg, { code: 'http_403' });
   if (res.status === 429) return new ConnectorError('rate_limited', msg, { code: 'http_429', retryAfterMs: parseRetryAfter(res.headers) ?? 1000 });
   if (res.status === 408 || res.status >= 500) return new ConnectorError('transient', msg, { code: `http_${res.status}`, retryAfterMs: parseRetryAfter(res.headers) });
   return new ConnectorError('permanent', msg, { code: `http_${res.status}` });

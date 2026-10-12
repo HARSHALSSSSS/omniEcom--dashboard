@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { withVendor, writeAudit, writeOutboxEvent } from '@oms/database';
 import { AppError, newId } from '@oms/shared';
 import {
@@ -24,7 +24,7 @@ export function verifyState(secret: string, state: string, vendorId: string, acc
   const [payload, sig] = state.split('.');
   if (!payload || !sig) return false;
   const expected = createHmac('sha256', `oauth-state:${secret}`).update(payload).digest('base64url');
-  if (sig.length !== expected.length || !timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return false;
+  if (!timingSafeEqual(createHash('sha256').update(sig).digest(), createHash('sha256').update(expected).digest())) return false;
   try {
     const p = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as { v: string; a: string; e: number };
     return p.v === vendorId && p.a === accountId && p.e > now;

@@ -38,6 +38,13 @@ export const TEST_ENV: Record<string, string> = {
   SYNC_BACKOFF_MAX_MS: '0',
 };
 
+/** overrides that make NODE_ENV=production pass the production readiness checks (for tests that need a production-mode app) */
+export const PROD_SAFE_ENV: Record<string, string> = {
+  NODE_ENV: 'production', JWT_ACCESS_SECRET: 'Zk3v9qLw1XrT7mNc4HbY8dFs2PjA6eUo0GiKt5RxVnWyQz1B', ENCRYPTION_KEYS: `k2025:${Buffer.alloc(32, 7).toString('base64')}`, METRICS_TOKEN: 'metrics-token-0123456789',
+  CORS_ORIGINS: 'https://app.example.com', DATABASE_URL: 'postgres://oms_app:pw@db.example.com:5432/oms', DATABASE_SSL: 'true', STORAGE_DRIVER: 's3', TRUST_PROXY: '1',
+  APP_WEB_URL: 'https://app.example.com', PUBLIC_BASE_URL: 'https://api.example.com', PUBLIC_API_URL: 'https://api.example.com', AUTH_RATE_LIMIT_MAX: '10', EMAIL_VERIFICATION_REQUIRED: 'true',
+};
+
 export const testConfig = (overrides: Record<string, string> = {}): AppConfig => parseConfig({ ...TEST_ENV, ...overrides });
 
 export const ROLE_PERMISSIONS: Record<string, string[]> = Object.fromEntries(Object.entries(SYSTEM_ROLES).map(([k, v]) => [k, v.permissions]));

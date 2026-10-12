@@ -195,19 +195,24 @@ export const pricesRunner: SyncRunner = async (ctx) => {
   const ids = (ctx.payload.listingIds as string[] | undefined) ?? [];
   const rows = await withVendor(db, vendorId, (tx) =>
     tx.select({ l: L, price: V.sellingPriceMinor }).from(L).innerJoin(V, and(eq(V.id, L.variantId), eq(V.vendorId, L.vendorId)))
-      .where(and(eq(L.vendorId, vendorId), eq(L.marketplaceAccountId, accountId), eq(L.status, 'active'), ids.length ? inArray(L.id, ids) : undefined)).limit(500),
+      .where(and(eq(L.vendorId, vendorId), eq(L.marketplaceAccountId, accountId), eq(L.status, 'active'), ids.length ? inArray(L.id, ids) : undefined)).orderBy(L.id).limit(5000),
   );
   const updates = rows.map((r) => ({ externalSku: r.l.externalSku, priceMinor: r.l.priceMinor ?? r.price ?? 0, currency: r.l.currency.trim() })).filter((u) => u.priceMinor > 0);
   if (updates.length === 0) return { stats: { pushed: 0, failed: 0 } };
   await ctx.progress({ total: updates.length, done: 0, failed: 0 });
-  const results = await host.run(vendorId, accountId, async (conn, cctx) => {
-    requireCapability(conn, 'pricing.push');
-    return conn.pushPrices!(cctx, updates);
-  });
+  // chunked: a bulk price change (up to thousands of listings) is pushed in full, in batches the marketplace accepts
   let failed = 0;
-  for (const r of results) if (!r.ok) { failed++; ctx.addFailure({ ref: r.externalSku ?? '?', code: r.errorCode, message: r.message ?? 'price rejected' }); }
-  await ctx.progress({ done: results.length - failed, failed });
-  return { stats: { pushed: results.length - failed, failed } };
+  let pushed = 0;
+  for (let i = 0; i < updates.length; i += 100) {
+    const batch = updates.slice(i, i + 100);
+    const results = await host.run(vendorId, accountId, async (conn, cctx) => {
+      requireCapability(conn, 'pricing.push');
+      return conn.pushPrices!(cctx, batch);
+    });
+    for (const r of results) if (!r.ok) { failed++; ctx.addFailure({ ref: r.externalSku ?? '?', code: r.errorCode, message: r.message ?? 'price rejected' }); } else pushed++;
+    await ctx.progress({ done: pushed, failed });
+  }
+  return { stats: { pushed, failed } };
 };
 
 export async function requestPriceSync(c: Container, vendorId: string, accountId: string, listingIds: string[]) {
@@ -220,4 +225,14 @@ export async function recentStockUpdates(tx: Tx, vendorId: string, listingId: st
     id: u.id, listingId: u.listingId, syncJobId: u.syncJobId, externalSku: u.externalSku, availableQuantity: u.availableQuantity, requestedQuantity: u.requestedQuantity, status: u.status as 'pending' | 'sent' | 'succeeded' | 'failed',
     errorCode: u.errorCode, errorMessage: u.errorMessage, requestedAt: u.requestedAt.toISOString(), completedAt: u.completedAt ? u.completedAt.toISOString() : null,
   }));
+}
+
+/**
+ * The price a listing SHOWS on its marketplace (null = follow the variant's own selling price). Called by the pricing module,
+ * which owns the decision; listings owns the row. The caller then asks for a price sync.
+ */
+export async function setListingPrice(tx: Tx, vendorId: string, variantId: string, accountId: string, price: { priceMinor: number | null; mrpMinor?: number | null }): Promise<Array<{ id: string; externalSku: string }>> {
+  return tx.update(L).set({ priceMinor: price.priceMinor, ...(price.mrpMinor !== undefined ? { mrpMinor: price.mrpMinor } : {}), version: sql`${L.version} + 1` })
+    .where(and(eq(L.vendorId, vendorId), eq(L.variantId, variantId), eq(L.marketplaceAccountId, accountId)))
+    .returning({ id: L.id, externalSku: L.externalSku });
 }

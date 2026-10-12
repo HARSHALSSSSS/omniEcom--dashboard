@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 
 /**
  * Generic HMAC webhook verification helper. Marketplace-specific schemes (header names, payload
@@ -9,10 +9,13 @@ export function hmacSha256Hex(secret: string, payload: string | Buffer): string 
   return createHmac('sha256', secret).update(payload).digest('hex');
 }
 
+/**
+ * Constant-time string comparison that can never throw: both sides are hashed first, so the compared buffers always have the same
+ * length (comparing raw buffers throws for equal-length strings whose UTF-8 encodings differ in length, which an attacker can use
+ * to turn a header into an unauthenticated 500).
+ */
 export function safeEqual(a: string, b: string): boolean {
-  const ab = Buffer.from(a);
-  const bb = Buffer.from(b);
-  return ab.length === bb.length && timingSafeEqual(ab, bb);
+  return timingSafeEqual(createHash('sha256').update(a).digest(), createHash('sha256').update(b).digest());
 }
 
 export function verifyHmacSignature(opts: { secret: string; rawBody: string | Buffer; signature: string; timestamp?: number; toleranceSeconds?: number; now?: Date }): boolean {

@@ -137,6 +137,13 @@ export async function saveAuthorization(tx: Tx, c: Container, input: SaveAuthori
   const ciphertext = box.encrypt(JSON.stringify(input.credentials), aad(input.vendorId, input.accountId));
   const keyId = ciphertext.split('.')[1]!;
   const existing = await getAuthorizationRow(tx, input.vendorId, input.accountId);
+  if (input.rotation) {
+    // a token REFRESH only updates tokens of a live authorization: it must never re-create credentials the user disconnected, nor
+    // switch a paused / errored account back on
+    if (!existing) throw new AppError('CONFLICT', 'The marketplace was disconnected while its token was being refreshed', { details: { rule: 'authorization_removed' } });
+    await tx.update(Z).set({ credentialsCiphertext: ciphertext, encryptionKeyId: keyId, accessTokenExpiresAt: input.expiresAt ?? null, lastRefreshedAt: new Date(), rotationCount: existing.rotationCount + 1, version: sql`${Z.version} + 1` }).where(eq(Z.id, existing.id));
+    return;
+  }
   const values = {
     authType: input.authType,
     credentialsCiphertext: ciphertext,

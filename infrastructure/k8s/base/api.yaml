@@ -19,7 +19,7 @@ spec:
           image: registry.example.com/oms-api:REPLACED_BY_OVERLAY
           ports: [{ containerPort: 3000, name: http }]
           envFrom: [{ secretRef: { name: oms-secrets } }, { configMapRef: { name: oms-config } }]
-          env: [{ name: NODE_ENV, value: production }, { name: TRUST_PROXY, value: "true" }]
+          env: [{ name: NODE_ENV, value: production }, { name: TRUST_PROXY, value: "1" }]
           resources: { requests: { cpu: 250m, memory: 256Mi }, limits: { memory: 512Mi } }
           securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
           startupProbe: { httpGet: { path: /health/live, port: http }, periodSeconds: 2, failureThreshold: 30 }

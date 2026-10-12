@@ -116,6 +116,15 @@ export const API_TAGS = [
   { name: 'Orders', description: 'Normalised marketplace orders: import, status model, timeline, cancellation, status sync back to the marketplace' },
   { name: 'Sync Jobs', description: 'Asynchronous marketplace synchronisation: job status, progress, logs, retries and dead letters' },
   { name: 'Webhooks', description: 'Inbound marketplace webhooks (signature-verified, idempotent) and webhook secret management' },
+  { name: 'Business Rules', description: 'Controlled rule engine: pricing, stock, marketplace, fulfillment and notification rules' },
+  { name: 'Fulfillment', description: 'Order routing, fulfillment lifecycle and exceptions' },
+  { name: 'Picking', description: 'Pick lists, pick tasks, barcode scanning, partial picks' },
+  { name: 'Packing', description: 'Packing tasks, packages, dimensions, weight, barcode verification' },
+  { name: 'Shipping', description: 'Shipping providers, shipments, labels, manifests, tracking, NDR and RTO' },
+  { name: 'Returns', description: 'Return orders, receiving, inspection, disposition, refunds' },
+  { name: 'Pricing', description: 'Marketplace prices, sales, price rules, bulk updates and price history' },
+  { name: 'Notifications', description: 'In-app notifications, preferences, e-mail and push-ready devices' },
+  { name: 'Reports', description: 'Sales, orders, inventory, product, marketplace, returns and fulfillment reports' },
   { name: 'Audit', description: 'Audit trail' },
 ] as const;
 

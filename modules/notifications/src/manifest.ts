@@ -4,11 +4,11 @@ import { defineModule } from '@oms/module-kit';
 export const manifest = defineModule({
   name: "notifications",
   title: "Notifications",
-  responsibility: "In-app/email/SMS/webhook-out notifications, templates, preferences, delivery tracking.",
-  owns: ["notifications (future)"],
-  dependsOn: ["users"],
+  responsibility: "Notification infrastructure: in-app notifications, e-mail delivery, push-ready device tokens, per-user preferences, de-duplication, and notification rules. Subscribes to operational events (orders, low stock, failed syncs, listing rejections, returns, disconnections, exceptions).",
+  owns: ["notifications", "notification_deliveries", "notification_preferences", "device_tokens"],
+  dependsOn: ["users", "rules"],
   api: ["/api/v1/notifications"],
-  publishes: ["notification.sent", "notification.failed"],
-  consumes: ["inventory.low_stock", "marketplace_account.authorization_expired", "sync.failed", "user.invited"],
+  publishes: ["notification.created", "notification.failed"],
+  consumes: ["order.created", "order.needs_attention", "order.cancellation_requested", "inventory.low_stock", "sync.failed", "sync.dead_lettered", "listing.failed", "return.received", "marketplace_account.authorization_expired", "marketplace_account.disconnected", "fulfillment.exception_raised", "shipment.ndr_raised", "shipment.rto_started", "webhook.dead_lettered"],
   extraction: "early",
 });

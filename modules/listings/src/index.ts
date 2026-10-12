@@ -7,7 +7,8 @@ export { manifest };
 export { listingRoutes } from './routes';
 export { applyStatusReport, getListingDto, listingsByStatus, toListingDto } from './service';
 export { computeSellable, DEFAULT_POLICY, fromReport, validateListingInput, stableHash, type ChannelPolicy, type ListingStatus } from './domain';
-export { markDirty, requestInventorySync } from './channel';
+export { markDirty, requestInventorySync, requestPriceSync } from './channel';
+export { setListingPrice } from './channel';
 export { getListingRow, type ListingRow } from './context';
 export { systemCtx, type Ctx } from './ctx';
 

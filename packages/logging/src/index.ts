@@ -42,6 +42,9 @@ export const REDACT_PATHS = [
   '*.encryptedCredentials',
   '*.apiKey',
   '*.secret',
+  // deeper paths (request bodies / nested payloads are not logged today; this keeps it that way if someone logs one)
+  'req.body.password', 'req.body.currentPassword', 'req.body.newPassword', 'req.body.token', 'req.body.refreshToken', 'req.body.credentials', 'body.*', 'params',
+  'err.params', 'err.cause.params', 'err.query.params',
 ];
 
 export interface LoggerConfig {

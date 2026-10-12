@@ -77,15 +77,21 @@ export async function listStatusUpdates(tx: Tx, vendorId: string, orderId: strin
 // ------------------------------------------------------------------------------------------------
 // operator actions
 // ------------------------------------------------------------------------------------------------
+/**
+ * Move an order along (or cancel it) inside the caller's transaction, and queue the marketplace status push.
+ * The caller dispatches `sync.job` AFTER its transaction commits.
+ */
+export async function transitionWithin(tx: Tx, ctx: OpCtx, id: string, to: InternalOrderStatus, opts: { viaFulfillment?: boolean; note?: string | null; tracking?: { number?: string; carrier?: string }; cancelReason?: string | null; version?: number; initiator?: (typeof schema.CANCELLATION_INITIATORS)[number]; reasonCode?: string }) {
+  const order = await manualTransition(tx, ctx, id, to, opts);
+  // a transition requested by us is pushed to the marketplace (it did not originate there)
+  const sync = await requestMarketplaceStatus(tx, ctx, order, to, opts.tracking ?? (order.trackingNumber ? { number: order.trackingNumber, carrier: order.carrier ?? undefined } : undefined));
+  return { order: await getOrderDetail(tx, ctx.vendorId, id), sync };
+}
+
 /** Move an order along (or cancel it). The marketplace is told asynchronously where it supports that status. */
-export async function transitionOrder(ctx: OpCtx, id: string, to: InternalOrderStatus, opts: { note?: string | null; tracking?: { number?: string; carrier?: string }; cancelReason?: string | null; version?: number }) {
+export async function transitionOrder(ctx: OpCtx, id: string, to: InternalOrderStatus, opts: Parameters<typeof transitionWithin>[4]) {
   const { c, vendorId } = ctx;
-  const res = await withVendor(c.database.db, vendorId, async (tx) => {
-    const order = await manualTransition(tx, ctx, id, to, opts);
-    // a transition requested by us is pushed to the marketplace (it did not originate there)
-    const sync = await requestMarketplaceStatus(tx, ctx, order, to, opts.tracking ?? (order.trackingNumber ? { number: order.trackingNumber, carrier: order.carrier ?? undefined } : undefined));
-    return { order: await getOrderDetail(tx, vendorId, id), sync };
-  });
+  const res = await withVendor(c.database.db, vendorId, (tx) => transitionWithin(tx, ctx, id, to, opts));
   if (res.sync.job) await dispatchSyncJob(c, res.sync.job);
   return { order: res.order, statusUpdate: toStatusUpdateDto(res.sync.update) };
 }
@@ -97,6 +103,11 @@ export async function transitionOrder(ctx: OpCtx, id: string, to: InternalOrderS
 export async function allocateOrder(tx: Tx, ctx: OpCtx, id: string): Promise<{ inventoryStatus: string; reserved: number; wanted: number }> {
   const o = await getOrderRow(tx, ctx.vendorId, id);
   if (!['new', 'confirmed', 'picking', 'packed', 'ready_to_dispatch'].includes(o.status)) throw new AppError('INVALID_STATE', `A ${o.status} order does not need stock`, { details: { status: o.status } });
+  // a unit the warehouse could not find (short pick) is a human decision: never silently re-reserve it
+  if ((o.attentionReason ?? '').split(';').includes('short_pick')) {
+    const held = (await tx.select().from(OI).where(and(eq(OI.vendorId, ctx.vendorId), eq(OI.orderId, id)))).reduce((n, i) => n + i.reservedQuantity, 0);
+    return { inventoryStatus: o.inventoryStatus, reserved: held, wanted: held };
+  }
   const items = await tx.select().from(OI).where(and(eq(OI.vendorId, ctx.vendorId), eq(OI.orderId, id)));
   let wanted = 0;
   let reserved = 0;
@@ -159,4 +170,33 @@ export async function orderSummary(tx: Tx, vendorId: string, since: Date) {
     total += r.n;
   }
   return { since: since.toISOString(), total, byStatus, byMarketplace, needsAttention: attention?.n ?? 0 };
+}
+
+/**
+ * A warehouse could not supply units that were reserved for an order line (a short pick). The reservation for them must have
+ * been released already; this keeps the ORDER honest: fewer units held, inventory status partial/unallocated, attention flag.
+ */
+export async function recordShortage(tx: Tx, ctx: OpCtx, orderItemId: string, quantity: number, note: string): Promise<void> {
+  const [it] = await tx.select().from(OI).where(and(eq(OI.id, orderItemId), eq(OI.vendorId, ctx.vendorId)));
+  if (!it) throw new AppError('NOT_FOUND', 'Order item not found', { details: { resource: 'order_item', id: orderItemId } });
+  const reserved = Math.max(0, it.reservedQuantity - quantity);
+  await tx.update(OI).set({ reservedQuantity: reserved, status: reserved >= it.quantity ? it.status : 'new' }).where(eq(OI.id, it.id));
+  const items = await tx.select().from(OI).where(and(eq(OI.vendorId, ctx.vendorId), eq(OI.orderId, it.orderId)));
+  const wanted = items.filter((i) => i.variantId).reduce((n, i) => n + i.quantity, 0);
+  const held = items.filter((i) => i.variantId).reduce((n, i) => n + i.reservedQuantity, 0);
+  const o = await getOrderRow(tx, ctx.vendorId, it.orderId);
+  const reasons = new Set((o.attentionReason ?? '').split(';').filter(Boolean));
+  reasons.add('short_pick');
+  await tx.update(O).set({ inventoryStatus: inventoryStatusFor(wanted, held), attentionReason: [...reasons].join(';'), version: sql`${O.version} + 1` }).where(eq(O.id, o.id));
+  await effects(tx, ctx).audit({ action: 'order.short_pick', resourceType: 'order', resourceId: o.id, metadata: { orderItemId, quantity, note } });
+  await effects(tx, ctx).event({ type: 'order.needs_attention', aggregateType: 'order', aggregateId: o.id, payload: { reason: 'short_pick', orderItemId, quantity } });
+}
+
+/** a human resolved what an attention flag was about (e.g. a short pick): take that reason off the order */
+export async function clearAttention(tx: Tx, ctx: OpCtx, orderId: string, reason: string): Promise<void> {
+  const o = await getOrderRow(tx, ctx.vendorId, orderId);
+  const rest = (o.attentionReason ?? '').split(';').filter((r) => r && r !== reason);
+  if (rest.length === (o.attentionReason ?? '').split(';').filter(Boolean).length) return;
+  await tx.update(O).set({ attentionReason: rest.join(';') || null, version: sql`${O.version} + 1` }).where(eq(O.id, orderId));
+  await effects(tx, ctx).audit({ action: 'order.attention_cleared', resourceType: 'order', resourceId: orderId, before: { attentionReason: o.attentionReason }, after: { attentionReason: rest.join(';') || null }, metadata: { reason } });
 }

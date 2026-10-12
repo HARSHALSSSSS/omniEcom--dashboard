@@ -216,11 +216,25 @@ Fulfilment locations (default / priority / activation)
 
 | Method | Path | Access | Summary |
 |---|---|---|---|
+| GET | `/api/v1/warehouse-access/me` | any signed-in user | Which warehouses can I work in, and how? |
+| DELETE | `/api/v1/warehouse-bins/{id}` | `warehouses:write` | Delete an empty bin |
+| PATCH | `/api/v1/warehouse-bins/{id}` | `warehouses:write` | Update a bin |
+| GET | `/api/v1/warehouse-bins/by-barcode/{barcode}` | `warehouses:read` | Look a bin up by its barcode (scan) |
+| DELETE | `/api/v1/warehouse-locations/{id}` | `warehouses:write` | Delete an empty location |
+| PATCH | `/api/v1/warehouse-locations/{id}` | `warehouses:write` | Update a location |
+| DELETE | `/api/v1/warehouse-members/{id}` | `warehouses:admin` | Remove a user from a warehouse |
+| PATCH | `/api/v1/warehouse-members/{id}` | `warehouses:admin` | Change a member's role / capabilities |
 | GET | `/api/v1/warehouses` | `warehouses:read` | List warehouses |
 | POST | `/api/v1/warehouses` | `warehouses:write` | Create a warehouse |
 | DELETE | `/api/v1/warehouses/{id}` | `warehouses:write` | Delete a warehouse |
 | GET | `/api/v1/warehouses/{id}` | `warehouses:read` | Get a warehouse |
 | PATCH | `/api/v1/warehouses/{id}` | `warehouses:write` | Update / deactivate a warehouse |
+| GET | `/api/v1/warehouses/{id}/bins` | `warehouses:read` | List a warehouse's bins |
+| POST | `/api/v1/warehouses/{id}/bins` | `warehouses:write` | Add a bin to a warehouse |
+| GET | `/api/v1/warehouses/{id}/locations` | `warehouses:read` | List a warehouse's locations |
+| POST | `/api/v1/warehouses/{id}/locations` | `warehouses:write` | Add a location (zone) to a warehouse |
+| GET | `/api/v1/warehouses/{id}/members` | `warehouses:read` | People assigned to a warehouse |
+| POST | `/api/v1/warehouses/{id}/members` | `warehouses:admin` | Assign a user to a warehouse |
 
 ## Inventory
 
@@ -228,12 +242,22 @@ Stock levels, the append-only movement ledger, reservations, adjustments and war
 
 | Method | Path | Access | Summary |
 |---|---|---|---|
+| GET | `/api/v1/bin-stock` | `inventory:read` | What is in which bin |
+| POST | `/api/v1/bin-stock/put-away` | `inventory:write` | Put away / move stock between bins |
+| POST | `/api/v1/bin-stock/remove` | `inventory:write` | Take units out of a bin (they become unbinned; stock quantity is unchanged) |
+| GET | `/api/v1/inbound-shipments` | `inventory:read` | List inbound shipments |
+| POST | `/api/v1/inbound-shipments` | `inventory:write` | Announce an inbound shipment (expected goods) |
+| GET | `/api/v1/inbound-shipments/{id}` | `inventory:read` | Get an inbound shipment |
+| POST | `/api/v1/inbound-shipments/{id}/cancel` | `inventory:write` | Cancel an inbound shipment with nothing received |
+| POST | `/api/v1/inbound-shipments/{id}/close` | `inventory:write` | Close a part-received shipment (clears what will never arrive) |
+| POST | `/api/v1/inbound-shipments/{id}/receive` | `inventory:write` | Receive goods (good + damaged), optionally into a bin |
 | GET | `/api/v1/inventory` | `inventory:read` | Stock levels (per variant per warehouse) |
 | POST | `/api/v1/inventory/adjust` | `inventory:write` | Adjust stock (delta) or record a stock count |
 | POST | `/api/v1/inventory/damage` | `inventory:write` | Move stock to / from the damaged bucket |
 | POST | `/api/v1/inventory/incoming` | `inventory:write` | Record stock that is on its way |
 | GET | `/api/v1/inventory/ledger-check` | `inventory:read` | Verify stock equals the movement ledger |
 | GET | `/api/v1/inventory/movements` | `inventory:read` | Movement ledger (append-only) |
+| POST | `/api/v1/inventory/outbound` | `inventory:write` | Issue stock out of a warehouse without an order |
 | POST | `/api/v1/inventory/receive` | `inventory:write` | Receive stock into a warehouse |
 | PUT | `/api/v1/inventory/reorder-level` | `inventory:write` | Set the low-stock threshold of a variant in a warehouse |
 | GET | `/api/v1/inventory/reservations` | `inventory:read` | Stock reservations |
@@ -246,6 +270,7 @@ Stock levels, the append-only movement ledger, reservations, adjustments and war
 | POST | `/api/v1/inventory/transfers/{id}/receive` | `inventory:write` | Receive a transfer |
 | POST | `/api/v1/inventory/transfers/{id}/ship` | `inventory:write` | Ship a transfer |
 | GET | `/api/v1/inventory/variants/{id}` | `inventory:read` | Stock of one variant across all warehouses |
+| GET | `/api/v1/inventory/variants/{id}/locations` | `inventory:read` | Where a variant is stored (warehouse -> bins, plus unbinned stock) |
 
 ## Listings
 
@@ -316,10 +341,15 @@ Normalised marketplace orders: import, status model, timeline, cancellation, sta
 | GET | `/api/v1/orders/{id}` | `orders:read` | Get an order with its items |
 | POST | `/api/v1/orders/{id}/allocate` | `orders:write` | Hold stock for the lines that are still short |
 | POST | `/api/v1/orders/{id}/cancel` | `orders:write` | Cancel an order |
+| POST | `/api/v1/orders/{id}/cancellation-requests` | `orders:write` | Record a cancellation REQUEST (not yet decided) |
+| POST | `/api/v1/orders/{id}/cancellation-requests/{cid}/accept` | `orders:write` | Accept a cancellation request (cancels the order and releases stock) |
+| POST | `/api/v1/orders/{id}/cancellation-requests/{cid}/reject` | `orders:write` | Reject a cancellation request (the order carries on) |
+| GET | `/api/v1/orders/{id}/cancellations` | `orders:read` | Cancellation history of an order |
 | GET | `/api/v1/orders/{id}/status-updates` | `orders:read` | Status pushes to the marketplace |
 | POST | `/api/v1/orders/{id}/status-updates/{updateId}/retry` | `orders:write` | Retry a failed status push |
 | GET | `/api/v1/orders/{id}/timeline` | `orders:read` | Order timeline |
 | POST | `/api/v1/orders/{id}/transition` | `orders:write` | Move an order to its next status |
+| GET | `/api/v1/orders/cancellation-reasons` | `orders:read` | Cancellation reason codes |
 | GET | `/api/v1/orders/summary` | `orders:read` | Central dashboard numbers |
 
 ## Sync Jobs
@@ -348,6 +378,172 @@ Inbound marketplace webhooks (signature-verified, idempotent) and webhook secret
 | GET | `/api/v1/webhooks/events/{id}` | `webhooks:read` | One webhook event (with its payload) |
 | POST | `/api/v1/webhooks/events/{id}/retry` | `webhooks:write` | Process a failed / dead-lettered event again |
 
+## Business Rules
+
+Controlled rule engine: pricing, stock, marketplace, fulfillment and notification rules
+
+| Method | Path | Access | Summary |
+|---|---|---|---|
+| GET | `/api/v1/rules` | `rules:read` | List rules |
+| POST | `/api/v1/rules` | `rules:write` | Create a rule |
+| DELETE | `/api/v1/rules/{id}` | `rules:write` | Delete a rule |
+| GET | `/api/v1/rules/{id}` | `rules:read` | Get a rule |
+| PATCH | `/api/v1/rules/{id}` | `rules:write` | Update a rule (partial) |
+| POST | `/api/v1/rules/{id}/activate` | `rules:write` | Activate a rule |
+| POST | `/api/v1/rules/{id}/disable` | `rules:write` | Disable a rule |
+| POST | `/api/v1/rules/evaluate` | `rules:read` | Dry-run: which rules apply to these facts? |
+| GET | `/api/v1/rules/types` | `rules:read` | Rule types: the facts, operators and actions each type supports |
+
+## Fulfillment
+
+Order routing, fulfillment lifecycle and exceptions
+
+| Method | Path | Access | Summary |
+|---|---|---|---|
+| GET | `/api/v1/fulfillment-exceptions` | `fulfillment:read` | List fulfillment exceptions |
+| POST | `/api/v1/fulfillment-exceptions` | `fulfillment:write` | Raise an exception manually |
+| GET | `/api/v1/fulfillment-exceptions/{id}` | `fulfillment:read` | Get an exception |
+| POST | `/api/v1/fulfillment-exceptions/{id}/resolve` | `fulfillment:write` | Resolve or dismiss an exception |
+| GET | `/api/v1/fulfillments` | `fulfillment:read` | List fulfillments |
+| GET | `/api/v1/fulfillments/{id}` | `fulfillment:read` | Get a fulfillment (items, packages, routing explanation) |
+| POST | `/api/v1/fulfillments/{id}/cancel` | `fulfillment:write` | Cancel a fulfillment (before shipping) |
+| POST | `/api/v1/fulfillments/{id}/hold` | `fulfillment:write` | Put a fulfillment on hold |
+| POST | `/api/v1/fulfillments/{id}/resume` | `fulfillment:write` | Resume a fulfillment on hold |
+| GET | `/api/v1/fulfillments/{id}/timeline` | `fulfillment:read` | Fulfillment status timeline |
+| GET | `/api/v1/orders/{id}/fulfillment` | `fulfillment:read` | Fulfillments of an order |
+| POST | `/api/v1/orders/{id}/fulfillment` | `fulfillment:write` | Start fulfilling an order (routing) |
+| GET | `/api/v1/orders/{id}/fulfillment/routing-preview` | `fulfillment:read` | Preview order routing |
+
+## Picking
+
+Pick lists, pick tasks, barcode scanning, partial picks
+
+| Method | Path | Access | Summary |
+|---|---|---|---|
+| GET | `/api/v1/pick-lists` | `fulfillment:read` | List pick lists |
+| POST | `/api/v1/pick-lists` | `fulfillment:write` | Create a pick list |
+| GET | `/api/v1/pick-lists/{id}` | `fulfillment:read` | Get a pick list with its tasks |
+| POST | `/api/v1/pick-lists/{id}/assign` | `fulfillment:write` | Assign a pick list to a picker |
+| GET | `/api/v1/pick-tasks` | `fulfillment:read` | List pick tasks |
+| POST | `/api/v1/pick-tasks/{id}/flag` | `fulfillment:write` | Flag a wrong or damaged item |
+| POST | `/api/v1/pick-tasks/{id}/pick` | `fulfillment:write` | Record picked units |
+| POST | `/api/v1/pick-tasks/{id}/scan` | `fulfillment:write` | Scan the item (and bin) at the shelf |
+| POST | `/api/v1/pick-tasks/{id}/short` | `fulfillment:write` | Report the remaining units as not found (short pick) |
+
+## Packing
+
+Packing tasks, packages, dimensions, weight, barcode verification
+
+| Method | Path | Access | Summary |
+|---|---|---|---|
+| POST | `/api/v1/fulfillments/{id}/packages` | `fulfillment:write` | Create a package |
+| GET | `/api/v1/packages` | `fulfillment:read` | List packages |
+| GET | `/api/v1/packages/{id}` | `fulfillment:read` | Get a package |
+| PATCH | `/api/v1/packages/{id}` | `fulfillment:write` | Set weight, dimensions and box type |
+| POST | `/api/v1/packages/{id}/cancel` | `fulfillment:write` | Cancel a package that has not shipped |
+| POST | `/api/v1/packages/{id}/close` | `fulfillment:write` | Close (seal) the package |
+| POST | `/api/v1/packages/{id}/scan` | `fulfillment:write` | Scan an item into the package (barcode verification) |
+| GET | `/api/v1/packing-tasks` | `fulfillment:read` | Packing queue |
+
+## Shipping
+
+Shipping providers, shipments, labels, manifests, tracking, NDR and RTO
+
+| Method | Path | Access | Summary |
+|---|---|---|---|
+| GET | `/api/v1/manifests` | `shipping:read` | List manifests |
+| POST | `/api/v1/manifests` | `shipping:write` | Create a manifest from labelled shipments |
+| GET | `/api/v1/manifests/{id}` | `shipping:read` | Get a manifest with its shipments (the hand-over document) |
+| POST | `/api/v1/manifests/{id}/cancel` | `shipping:write` | Cancel a manifest (shipments go back to label_ready) |
+| POST | `/api/v1/manifests/{id}/close` | `shipping:write` | Close a manifest (no more shipments can be added) |
+| POST | `/api/v1/manifests/{id}/dispatch` | `shipping:write` | Dispatch a closed manifest: hand every shipment to the courier |
+| GET | `/api/v1/ndr-cases` | `shipping:read` | List non-delivery reports (failed delivery attempts) |
+| GET | `/api/v1/ndr-cases/{id}` | `shipping:read` | Get an NDR case |
+| POST | `/api/v1/ndr-cases/{id}/action` | `shipping:write` | Decide what to do about a failed delivery |
+| GET | `/api/v1/orders/{id}/shipments` | `shipping:read` | Shipments of an order |
+| GET | `/api/v1/shipments` | `shipping:read` | List shipments |
+| POST | `/api/v1/shipments` | `shipping:write` | Create a shipment (label) for a packed fulfillment |
+| GET | `/api/v1/shipments/{id}` | `shipping:read` | Get a shipment |
+| POST | `/api/v1/shipments/{id}/cancel` | `shipping:write` | Cancel a shipment before dispatch |
+| POST | `/api/v1/shipments/{id}/dispatch` | `shipping:write` | Dispatch (hand over to the courier) |
+| GET | `/api/v1/shipments/{id}/label` | `shipping:read` | Get the shipping label |
+| POST | `/api/v1/shipments/{id}/refresh-tracking` | `shipping:write` | Ask the provider for the latest tracking |
+| POST | `/api/v1/shipments/{id}/simulate` | `shipping:write` | Simulate a courier event (sandbox courier only) |
+| GET | `/api/v1/shipments/{id}/tracking` | `shipping:read` | Delivery tracking timeline |
+| POST | `/api/v1/shipments/{id}/tracking-events` | `shipping:write` | Record tracking updates |
+| GET | `/api/v1/shipping/providers` | `shipping:read` | Providers enabled for this vendor |
+| POST | `/api/v1/shipping/providers` | `shipping:configure` | Enable a shipping provider |
+| PATCH | `/api/v1/shipping/providers/{id}` | `shipping:configure` | Update / disable a shipping provider or make it the default |
+| GET | `/api/v1/shipping/providers/catalog` | `shipping:read` | Available shipping providers |
+
+## Returns
+
+Return orders, receiving, inspection, disposition, refunds
+
+| Method | Path | Access | Summary |
+|---|---|---|---|
+| GET | `/api/v1/orders/{id}/returns` | `returns:read` | Returns of an order |
+| GET | `/api/v1/returns` | `returns:read` | List returns |
+| POST | `/api/v1/returns` | `returns:write` | Create a return |
+| GET | `/api/v1/returns/{id}` | `returns:read` | Get a return |
+| POST | `/api/v1/returns/{id}/approve` | `returns:write` | Approve a return |
+| POST | `/api/v1/returns/{id}/cancel` | `returns:write` | Cancel a return that has not been received |
+| POST | `/api/v1/returns/{id}/complete` | `returns:write` | Complete a return |
+| POST | `/api/v1/returns/{id}/inspect` | `returns:write` | Inspect received units and decide their disposition |
+| POST | `/api/v1/returns/{id}/pickup` | `returns:write` | Schedule a reverse pickup |
+| POST | `/api/v1/returns/{id}/pickup-status` | `returns:write` | Record reverse pickup progress |
+| POST | `/api/v1/returns/{id}/receive` | `returns:write` | Receive the returned goods into a warehouse |
+| POST | `/api/v1/returns/{id}/refund` | `returns:refund` | Record the refund outcome |
+| POST | `/api/v1/returns/{id}/reject` | `returns:write` | Reject a return |
+| GET | `/api/v1/returns/{id}/timeline` | `returns:read` | Return timeline |
+| GET | `/api/v1/returns/reasons` | `returns:read` | Return reason catalogue |
+
+## Pricing
+
+Marketplace prices, sales, price rules, bulk updates and price history
+
+| Method | Path | Access | Summary |
+|---|---|---|---|
+| POST | `/api/v1/pricing/apply-rules` | `pricing:write` | Price an account's variants from the pricing rules |
+| POST | `/api/v1/pricing/bulk-update` | `pricing:write` | Bulk price update (set / % / amount) |
+| GET | `/api/v1/pricing/history` | `pricing:read` | Price history |
+| GET | `/api/v1/pricing/marketplace-prices` | `pricing:read` | List marketplace prices |
+| PUT | `/api/v1/pricing/marketplace-prices` | `pricing:write` | Set a marketplace price (and optionally a scheduled sale) |
+| DELETE | `/api/v1/pricing/marketplace-prices/{id}` | `pricing:write` | Remove a marketplace price (the listing follows the variant price again) |
+| POST | `/api/v1/pricing/sales/process` | `pricing:write` | Start / end due sales now |
+| GET | `/api/v1/pricing/variants/{id}` | `pricing:read` | All prices of a variant |
+
+## Notifications
+
+In-app notifications, preferences, e-mail and push-ready devices
+
+| Method | Path | Access | Summary |
+|---|---|---|---|
+| GET | `/api/v1/notifications` | `notifications:read` | My notifications |
+| GET | `/api/v1/notifications/{id}` | `notifications:read` | Get one notification with its delivery status per channel |
+| POST | `/api/v1/notifications/{id}/read` | `notifications:read` | Mark one notification read |
+| DELETE | `/api/v1/notifications/devices` | `notifications:read` | Unregister a push device |
+| POST | `/api/v1/notifications/devices` | `notifications:read` | Register a push device |
+| GET | `/api/v1/notifications/preferences` | `notifications:read` | My channel preferences per notification type |
+| PUT | `/api/v1/notifications/preferences/{type}` | `notifications:read` | Set my channels for one notification type |
+| POST | `/api/v1/notifications/read` | `notifications:read` | Mark notifications read |
+| GET | `/api/v1/notifications/types` | `notifications:read` | Notification types |
+| GET | `/api/v1/notifications/unread-count` | `notifications:read` | Unread badge |
+
+## Reports
+
+Sales, orders, inventory, product, marketplace, returns and fulfillment reports
+
+| Method | Path | Access | Summary |
+|---|---|---|---|
+| GET | `/api/v1/reports/fulfillment` | `reports:read` | Fulfillment report |
+| GET | `/api/v1/reports/inventory` | `reports:read` | Inventory report |
+| GET | `/api/v1/reports/marketplaces` | `reports:read` | Marketplace performance |
+| GET | `/api/v1/reports/orders` | `reports:read` | Order report |
+| GET | `/api/v1/reports/products` | `reports:read` | Product performance |
+| GET | `/api/v1/reports/returns` | `reports:read` | Returns report |
+| GET | `/api/v1/reports/sales` | `reports:read` | Sales report |
+
 ## Audit
 
 Audit trail
@@ -355,3 +551,4 @@ Audit trail
 | Method | Path | Access | Summary |
 |---|---|---|---|
 | GET | `/api/v1/audit-logs` | `audit:read` | Audit trail (newest first) |
+| GET | `/api/v1/audit-logs/entities/{resourceType}/{resourceId}` | `audit:read` | History of one entity (who changed what, previous and new value) |

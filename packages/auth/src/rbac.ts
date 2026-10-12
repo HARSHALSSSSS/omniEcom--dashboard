@@ -14,18 +14,19 @@ export const PERMISSIONS = [
   'attributes:read', 'attributes:write',
   'connectors:read',
   'documents:read', 'documents:write',
-  'warehouses:read', 'warehouses:write',
+  'warehouses:read', 'warehouses:write', 'warehouses:admin',
   'inventory:read', 'inventory:write',
   'marketplace_accounts:read', 'marketplace_accounts:write',
   'listings:read', 'listings:write',
   'orders:read', 'orders:write',
   'fulfillment:read', 'fulfillment:write',
-  'shipping:read', 'shipping:write',
-  'returns:read', 'returns:write',
+  'shipping:read', 'shipping:write', 'shipping:configure',
+  'returns:read', 'returns:write', 'returns:refund',
   'pricing:read', 'pricing:write',
   'reports:read', 'analytics:read',
   'sync:read', 'sync:write',
   'webhooks:read', 'webhooks:write',
+  'rules:read', 'rules:write',
   'jobs:read',
   'audit:read',
   'billing:read', 'billing:write',
@@ -40,6 +41,9 @@ const WRITE_SUFFIX = ':write';
 const all = [...PERMISSIONS] as string[];
 const vendorAll = all.filter((p) => !p.startsWith('platform:'));
 
+/** powers that change who may do what or move money: owners / admins only (staff run day-to-day operations, not the rules of the house) */
+const ADMIN_ONLY = new Set(['warehouses:admin', 'shipping:configure', 'returns:refund']);
+
 /** System roles (vendor_id IS NULL in `roles`). Vendors can later define custom roles from the same catalogue. */
 export const SYSTEM_ROLES: Record<string, { name: string; userType: 'vendor' | 'platform'; permissions: string[] }> = {
   // Business owner/administrator: everything inside their own vendor.
@@ -50,8 +54,8 @@ export const SYSTEM_ROLES: Record<string, { name: string; userType: 'vendor' | '
     userType: 'vendor',
     permissions: vendorAll.filter(
       (p) =>
-        (['products', 'inventory', 'orders', 'fulfillment', 'shipping', 'returns', 'listings', 'documents', 'warehouses', 'categories', 'attributes'].some((r) => p.startsWith(`${r}:`)) && p !== 'products:delete') ||
-        ['vendors:read', 'marketplace_accounts:read', 'connectors:read', 'sync:read', 'webhooks:read', 'reports:read', 'analytics:read', 'notifications:read'].includes(p),
+        (['products', 'inventory', 'orders', 'fulfillment', 'shipping', 'returns', 'listings', 'documents', 'warehouses', 'categories', 'attributes'].some((r) => p.startsWith(`${r}:`)) && p !== 'products:delete' && !ADMIN_ONLY.has(p)) ||
+        ['vendors:read', 'marketplace_accounts:read', 'connectors:read', 'sync:read', 'webhooks:read', 'rules:read', 'pricing:read', 'reports:read', 'analytics:read', 'notifications:read'].includes(p),
     ),
   },
   vendor_viewer: { name: 'Vendor Viewer', userType: 'vendor', permissions: vendorAll.filter((p) => p.endsWith(':read') && p !== 'users:read' && p !== 'audit:read' && p !== 'billing:read') },

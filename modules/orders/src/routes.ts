@@ -8,6 +8,7 @@ import { ok, opCtxFromRequest, paginated, requireVendor, vendorTx } from '@oms/m
 import { SyncJobSchema, dispatchSyncJob, toSyncJobDto } from '@oms/mod-sync';
 import { getAccountRow } from '@oms/mod-marketplace-accounts';
 import { requestOrderSync } from './runners';
+import { CANCELLATION_REASONS, REASON_CODES, decideCancellation, listCancellations, requestCancellation } from './cancellations';
 import { allocateOrder, getOrderDetail, listOrders, listStatusUpdates, orderSummary, orderTimeline, transitionOrder } from './service';
 import { retryStatusUpdate, toStatusUpdateDto } from './status';
 
@@ -113,12 +114,59 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
     schema: {
       tags: TAGS,
       summary: 'Cancel an order',
-      description: 'Allowed until the order is dispatched. Held stock is released; the marketplace is told where it supports cancellation.',
+      description: 'Allowed until the order is dispatched. Records who cancelled and why (see GET /orders/{id}/cancellations), releases held stock, and tells the marketplace where it supports cancellation. Downstream work (fulfillment, shipment) is cancelled by events.',
       params: IdParamSchema,
-      body: z.object({ reason: z.string().trim().min(2).max(300) }),
+      body: z.object({ reason: z.string().trim().min(2).max(300), reasonCode: z.enum(REASON_CODES).default('other'), initiator: z.enum(['seller', 'customer']).default('seller').describe('Who wanted it: the seller, or the customer (the seller cancels at the customer request)') }),
       response: { 200: successEnvelope(TransitionResult) },
     },
-  }, async (req) => ok(req, (await transitionOrder(opCtxFromRequest(req, requireVendor(req)), req.params.id, 'cancelled', { cancelReason: req.body.reason, note: req.body.reason })) as never));
+  }, async (req) => ok(req, (await transitionOrder(opCtxFromRequest(req, requireVendor(req)), req.params.id, 'cancelled', { cancelReason: req.body.reason, note: req.body.reason, reasonCode: req.body.reasonCode, initiator: req.body.initiator })) as never));
+
+  const CancellationSchema = z.object({
+    id: z.string(), orderId: z.string(), initiator: z.enum(schema.CANCELLATION_INITIATORS), reasonCode: z.string(), reasonText: z.string().nullable(), status: z.enum(schema.CANCELLATION_STATUSES),
+    orderStatusAtRequest: z.string().describe('How far fulfilment had got when it was asked for'), requestedBy: z.string().nullable(), decidedBy: z.string().nullable(), decidedAt: IsoDate.nullable(), decisionNote: z.string().nullable(),
+    releasedUnits: z.number().int().describe('Units of held stock given back to available'), createdAt: IsoDate, updatedAt: IsoDate,
+  }).meta({ id: 'OrderCancellation' });
+  r.get('/orders/cancellation-reasons', {
+    config: { access: { permission: 'orders:read' } },
+    schema: { tags: TAGS, summary: 'Cancellation reason codes', response: { 200: successEnvelope(z.array(z.object({ code: z.string(), label: z.string(), initiators: z.array(z.string()) }))) } },
+  }, async (req) => ok(req, CANCELLATION_REASONS.map((x) => ({ code: x.code, label: x.label, initiators: [...x.initiators] }))));
+  r.get('/orders/:id/cancellations', {
+    config: { access: { permission: 'orders:read' } },
+    schema: { tags: TAGS, summary: 'Cancellation history of an order', description: 'Requests (customer / marketplace / seller) and their outcome, newest first. The order timeline shows the resulting status change.', params: IdParamSchema, response: { 200: successEnvelope(z.array(CancellationSchema)) } },
+  }, async (req) => ok(req, await vendorTx(req, (tx, vendorId) => listCancellations(tx, vendorId, req.params.id))));
+  r.post('/orders/:id/cancellation-requests', {
+    config: { access: { permission: 'orders:write' } },
+    schema: {
+      tags: TAGS,
+      summary: 'Record a cancellation REQUEST (not yet decided)',
+      description: 'For a customer / marketplace asking to cancel while the seller still decides. Accept or reject it with the endpoints below. Only possible before dispatch.',
+      params: IdParamSchema,
+      body: z.object({ initiator: z.enum(schema.CANCELLATION_INITIATORS).default('customer'), reasonCode: z.enum(REASON_CODES).default('other'), reasonText: z.string().trim().max(300).optional() }),
+      response: { 201: successEnvelope(CancellationSchema) },
+    },
+  }, async (req, reply) => {
+    const dto = await vendorTx(req, (tx, vendorId) => requestCancellation(tx, opCtxFromRequest(req, vendorId), req.params.id, req.body));
+    reply.code(201);
+    return ok(req, dto);
+  });
+  for (const decision of ['accept', 'reject'] as const) {
+    r.post(`/orders/:id/cancellation-requests/:cid/${decision}`, {
+      config: { access: { permission: 'orders:write' } },
+      schema: {
+        tags: TAGS,
+        summary: decision === 'accept' ? 'Accept a cancellation request (cancels the order and releases stock)' : 'Reject a cancellation request (the order carries on)',
+        params: z.object({ id: z.uuid(), cid: z.uuid() }),
+        body: z.object({ note: z.string().trim().max(300).optional() }).default({}),
+        response: { 200: successEnvelope(z.object({ cancellation: CancellationSchema, order: OrderSchema.nullable() })) },
+      },
+    }, async (req) => {
+      const vendorId = requireVendor(req);
+      const ctx = opCtxFromRequest(req, vendorId);
+      const res = await withVendor(c.database.db, vendorId, (tx) => decideCancellation(tx, ctx, req.params.id, req.params.cid, decision, req.body.note));
+      if (res.sync?.job) await dispatchSyncJob(c, res.sync.job);
+      return ok(req, { cancellation: res.cancellation, order: res.order } as never);
+    });
+  }
 
   r.post('/orders/:id/allocate', {
     config: { access: { permission: 'orders:write' } },

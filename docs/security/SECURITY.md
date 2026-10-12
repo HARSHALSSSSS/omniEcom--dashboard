@@ -66,7 +66,7 @@ Why HS256 now: single trust domain (only this backend verifies tokens), simplest
 
 - [ ] Real secrets in the secret manager; rotate `JWT_ACCESS_SECRET` and add a second `ENCRYPTION_KEYS` entry per rotation policy
 - [ ] DB runtime role is `NOBYPASSRLS`, not owner; verify with `SELECT rolbypassrls FROM pg_roles WHERE rolname='oms_app'`
-- [ ] `TRUST_PROXY=true` behind the load balancer; WAF + TLS 1.2+ at the edge
+- [ ] `TRUST_PROXY=<hops>` (e.g. 1) behind the load balancer, never `true`; WAF + TLS 1.2+ at the edge
 - [ ] `SWAGGER_ENABLED` off (or gated); `/metrics` not publicly routable (or `METRICS_TOKEN` set)
 - [ ] Dependency audit + image scan in CI; SBOM generation
 - [ ] Backups + PITR verified by a restore drill

@@ -41,7 +41,7 @@ export function sniffMatches(mime: string, b: Buffer): boolean {
 export async function toDocumentDto(c: Container, d: DocumentRow) {
   const ready = d.status === 'uploaded' || d.status === 'processed';
   let downloadUrl: string | null = null;
-  if (ready) downloadUrl = c.storage.supportsPresign ? await c.storage.presignDownload(d.storageKey, 300) : `${c.config.PUBLIC_BASE_URL.replace(/\/$/, '')}/api/v1/documents/${d.id}/content`;
+  if (ready) downloadUrl = c.storage.supportsPresign ? await c.storage.presignDownload(d.storageKey, 300, d.mimeType.startsWith('image/') ? {} : { attachmentName: d.fileName }) : `${c.config.PUBLIC_BASE_URL.replace(/\/$/, '')}/api/v1/documents/${d.id}/content`;
   return {
     id: d.id,
     productId: d.productId,
@@ -104,7 +104,7 @@ export async function createDocument(tx: Tx, c: Container, vendorId: string, pro
     .values({ id, vendorId, productId, variantId: input.variantId ?? null, listingId: input.listingId ?? null, kind, purpose, storageKey, fileName, mimeType: input.mimeType, sizeBytes: input.sizeBytes, sortOrder: input.sortOrder ?? n, isPrimary: false, status: 'pending_upload' })
     .returning();
   const upload = c.storage.supportsPresign
-    ? { strategy: 'presigned' as const, ...(await c.storage.presignUpload({ key: storageKey, contentType: input.mimeType, maxBytes: maxBytesFor(input.mimeType), expiresInSeconds: 600 })) }
+    ? { strategy: 'presigned' as const, ...(await c.storage.presignUpload({ key: storageKey, contentType: input.mimeType, maxBytes: maxBytesFor(input.mimeType), contentLength: input.sizeBytes, expiresInSeconds: 600 })) }
     : { strategy: 'api' as const, method: 'POST', url: `/api/v1/documents/${id}/upload`, headers: { 'Content-Type': input.mimeType } };
   return { row: row!, upload };
 }

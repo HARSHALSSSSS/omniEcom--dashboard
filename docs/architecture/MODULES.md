@@ -9,27 +9,28 @@ Modules live in `modules/<name>` as workspace packages `@oms/mod-<name>`. A modu
 | Module | Owns (tables) | Depends on | Extraction |
 |---|---|---|---|
 | **Vendor / Organization** (`vendors`) | `vendors` | - | keep |
+| **Business Rules** (`rules`) | `business_rules`, `rule_executions` | `vendors` | later |
 | **Identity & Access** (`identity`) | `roles`, `permissions`, `role_permissions`, `user_roles`, `refresh_tokens`, `user_tokens` | `vendors` | later |
 | **User Management** (`users`) | `users`, `invitations` | `identity`, `vendors` | keep |
 | **Categories** (`categories`) | `categories` | `vendors` | keep |
 | **Attributes** (`attributes`) | `attribute_definitions`, `attribute_values`, `category_attributes`, `product_attribute_values` | `categories` | keep |
 | **Product Catalog** (`catalog`) | `products`, `product_variants`, `product_marketplace_data`, `data_jobs` | `vendors`, `categories`, `attributes` | later |
 | **Documents & Media** (`documents`) | `product_documents` | `catalog` | later |
-| **Warehouse** (`warehouses`) | `warehouses` | `vendors` | keep |
-| **Inventory** (`inventory`) | `inventory`, `inventory_movements`, `inventory_reservations`, `stock_transfers`, `stock_transfer_items`, `vendor_counters` | `catalog`, `warehouses` | early |
+| **Warehouse** (`warehouses`) | `warehouses`, `warehouse_locations`, `warehouse_bins`, `warehouse_members` | `vendors` | keep |
+| **Inventory** (`inventory`) | `inventory`, `inventory_movements`, `inventory_reservations`, `stock_transfers`, `stock_transfer_items`, `vendor_counters`, `bin_stock`, `inbound_shipments`, `inbound_shipment_items` | `catalog`, `warehouses` | early |
 | **Marketplace Accounts** (`marketplace-accounts`) | `marketplace_accounts`, `marketplace_authorizations` | `vendors` | later |
 | **Marketplace Connectors** (`marketplace-connectors`) | - | `marketplace-accounts` | early |
 | **Listings & Channels** (`listings`) | `marketplace_listings`, `category_mappings`, `attribute_mappings`, `imported_products`, `channel_inventory_policies`, `channel_stock_updates` | `catalog`, `marketplace-accounts`, `marketplace-connectors`, `inventory`, `sync`, `warehouses` | later |
-| **Pricing** (`pricing`) | `price_rules (future)` | `catalog`, `listings` | later |
-| **Orders** (`orders`) | `orders`, `order_items`, `order_status_events`, `order_status_updates` | `catalog`, `marketplace-accounts`, `marketplace-connectors`, `inventory`, `listings`, `sync` | early |
-| **Fulfillment** (`fulfillment`) | `fulfillments (future)` | `orders`, `warehouses`, `inventory` | later |
-| **Shipping** (`shipping`) | `shipments (future)` | `fulfillment` | later |
-| **Returns** (`returns`) | `returns (future)` | `orders`, `inventory` | later |
-| **Notifications** (`notifications`) | `notifications (future)` | `users` | early |
+| **Pricing** (`pricing`) | `marketplace_prices`, `price_history` | `catalog`, `listings`, `rules` | later |
+| **Orders** (`orders`) | `orders`, `order_items`, `order_status_events`, `order_status_updates`, `order_cancellations` | `catalog`, `marketplace-accounts`, `marketplace-connectors`, `inventory`, `listings`, `sync` | early |
+| **Fulfillment** (`fulfillment`) | `fulfillments`, `fulfillment_items`, `fulfillment_events`, `pick_lists`, `pick_tasks`, `fulfillment_exceptions`, `packages`, `package_items` | `orders`, `warehouses`, `inventory`, `rules`, `sync` | later |
+| **Shipping** (`shipping`) | `vendor_shipping_providers`, `shipments`, `shipment_tracking_events`, `manifests`, `ndr_cases` | `fulfillment`, `orders`, `warehouses`, `inventory` | later |
+| **Returns** (`returns`) | `return_orders`, `return_items`, `return_events` | `orders`, `inventory`, `warehouses` | later |
+| **Notifications** (`notifications`) | `notifications`, `notification_deliveries`, `notification_preferences`, `device_tokens` | `users`, `rules` | early |
 | **Jobs** (`jobs`) | - | - | keep |
 | **Synchronization** (`sync`) | `sync_jobs`, `sync_logs` | `marketplace-accounts`, `marketplace-connectors`, `jobs` | early |
 | **Webhooks** (`webhooks`) | `webhook_events` | `marketplace-accounts`, `marketplace-connectors`, `jobs`, `sync`, `orders`, `listings` | early |
-| **Reports** (`reports`) | `report_runs (future)` | `orders`, `inventory`, `catalog` | later |
+| **Reports** (`reports`) | - | `orders`, `inventory`, `catalog` | later |
 | **Analytics** (`analytics`) | `analytics_* (future read models)` | `orders`, `inventory`, `listings` | early |
 | **Billing** (`billing`) | `plans (future)`, `subscriptions (future)`, `invoices (future)` | `vendors` | later |
 | **AI** (`ai`) | `ai_runs (future)` | `catalog`, `listings`, `orders` | early |
@@ -49,6 +50,17 @@ Modules live in `modules/<name>` as workspace packages `@oms/mod-<name>`. A modu
 - **Publishes events:** `vendor.created`, `vendor.updated`, `vendor.suspended`, `vendor.reactivated`
 - **Consumes events:** `billing.subscription_changed`
 - **Microservice extraction:** keep
+
+### Business Rules — `rules`
+
+**Responsibility:** Controlled, data-driven rule engine: typed conditions over a whitelisted field set + a registry of whitelisted, validated actions per rule type (pricing, stock, marketplace, fulfillment, notification). No code, no free-form scripts. Other modules register their rule types and evaluate rules through this module.
+
+- **Owns data:** `business_rules`, `rule_executions`
+- **API prefixes:** `/api/v1/rules`
+- **Depends on (sync calls):** `vendors`
+- **Publishes events:** `rule.created`, `rule.updated`, `rule.deleted`
+- **Consumes events:** none
+- **Microservice extraction:** later
 
 ### Identity & Access — `identity`
 
@@ -118,9 +130,9 @@ Modules live in `modules/<name>` as workspace packages `@oms/mod-<name>`. A modu
 
 ### Warehouse — `warehouses`
 
-**Responsibility:** Vendor fulfilment locations, addresses, default/priority routing and activation. Stock lives in inventory; a warehouse with stock cannot be removed.
+**Responsibility:** Vendor fulfilment locations: addresses, default/priority, zones (locations), bins, and the people who work there (members with roles and capabilities). Stock quantities live in inventory; bins only say where inside the warehouse stock sits.
 
-- **Owns data:** `warehouses`
+- **Owns data:** `warehouses`, `warehouse_locations`, `warehouse_bins`, `warehouse_members`
 - **API prefixes:** `/api/v1/warehouses`
 - **Depends on (sync calls):** `vendors`
 - **Publishes events:** `warehouse.created`, `warehouse.updated`, `warehouse.deactivated`
@@ -129,12 +141,12 @@ Modules live in `modules/<name>` as workspace packages `@oms/mod-<name>`. A modu
 
 ### Inventory — `inventory`
 
-**Responsibility:** Stock per variant per warehouse (on hand / reserved / incoming / damaged / returned), the append-only movement ledger, reservations, adjustments, transfers and availability. Never changes a quantity without a movement.
+**Responsibility:** Stock per variant per warehouse (on hand / reserved / incoming / damaged / returned), the append-only movement ledger, reservations (and moving them between warehouses), bin-level stock, inbound shipments (receiving), manual outbound, adjustments, transfers and availability. Never changes a quantity without a movement.
 
-- **Owns data:** `inventory`, `inventory_movements`, `inventory_reservations`, `stock_transfers`, `stock_transfer_items`, `vendor_counters`
-- **API prefixes:** `/api/v1/inventory`
+- **Owns data:** `inventory`, `inventory_movements`, `inventory_reservations`, `stock_transfers`, `stock_transfer_items`, `vendor_counters`, `bin_stock`, `inbound_shipments`, `inbound_shipment_items`
+- **API prefixes:** `/api/v1/inventory`, `/api/v1/inbound-shipments`, `/api/v1/bin-stock`
 - **Depends on (sync calls):** `catalog`, `warehouses`
-- **Publishes events:** `inventory.adjusted`, `inventory.reserved`, `inventory.released`, `inventory.low_stock`, `inventory.transferred`
+- **Publishes events:** `inventory.adjusted`, `inventory.reserved`, `inventory.released`, `inventory.low_stock`, `inventory.transferred`, `inbound.created`, `inbound.received`
 - **Consumes events:** none
 - **Microservice extraction:** early
 
@@ -173,68 +185,68 @@ Modules live in `modules/<name>` as workspace packages `@oms/mod-<name>`. A modu
 
 ### Pricing — `pricing`
 
-**Responsibility:** Price lists, marketplace-specific pricing rules, margin guards, repricing proposals.
+**Responsibility:** Base / marketplace / sale prices, price rules (through the rules engine), bulk updates and the price history. Not every marketplace takes prices through an API: pushes go through the listing layer and respect each connector's capabilities.
 
-- **Owns data:** `price_rules (future)`
+- **Owns data:** `marketplace_prices`, `price_history`
 - **API prefixes:** `/api/v1/pricing`
-- **Depends on (sync calls):** `catalog`, `listings`
-- **Publishes events:** `pricing.rule_changed`, `pricing.price_proposed`
-- **Consumes events:** `variant.updated`, `order.created`
+- **Depends on (sync calls):** `catalog`, `listings`, `rules`
+- **Publishes events:** `pricing.changed`, `pricing.sale_started`, `pricing.sale_ended`
+- **Consumes events:** `variant.price_changed`
 - **Microservice extraction:** later
 
 ### Orders — `orders`
 
-**Responsibility:** Normalised order aggregate across marketplaces: idempotent import (unique per vendor + marketplace + marketplace order id), inventory reservation, status model + timeline, manual and marketplace-reported transitions, and outbound status sync (requested/sent/successful/failed/retrying).
+**Responsibility:** Normalised order aggregate across marketplaces: idempotent import (unique per vendor + marketplace + marketplace order id), inventory reservation, status model + timeline, manual and marketplace-reported transitions, outbound status sync, and cancellations (who/why/when, request + accept/reject, inventory release).
 
-- **Owns data:** `orders`, `order_items`, `order_status_events`, `order_status_updates`
+- **Owns data:** `orders`, `order_items`, `order_status_events`, `order_status_updates`, `order_cancellations`
 - **API prefixes:** `/api/v1/orders`, `/api/v1/marketplace-accounts/:id/sync-orders`
 - **Depends on (sync calls):** `catalog`, `marketplace-accounts`, `marketplace-connectors`, `inventory`, `listings`, `sync`
-- **Publishes events:** `order.created`, `order.updated`, `order.status_changed`, `order.cancelled`, `order.dispatched`, `order.delivered`, `order.returned`, `order.needs_attention`
+- **Publishes events:** `order.created`, `order.updated`, `order.status_changed`, `order.cancelled`, `order.dispatched`, `order.delivered`, `order.returned`, `order.needs_attention`, `order.cancellation_requested`
 - **Consumes events:** `inventory.adjusted`, `inventory.released`
 - **Microservice extraction:** early
 
 ### Fulfillment — `fulfillment`
 
-**Responsibility:** Pick/pack workflow, allocation of order items to warehouses, packing and handover readiness.
+**Responsibility:** What happens in a warehouse after an order is confirmed: order routing (rules + availability + priority, explainable), picking (pick lists, tasks, barcode verification, partial picks, exceptions), packing (packages, dimensions, weight), and the fulfillment state machine that drives the order status. Connected to the inventory and order engines.
 
-- **Owns data:** `fulfillments (future)`
-- **API prefixes:** `/api/v1/fulfillments`
-- **Depends on (sync calls):** `orders`, `warehouses`, `inventory`
-- **Publishes events:** `fulfillment.allocated`, `fulfillment.packed`
-- **Consumes events:** `order.created`, `order.cancelled`
+- **Owns data:** `fulfillments`, `fulfillment_items`, `fulfillment_events`, `pick_lists`, `pick_tasks`, `fulfillment_exceptions`, `packages`, `package_items`
+- **API prefixes:** `/api/v1/fulfillments`, `/api/v1/pick-lists`, `/api/v1/pick-tasks`, `/api/v1/packages`, `/api/v1/packing-tasks`, `/api/v1/fulfillment-exceptions`, `/api/v1/orders/:id/fulfillment`
+- **Depends on (sync calls):** `orders`, `warehouses`, `inventory`, `rules`, `sync`
+- **Publishes events:** `fulfillment.created`, `fulfillment.picked`, `fulfillment.packed`, `fulfillment.ready`, `fulfillment.shipped`, `fulfillment.delivered`, `fulfillment.cancelled`, `fulfillment.exception_raised`
+- **Consumes events:** `order.cancelled`
 - **Microservice extraction:** later
 
 ### Shipping — `shipping`
 
-**Responsibility:** Carrier integrations, labels, manifests, tracking and delivery status.
+**Responsibility:** Provider-neutral shipping: vendor shipping providers (manual, sandbox courier; real couriers plug into the same interface), shipments, labels, AWB/tracking, manifests, dispatch, delivery tracking, and delivery exceptions (failed delivery, NDR, RTO).
 
-- **Owns data:** `shipments (future)`
-- **API prefixes:** `/api/v1/shipments`
-- **Depends on (sync calls):** `fulfillment`
-- **Publishes events:** `shipment.created`, `shipment.in_transit`, `shipment.delivered`, `shipment.failed`
-- **Consumes events:** `fulfillment.packed`
+- **Owns data:** `vendor_shipping_providers`, `shipments`, `shipment_tracking_events`, `manifests`, `ndr_cases`
+- **API prefixes:** `/api/v1/shipping`, `/api/v1/shipments`, `/api/v1/manifests`, `/api/v1/ndr-cases`
+- **Depends on (sync calls):** `fulfillment`, `orders`, `warehouses`, `inventory`
+- **Publishes events:** `shipment.created`, `shipment.dispatched`, `shipment.in_transit`, `shipment.delivered`, `shipment.failed`, `shipment.ndr_raised`, `shipment.rto_started`, `shipment.rto_delivered`
+- **Consumes events:** `order.cancelled`
 - **Microservice extraction:** later
 
 ### Returns — `returns`
 
-**Responsibility:** Return/RTO/refund lifecycle, QC outcomes, restock decisions.
+**Responsibility:** Return/RTO/refund lifecycle: return orders and items, reasons, pickup status, receiving, inspection, disposition (restock / damaged / dispose ...) feeding the inventory engine, and refund tracking. RTO deliveries create return orders automatically.
 
-- **Owns data:** `returns (future)`
+- **Owns data:** `return_orders`, `return_items`, `return_events`
 - **API prefixes:** `/api/v1/returns`
-- **Depends on (sync calls):** `orders`, `inventory`
-- **Publishes events:** `return.created`, `return.received`, `return.completed`
-- **Consumes events:** `order.delivered`, `shipment.failed`
+- **Depends on (sync calls):** `orders`, `inventory`, `warehouses`
+- **Publishes events:** `return.created`, `return.received`, `return.inspected`, `return.completed`
+- **Consumes events:** `shipment.rto_delivered`
 - **Microservice extraction:** later
 
 ### Notifications — `notifications`
 
-**Responsibility:** In-app/email/SMS/webhook-out notifications, templates, preferences, delivery tracking.
+**Responsibility:** Notification infrastructure: in-app notifications, e-mail delivery, push-ready device tokens, per-user preferences, de-duplication, and notification rules. Subscribes to operational events (orders, low stock, failed syncs, listing rejections, returns, disconnections, exceptions).
 
-- **Owns data:** `notifications (future)`
+- **Owns data:** `notifications`, `notification_deliveries`, `notification_preferences`, `device_tokens`
 - **API prefixes:** `/api/v1/notifications`
-- **Depends on (sync calls):** `users`
-- **Publishes events:** `notification.sent`, `notification.failed`
-- **Consumes events:** `inventory.low_stock`, `marketplace_account.authorization_expired`, `sync.failed`, `user.invited`
+- **Depends on (sync calls):** `users`, `rules`
+- **Publishes events:** `notification.created`, `notification.failed`
+- **Consumes events:** `order.created`, `order.needs_attention`, `order.cancellation_requested`, `inventory.low_stock`, `sync.failed`, `sync.dead_lettered`, `listing.failed`, `return.received`, `marketplace_account.authorization_expired`, `marketplace_account.disconnected`, `fulfillment.exception_raised`, `shipment.ndr_raised`, `shipment.rto_started`, `webhook.dead_lettered`
 - **Microservice extraction:** early
 
 ### Jobs — `jobs`
@@ -272,12 +284,12 @@ Modules live in `modules/<name>` as workspace packages `@oms/mod-<name>`. A modu
 
 ### Reports — `reports`
 
-**Responsibility:** Operational reports and exports (async generation, stored in object storage). Reads from read-optimised views.
+**Responsibility:** Reporting foundation: sales, orders, inventory, product performance, marketplace performance, returns and fulfillment, as tenant-scoped read APIs over the operational tables (read models / exports can be added without changing the endpoints).
 
-- **Owns data:** `report_runs (future)`
+- **Owns data:** none
 - **API prefixes:** `/api/v1/reports`
 - **Depends on (sync calls):** `orders`, `inventory`, `catalog`
-- **Publishes events:** `report.generated`
+- **Publishes events:** none
 - **Consumes events:** none
 - **Microservice extraction:** later
 

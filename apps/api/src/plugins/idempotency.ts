@@ -55,8 +55,10 @@ const TTL_SECONDS = 24 * 3600;
  */
 export const idempotencyPlugin = fp<{ store: IdempotencyStore }>(async (app, { store }) => {
   app.addHook('preHandler', async (req, reply) => {
-    if (req.is404 || !req.routeOptions.config?.idempotent) return;
+    const mode = req.routeOptions.config?.idempotent;
+    if (req.is404 || !mode) return;
     const key = req.headers['idempotency-key'];
+    if (mode === 'optional' && key === undefined) return; // supported, not required: a client that sends the header gets replay protection
     if (typeof key !== 'string' || key.length < 8 || key.length > 128) {
       throw new AppError('BAD_REQUEST', 'Idempotency-Key header (8-128 chars) is required for this operation');
     }
@@ -66,7 +68,7 @@ export const idempotencyPlugin = fp<{ store: IdempotencyStore }>(async (app, { s
       scope: `${req.method} ${req.routeOptions.url}`,
       key,
     };
-    const requestHash = createHash('sha256').update(JSON.stringify({ b: req.body ?? null, q: req.query ?? null, p: req.params ?? null })).digest('hex');
+    const requestHash = createHash('sha256').update(JSON.stringify({ a: req.ctx.principal?.actorId ?? null, b: req.body ?? null, q: req.query ?? null, p: req.params ?? null })).digest('hex');
     const result = await store.begin({ ...ref, requestHash, ttlSeconds: TTL_SECONDS });
     switch (result.state) {
       case 'new':

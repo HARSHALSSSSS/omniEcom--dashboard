@@ -83,7 +83,8 @@ declare module 'fastify' {
   interface FastifyContextConfig {
     access?: RouteAccess;
     /** Require + honour the Idempotency-Key header on this route */
-    idempotent?: boolean;
+    /** true = Idempotency-Key required; 'optional' = honoured when sent (set automatically on every authenticated mutating route) */
+    idempotent?: boolean | 'optional';
   }
   interface FastifyInstance {
     container: Container;
@@ -121,14 +122,14 @@ export const created = <T>(req: FastifyRequest, reply: FastifyReply, data: T, lo
 // ---------------------------------------------------------------------------------------------
 // Mailer port (verification, password reset, invitations). Providers: log (dev), memory (tests), SMTP/SES later.
 // ---------------------------------------------------------------------------------------------
-export type MailKind = 'verify_email' | 'reset_password' | 'invitation';
+export type MailKind = 'verify_email' | 'reset_password' | 'invitation' | 'notification';
 export interface MailMessage {
   kind: MailKind;
   to: string;
   subject: string;
   text: string;
   /** structured data (e.g. the one-time token) for providers/templates and tests; never logged in production */
-  data: { token: string; link: string; [k: string]: unknown };
+  data: { token: string; link: string; [k: string]: unknown }; // notification mails: token = notification id, link = the page to open
 }
 export interface Mailer { send(message: MailMessage): Promise<void> }
 

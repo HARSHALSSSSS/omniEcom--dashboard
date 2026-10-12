@@ -8,3 +8,8 @@ export * from './catalog-ext';
 export * from './channel';
 export * from './ledger';
 export * from './order-ext';
+export * from './warehouse-ops';
+export * from './fulfillment-ops';
+export * from './shipping-ops';
+export * from './returns-ops';
+export * from './business-ops';

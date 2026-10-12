@@ -161,11 +161,11 @@ describe('verification and idempotency', () => {
     expect((await events('?filter[status]=rejected'))[0].lastError).toBe('no_secret_configured');
   });
 
-  it('unknown endpoints and wrong marketplace codes are 404; malformed JSON is 400', async () => {
+  it('unknown endpoints and wrong marketplace codes answer exactly like a bad signature (401, no existence oracle); malformed JSON is 400', async () => {
     const { acct, secret } = await setup();
     const signed = mockControl.signedWebhook({ id: 'e', type: 'order.created', orderId: 'x' }, secret);
-    expect((await deliver({ id: '019a0000-0000-7000-8000-000000000000' }, signed)).status).toBe(404);
-    expect((await deliver(acct, signed, 'flipkart')).status).toBe(404); // the account exists, but not as a flipkart account
+    expect((await deliver({ id: '019a0000-0000-7000-8000-000000000000' }, signed)).status).toBe(401);
+    expect((await deliver(acct, signed, 'flipkart')).status).toBe(401); // the account exists, but not as a flipkart account
     const bad = await c.call('POST', `/api/v1/webhooks/mock/${acct.id}`, { raw: '{not json', contentType: 'application/json', headers: { 'x-mock-signature': 'abc' } });
     expect(bad.status).toBe(400);
   });

@@ -12,6 +12,8 @@ export interface AuditEntry {
   onBehalfOfVendorId?: string | null;
   /** dotted verb, e.g. product.update, auth.login_failed */
   action: string;
+  /** where it came from; defaults from the actor type (user/api_key -> api, webhook -> webhook, system -> job) */
+  source?: 'api' | 'webhook' | 'job' | 'system' | 'marketplace';
   resourceType?: string;
   resourceId?: string;
   requestId?: string;
@@ -31,6 +33,7 @@ export async function writeAudit(tx: Tx, e: AuditEntry): Promise<void> {
     actorId: e.actorId ?? null,
     onBehalfOfVendorId: e.onBehalfOfVendorId ?? null,
     action: e.action,
+    source: e.source ?? (e.actorType === 'webhook' ? 'webhook' : e.actorType === 'system' ? 'job' : 'api'),
     resourceType: e.resourceType ?? null,
     resourceId: e.resourceId ?? null,
     requestId: e.requestId ?? getContext().requestId ?? null,

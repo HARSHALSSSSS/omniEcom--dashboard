@@ -204,15 +204,20 @@ export async function login(c: Container, systemTx: <T>(fn: (tx: Tx) => Promise<
   if (lookup.kind === 'fail') {
     await verifyDummy(input.password); // equalise timing: unknown user vs wrong password
     await systemTx((tx) => writeAudit(tx, { vendorId: lookup.user?.vendorId ?? null, actorType: 'user', actorId: lookup.user?.id ?? null, action: lookup.locked ? 'auth.login_locked' : 'auth.login_failed', requestId: meta.requestId, ip: meta.ip, userAgent: meta.userAgent, metadata: { email } }));
-    throw lookup.locked ? new AppError('ACCOUNT_LOCKED') : new AppError('INVALID_CREDENTIALS');
+    // a locked account answers exactly like a wrong password: the response must not reveal that the address has an account
+    throw new AppError('INVALID_CREDENTIALS');
   }
 
   const valid = await verifyPassword(lookup.user.passwordHash!, input.password);
   if (!valid) {
     await systemTx(async (tx) => {
-      const failed = lookup.user.failedLoginCount + 1;
-      const lock = failed >= MAX_FAILED_LOGINS;
-      await tx.update(schema.users).set({ failedLoginCount: lock ? 0 : failed, lockedUntil: lock ? new Date(Date.now() + LOCK_MINUTES * 60_000) : null }).where(eq(schema.users.id, lookup.user.id));
+      // ONE atomic statement: parallel guesses cannot all read the same counter and dodge the lock
+      const U = schema.users;
+      const [row] = await tx.update(U).set({
+        failedLoginCount: sql`CASE WHEN ${U.failedLoginCount} + 1 >= ${MAX_FAILED_LOGINS} THEN 0 ELSE ${U.failedLoginCount} + 1 END`,
+        lockedUntil: sql`CASE WHEN ${U.failedLoginCount} + 1 >= ${MAX_FAILED_LOGINS} THEN now() + (${LOCK_MINUTES} * interval '1 minute') ELSE ${U.lockedUntil} END`,
+      }).where(eq(U.id, lookup.user.id)).returning({ lockedUntil: U.lockedUntil });
+      const lock = Boolean(row?.lockedUntil && row.lockedUntil > new Date());
       await writeAudit(tx, { vendorId: lookup.user.vendorId, actorType: 'user', actorId: lookup.user.id, action: lock ? 'auth.account_locked' : 'auth.login_failed', requestId: meta.requestId, ip: meta.ip, userAgent: meta.userAgent, metadata: { email } });
     });
     throw new AppError('INVALID_CREDENTIALS');

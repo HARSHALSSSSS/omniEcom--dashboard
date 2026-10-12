@@ -4,7 +4,7 @@ import { createdAt, inList, pk, tenantId, timestamps, tz } from './_helpers';
 import { vendors } from './identity';
 import { marketplaceAccounts } from './marketplace';
 
-export const SYNC_TYPES = ['orders', 'inventory', 'prices', 'listings', 'listing_publish', 'listing_status', 'catalog_import', 'order_status', 'returns', 'full'] as const;
+export const SYNC_TYPES = ['orders', 'inventory', 'prices', 'listings', 'listing_publish', 'listing_status', 'catalog_import', 'order_status', 'returns', 'tracking', 'full'] as const;
 /** retrying = failed an attempt, waiting for the next one; dead_lettered = out of attempts, needs an operator (manual retry) */
 export const SYNC_STATUSES = ['queued', 'running', 'retrying', 'succeeded', 'partially_failed', 'failed', 'dead_lettered', 'cancelled'] as const;
 export const SYNC_TRIGGERS = ['schedule', 'manual', 'webhook', 'event', 'system', 'retry'] as const;
@@ -80,6 +80,8 @@ export const auditLogs = pgTable('audit_logs', {
   /** when platform staff act inside a vendor */
   onBehalfOfVendorId: uuid('on_behalf_of_vendor_id'),
   action: text('action').notNull(), // e.g. product.update, auth.login_failed
+  /** where the action came from: api | webhook | job | system | marketplace */
+  source: text('source').notNull().default('api'),
   resourceType: text('resource_type'),
   resourceId: text('resource_id'),
   requestId: text('request_id'),

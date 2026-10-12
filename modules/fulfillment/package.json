@@ -13,6 +13,8 @@
     "@oms/module-kit": "workspace:*",
     "@oms/mod-orders": "workspace:*",
     "@oms/mod-warehouses": "workspace:*",
-    "@oms/mod-inventory": "workspace:*"
+    "@oms/mod-inventory": "workspace:*",
+    "@oms/mod-rules": "workspace:*",
+    "@oms/mod-sync": "workspace:*"
   }
 }

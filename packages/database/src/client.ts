@@ -30,6 +30,11 @@ export function createDatabase(cfg: DbConfig, applicationName = 'oms'): Database
     max: cfg.DATABASE_POOL_MAX,
     idleTimeoutMillis: cfg.DATABASE_POOL_IDLE_MS,
     statement_timeout: cfg.DATABASE_STATEMENT_TIMEOUT_MS,
+    query_timeout: cfg.DATABASE_STATEMENT_TIMEOUT_MS + 5_000,
+    // fail fast instead of queueing forever when every connection is busy
+    connectionTimeoutMillis: 5_000,
+    // a crashed handler must not keep row locks, and nothing waits forever for a lock
+    options: '-c idle_in_transaction_session_timeout=60000 -c lock_timeout=10000',
     application_name: applicationName,
     ssl: cfg.DATABASE_SSL ? { rejectUnauthorized: true } : undefined,
   });

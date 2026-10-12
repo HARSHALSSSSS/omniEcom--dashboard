@@ -123,7 +123,8 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
     },
   }, async (req, reply) => {
     const mails = await systemTx(req, (tx) => svc.forgotPassword(tx, c, req.body.email, meta(req)));
-    await svc.deliver(c, mails);
+    // e-mail delivery must not be on the response path: an existing account would otherwise answer measurably slower than an unknown one
+    void svc.deliver(c, mails);
     reply.code(202);
     return ok(req, { message: 'If the address belongs to an account, a reset link is on its way' });
   });

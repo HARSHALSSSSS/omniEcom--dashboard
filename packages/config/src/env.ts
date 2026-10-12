@@ -19,7 +19,18 @@ export const envSchema = z.object({
   LOG_PRETTY: bool.default(false),
   PUBLIC_BASE_URL: z.string().url().default('http://localhost:3000'),
   CORS_ORIGINS: csv.default(['http://localhost:5173']),
-  TRUST_PROXY: bool.default(false),
+  /**
+   * Which proxies' X-Forwarded-For to believe: false | a number of trusted hops (1 = exactly one load balancer in front) | a comma
+   * separated list of proxy CIDRs. 'true' (believe every hop, so a client can spoof its IP and dodge rate limits) is accepted
+   * outside production only.
+   */
+  TRUST_PROXY: z.string().default('false').transform((v): boolean | number | string[] => {
+    const t = v.trim().toLowerCase();
+    if (t === 'false' || t === '0' || t === '') return false;
+    if (t === 'true') return true;
+    if (/^\d+$/.test(t)) return Number(t);
+    return v.split(',').map((x) => x.trim()).filter(Boolean);
+  }),
   SWAGGER_ENABLED: bool.optional(),
   RATE_LIMIT_MAX: z.coerce.number().int().default(300),
   RATE_LIMIT_WINDOW: z.string().default('1 minute'),
@@ -63,6 +74,8 @@ export const envSchema = z.object({
   APP_WEB_URL: z.string().url().default('http://localhost:5173'),
   /** Built-in mock/sandbox marketplace connector. Always allowed outside production; opt-in in production. */
   MOCK_MARKETPLACE_ENABLED: bool.optional(),
+  /** Built-in sandbox courier and its /shipments/{id}/simulate endpoint. Always allowed outside production; opt-in in production. */
+  SANDBOX_COURIER_ENABLED: bool.optional(),
 
   // ---- marketplace connectors / sync engine
   /** Bounded in-call retries (transient / 429) inside the connector host. */

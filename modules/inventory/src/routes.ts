@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { schema } from '@oms/database';
 import { IdParamSchema, IsoDate, PaginationQuerySchema, SearchQuerySchema, paginatedEnvelope, sortQuery, successEnvelope } from '@oms/contracts';
 import { audit, created, ok, paginated, vendorTx } from '@oms/module-kit';
+import { assertWarehouseCapability } from '@oms/mod-warehouses';
 import * as svc from './service';
 
 const Qty = z.number().int().min(1).max(10_000_000);
@@ -56,6 +57,8 @@ export const inventoryRoutes: FastifyPluginAsync = async (app) => {
   /** runs one stock operation, audits it, returns the uniform result shape */
   const change = async (req: FastifyRequest, action: string, op: (tx: Parameters<Parameters<typeof vendorTx>[1]>[0], vendorId: string) => Promise<Awaited<ReturnType<typeof svc.receiveStock>>>) => {
     const res = await vendorTx(req, async (tx, vendorId) => {
+      const wid = (req.body as { warehouseId?: string }).warehouseId;
+      if (wid) await assertWarehouseCapability(tx, req.ctx.principal, vendorId, wid, action === 'receive' || action === 'incoming' ? 'receive' : 'adjust');
       const mv = await op(tx, vendorId);
       if (!mv.duplicate) await audit(tx, req, { action: `inventory.${action}`, resourceType: 'inventory', resourceId: mv.stock.id, after: { movementId: mv.movementId, onHand: mv.stock.quantityOnHand, reserved: mv.stock.quantityReserved } });
       const detail = await svc.variantOverview(tx, vendorId, mv.stock.variantId);

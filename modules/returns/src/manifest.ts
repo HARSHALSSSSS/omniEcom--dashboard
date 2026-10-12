@@ -4,11 +4,11 @@ import { defineModule } from '@oms/module-kit';
 export const manifest = defineModule({
   name: "returns",
   title: "Returns",
-  responsibility: "Return/RTO/refund lifecycle, QC outcomes, restock decisions.",
-  owns: ["returns (future)"],
-  dependsOn: ["orders", "inventory"],
+  responsibility: "Return/RTO/refund lifecycle: return orders and items, reasons, pickup status, receiving, inspection, disposition (restock / damaged / dispose ...) feeding the inventory engine, and refund tracking. RTO deliveries create return orders automatically.",
+  owns: ["return_orders", "return_items", "return_events"],
+  dependsOn: ["orders", "inventory", "warehouses"],
   api: ["/api/v1/returns"],
-  publishes: ["return.created", "return.received", "return.completed"],
-  consumes: ["order.delivered", "shipment.failed"],
+  publishes: ["return.created", "return.received", "return.inspected", "return.completed"],
+  consumes: ["shipment.rto_delivered"],
   extraction: "later",
 });

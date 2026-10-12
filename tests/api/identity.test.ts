@@ -54,10 +54,19 @@ describe('login', () => {
     const a = await c().registerVendor();
     for (let i = 0; i < 5; i++) expect((await c().post('/api/v1/auth/login', { email: a.email, password: 'nope-nope-nope' })).status).toBe(401);
     const locked = await c().post('/api/v1/auth/login', { email: a.email, password: a.password });
-    expect(locked.status).toBe(423);
-    expect(locked.body.error.code).toBe('ACCOUNT_LOCKED');
+    // while locked the answer is IDENTICAL to a wrong password: it must not reveal that the address has an account
+    expect(locked.status).toBe(401);
+    expect(locked.body.error.code).toBe('INVALID_CREDENTIALS');
     const logs = await c().get('/api/v1/audit-logs?limit=50', a); // existing session still works
     expect(logs.body.data.map((l: any) => l.action)).toEqual(expect.arrayContaining(['auth.account_locked']));
+  });
+
+  it('parallel guesses cannot dodge the lock (the counter is atomic)', async () => {
+    const a = await c().registerVendor();
+    await Promise.all(Array.from({ length: 8 }, () => c().post('/api/v1/auth/login', { email: a.email, password: 'nope-nope-nope' })));
+    expect((await c().post('/api/v1/auth/login', { email: a.email, password: a.password })).status).toBe(401); // locked despite the race
+    const logs = await c().get('/api/v1/audit-logs?limit=50&filter[actionPrefix]=auth.', a);
+    expect(logs.body.data.map((l: any) => l.action)).toContain('auth.account_locked');
   });
 
   it('is rate limited per IP+route', async () => {

@@ -35,7 +35,7 @@ Order matters: **migrate first, then app**; the new schema must be backward comp
 
 | Process | Replicas | Scale on | Notes |
 |---|---|---|---|
-| api | ≥ 2 | CPU / RPS | stateless, `TRUST_PROXY=true`, PDB `minAvailable: 1`, preStop sleep for LB drain |
+| api | ≥ 2 | CPU / RPS | stateless, `TRUST_PROXY=1` (hop count), PDB `minAvailable: 1`, preStop sleep for LB drain |
 | worker | ≥ 2 | queue depth (KEDA) | split pools with `WORKER_QUEUES` (e.g. dedicated `marketplacePush`) |
 | webhook-worker | ≥ 2 | queue depth | isolates webhook storms |
 | scheduler | 1–2 | n/a | idempotent; replicas are safe |

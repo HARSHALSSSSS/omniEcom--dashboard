@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import type { NormalizedWebhook } from '@oms/marketplace-core';
 import type { FkListingState, FkShipmentState } from './dto';
 import { toInternalOrderStatus, toListingStatus } from './mappers';
@@ -19,11 +19,14 @@ export interface FkNotification {
 
 export const sign = (secret: string, rawBody: string | Buffer): string => createHmac('sha256', secret).update(rawBody).digest('base64');
 
+/** constant-time and never throws (hash first: equal-length strings can still encode to different byte lengths) */
+const constantTimeEqual = (a: string, b: string): boolean => timingSafeEqual(createHash('sha256').update(a).digest(), createHash('sha256').update(b).digest());
+
 export function verifyWebhook({ headers, rawBody, secret }: { headers: Record<string, string | undefined>; rawBody: Buffer; secret: string }): boolean {
   const got = headers[SIGNATURE_HEADER];
   if (!got) return false;
   const expected = sign(secret, rawBody);
-  return got.length === expected.length && timingSafeEqual(Buffer.from(got), Buffer.from(expected));
+  return constantTimeEqual(got, expected);
 }
 
 export function parseWebhook({ body }: { body: unknown }): NormalizedWebhook | null {

@@ -20,7 +20,7 @@ export const securityPlugin = fp<{ config: AppConfig; redis?: Redis }>(async (ap
     contentSecurityPolicy: config.swaggerEnabled
       ? { directives: { 'default-src': ["'self'"], 'script-src': ["'self'", "'unsafe-inline'"], 'style-src': ["'self'", "'unsafe-inline'"], 'img-src': ["'self'", 'data:'] } }
       : { directives: { 'default-src': ["'none'"], 'frame-ancestors': ["'none'"] } },
-    hsts: config.isProd ? { maxAge: 31_536_000, includeSubDomains: true } : false,
+    hsts: config.isProd || config.NODE_ENV === 'staging' ? { maxAge: 31_536_000, includeSubDomains: true } : false,
   });
 
   await app.register(cors, {

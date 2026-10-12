@@ -105,8 +105,10 @@ export async function updateMember(tx: Tx, vendorId: string, actorId: string, id
   if (input.fullName !== undefined) patch.fullName = input.fullName;
   if (input.status !== undefined) patch.status = input.status;
   if (Object.keys(patch).length) await tx.update(schema.users).set({ ...patch, version: sql`${schema.users.version} + 1` as never }).where(eq(schema.users.id, id));
-  if (input.roleKey !== undefined && input.roleKey !== current) await setRole(tx, vendorId, id, input.roleKey);
-  if (input.status === 'disabled' && user.status !== 'disabled') (await revokeSessions(tx, { userId: id })).forEach(notifySessionRevoked);
+  const roleChanged = input.roleKey !== undefined && input.roleKey !== current;
+  if (roleChanged) await setRole(tx, vendorId, id, input.roleKey!);
+  // a demotion must not keep working until the old access token expires: end every session (the user signs in again with the new role)
+  if (roleChanged || (input.status === 'disabled' && user.status !== 'disabled')) (await revokeSessions(tx, { userId: id })).forEach(notifySessionRevoked);
   return { before: { roleKey: current, status: user.status, fullName: user.fullName }, after: await getMember(tx, vendorId, id) };
 }
 

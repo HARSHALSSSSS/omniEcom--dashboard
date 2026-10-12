@@ -190,7 +190,7 @@ describe.each(SPECS)('connector conformance: $code', (spec) => {
 
     it('the error message never leaks credentials', async () => {
       control.setBehavior(seller, { failNext: 1, failStatus: 500 });
-      const e = await connector.fetchOrders!(ctx, { since: new Date(0) }).catch((x) => x as Error);
+      const e = (await connector.fetchOrders!(ctx, { since: new Date(0) }).catch((x) => x)) as Error;
       const text = `${e.message} ${JSON.stringify((e as ConnectorError).opts)}`;
       for (const v of Object.values(ctx.credentials)) if (typeof v === 'string' && v.length > 6) expect(text).not.toContain(v);
     });
@@ -408,7 +408,8 @@ describe.each(SPECS.filter((s) => s.webhooks))('webhook handling: $code', (spec)
   const listingType = spec.code === 'amazon_in' ? 'LISTINGS_ITEM_STATUS_CHANGE' : 'listing.updated';
 
   it('verifies the signature over the RAW body, constant-time, and rejects everything else', () => {
-    const { rawBody, headers } = signed(orderType);
+    const { rawBody, headers: signedHeaders } = signed(orderType);
+    const headers = signedHeaders as Record<string, string>;
     const verify = (h: Record<string, string | undefined>, body: string, sec = secret) => connector.verifyWebhook!({ headers: h, rawBody: Buffer.from(body), secret: sec });
     expect(verify(headers, rawBody)).toBe(true);
     expect(verify(headers, rawBody.replace('ORD-1', 'ORD-2'))).toBe(false); // tampered

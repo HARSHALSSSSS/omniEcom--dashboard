@@ -4,8 +4,8 @@ import { defineModule } from '@oms/module-kit';
 export const manifest = defineModule({
   name: "warehouses",
   title: "Warehouse",
-  responsibility: "Vendor fulfilment locations, addresses, default/priority routing and activation. Stock lives in inventory; a warehouse with stock cannot be removed.",
-  owns: ["warehouses"],
+  responsibility: "Vendor fulfilment locations: addresses, default/priority, zones (locations), bins, and the people who work there (members with roles and capabilities). Stock quantities live in inventory; bins only say where inside the warehouse stock sits.",
+  owns: ["warehouses", "warehouse_locations", "warehouse_bins", "warehouse_members"],
   dependsOn: ["vendors"],
   api: ["/api/v1/warehouses"],
   publishes: ["warehouse.created", "warehouse.updated", "warehouse.deactivated"],

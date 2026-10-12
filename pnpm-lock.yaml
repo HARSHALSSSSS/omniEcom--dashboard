@@ -605,6 +605,12 @@ importers:
       '@oms/mod-orders':
         specifier: workspace:*
         version: link:../orders
+      '@oms/mod-rules':
+        specifier: workspace:*
+        version: link:../rules
+      '@oms/mod-sync':
+        specifier: workspace:*
+        version: link:../sync
       '@oms/mod-warehouses':
         specifier: workspace:*
         version: link:../warehouses
@@ -749,6 +755,9 @@ importers:
 
   modules/notifications:
     dependencies:
+      '@oms/mod-rules':
+        specifier: workspace:*
+        version: link:../rules
       '@oms/mod-users':
         specifier: workspace:*
         version: link:../users
@@ -803,6 +812,9 @@ importers:
       '@oms/mod-listings':
         specifier: workspace:*
         version: link:../listings
+      '@oms/mod-rules':
+        specifier: workspace:*
+        version: link:../rules
       '@oms/module-kit':
         specifier: workspace:*
         version: link:../../packages/module-kit
@@ -875,6 +887,9 @@ importers:
       '@oms/mod-returns':
         specifier: workspace:*
         version: link:../returns
+      '@oms/mod-rules':
+        specifier: workspace:*
+        version: link:../rules
       '@oms/mod-shipping':
         specifier: workspace:*
         version: link:../shipping
@@ -920,6 +935,18 @@ importers:
       '@oms/mod-orders':
         specifier: workspace:*
         version: link:../orders
+      '@oms/mod-warehouses':
+        specifier: workspace:*
+        version: link:../warehouses
+      '@oms/module-kit':
+        specifier: workspace:*
+        version: link:../../packages/module-kit
+
+  modules/rules:
+    dependencies:
+      '@oms/mod-vendors':
+        specifier: workspace:*
+        version: link:../vendors
       '@oms/module-kit':
         specifier: workspace:*
         version: link:../../packages/module-kit
@@ -929,6 +956,15 @@ importers:
       '@oms/mod-fulfillment':
         specifier: workspace:*
         version: link:../fulfillment
+      '@oms/mod-inventory':
+        specifier: workspace:*
+        version: link:../inventory
+      '@oms/mod-orders':
+        specifier: workspace:*
+        version: link:../orders
+      '@oms/mod-warehouses':
+        specifier: workspace:*
+        version: link:../warehouses
       '@oms/module-kit':
         specifier: workspace:*
         version: link:../../packages/module-kit

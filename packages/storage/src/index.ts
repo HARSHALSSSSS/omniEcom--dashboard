@@ -19,8 +19,8 @@ export interface StoredObjectInfo { size: number; contentType: string | null }
 export interface ObjectStorage {
   readonly driver: string;
   readonly supportsPresign: boolean;
-  presignUpload(input: { key: string; contentType: string; maxBytes?: number; expiresInSeconds?: number }): Promise<{ url: string; method: 'PUT'; headers: Record<string, string> }>;
-  presignDownload(key: string, expiresInSeconds?: number): Promise<string>;
+  presignUpload(input: { key: string; contentType: string; maxBytes?: number; contentLength?: number; expiresInSeconds?: number }): Promise<{ url: string; method: 'PUT'; headers: Record<string, string> }>;
+  presignDownload(key: string, expiresInSeconds?: number, opts?: { attachmentName?: string }): Promise<string>;
   put(key: string, body: Buffer, contentType: string): Promise<{ size: number; sha256: string }>;
   get(key: string): Promise<Buffer | null>;
   head(key: string): Promise<StoredObjectInfo | null>;
@@ -62,13 +62,15 @@ export class S3Storage implements ObjectStorage {
     });
   }
 
-  async presignUpload({ key, contentType, expiresInSeconds = 300 }: { key: string; contentType: string; maxBytes?: number; expiresInSeconds?: number }) {
-    const url = await getSignedUrl(this.client, new PutObjectCommand({ Bucket: this.bucket, Key: key, ContentType: contentType }), { expiresIn: expiresInSeconds });
+  /** `contentLength` is SIGNED: the storage service refuses a body of any other size (no 5 GB uploads through a 5 MB slot). */
+  async presignUpload({ key, contentType, contentLength, expiresInSeconds = 300 }: { key: string; contentType: string; maxBytes?: number; contentLength?: number; expiresInSeconds?: number }) {
+    const url = await getSignedUrl(this.client, new PutObjectCommand({ Bucket: this.bucket, Key: key, ContentType: contentType, ...(contentLength !== undefined ? { ContentLength: contentLength } : {}) }), { expiresIn: expiresInSeconds });
     return { url, method: 'PUT' as const, headers: { 'Content-Type': contentType } };
   }
 
-  presignDownload(key: string, expiresInSeconds = 300): Promise<string> {
-    return getSignedUrl(this.client, new GetObjectCommand({ Bucket: this.bucket, Key: key }), { expiresIn: expiresInSeconds });
+  /** Non-image downloads are forced to `attachment` (never rendered in the browser from the storage origin). */
+  presignDownload(key: string, expiresInSeconds = 300, opts: { attachmentName?: string } = {}): Promise<string> {
+    return getSignedUrl(this.client, new GetObjectCommand({ Bucket: this.bucket, Key: key, ...(opts.attachmentName ? { ResponseContentDisposition: `attachment; filename="${opts.attachmentName.replace(/[^A-Za-z0-9._-]/g, '_')}"` } : {}) }), { expiresIn: expiresInSeconds });
   }
 
   async put(key: string, body: Buffer, contentType: string) {

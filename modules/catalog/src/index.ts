@@ -5,7 +5,7 @@ import { dataJobRoutes } from './datajob-routes';
 import { exportProductsHandler, importProductsHandler } from './datajobs';
 
 export { manifest };
-export { getProductRow, getVariantRow, toProductDto, toVariantDto, createProduct, createVariant, type ProductRow, type VariantRow } from './service';
+export { getProductRow, getVariantRow, toProductDto, toVariantDto, createProduct, createVariant, updateVariant, type ProductRow, type VariantRow } from './service';
 export { evaluateReadiness } from './readiness';
 export { jobEffects, requestEffects, type Effects } from './effects';
 export type { ProductInput, VariantInput } from './service';

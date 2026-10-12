@@ -4,11 +4,11 @@ import { defineModule } from '@oms/module-kit';
 export const manifest = defineModule({
   name: "reports",
   title: "Reports",
-  responsibility: "Operational reports and exports (async generation, stored in object storage). Reads from read-optimised views.",
-  owns: ["report_runs (future)"],
+  responsibility: "Reporting foundation: sales, orders, inventory, product performance, marketplace performance, returns and fulfillment, as tenant-scoped read APIs over the operational tables (read models / exports can be added without changing the endpoints).",
+  owns: [],
   dependsOn: ["orders", "inventory", "catalog"],
   api: ["/api/v1/reports"],
-  publishes: ["report.generated"],
+  publishes: [],
   consumes: [],
   extraction: "later",
 });

@@ -114,6 +114,7 @@ export const orders = pgTable('orders', {
   foreignKey({ columns: [t.vendorId, t.warehouseId], foreignColumns: [warehouses.vendorId, warehouses.id], name: 'orders_warehouse_fk' }),
   index('orders_vendor_status_placed_idx').on(t.vendorId, t.status, t.placedAt.desc(), t.id),
   index('orders_vendor_placed_idx').on(t.vendorId, t.placedAt.desc(), t.id),
+  index('orders_vendor_warehouse_idx').on(t.vendorId, t.warehouseId, t.placedAt.desc()),
   foreignKey({ columns: [t.vendorId, t.marketplaceAccountId], foreignColumns: [marketplaceAccounts.vendorId, marketplaceAccounts.id], name: 'orders_account_fk' }),
   check('orders_status_chk', inList('status', ORDER_STATUSES)),
   check('orders_payment_method_chk', inList('payment_method', PAYMENT_METHODS)),

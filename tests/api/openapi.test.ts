@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import Fastify from 'fastify';
 import { z } from 'zod';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
-import { buildTestApp, type TestApp } from '@oms/testing';
+import { buildTestApp, PROD_SAFE_ENV, type TestApp } from '@oms/testing';
 import { routePolicyPlugin } from '../../apps/api/src/plugins/route-policy';
 
 let t: TestApp;
@@ -51,7 +51,7 @@ describe('OpenAPI / Swagger', () => {
   });
 
   it('is disabled in production by default', async () => {
-    const prod = await buildTestApp({ config: { NODE_ENV: 'production', SWAGGER_ENABLED: 'false' } });
+    const prod = await buildTestApp({ config: { ...PROD_SAFE_ENV, SWAGGER_ENABLED: 'false' } });
     expect((await prod.app.inject('/docs/openapi')).statusCode).toBe(404);
     await prod.close();
   });

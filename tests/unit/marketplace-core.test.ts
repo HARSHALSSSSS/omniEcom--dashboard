@@ -8,7 +8,7 @@ import { signState, verifyState } from '@oms/mod-marketplace-connectors';
 import { parseCsv, toCsv } from '../../modules/catalog/src/csv';
 
 const fake = (caps: Partial<MarketplaceConnector['capabilities']> = {}): MarketplaceConnector => ({
-  code: 'mock', displayName: 'Fake', implementation: 'beta', verifyConnection: async () => ({ ok: true }),
+  code: 'mock', displayName: 'Fake', implementation: 'beta', readiness: { sandbox: true, live: false, notes: 'test double' }, verifyConnection: async () => ({ ok: true }),
   capabilities: { ...NO_CAPABILITIES, auth: { type: 'api_key', refreshable: false }, ...caps },
 });
 

@@ -184,9 +184,10 @@ describe('pagination & validation of query params', () => {
   });
 });
 
+const SAME_USER = '00000000-0000-7000-8000-00000000cafe';
 describe('idempotency', () => {
   const post = async (key: string | undefined, name = 'widget-one') =>
-    t.app.inject({ method: 'POST', url: '/api/v1/widgets', headers: { ...(await auth()), ...(key ? { 'idempotency-key': key } : {}) }, payload: { name } });
+    t.app.inject({ method: 'POST', url: '/api/v1/widgets', headers: { ...(await auth({ userId: SAME_USER })), ...(key ? { 'idempotency-key': key } : {}) }, payload: { name } });
 
   it('requires the header on idempotent routes', async () => {
     expect((await post(undefined)).statusCode).toBe(400);
@@ -198,6 +199,12 @@ describe('idempotency', () => {
     expect(second.statusCode).toBe(201);
     expect(second.headers['idempotency-replayed']).toBe('true');
     expect(second.json().data.id).toBe(first.json().data.id);
+  });
+  it('is bound to the caller: another user with the same key and body never replays someone else\'s response', async () => {
+    await post('shared-key-0001');
+    const other = await t.app.inject({ method: 'POST', url: '/api/v1/widgets', headers: { ...(await auth({ userId: '00000000-0000-7000-8000-00000000beef' })), 'idempotency-key': 'shared-key-0001' }, payload: { name: 'widget-one' } });
+    expect(other.statusCode).toBe(422);
+    expect(other.headers['idempotency-replayed']).toBeUndefined();
   });
   it('rejects the same key with a different payload', async () => {
     await post('reuse-key-00001', 'aaa');

@@ -23,7 +23,7 @@ export type SyncTrigger = (typeof schema.SYNC_TRIGGERS)[number];
 
 /** Which queue runs which job type. Pushes share one rate-limited queue; reads share another. */
 export const SYNC_QUEUE: Record<SyncType, QueueKey> = {
-  orders: 'syncMarketplace', listing_status: 'syncMarketplace', catalog_import: 'syncMarketplace', listings: 'syncMarketplace', returns: 'syncMarketplace', full: 'syncMarketplace',
+  orders: 'syncMarketplace', listing_status: 'syncMarketplace', catalog_import: 'syncMarketplace', listings: 'syncMarketplace', returns: 'syncMarketplace', tracking: 'syncMarketplace', full: 'syncMarketplace',
   order_status: 'marketplacePush', inventory: 'marketplacePush', prices: 'marketplacePush', listing_publish: 'marketplacePush',
 };
 export const syncJobName = (type: SyncType): string => `sync.${type}`;
@@ -141,7 +141,7 @@ export function backoffMs(c: Pick<Container, 'config'>, attempt: number, retryAf
   const base = c.config.SYNC_BACKOFF_BASE_MS;
   const raw = Math.min(c.config.SYNC_BACKOFF_MAX_MS, base * 2 ** Math.max(0, attempt - 1));
   const jittered = Math.round(raw * (0.75 + random() * 0.25));
-  return Math.max(jittered, retryAfterMs);
+  return Math.min(c.config.SYNC_BACKOFF_MAX_MS, Math.max(jittered, retryAfterMs));
 }
 
 const MAX_FAILURES_KEPT = 50;

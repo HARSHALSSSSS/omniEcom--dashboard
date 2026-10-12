@@ -44,9 +44,11 @@ export class SecretBox {
     if (version !== 'v1' || !keyId || !iv || !tag || !ct) throw new Error('Unsupported ciphertext envelope');
     const key = this.ring.keys.get(keyId);
     if (!key) throw new Error(`Unknown encryption key id "${keyId}"`);
-    const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(iv, 'base64url'));
+    const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(iv, 'base64url'), { authTagLength: 16 });
     decipher.setAAD(Buffer.from(aad));
-    decipher.setAuthTag(Buffer.from(tag, 'base64url'));
+    const authTag = Buffer.from(tag, 'base64url');
+    if (authTag.length !== 16) throw new Error('Invalid authentication tag'); // never accept a truncated GCM tag
+    decipher.setAuthTag(authTag);
     return Buffer.concat([decipher.update(Buffer.from(ct, 'base64url')), decipher.final()]).toString('utf8');
   }
 

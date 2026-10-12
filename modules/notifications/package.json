@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@oms/module-kit": "workspace:*",
-    "@oms/mod-users": "workspace:*"
+    "@oms/mod-users": "workspace:*",
+    "@oms/mod-rules": "workspace:*"
   }
 }

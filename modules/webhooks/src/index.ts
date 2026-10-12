@@ -1,4 +1,4 @@
-import { and, inArray, lt, or, schema, withSystem } from '@oms/database';
+import { and, eq, inArray, lt, or, schema, withSystem } from '@oms/database';
 import type { JobHandler } from '@oms/module-kit';
 import { manifest } from './manifest';
 import { webhookRoutes } from './routes';
@@ -29,6 +29,8 @@ const sweepHandler: JobHandler = {
   name: 'webhooks.sweep',
   async handle(_env, c) {
     const now = Date.now();
+    // a worker that died between "claim" and "outcome" leaves an event in `processing` forever: hand it back after 10 minutes
+    await withSystem(c.database.db, (tx) => tx.update(W).set({ status: 'failed', nextRetryAt: new Date(now) }).where(and(eq(W.status, 'processing'), lt(W.updatedAt, new Date(now - 10 * 60_000)))));
     const stale = await withSystem(c.database.db, (tx) =>
       tx.select().from(W).where(or(and(inArray(W.status, ['received']), lt(W.receivedAt, new Date(now - 2 * 60_000))), and(inArray(W.status, ['failed']), lt(W.nextRetryAt, new Date(now - 60_000))))).limit(500),
     );

@@ -1,4 +1,4 @@
-import { and, eq, schema, sql, type Tx } from '@oms/database';
+import { and, eq, inArray, schema, sql, type Tx } from '@oms/database';
 import { canManualTransition, type InternalOrderStatus } from '@oms/marketplace-core';
 import { AppError, Errors } from '@oms/shared';
 import { commitOrder, releaseOrder } from '@oms/mod-inventory';
@@ -13,8 +13,10 @@ export type OrderRow = typeof O.$inferSelect;
 export type StatusUpdateRow = typeof UPD.$inferSelect;
 type Source = (typeof schema.STATUS_EVENT_SOURCES)[number];
 
-export async function getOrderRow(tx: Tx, vendorId: string, id: string): Promise<OrderRow> {
-  const [o] = await tx.select().from(O).where(and(eq(O.id, id), eq(O.vendorId, vendorId)));
+/** `lock`: SELECT ... FOR UPDATE, so two concurrent state changes of one order run one after the other (the second sees the first's result) */
+export async function getOrderRow(tx: Tx, vendorId: string, id: string, lock = false): Promise<OrderRow> {
+  const q = tx.select().from(O).where(and(eq(O.id, id), eq(O.vendorId, vendorId)));
+  const [o] = await (lock ? q.for('update') : q);
   if (!o) throw Errors.notFound('Order', id);
   return o;
 }
@@ -25,6 +27,11 @@ export interface TransitionOptions {
   note?: string | null;
   tracking?: { number?: string; carrier?: string };
   cancelReason?: string | null;
+  /** set ONLY by the fulfillment module: it owns the picking..delivered statuses of an order that is being fulfilled */
+  viaFulfillment?: boolean;
+  /** who asked for the cancellation (derived from the source when omitted) and the machine-readable reason */
+  initiator?: (typeof schema.CANCELLATION_INITIATORS)[number];
+  reasonCode?: string;
 }
 
 /**
@@ -53,6 +60,7 @@ export async function performTransition(tx: Tx, ctx: OpCtx, order: OrderRow, to:
     const released = await releaseOrder(tx, vendorId, order.id, `order ${order.orderNumber} cancelled`, ctx.actor);
     if (released > 0 || order.inventoryStatus !== 'pending') set.inventoryStatus = 'released';
     stockNote = released > 0 ? `released ${released} unit(s)` : null;
+    await closeCancellation(tx, ctx, order, opts, released);
   } else if (left && order.inventoryStatus !== 'committed') {
     const committed = await commitOrder(tx, vendorId, order.id, ctx.actor);
     if (committed > 0) { set.inventoryStatus = 'committed'; stockNote = `committed ${committed} unit(s)`; }
@@ -68,7 +76,7 @@ export async function performTransition(tx: Tx, ctx: OpCtx, order: OrderRow, to:
   });
 
   const f = effects(tx, ctx);
-  const payload = { orderNumber: order.orderNumber, from, to, marketplace: order.marketplace, accountId: order.marketplaceAccountId, source: opts.source };
+  const payload = { orderNumber: order.orderNumber, from, to, marketplace: order.marketplaceAccountId ? order.marketplace : order.marketplace, accountId: order.marketplaceAccountId, source: opts.source, ...(to === 'cancelled' ? { initiator: opts.initiator ?? initiatorFor(opts.source), reasonCode: opts.reasonCode ?? 'other' } : {}) };
   await f.event({ type: 'order.status_changed', aggregateType: 'order', aggregateId: order.id, payload });
   const specific = { cancelled: 'order.cancelled', dispatched: 'order.dispatched', delivered: 'order.delivered', returned: 'order.returned' } as Partial<Record<InternalOrderStatus, string>>;
   if (specific[to]) await f.event({ type: specific[to]!, aggregateType: 'order', aggregateId: order.id, payload });
@@ -84,17 +92,39 @@ export async function recordIgnored(tx: Tx, ctx: OpCtx, order: OrderRow, reporte
   });
 }
 
+const initiatorFor = (source: Source): (typeof schema.CANCELLATION_INITIATORS)[number] => (source === 'marketplace' || source === 'webhook' || source === 'sync' ? 'marketplace' : source === 'user' ? 'seller' : 'system');
+
+/** One cancellation record per cancelled order: an accepted request is completed, otherwise a completed record is written. */
+async function closeCancellation(tx: Tx, ctx: OpCtx, order: OrderRow, opts: TransitionOptions, released: number): Promise<void> {
+  const C = schema.orderCancellations;
+  const [open] = await tx.select().from(C).where(and(eq(C.vendorId, ctx.vendorId), eq(C.orderId, order.id), inArray(C.status, ['requested', 'accepted'])));
+  if (open) {
+    await tx.update(C).set({ status: 'completed', releasedUnits: released, decidedBy: open.decidedBy ?? ctx.actor.id, decidedAt: open.decidedAt ?? new Date() }).where(eq(C.id, open.id));
+    return;
+  }
+  await tx.insert(C).values({
+    vendorId: ctx.vendorId, orderId: order.id, initiator: opts.initiator ?? initiatorFor(opts.source), reasonCode: opts.reasonCode ?? 'other', reasonText: opts.cancelReason ?? opts.note ?? null,
+    status: 'completed', orderStatusAtRequest: order.status, requestedBy: ctx.actor.id, decidedBy: ctx.actor.id, decidedAt: new Date(), releasedUnits: released,
+  });
+}
+
 // ------------------------------------------------------------------------------------------------
 // manual transition (an operator moves the order along)
 // ------------------------------------------------------------------------------------------------
 export async function manualTransition(tx: Tx, ctx: OpCtx, id: string, to: InternalOrderStatus, opts: Omit<TransitionOptions, 'source'> & { version?: number }): Promise<OrderRow> {
-  const order = await getOrderRow(tx, ctx.vendorId, id);
+  const order = await getOrderRow(tx, ctx.vendorId, id, true);
   if (opts.version !== undefined && opts.version !== order.version) throw new AppError('VERSION_CONFLICT', undefined, { details: { currentVersion: order.version } });
   const from = order.status as InternalOrderStatus;
   if (from === to) throw new AppError('INVALID_STATE', `The order is already ${to}`, { details: { status: from } });
+  if (!opts.viaFulfillment && FULFILLMENT_OWNED.includes(to)) {
+    const [live] = await tx.select({ id: schema.fulfillments.id }).from(schema.fulfillments).where(and(eq(schema.fulfillments.vendorId, ctx.vendorId), eq(schema.fulfillments.orderId, id), sql`${schema.fulfillments.status} <> 'cancelled'`)).limit(1);
+    if (live) throw new AppError('CONFLICT', 'This order is being fulfilled: its status follows the warehouse work (pick, pack, ship) and cannot be set by hand', { details: { rule: 'managed_by_fulfillment', fulfillmentId: live.id } });
+  }
   if (!canManualTransition(from, to)) throw new AppError('INVALID_STATE', `An order cannot move from ${from} to ${to}`, { details: { from, to, allowed: ALLOWED[from] } });
   return performTransition(tx, ctx, order, to, { ...opts, source: ctx.actor.type === 'user' || ctx.actor.type === 'api_key' ? 'user' : 'system' });
 }
+/** statuses the warehouse / shipping flow drives once an order has a fulfillment */
+const FULFILLMENT_OWNED: InternalOrderStatus[] = ['picking', 'packed', 'ready_to_dispatch', 'dispatched', 'in_transit', 'delivered'];
 const ALLOWED: Record<InternalOrderStatus, InternalOrderStatus[]> = {
   new: ['confirmed', 'cancelled'], confirmed: ['picking', 'cancelled'], picking: ['packed', 'cancelled'], packed: ['ready_to_dispatch', 'cancelled'], ready_to_dispatch: ['dispatched', 'cancelled'],
   dispatched: ['in_transit', 'delivered', 'returned'], in_transit: ['delivered', 'returned'], delivered: ['returned'], cancelled: [], returned: [],

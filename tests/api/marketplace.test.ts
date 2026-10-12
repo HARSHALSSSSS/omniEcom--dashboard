@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { buildTestApp, clientFor, mockControl, type Actor, type TestApp } from '@oms/testing';
+import { buildTestApp, clientFor, mockControl, PROD_SAFE_ENV, type Actor, type TestApp } from '@oms/testing';
 
 let t: TestApp;
 let c: ReturnType<typeof clientFor>;
@@ -67,7 +67,7 @@ describe('connector catalogue and capability matrix', () => {
 
   it('the mock marketplace is sandbox-only and can be switched off (production default)', async () => {
     expect((await c.post('/api/v1/marketplace-accounts', { marketplace: 'mock', displayName: 'Mock', mode: 'live' }, admin)).status).toBe(400);
-    const prodLike = await buildTestApp({ database: true, config: { NODE_ENV: 'production', MOCK_MARKETPLACE_ENABLED: 'false', SWAGGER_ENABLED: 'false' } });
+    const prodLike = await buildTestApp({ database: true, config: { ...PROD_SAFE_ENV, MOCK_MARKETPLACE_ENABLED: 'false', SWAGGER_ENABLED: 'false' } });
     const cc = clientFor(prodLike);
     const actor = await cc.registerVendor();
     expect((await cc.get('/api/v1/marketplaces', actor)).body.data.map((m: any) => m.code)).not.toContain('mock');

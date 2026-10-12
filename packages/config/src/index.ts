@@ -2,6 +2,9 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { config as loadDotenv } from 'dotenv';
 import { envSchema, type Env } from './env';
+import { assertProductionReadiness } from './production';
+
+export { assertProductionReadiness } from './production';
 
 export { envSchema } from './env';
 export type { Env } from './env';
@@ -12,6 +15,7 @@ export interface AppConfig extends Env {
   isDev: boolean;
   swaggerEnabled: boolean;
   mockMarketplaceEnabled: boolean;
+  sandboxCourierEnabled: boolean;
 }
 
 /**
@@ -37,6 +41,7 @@ export function parseConfig(source: Record<string, string | undefined>): AppConf
   }
   const env = parsed.data;
   const isProd = env.NODE_ENV === 'production';
+  if (isProd || env.NODE_ENV === 'staging') assertProductionReadiness(env, isProd);
   return {
     ...env,
     isProd,
@@ -45,6 +50,7 @@ export function parseConfig(source: Record<string, string | undefined>): AppConf
     // Interactive docs are on everywhere except production unless explicitly enabled.
     swaggerEnabled: env.SWAGGER_ENABLED ?? !isProd,
     mockMarketplaceEnabled: env.MOCK_MARKETPLACE_ENABLED ?? !isProd,
+    sandboxCourierEnabled: env.SANDBOX_COURIER_ENABLED ?? !isProd,
   };
 }
 

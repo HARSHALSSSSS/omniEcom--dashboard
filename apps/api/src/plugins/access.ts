@@ -1,5 +1,5 @@
 import fp from 'fastify-plugin';
-import { verifyAccessToken, principalFromClaims, type TokenConfig } from '@oms/auth';
+import { isWritePermission, verifyAccessToken, principalFromClaims, type TokenConfig } from '@oms/auth';
 import { enrichContext } from '@oms/logging';
 import { AppError, Errors, isUuid, resolveScope } from '@oms/shared';
 import type { AccessDirectory } from '../access-directory';
@@ -46,6 +46,10 @@ export const accessPlugin = fp<{ tokens: TokenConfig; directory: AccessDirectory
       if (principal.userType !== 'platform' || !permissions.has('platform:impersonate')) throw Errors.forbidden('platform:impersonate');
       if (typeof actAs !== 'string' || !isUuid(actAs)) throw new AppError('BAD_REQUEST', 'X-Act-As-Vendor must be a vendor UUID');
       if (!(await opts.directory.vendorStatus(actAs))) throw Errors.notFound('Vendor', actAs);
+      // Acting inside a tenant is READ-ONLY for everyone (support and admins alike): a stolen platform token must not be able to
+      // change tenant data. Anything that could mutate (any non-GET/HEAD method, or a write permission) is refused.
+      const readOnly = req.method === 'GET' || req.method === 'HEAD';
+      if (!readOnly || (typeof access === 'object' && isWritePermission(access.permission))) throw new AppError('FORBIDDEN', 'Acting on behalf of a vendor is read-only', { details: { rule: 'impersonation_read_only' } });
       principal.actingAsVendorId = actAs;
       req.log.warn({ actorId: principal.actorId, onBehalfOfVendorId: actAs, route: req.routeOptions.url }, 'platform.cross_tenant_access');
     }
