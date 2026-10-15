@@ -1,6 +1,8 @@
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import { lazy, Suspense } from "react";
 import { ROUTES } from "@/constants/routes";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { PublicOnlyRoute } from "@/components/auth/PublicOnlyRoute";
 
 // Layouts
 const AppShell = lazy(() => import("@/components/layout/AppShell"));
@@ -94,23 +96,41 @@ export const router = createBrowserRouter([
   // Auth routes (no shell)
   {
     path: ROUTES.SIGN_UP,
-    element: withSuspense(SignUpPage),
+    element: (
+      <PublicOnlyRoute>
+        {withSuspense(SignUpPage)}
+      </PublicOnlyRoute>
+    ),
   },
   {
     path: ROUTES.SIGN_IN,
-    element: withSuspense(SignInPage),
+    element: (
+      <PublicOnlyRoute>
+        {withSuspense(SignInPage)}
+      </PublicOnlyRoute>
+    ),
   },
   // Onboarding (wizard layout, no app shell)
   {
+    path: ROUTES.ONBOARDING,
+    element: <Navigate to={`${ROUTES.ONBOARDING}/business`} replace />,
+  },
+  {
     path: `${ROUTES.ONBOARDING}/:step`,
-    element: withSuspense(OnboardingPage),
+    element: (
+      <ProtectedRoute requireOnboarding={false}>
+        {withSuspense(OnboardingPage)}
+      </ProtectedRoute>
+    ),
   },
   // App shell routes
   {
     element: (
-      <Suspense fallback={<PageLoader />}>
-        <AppShell />
-      </Suspense>
+      <ProtectedRoute requireOnboarding={true}>
+        <Suspense fallback={<PageLoader />}>
+          <AppShell />
+        </Suspense>
+      </ProtectedRoute>
     ),
     children: [
       { index: true, element: <Navigate to={ROUTES.DASHBOARD} replace /> },

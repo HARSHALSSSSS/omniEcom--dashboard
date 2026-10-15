@@ -3,8 +3,8 @@ import { ENDPOINTS } from "@/api/endpoints";
 
 const MOCK_USER = {
   id: "user-001",
-  fullName: "Abhishek Kumar",
-  email: "abhishek@novaliving.in",
+  fullName: "Aayush Kumar",
+  email: "aayush@gmail.com",
   businessName: "Nova Living",
   businessType: "d2c_brand",
   teamSize: "6-20",

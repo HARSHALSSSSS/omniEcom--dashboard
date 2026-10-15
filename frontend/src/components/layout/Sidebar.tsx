@@ -1,18 +1,26 @@
 import React from "react";
-import { NavLink } from "react-router-dom";
-import { ChevronsUpDown, PanelLeft } from "lucide-react";
+import { NavLink, useNavigate } from "react-router-dom";
+import { PanelLeft, LogOut } from "lucide-react";
 import { NAV_GROUPS, NAV_BOTTOM } from "@/constants/navigation";
 import { useUiStore } from "@/store/ui.store";
 import { useWorkspaceStore } from "@/store/workspace.store";
+import { ROUTES } from "@/constants/routes";
 import { cn } from "@/utils/cn";
 
 export const Sidebar: React.FC = () => {
+  const navigate = useNavigate();
   const { sidebarCollapsed, toggleSidebar } = useUiStore();
-  const { user, needsAttentionCount } = useWorkspaceStore();
+  const { user, needsAttentionCount, clearWorkspace } = useWorkspaceStore();
 
   const displayName = user?.fullName ?? "Abhishek";
   const displayRole = user?.role === "owner" ? "Business owner" : "Seller";
   const initial = displayName.charAt(0).toUpperCase();
+
+  const handleSignOut = () => {
+    clearWorkspace();
+    localStorage.removeItem("omni-ecom-workspace-store");
+    navigate(ROUTES.SIGN_IN);
+  };
 
   return (
     <aside
@@ -150,7 +158,14 @@ export const Sidebar: React.FC = () => {
             </div>
           )}
           {!sidebarCollapsed && (
-            <ChevronsUpDown className="h-3.5 w-3.5 text-[#666666] shrink-0" />
+            <button
+              type="button"
+              onClick={handleSignOut}
+              title="Sign out"
+              className="p-1 text-[#666666] hover:text-red-600 rounded transition-colors"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+            </button>
           )}
         </div>
       </div>

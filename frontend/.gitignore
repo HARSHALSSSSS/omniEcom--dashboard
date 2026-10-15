@@ -1,6 +1,40 @@
+# Dependencies
 node_modules/
-dist/
-*.tsbuildinfo
-*.local
-.env*.local
 
+# Production build output
+dist/
+dist-ssr/
+
+# TypeScript compiler build cache
+*.tsbuildinfo
+
+# Local env files
+.env
+.env.local
+.env.*.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editor & OS files
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store
+Thumbs.db
+
+# Project-specific documentation & internal reference files
+omni chanel/
+"omni chanel"
+architecture.md
+memory.md
+prd.md
+rules.md

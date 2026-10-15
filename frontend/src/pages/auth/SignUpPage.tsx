@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -100,7 +100,7 @@ export default function SignUpPage() {
               type="text"
               placeholder="Your full name"
               {...register("fullName")}
-              className="h-11 rounded-lg border-[#E5E7EB] bg-white px-3.5 text-sm focus:border-black"
+              className="h-11 rounded-[18px] border-[#E5E7EB] bg-white px-3.5 text-sm focus:border-black"
             />
             {errors.fullName && (
               <p className="text-xs text-red-500">{errors.fullName.message}</p>
@@ -116,7 +116,7 @@ export default function SignUpPage() {
               type="text"
               placeholder="e.g. Nova Living"
               {...register("businessName")}
-              className="h-11 rounded-lg border-[#E5E7EB] bg-white px-3.5 text-sm focus:border-black"
+              className="h-11 rounded-[18px] border-[#E5E7EB] bg-white px-3.5 text-sm focus:border-black"
             />
             {errors.businessName && (
               <p className="text-xs text-red-500">
@@ -134,7 +134,7 @@ export default function SignUpPage() {
               type="email"
               placeholder="you@company.com"
               {...register("email")}
-              className="h-11 rounded-lg border-[#E5E7EB] bg-white px-3.5 text-sm focus:border-black"
+              className="h-11 rounded-[18px] border-[#E5E7EB] bg-white px-3.5 text-sm focus:border-black"
             />
             {errors.email && (
               <p className="text-xs text-red-500">{errors.email.message}</p>
@@ -151,7 +151,7 @@ export default function SignUpPage() {
                 type={showPassword ? "text" : "password"}
                 placeholder="Create a secure password"
                 {...register("password")}
-                className="h-11 rounded-lg border-[#E5E7EB] bg-white px-3.5 pr-10 text-sm focus:border-black"
+                className="h-11 rounded-[18px] border-[#E5E7EB] bg-white px-3.5 pr-10 text-sm focus:border-black"
               />
               <button
                 type="button"
@@ -179,7 +179,7 @@ export default function SignUpPage() {
           <Button
             type="submit"
             disabled={isLoading}
-            className="w-full h-11 rounded-lg bg-black text-white hover:bg-neutral-800 font-medium text-sm mt-3 flex items-center justify-center gap-2"
+            className="w-full h-11 rounded-[18px] bg-black text-white hover:bg-neutral-800 font-medium text-sm mt-3 flex items-center justify-center gap-2"
           >
             {isLoading ? (
               <>

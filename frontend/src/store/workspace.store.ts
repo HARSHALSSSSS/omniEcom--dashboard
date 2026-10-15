@@ -75,8 +75,8 @@ const DEFAULT_ONBOARDING_DATA: OnboardingState = {
 
 const DEFAULT_USER: WorkspaceUser = {
   id: "user-001",
-  fullName: "Abhishek Kumar",
-  email: "abhishek@novaliving.in",
+  fullName: "Aayush Kumar",
+  email: "aayush@gmail.com",
   businessName: "Nova Living",
   businessType: "d2c_brand",
   teamSize: "just_me",
@@ -123,12 +123,12 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
           onboardingComplete: true,
           user: state.user
             ? {
-                ...state.user,
-                businessName:
-                  state.onboardingData.business.name || state.user.businessName,
-                businessType: state.onboardingData.business.type,
-                city: state.onboardingData.business.city,
-              }
+              ...state.user,
+              businessName:
+                state.onboardingData.business.name || state.user.businessName,
+              businessType: state.onboardingData.business.type,
+              city: state.onboardingData.business.city,
+            }
             : null,
         })),
 

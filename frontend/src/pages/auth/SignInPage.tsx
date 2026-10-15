@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -35,7 +35,7 @@ export default function SignInPage() {
   } = useForm<SignInFormData>({
     resolver: zodResolver(signInSchema),
     defaultValues: {
-      email: "abhishek@novaliving.in",
+      email: "aayush@gmail.com",
       password: "password123",
       rememberMe: true,
     },
@@ -95,7 +95,7 @@ export default function SignInPage() {
               type="email"
               placeholder="you@company.com"
               {...register("email")}
-              className="h-11 rounded-lg border-[#E5E7EB] bg-white px-3.5 text-sm focus:border-black"
+              className="h-11 rounded-[18px] border-[#E5E7EB] bg-white px-3.5 text-sm focus:border-black"
             />
             {errors.email && (
               <p className="text-xs text-red-500">{errors.email.message}</p>
@@ -121,7 +121,7 @@ export default function SignInPage() {
                 type={showPassword ? "text" : "password"}
                 placeholder="Enter your password"
                 {...register("password")}
-                className="h-11 rounded-lg border-[#E5E7EB] bg-white px-3.5 pr-10 text-sm focus:border-black"
+                className="h-11 rounded-[18px] border-[#E5E7EB] bg-white px-3.5 pr-10 text-sm focus:border-black"
               />
               <button
                 type="button"
@@ -160,7 +160,7 @@ export default function SignInPage() {
           <Button
             type="submit"
             disabled={isLoading}
-            className="w-full h-11 rounded-lg bg-black text-white hover:bg-neutral-800 font-medium text-sm mt-3 flex items-center justify-center gap-2"
+            className="w-full h-11 rounded-[18px] bg-black text-white hover:bg-neutral-800 font-medium text-sm mt-3 flex items-center justify-center gap-2"
           >
             {isLoading ? (
               <>

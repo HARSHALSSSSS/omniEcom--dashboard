@@ -8,8 +8,8 @@ interface AuthLayoutProps {
 export const AuthLayout: React.FC<AuthLayoutProps> = ({ children }) => {
   return (
     <div className="flex min-h-screen w-full flex-col lg:flex-row">
-      {/* Left dark brand & value proposition panel */}
-      <div className="relative flex flex-col justify-between bg-black p-8 text-white lg:w-1/2 lg:p-14">
+      {/* Left dark brand & value proposition panel (40%) */}
+      <div className="relative flex flex-col justify-between bg-black p-8 text-white lg:w-[40%] lg:p-14">
         {/* Brand header */}
         <div className="space-y-1">
           <h2 className="text-xl font-bold tracking-tight">[Product Name]</h2>
@@ -98,8 +98,8 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children }) => {
         </div>
       </div>
 
-      {/* Right form container */}
-      <div className="flex flex-1 items-center justify-center p-6 sm:p-12 lg:p-16 bg-background">
+      {/* Right form container (60%) */}
+      <div className="flex flex-1 lg:w-[60%] items-center justify-center p-6 sm:p-12 lg:p-16 bg-background">
         <div className="w-full max-w-md">{children}</div>
       </div>
     </div>
