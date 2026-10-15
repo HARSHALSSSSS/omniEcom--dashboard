@@ -5,7 +5,7 @@ import { warehouseLayoutRoutes } from './layout-routes';
 
 export { manifest };
 export { warehouseRoutes, WarehouseSchema } from './routes';
-export { allocationOrder, createWarehouse, getWarehouseRow, listWarehouses, toWarehouseDto, type WarehouseRow } from './service';
+export { allocationOrder, createWarehouse, updateWarehouse, getWarehouseRow, listWarehouses, toWarehouseDto, type WarehouseRow } from './service';
 export { assertWarehouseCapability, allowedWarehouses, capabilitiesOf, findBinByBarcode, getBin, ROLE_CAPABILITIES, type Capability, type WarehouseRole } from './layout';
 
 const routes: FastifyPluginAsync = async (app) => {

@@ -232,6 +232,13 @@ const modules = [
     extraction: 'keep',
   },
 
+  {
+    name: 'onboarding', title: 'Onboarding',
+    responsibility: 'Guided seller setup: business profile, sales channels, products, inventory mode and first warehouse, fulfillment preferences and the readiness checklist. Stores progress and drafts per step ("Save & exit") and delegates real configuration to the modules that own it.',
+    owns: ['onboarding_progress', 'fulfillment_preferences'], dependsOn: ['vendors', 'marketplace-accounts', 'marketplace-connectors', 'listings', 'sync', 'warehouses'], api: ['/api/v1/onboarding'],
+    publishes: ['onboarding.completed', 'onboarding.inventory_configured'], consumes: [],
+    extraction: 'keep',
+  },
 ];
 
 const write = (path, content) => {

@@ -39,6 +39,7 @@
     "@oms/mod-ai": "workspace:*",
     "@oms/mod-automation": "workspace:*",
     "@oms/mod-audit": "workspace:*",
-    "@oms/mod-platform-admin": "workspace:*"
+    "@oms/mod-platform-admin": "workspace:*",
+    "@oms/mod-onboarding": "workspace:*"
   }
 }

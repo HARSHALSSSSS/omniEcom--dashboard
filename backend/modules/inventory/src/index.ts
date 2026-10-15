@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { manifest } from './manifest';
 import { inventoryRoutes } from './routes';
 import { inventoryOpsRoutes } from './ops-routes';
+import { stockImportRoutes } from './stock-import';
 
 export { manifest };
 export { inventoryRoutes } from './routes';
@@ -18,6 +19,7 @@ export { addToBin, binStockOf, moveBetweenBins, removeFromBin, stockLocations, s
 const routes: FastifyPluginAsync = async (app) => {
   await app.register(inventoryRoutes);
   await app.register(inventoryOpsRoutes);
+  await app.register(stockImportRoutes);
 };
 
 /**

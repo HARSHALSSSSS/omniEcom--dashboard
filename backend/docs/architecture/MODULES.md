@@ -37,6 +37,7 @@ Modules live in `modules/<name>` as workspace packages `@oms/mod-<name>`. A modu
 | **Automation** (`automation`) | `automation_rules`, `automation_executions` | `ai`, `inventory`, `sync`, `fulfillment`, `notifications`, `rules` | later |
 | **Audit** (`audit`) | `audit_logs` | - | early |
 | **Platform Admin** (`platform-admin`) | `feature_flags`, `feature_flag_overrides` | `vendors`, `users`, `identity` | keep |
+| **Onboarding** (`onboarding`) | `onboarding_progress`, `fulfillment_preferences` | `vendors`, `marketplace-accounts`, `marketplace-connectors`, `listings`, `sync`, `warehouses` | keep |
 
 ## Details
 
@@ -356,6 +357,17 @@ Modules live in `modules/<name>` as workspace packages `@oms/mod-<name>`. A modu
 - **API prefixes:** `/api/v1/admin`, `/api/v1/features`
 - **Depends on (sync calls):** `vendors`, `users`, `identity`
 - **Publishes events:** `admin.impersonation_started`, `admin.flag_changed`
+- **Consumes events:** none
+- **Microservice extraction:** keep
+
+### Onboarding — `onboarding`
+
+**Responsibility:** Guided seller setup: business profile, sales channels, products, inventory mode and first warehouse, fulfillment preferences and the readiness checklist. Stores progress and drafts per step ("Save & exit") and delegates real configuration to the modules that own it.
+
+- **Owns data:** `onboarding_progress`, `fulfillment_preferences`
+- **API prefixes:** `/api/v1/onboarding`
+- **Depends on (sync calls):** `vendors`, `marketplace-accounts`, `marketplace-connectors`, `listings`, `sync`, `warehouses`
+- **Publishes events:** `onboarding.completed`, `onboarding.inventory_configured`
 - **Consumes events:** none
 - **Microservice extraction:** keep
 

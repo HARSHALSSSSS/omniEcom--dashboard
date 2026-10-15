@@ -14,3 +14,4 @@ export * from './shipping-ops';
 export * from './returns-ops';
 export * from './business-ops';
 export * from './platform-intel';
+export * from './onboarding';

@@ -17,6 +17,9 @@ export function toVendorDto(v: VendorRow) {
     gstin: v.gstin,
     pan: v.pan,
     address: v.address as Record<string, string>,
+    businessType: v.businessType as (typeof schema.BUSINESS_TYPES)[number] | null,
+    teamSize: v.teamSize as (typeof schema.TEAM_SIZES)[number] | null,
+    operatingLocation: v.operatingLocation,
     timezone: v.timezone,
     currency: v.currency.trim(),
     settings: v.settings as Record<string, unknown>,
@@ -34,7 +37,7 @@ export async function getVendor(tx: Tx, id: string): Promise<VendorRow> {
 
 export type VendorUpdate = Partial<{
   displayName: string; legalName: string; businessEmail: string; phone: string; gstin: string | null; pan: string | null;
-  address: Record<string, unknown>; timezone: string; currency: string; version: number;
+  address: Record<string, unknown>; businessType: string; teamSize: string; operatingLocation: string; timezone: string; currency: string; version: number;
 }>;
 
 export async function updateVendor(tx: Tx, id: string, input: VendorUpdate): Promise<{ before: VendorRow; after: VendorRow }> {

@@ -1,0 +1,28 @@
+{
+  "name": "@oms/mod-onboarding",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@oms/module-kit": "workspace:*",
+    "@oms/marketplace-core": "workspace:*",
+    "@oms/shared": "workspace:*",
+    "@oms/database": "workspace:*",
+    "@oms/contracts": "workspace:*",
+    "zod": "^4.6.5",
+    "fastify": "^5.12.5",
+    "fastify-type-provider-zod": "^7.0.0",
+    "@oms/mod-vendors": "workspace:*",
+    "@oms/mod-marketplace-accounts": "workspace:*",
+    "@oms/mod-marketplace-connectors": "workspace:*",
+    "@oms/mod-listings": "workspace:*",
+    "@oms/mod-sync": "workspace:*",
+    "@oms/mod-warehouses": "workspace:*"
+  }
+}

@@ -279,6 +279,27 @@
               }
             },
             "additionalProperties": false
+          },
+          "inventory": {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "simple",
+                  "warehouse"
+                ]
+              },
+              "startingMethod": {
+                "type": "string",
+                "enum": [
+                  "manual",
+                  "marketplace",
+                  "file"
+                ]
+              }
+            },
+            "additionalProperties": false
           }
         },
         "additionalProperties": false
@@ -343,6 +364,47 @@
           "address": {
             "$ref": "#/components/schemas/AddressInput"
           },
+          "businessType": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "d2c_brand",
+                  "marketplace_seller",
+                  "retail",
+                  "wholesaler",
+                  "social_commerce",
+                  "other"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "teamSize": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "just_me",
+                  "2_5",
+                  "6_20",
+                  "21_50",
+                  "50_plus"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "operatingLocation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "timezone": {
             "type": "string"
           },
@@ -381,6 +443,9 @@
           "gstin",
           "pan",
           "address",
+          "businessType",
+          "teamSize",
+          "operatingLocation",
           "timezone",
           "currency",
           "settings",
@@ -3357,6 +3422,74 @@
           "variantId",
           "sku",
           "quantity"
+        ]
+      },
+      "StockImportResultInput": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "set",
+              "add"
+            ]
+          },
+          "rows": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "applied": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "unchanged": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "failed": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "row": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "sku": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "row",
+                "sku",
+                "message"
+              ]
+            },
+            "description": "First 100 row errors"
+          }
+        },
+        "required": [
+          "mode",
+          "rows",
+          "applied",
+          "unchanged",
+          "failed",
+          "errors"
         ]
       },
       "MarketplaceAccountInput": {
@@ -7773,6 +7906,847 @@
           "overrides"
         ]
       },
+      "OnboardingBusinessInput": {
+        "type": "object",
+        "properties": {
+          "businessName": {
+            "type": "string"
+          },
+          "businessType": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "d2c_brand",
+                  "marketplace_seller",
+                  "retail",
+                  "wholesaler",
+                  "social_commerce",
+                  "other"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "teamSize": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "just_me",
+                  "2_5",
+                  "6_20",
+                  "21_50",
+                  "50_plus"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "operatingLocation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "workspaceTier": {
+            "type": "string",
+            "enum": [
+              "starter",
+              "growing",
+              "scale"
+            ]
+          }
+        },
+        "required": [
+          "businessName",
+          "businessType",
+          "teamSize",
+          "operatingLocation",
+          "workspaceTier"
+        ]
+      },
+      "OnboardingStateInput": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "in_progress",
+              "completed"
+            ]
+          },
+          "currentStep": {
+            "type": "string",
+            "enum": [
+              "business",
+              "channels",
+              "products",
+              "inventory",
+              "fulfillment",
+              "ready"
+            ]
+          },
+          "resumeStep": {
+            "type": "string",
+            "enum": [
+              "business",
+              "channels",
+              "products",
+              "inventory",
+              "fulfillment",
+              "ready"
+            ]
+          },
+          "percentComplete": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "0-100, over the five setup steps before \"Ready\""
+          },
+          "completedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "example": "2026-01-31T10:15:30.000Z"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "enum": [
+                    "business",
+                    "channels",
+                    "products",
+                    "inventory",
+                    "fulfillment",
+                    "ready"
+                  ]
+                },
+                "title": {
+                  "type": "string"
+                },
+                "order": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "skippable": {
+                  "type": "boolean"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "not_started",
+                    "in_progress",
+                    "completed",
+                    "skipped"
+                  ]
+                },
+                "completedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "skippedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "key",
+                "title",
+                "order",
+                "skippable",
+                "status",
+                "completedAt",
+                "skippedAt"
+              ]
+            }
+          },
+          "drafts": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {}
+            },
+            "description": "Unsaved form state per step, saved by \"Save & exit\""
+          },
+          "selectedChannels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "business": {
+            "$ref": "#/components/schemas/OnboardingBusinessInput"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "status",
+          "currentStep",
+          "resumeStep",
+          "percentComplete",
+          "completedAt",
+          "steps",
+          "drafts",
+          "selectedChannels",
+          "business",
+          "version"
+        ]
+      },
+      "OnboardingChannelInput": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "marketplace",
+              "online_store",
+              "social"
+            ]
+          },
+          "description": {
+            "type": "string"
+          },
+          "availability": {
+            "type": "string",
+            "enum": [
+              "available",
+              "coming_soon"
+            ],
+            "description": "coming_soon channels can be ticked (interest) but not connected"
+          },
+          "selected": {
+            "type": "boolean"
+          },
+          "connection": {
+            "type": "string",
+            "enum": [
+              "connected",
+              "needs_attention",
+              "not_connected"
+            ]
+          },
+          "account": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "displayName": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "connectionStatus": {
+                    "type": "string"
+                  },
+                  "lastSyncedAt": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date-time",
+                        "example": "2026-01-31T10:15:30.000Z"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "mode": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "displayName",
+                  "status",
+                  "connectionStatus",
+                  "lastSyncedAt",
+                  "mode"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "accountCount": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "connect",
+                "manage"
+              ]
+            }
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "kind",
+          "description",
+          "availability",
+          "selected",
+          "connection",
+          "account",
+          "accountCount",
+          "actions"
+        ]
+      },
+      "OnboardingInventoryOverviewInput": {
+        "type": "object",
+        "properties": {
+          "products": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "units": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "lowStock": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "outOfStock": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "lowStockThreshold": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "syncedChannels": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "marketplace": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "marketplace",
+                "name"
+              ]
+            }
+          }
+        },
+        "required": [
+          "products",
+          "units",
+          "lowStock",
+          "outOfStock",
+          "lowStockThreshold",
+          "syncedChannels"
+        ]
+      },
+      "OnboardingInventorySetupInput": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "simple",
+                  "warehouse"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "startingMethod": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "manual",
+                  "marketplace",
+                  "file"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "code": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "city": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "state": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "address": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "code",
+                  "name",
+                  "city",
+                  "state",
+                  "address"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "warehouseCount": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "options": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          }
+        },
+        "required": [
+          "mode",
+          "startingMethod",
+          "location",
+          "warehouseCount",
+          "options"
+        ]
+      },
+      "OnboardingFulfillmentInput": {
+        "type": "object",
+        "properties": {
+          "configured": {
+            "type": "boolean"
+          },
+          "defaultMethod": {
+            "type": "string",
+            "enum": [
+              "marketplace",
+              "seller",
+              "third_party"
+            ]
+          },
+          "defaultPreference": {
+            "type": "string",
+            "enum": [
+              "recommended",
+              "fastest",
+              "lowest_cost",
+              "best_rated"
+            ]
+          },
+          "overrides": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "string",
+              "enum": [
+                "marketplace",
+                "seller",
+                "third_party"
+              ]
+            }
+          },
+          "methods": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "type": "string",
+                  "enum": [
+                    "marketplace",
+                    "seller",
+                    "third_party"
+                  ]
+                },
+                "label": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "hint": {
+                  "type": "string"
+                },
+                "available": {
+                  "type": "boolean"
+                },
+                "requiresConnection": {
+                  "type": "boolean"
+                },
+                "unavailableReason": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "value",
+                "label",
+                "description",
+                "hint",
+                "available",
+                "requiresConnection",
+                "unavailableReason"
+              ]
+            }
+          },
+          "preferenceOptions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "type": "string",
+                  "enum": [
+                    "recommended",
+                    "fastest",
+                    "lowest_cost",
+                    "best_rated"
+                  ]
+                },
+                "label": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "value",
+                "label"
+              ]
+            }
+          },
+          "connections": {
+            "type": "object",
+            "properties": {
+              "marketplaceShipping": {
+                "type": "object",
+                "properties": {
+                  "available": {
+                    "type": "boolean"
+                  },
+                  "marketplaces": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "available",
+                  "marketplaces"
+                ]
+              },
+              "thirdParty": {
+                "type": "object",
+                "properties": {
+                  "available": {
+                    "type": "boolean"
+                  },
+                  "providers": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "code": {
+                          "type": "string"
+                        },
+                        "label": {
+                          "type": "string"
+                        },
+                        "isDefault": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "code",
+                        "label",
+                        "isDefault"
+                      ]
+                    }
+                  },
+                  "connectWith": {
+                    "type": "object",
+                    "properties": {
+                      "method": {
+                        "type": "string"
+                      },
+                      "url": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "method",
+                      "url"
+                    ]
+                  }
+                },
+                "required": [
+                  "available",
+                  "providers",
+                  "connectWith"
+                ]
+              }
+            },
+            "required": [
+              "marketplaceShipping",
+              "thirdParty"
+            ]
+          },
+          "preview": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "marketplace",
+                    "default"
+                  ]
+                },
+                "marketplace": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "label": {
+                  "type": "string"
+                },
+                "method": {
+                  "type": "string",
+                  "enum": [
+                    "marketplace",
+                    "seller",
+                    "third_party"
+                  ]
+                },
+                "isOverride": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "kind",
+                "marketplace",
+                "label",
+                "method",
+                "isOverride"
+              ]
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "marketplace": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "message"
+              ]
+            }
+          },
+          "flow": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "configured",
+          "defaultMethod",
+          "defaultPreference",
+          "overrides",
+          "methods",
+          "preferenceOptions",
+          "connections",
+          "preview",
+          "warnings",
+          "flow"
+        ]
+      },
+      "OnboardingReadinessInput": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "enum": [
+                    "business",
+                    "channels",
+                    "products",
+                    "inventory",
+                    "fulfillment"
+                  ]
+                },
+                "group": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "complete",
+                    "connected",
+                    "ready",
+                    "configured",
+                    "needs_attention",
+                    "skipped",
+                    "pending"
+                  ]
+                }
+              },
+              "required": [
+                "key",
+                "group",
+                "title",
+                "status"
+              ]
+            }
+          },
+          "percentComplete": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "canGoToDashboard": {
+            "type": "boolean"
+          },
+          "completed": {
+            "type": "boolean"
+          },
+          "whatHappensNext": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "body": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title",
+                "body"
+              ]
+            }
+          }
+        },
+        "required": [
+          "items",
+          "percentComplete",
+          "canGoToDashboard",
+          "completed",
+          "whatHappensNext"
+        ]
+      },
       "RuleTypeSpecInput": {
         "type": "object",
         "properties": {
@@ -8991,6 +9965,27 @@
               }
             },
             "additionalProperties": false
+          },
+          "inventory": {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "simple",
+                  "warehouse"
+                ]
+              },
+              "startingMethod": {
+                "type": "string",
+                "enum": [
+                  "manual",
+                  "marketplace",
+                  "file"
+                ]
+              }
+            },
+            "additionalProperties": false
           }
         },
         "additionalProperties": false
@@ -9055,6 +10050,47 @@
           "address": {
             "$ref": "#/components/schemas/Address"
           },
+          "businessType": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "d2c_brand",
+                  "marketplace_seller",
+                  "retail",
+                  "wholesaler",
+                  "social_commerce",
+                  "other"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "teamSize": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "just_me",
+                  "2_5",
+                  "6_20",
+                  "21_50",
+                  "50_plus"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "operatingLocation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "timezone": {
             "type": "string"
           },
@@ -9093,6 +10129,9 @@
           "gstin",
           "pan",
           "address",
+          "businessType",
+          "teamSize",
+          "operatingLocation",
           "timezone",
           "currency",
           "settings",
@@ -12130,6 +13169,76 @@
           "variantId",
           "sku",
           "quantity"
+        ],
+        "additionalProperties": false
+      },
+      "StockImportResult": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "set",
+              "add"
+            ]
+          },
+          "rows": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "applied": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "unchanged": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "failed": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "row": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "sku": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "row",
+                "sku",
+                "message"
+              ],
+              "additionalProperties": false
+            },
+            "description": "First 100 row errors"
+          }
+        },
+        "required": [
+          "mode",
+          "rows",
+          "applied",
+          "unchanged",
+          "failed",
+          "errors"
         ],
         "additionalProperties": false
       },
@@ -16609,6 +17718,869 @@
         ],
         "additionalProperties": false
       },
+      "OnboardingBusiness": {
+        "type": "object",
+        "properties": {
+          "businessName": {
+            "type": "string"
+          },
+          "businessType": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "d2c_brand",
+                  "marketplace_seller",
+                  "retail",
+                  "wholesaler",
+                  "social_commerce",
+                  "other"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "teamSize": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "just_me",
+                  "2_5",
+                  "6_20",
+                  "21_50",
+                  "50_plus"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "operatingLocation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "workspaceTier": {
+            "type": "string",
+            "enum": [
+              "starter",
+              "growing",
+              "scale"
+            ]
+          }
+        },
+        "required": [
+          "businessName",
+          "businessType",
+          "teamSize",
+          "operatingLocation",
+          "workspaceTier"
+        ],
+        "additionalProperties": false
+      },
+      "OnboardingState": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "in_progress",
+              "completed"
+            ]
+          },
+          "currentStep": {
+            "type": "string",
+            "enum": [
+              "business",
+              "channels",
+              "products",
+              "inventory",
+              "fulfillment",
+              "ready"
+            ]
+          },
+          "resumeStep": {
+            "type": "string",
+            "enum": [
+              "business",
+              "channels",
+              "products",
+              "inventory",
+              "fulfillment",
+              "ready"
+            ]
+          },
+          "percentComplete": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "0-100, over the five setup steps before \"Ready\""
+          },
+          "completedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "example": "2026-01-31T10:15:30.000Z"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "enum": [
+                    "business",
+                    "channels",
+                    "products",
+                    "inventory",
+                    "fulfillment",
+                    "ready"
+                  ]
+                },
+                "title": {
+                  "type": "string"
+                },
+                "order": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "skippable": {
+                  "type": "boolean"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "not_started",
+                    "in_progress",
+                    "completed",
+                    "skipped"
+                  ]
+                },
+                "completedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "skippedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "key",
+                "title",
+                "order",
+                "skippable",
+                "status",
+                "completedAt",
+                "skippedAt"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "drafts": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {}
+            },
+            "description": "Unsaved form state per step, saved by \"Save & exit\""
+          },
+          "selectedChannels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "business": {
+            "$ref": "#/components/schemas/OnboardingBusiness"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "status",
+          "currentStep",
+          "resumeStep",
+          "percentComplete",
+          "completedAt",
+          "steps",
+          "drafts",
+          "selectedChannels",
+          "business",
+          "version"
+        ],
+        "additionalProperties": false
+      },
+      "OnboardingChannel": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "marketplace",
+              "online_store",
+              "social"
+            ]
+          },
+          "description": {
+            "type": "string"
+          },
+          "availability": {
+            "type": "string",
+            "enum": [
+              "available",
+              "coming_soon"
+            ],
+            "description": "coming_soon channels can be ticked (interest) but not connected"
+          },
+          "selected": {
+            "type": "boolean"
+          },
+          "connection": {
+            "type": "string",
+            "enum": [
+              "connected",
+              "needs_attention",
+              "not_connected"
+            ]
+          },
+          "account": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "displayName": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "connectionStatus": {
+                    "type": "string"
+                  },
+                  "lastSyncedAt": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date-time",
+                        "example": "2026-01-31T10:15:30.000Z"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "mode": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "displayName",
+                  "status",
+                  "connectionStatus",
+                  "lastSyncedAt",
+                  "mode"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "accountCount": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "connect",
+                "manage"
+              ]
+            }
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "kind",
+          "description",
+          "availability",
+          "selected",
+          "connection",
+          "account",
+          "accountCount",
+          "actions"
+        ],
+        "additionalProperties": false
+      },
+      "OnboardingInventoryOverview": {
+        "type": "object",
+        "properties": {
+          "products": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "units": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "lowStock": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "outOfStock": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "lowStockThreshold": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "syncedChannels": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "marketplace": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "marketplace",
+                "name"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "products",
+          "units",
+          "lowStock",
+          "outOfStock",
+          "lowStockThreshold",
+          "syncedChannels"
+        ],
+        "additionalProperties": false
+      },
+      "OnboardingInventorySetup": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "simple",
+                  "warehouse"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "startingMethod": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "manual",
+                  "marketplace",
+                  "file"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "code": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "city": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "state": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "address": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "code",
+                  "name",
+                  "city",
+                  "state",
+                  "address"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "warehouseCount": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "options": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          }
+        },
+        "required": [
+          "mode",
+          "startingMethod",
+          "location",
+          "warehouseCount",
+          "options"
+        ],
+        "additionalProperties": false
+      },
+      "OnboardingFulfillment": {
+        "type": "object",
+        "properties": {
+          "configured": {
+            "type": "boolean"
+          },
+          "defaultMethod": {
+            "type": "string",
+            "enum": [
+              "marketplace",
+              "seller",
+              "third_party"
+            ]
+          },
+          "defaultPreference": {
+            "type": "string",
+            "enum": [
+              "recommended",
+              "fastest",
+              "lowest_cost",
+              "best_rated"
+            ]
+          },
+          "overrides": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "string",
+              "enum": [
+                "marketplace",
+                "seller",
+                "third_party"
+              ]
+            }
+          },
+          "methods": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "type": "string",
+                  "enum": [
+                    "marketplace",
+                    "seller",
+                    "third_party"
+                  ]
+                },
+                "label": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "hint": {
+                  "type": "string"
+                },
+                "available": {
+                  "type": "boolean"
+                },
+                "requiresConnection": {
+                  "type": "boolean"
+                },
+                "unavailableReason": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "value",
+                "label",
+                "description",
+                "hint",
+                "available",
+                "requiresConnection",
+                "unavailableReason"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "preferenceOptions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "type": "string",
+                  "enum": [
+                    "recommended",
+                    "fastest",
+                    "lowest_cost",
+                    "best_rated"
+                  ]
+                },
+                "label": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "value",
+                "label"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "connections": {
+            "type": "object",
+            "properties": {
+              "marketplaceShipping": {
+                "type": "object",
+                "properties": {
+                  "available": {
+                    "type": "boolean"
+                  },
+                  "marketplaces": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "available",
+                  "marketplaces"
+                ],
+                "additionalProperties": false
+              },
+              "thirdParty": {
+                "type": "object",
+                "properties": {
+                  "available": {
+                    "type": "boolean"
+                  },
+                  "providers": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "code": {
+                          "type": "string"
+                        },
+                        "label": {
+                          "type": "string"
+                        },
+                        "isDefault": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "code",
+                        "label",
+                        "isDefault"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "connectWith": {
+                    "type": "object",
+                    "properties": {
+                      "method": {
+                        "type": "string"
+                      },
+                      "url": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "method",
+                      "url"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "available",
+                  "providers",
+                  "connectWith"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "marketplaceShipping",
+              "thirdParty"
+            ],
+            "additionalProperties": false
+          },
+          "preview": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "marketplace",
+                    "default"
+                  ]
+                },
+                "marketplace": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "label": {
+                  "type": "string"
+                },
+                "method": {
+                  "type": "string",
+                  "enum": [
+                    "marketplace",
+                    "seller",
+                    "third_party"
+                  ]
+                },
+                "isOverride": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "kind",
+                "marketplace",
+                "label",
+                "method",
+                "isOverride"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "marketplace": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "message"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "flow": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "configured",
+          "defaultMethod",
+          "defaultPreference",
+          "overrides",
+          "methods",
+          "preferenceOptions",
+          "connections",
+          "preview",
+          "warnings",
+          "flow"
+        ],
+        "additionalProperties": false
+      },
+      "OnboardingReadiness": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "enum": [
+                    "business",
+                    "channels",
+                    "products",
+                    "inventory",
+                    "fulfillment"
+                  ]
+                },
+                "group": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "complete",
+                    "connected",
+                    "ready",
+                    "configured",
+                    "needs_attention",
+                    "skipped",
+                    "pending"
+                  ]
+                }
+              },
+              "required": [
+                "key",
+                "group",
+                "title",
+                "status"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "percentComplete": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "canGoToDashboard": {
+            "type": "boolean"
+          },
+          "completed": {
+            "type": "boolean"
+          },
+          "whatHappensNext": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "body": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title",
+                "body"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "items",
+          "percentComplete",
+          "canGoToDashboard",
+          "completed",
+          "whatHappensNext"
+        ],
+        "additionalProperties": false
+      },
       "RuleTypeSpec": {
         "type": "object",
         "properties": {
@@ -17937,6 +19909,32 @@
                   },
                   "address": {
                     "$ref": "#/components/schemas/AddressInput"
+                  },
+                  "businessType": {
+                    "type": "string",
+                    "enum": [
+                      "d2c_brand",
+                      "marketplace_seller",
+                      "retail",
+                      "wholesaler",
+                      "social_commerce",
+                      "other"
+                    ]
+                  },
+                  "teamSize": {
+                    "type": "string",
+                    "enum": [
+                      "just_me",
+                      "2_5",
+                      "6_20",
+                      "21_50",
+                      "50_plus"
+                    ]
+                  },
+                  "operatingLocation": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 160
                   },
                   "timezone": {
                     "type": "string",
@@ -36641,6 +38639,118 @@
                         "available"
                       ],
                       "additionalProperties": false
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "requestId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/inventory/imports": {
+      "post": {
+        "summary": "Import stock from a CSV file",
+        "tags": [
+          "Inventory"
+        ],
+        "description": "Body: raw text/csv (max 1 MB, 2000 rows). Columns: sku, quantity, optional warehouse_code (default warehouse when empty). mode=set (default) records a count: the ledger stores the difference; mode=add receives the quantity on top. Each row is applied on its own, so one bad row does not stop the rest; re-uploading the same file changes nothing twice.",
+        "parameters": [
+          {
+            "schema": {
+              "default": "set",
+              "type": "string",
+              "enum": [
+                "set",
+                "add"
+              ]
+            },
+            "in": "query",
+            "name": "mode",
+            "required": false
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "inventory:write",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/StockImportResult"
                     },
                     "requestId": {
                       "type": "string"
@@ -72852,6 +74962,2579 @@
                       "additionalProperties": {
                         "type": "boolean"
                       }
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "requestId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/onboarding": {
+      "get": {
+        "summary": "Where am I in the setup?",
+        "tags": [
+          "Onboarding"
+        ],
+        "description": "Steps with status, the step to resume on, progress and any saved drafts. Created on first call.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "onboarding:read",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/OnboardingState"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "requestId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/onboarding/options": {
+      "get": {
+        "summary": "Choices for the business screen",
+        "tags": [
+          "Onboarding"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "onboarding:read",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "businessTypes": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "value": {
+                                "type": "string",
+                                "enum": [
+                                  "d2c_brand",
+                                  "marketplace_seller",
+                                  "retail",
+                                  "wholesaler",
+                                  "social_commerce",
+                                  "other"
+                                ]
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "description": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "value",
+                              "label",
+                              "description"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "teamSizes": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "value": {
+                                "type": "string",
+                                "enum": [
+                                  "just_me",
+                                  "2_5",
+                                  "6_20",
+                                  "21_50",
+                                  "50_plus"
+                                ]
+                              },
+                              "label": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "value",
+                              "label"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "steps": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "key": {
+                                "type": "string",
+                                "enum": [
+                                  "business",
+                                  "channels",
+                                  "products",
+                                  "inventory",
+                                  "fulfillment",
+                                  "ready"
+                                ]
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "order": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "skippable": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "key",
+                              "title",
+                              "order",
+                              "skippable"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "businessTypes",
+                        "teamSizes",
+                        "steps"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "requestId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/onboarding/steps/{step}/draft": {
+      "put": {
+        "summary": "Save & exit: keep the half-filled form of a step",
+        "tags": [
+          "Onboarding"
+        ],
+        "description": "Stores the form as typed (max 8 KB, never secrets) and makes this the step to resume on.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {}
+                  }
+                },
+                "required": [
+                  "data"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "business",
+                "channels",
+                "products",
+                "inventory",
+                "fulfillment",
+                "ready"
+              ]
+            },
+            "in": "path",
+            "name": "step",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "onboarding:write",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/OnboardingState"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "requestId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/onboarding/steps/{step}/skip": {
+      "post": {
+        "summary": "Skip for now",
+        "tags": [
+          "Onboarding"
+        ],
+        "description": "Every step except Business can be skipped and done later from the workspace.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "business",
+                "channels",
+                "products",
+                "inventory",
+                "fulfillment",
+                "ready"
+              ]
+            },
+            "in": "path",
+            "name": "step",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "onboarding:write",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/OnboardingState"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "requestId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/onboarding/business": {
+      "put": {
+        "summary": "Save the business profile (step 2)",
+        "tags": [
+          "Onboarding"
+        ],
+        "description": "Updates the vendor profile (brand name, business type, team size, location) and completes the step. Re-callable any time (\"update these details anytime in Settings\").",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "businessName": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 120,
+                    "example": "Nova Living"
+                  },
+                  "businessType": {
+                    "type": "string",
+                    "enum": [
+                      "d2c_brand",
+                      "marketplace_seller",
+                      "retail",
+                      "wholesaler",
+                      "social_commerce",
+                      "other"
+                    ]
+                  },
+                  "teamSize": {
+                    "type": "string",
+                    "enum": [
+                      "just_me",
+                      "2_5",
+                      "6_20",
+                      "21_50",
+                      "50_plus"
+                    ]
+                  },
+                  "operatingLocation": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 160,
+                    "example": "Mumbai, Maharashtra"
+                  }
+                },
+                "required": [
+                  "businessName",
+                  "businessType",
+                  "teamSize",
+                  "operatingLocation"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "onboarding:write",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "business": {
+                          "$ref": "#/components/schemas/OnboardingBusiness"
+                        },
+                        "state": {
+                          "$ref": "#/components/schemas/OnboardingState"
+                        }
+                      },
+                      "required": [
+                        "business",
+                        "state"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "requestId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/onboarding/channels": {
+      "get": {
+        "summary": "Sales channels: what can be connected and what is",
+        "tags": [
+          "Onboarding"
+        ],
+        "description": "Marketplace and store catalogue with connection state. `availability: coming_soon` channels cannot be connected yet.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "onboarding:read",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/OnboardingChannel"
+                          }
+                        },
+                        "summary": {
+                          "type": "object",
+                          "properties": {
+                            "connected": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "selectedToConnect": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "interestedInComingSoon": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "connected",
+                            "selectedToConnect",
+                            "interestedInComingSoon"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "items",
+                        "summary"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "requestId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Save the ticked channels and continue (step 3)",
+        "tags": [
+          "Onboarding"
+        ],
+        "description": "Replaces the selection. Ticking a coming-soon channel only records interest.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "selected": {
+                    "maxItems": 20,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 40
+                    }
+                  }
+                },
+                "required": [
+                  "selected"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "onboarding:write",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "selected": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "state": {
+                          "$ref": "#/components/schemas/OnboardingState"
+                        }
+                      },
+                      "required": [
+                        "selected",
+                        "state"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "requestId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/onboarding/channels/{code}/connect": {
+      "post": {
+        "summary": "Connect a channel",
+        "tags": [
+          "Onboarding"
+        ],
+        "description": "Creates the marketplace account (or returns the existing one). Then authorize it with GET /marketplace-accounts/{id}/authorization-url or POST .../authorize. 409 `channel_coming_soon` for channels that are not available yet.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "default": {},
+                "type": "object",
+                "properties": {
+                  "displayName": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 80
+                  },
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "live",
+                      "sandbox"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 40
+            },
+            "in": "path",
+            "name": "code",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "onboarding:write",
+        "responses": {
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "accountId": {
+                          "type": "string"
+                        },
+                        "created": {
+                          "type": "boolean"
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "next": {
+                          "type": "object",
+                          "properties": {
+                            "authorizationUrl": {
+                              "type": "string"
+                            },
+                            "authorize": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "authorizationUrl",
+                            "authorize"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "accountId",
+                        "created",
+                        "status",
+                        "next"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "requestId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/onboarding/products": {
+      "get": {
+        "summary": "Products: connected catalogs and ways to bring products in (step 4)",
+        "tags": [
+          "Onboarding"
+        ],
+        "description": "One row per connected marketplace: products available, import state, last sync. `productsAvailable` is null until counted.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "onboarding:read",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "accountId": {
+                                "type": "string"
+                              },
+                              "marketplace": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "connection": {
+                                "type": "string",
+                                "enum": [
+                                  "connected",
+                                  "needs_attention",
+                                  "not_connected"
+                                ]
+                              },
+                              "productsAvailable": {
+                                "anyOf": [
+                                  {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "description": "null until counted (POST /onboarding/products/refresh-counts)"
+                              },
+                              "productsAvailableIsCapped": {
+                                "type": "boolean"
+                              },
+                              "countedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "example": "2026-01-31T10:15:30.000Z"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "importedProducts": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "awaitingReview": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "lastSyncedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "example": "2026-01-31T10:15:30.000Z"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "importStatus": {
+                                "type": "string",
+                                "enum": [
+                                  "not_imported",
+                                  "importing",
+                                  "imported",
+                                  "failed"
+                                ]
+                              },
+                              "lastImportAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "example": "2026-01-31T10:15:30.000Z"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "canImport": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "accountId",
+                              "marketplace",
+                              "name",
+                              "connection",
+                              "productsAvailable",
+                              "productsAvailableIsCapped",
+                              "countedAt",
+                              "importedProducts",
+                              "awaitingReview",
+                              "lastSyncedAt",
+                              "importStatus",
+                              "lastImportAt",
+                              "canImport"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "summary": {
+                          "type": "object",
+                          "properties": {
+                            "connected": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "productsAvailable": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "allCounted": {
+                              "type": "boolean"
+                            },
+                            "masterProducts": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "masterVariants": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "connected",
+                            "productsAvailable",
+                            "allCounted",
+                            "masterProducts",
+                            "masterVariants"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "ways": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {
+                            "type": "boolean"
+                          }
+                        }
+                      },
+                      "required": [
+                        "items",
+                        "summary",
+                        "ways"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "requestId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/onboarding/products/refresh-counts": {
+      "post": {
+        "summary": "Count the products available on each connected marketplace",
+        "tags": [
+          "Onboarding"
+        ],
+        "description": "Reads the marketplace catalogue read-only (up to 5,000 products per marketplace; `productsAvailableIsCapped` says when more exist). One marketplace failing does not fail the others.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "default": {},
+                "type": "object",
+                "properties": {
+                  "accountId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "onboarding:write",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "counted": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "accountId": {
+                                "type": "string"
+                              },
+                              "count": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "capped": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "accountId",
+                              "count",
+                              "capped"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "failed": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "accountId": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "accountId",
+                              "message"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "counted",
+                        "failed"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "requestId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/onboarding/products/import": {
+      "post": {
+        "summary": "Import the catalog of one connected marketplace",
+        "tags": [
+          "Onboarding"
+        ],
+        "description": "Asynchronous (202): starts a catalog import; follow it with GET /sync/jobs/{id}. Imported products wait for review under /imported-products (link to an existing product or create a master product).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "accountId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  }
+                },
+                "required": [
+                  "accountId"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "onboarding:write",
+        "responses": {
+          "202": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "job": {
+                          "$ref": "#/components/schemas/SyncJob"
+                        },
+                        "alreadyQueued": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "job",
+                        "alreadyQueued"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "requestId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/onboarding/products/continue": {
+      "post": {
+        "summary": "Continue from the products step",
+        "tags": [
+          "Onboarding"
+        ],
+        "description": "Products are managed in their own workspace; this only marks the step as seen.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "onboarding:write",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/OnboardingState"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "requestId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/onboarding/inventory": {
+      "get": {
+        "summary": "Inventory setup: mode, location and starting-stock options (step 5)",
+        "tags": [
+          "Onboarding"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "onboarding:read",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/OnboardingInventorySetup"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "requestId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Save inventory setup (step 5)",
+        "tags": [
+          "Onboarding"
+        ],
+        "description": "Simple inventory = one location (default `Home Inventory`); warehouse inventory = a named warehouse with city/state and an optional address. Creates the default warehouse or updates it, so it is safe to call again. Zones, racks and bins are added later under /warehouses.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "mode": {
+                        "type": "string",
+                        "enum": [
+                          "simple"
+                        ]
+                      },
+                      "startingMethod": {
+                        "type": "string",
+                        "enum": [
+                          "manual",
+                          "marketplace",
+                          "file"
+                        ]
+                      },
+                      "locationName": {
+                        "type": "string",
+                        "minLength": 2,
+                        "maxLength": 80,
+                        "example": "Home Inventory"
+                      }
+                    },
+                    "required": [
+                      "mode",
+                      "startingMethod",
+                      "locationName"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "mode": {
+                        "type": "string",
+                        "enum": [
+                          "warehouse"
+                        ]
+                      },
+                      "startingMethod": {
+                        "type": "string",
+                        "enum": [
+                          "manual",
+                          "marketplace",
+                          "file"
+                        ]
+                      },
+                      "warehouse": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string",
+                            "minLength": 2,
+                            "maxLength": 80,
+                            "example": "Main Warehouse"
+                          },
+                          "location": {
+                            "example": "Mumbai, Maharashtra",
+                            "type": "string",
+                            "maxLength": 120
+                          },
+                          "address": {
+                            "type": "string",
+                            "maxLength": 300
+                          }
+                        },
+                        "required": [
+                          "name"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "mode",
+                      "startingMethod",
+                      "warehouse"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "onboarding:write",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "warehouseId": {
+                          "type": "string"
+                        },
+                        "created": {
+                          "type": "boolean"
+                        },
+                        "setup": {
+                          "$ref": "#/components/schemas/OnboardingInventorySetup"
+                        },
+                        "state": {
+                          "$ref": "#/components/schemas/OnboardingState"
+                        }
+                      },
+                      "required": [
+                        "warehouseId",
+                        "created",
+                        "setup",
+                        "state"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "requestId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/onboarding/inventory/overview": {
+      "get": {
+        "summary": "Inventory overview numbers: products, units, low stock, out of stock",
+        "tags": [
+          "Onboarding"
+        ],
+        "description": "From the real stock tables. Low stock = available units at or under the reorder level (or the business default).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "onboarding:read",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/OnboardingInventoryOverview"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "requestId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/onboarding/fulfillment": {
+      "get": {
+        "summary": "Fulfillment preferences, shipping connections and preview (step 6)",
+        "tags": [
+          "Onboarding"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "onboarding:read",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/OnboardingFulfillment"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "requestId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Save fulfillment preferences (step 6)",
+        "tags": [
+          "Onboarding"
+        ],
+        "description": "Default method, preference and per-marketplace overrides. A method that is not available yet (no marketplace / no shipping provider connected) is saved but returned in `warnings`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "defaultMethod": {
+                    "type": "string",
+                    "enum": [
+                      "marketplace",
+                      "seller",
+                      "third_party"
+                    ]
+                  },
+                  "defaultPreference": {
+                    "default": "recommended",
+                    "type": "string",
+                    "enum": [
+                      "recommended",
+                      "fastest",
+                      "lowest_cost",
+                      "best_rated"
+                    ]
+                  },
+                  "overrides": {
+                    "default": {},
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string",
+                      "maxLength": 40
+                    },
+                    "additionalProperties": {
+                      "type": "string",
+                      "enum": [
+                        "marketplace",
+                        "seller",
+                        "third_party"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "defaultMethod"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "onboarding:write",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "fulfillment": {
+                          "$ref": "#/components/schemas/OnboardingFulfillment"
+                        },
+                        "state": {
+                          "$ref": "#/components/schemas/OnboardingState"
+                        }
+                      },
+                      "required": [
+                        "fulfillment",
+                        "state"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "requestId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/onboarding/readiness": {
+      "get": {
+        "summary": "Setup readiness checklist (Review setup / Ready screen)",
+        "tags": [
+          "Onboarding"
+        ],
+        "description": "Computed from what actually exists (connected channels, products, warehouse, shipping preferences), not from clicks.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "onboarding:read",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/OnboardingReadiness"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "requestId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/onboarding/complete": {
+      "post": {
+        "summary": "Go to dashboard: finish onboarding",
+        "tags": [
+          "Onboarding"
+        ],
+        "description": "Needs the business step. Safe to call twice.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "onboarding:write",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "alreadyCompleted": {
+                          "type": "boolean"
+                        },
+                        "completedAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "example": "2026-01-31T10:15:30.000Z"
+                        }
+                      },
+                      "required": [
+                        "alreadyCompleted",
+                        "completedAt"
+                      ],
+                      "additionalProperties": false
                     },
                     "requestId": {
                       "type": "string"

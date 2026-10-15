@@ -32,6 +32,7 @@ export const PERMISSIONS = [
   'billing:read', 'billing:write',
   'ai:use', 'automation:read', 'automation:write',
   'notifications:read',
+  'onboarding:read', 'onboarding:write',
   // platform staff only
   'platform:vendors', 'platform:impersonate', 'platform:system',
 ] as const;
@@ -55,7 +56,7 @@ export const SYSTEM_ROLES: Record<string, { name: string; userType: 'vendor' | '
     permissions: vendorAll.filter(
       (p) =>
         (['products', 'inventory', 'orders', 'fulfillment', 'shipping', 'returns', 'listings', 'documents', 'warehouses', 'categories', 'attributes'].some((r) => p.startsWith(`${r}:`)) && p !== 'products:delete' && !ADMIN_ONLY.has(p)) ||
-        ['vendors:read', 'marketplace_accounts:read', 'connectors:read', 'sync:read', 'webhooks:read', 'rules:read', 'pricing:read', 'reports:read', 'analytics:read', 'notifications:read'].includes(p),
+        ['vendors:read', 'marketplace_accounts:read', 'connectors:read', 'sync:read', 'webhooks:read', 'rules:read', 'pricing:read', 'reports:read', 'analytics:read', 'notifications:read', 'onboarding:read'].includes(p),
     ),
   },
   vendor_viewer: { name: 'Vendor Viewer', userType: 'vendor', permissions: vendorAll.filter((p) => p.endsWith(':read') && p !== 'users:read' && p !== 'audit:read' && p !== 'billing:read') },

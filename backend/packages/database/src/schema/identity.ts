@@ -6,6 +6,9 @@ export const VENDOR_STATUSES = ['pending', 'active', 'suspended', 'closed'] as c
 export const USER_STATUSES = ['invited', 'active', 'disabled'] as const;
 
 /** Tenant root. Not itself tenant-filtered by vendor_id (its own id IS the tenant id). */
+export const BUSINESS_TYPES = ['d2c_brand', 'marketplace_seller', 'retail', 'wholesaler', 'social_commerce', 'other'] as const;
+export const TEAM_SIZES = ['just_me', '2_5', '6_20', '21_50', '50_plus'] as const;
+
 export const vendors = pgTable('vendors', {
   id: pk(),
   slug: text('slug').notNull(),
@@ -22,6 +25,10 @@ export const vendors = pgTable('vendors', {
   timezone: text('timezone').notNull().default('Asia/Kolkata'),
   currency: char('currency', { length: 3 }).notNull().default('INR'),
   logoKey: text('logo_key'),
+  /** onboarding: what kind of business, how many people run it, where it operates from */
+  businessType: text('business_type'),
+  teamSize: text('team_size'),
+  operatingLocation: text('operating_location'),
   /** why the platform changed the status (suspension reason etc.) */
   statusReason: text('status_reason'),
   statusChangedAt: tz('status_changed_at'),
@@ -33,6 +40,8 @@ export const vendors = pgTable('vendors', {
 }, (t) => [
   uniqueIndex('vendors_slug_uq').on(t.slug).where(sql`${t.deletedAt} IS NULL`),
   check('vendors_status_chk', inList('status', VENDOR_STATUSES)),
+  check('vendors_business_type_chk', sql`business_type IS NULL OR business_type IN ('d2c_brand', 'marketplace_seller', 'retail', 'wholesaler', 'social_commerce', 'other')`),
+  check('vendors_team_size_chk', sql`team_size IS NULL OR team_size IN ('just_me', '2_5', '6_20', '21_50', '50_plus')`),
 ]);
 
 /** vendor_id NULL => platform staff. Email is globally unique (one login identity per person). */

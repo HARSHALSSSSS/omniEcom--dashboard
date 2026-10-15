@@ -254,6 +254,7 @@ Stock levels, the append-only movement ledger, reservations, adjustments and war
 | GET | `/api/v1/inventory` | `inventory:read` | Stock levels (per variant per warehouse) |
 | POST | `/api/v1/inventory/adjust` | `inventory:write` | Adjust stock (delta) or record a stock count |
 | POST | `/api/v1/inventory/damage` | `inventory:write` | Move stock to / from the damaged bucket |
+| POST | `/api/v1/inventory/imports` | `inventory:write` | Import stock from a CSV file |
 | POST | `/api/v1/inventory/incoming` | `inventory:write` | Record stock that is on its way |
 | GET | `/api/v1/inventory/ledger-check` | `inventory:read` | Verify stock equals the movement ledger |
 | GET | `/api/v1/inventory/movements` | `inventory:read` | Movement ledger (append-only) |

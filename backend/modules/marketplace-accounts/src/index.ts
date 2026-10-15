@@ -4,7 +4,7 @@ import { accountRoutes, AccountSchema } from './routes';
 export { manifest };
 export { accountRoutes, AccountSchema };
 export {
-  toAccountDto, getAccount, getAccountRow, getAuthorizationRow, saveAuthorization, loadCredentials, recordSuccess, recordFailure, clearAuthorization,
+  toAccountDto, createAccount, getAccount, getAccountRow, getAuthorizationRow, saveAuthorization, loadCredentials, recordSuccess, recordFailure, clearAuthorization,
   markAuthorizationExpiring, saveWebhookSecret, readWebhookSecret, type AccountRow, type AuthorizationRow, type SaveAuthorizationInput,
 } from './service';
 
