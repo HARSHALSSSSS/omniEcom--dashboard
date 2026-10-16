@@ -17,7 +17,17 @@ export const StepComplete: React.FC<StepCompleteProps> = ({
   const businessName = onboardingData.business.name || "Nova Living";
 
   return (
-    <div className="w-full max-w-5xl mx-auto py-8 px-4 sm:px-6 space-y-12">
+    <div className="relative w-full min-h-[calc(100vh-104px)] bg-[#FFFFFF] flex flex-col justify-start overflow-hidden">
+      {/* Atmospheric gradient: white on top, dark/charcoal at bottom-right */}
+      <div
+        className="pointer-events-none absolute inset-0 z-0 overflow-hidden"
+        style={{
+          background:
+            "radial-gradient(ellipse 90% 85% at 90% 95%, rgba(45, 45, 45, 0.42) 0%, rgba(130, 130, 130, 0.28) 32%, rgba(215, 215, 215, 0.12) 60%, rgba(255, 255, 255, 0) 80%), linear-gradient(175deg, #FFFFFF 0%, #FFFFFF 38%, #F7F7F7 58%, #E5E5E5 82%, #CCCCCC 100%)",
+        }}
+      />
+
+      <div className="relative z-10 w-full max-w-5xl mx-auto py-8 px-4 sm:px-6 space-y-12">
       {/* Top Banner & Readiness Card */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
         {/* Left Side: 7 cols */}
@@ -206,5 +216,6 @@ export const StepComplete: React.FC<StepCompleteProps> = ({
         </div>
       </div>
     </div>
+  </div>
   );
 };

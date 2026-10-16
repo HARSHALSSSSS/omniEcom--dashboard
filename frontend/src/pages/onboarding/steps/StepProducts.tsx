@@ -1,20 +1,17 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import {
   FileUp,
-  Download,
+  Store,
   Plug,
   Plus,
-  Layers,
   ArrowDown,
-  CheckCircle2,
+  Check,
+  CheckCircle,
   Info,
   ChevronDown,
   ChevronUp,
-  ArrowRight,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { useWorkspaceStore } from "@/store/workspace.store";
-import { cn } from "@/utils/cn";
 
 interface StepProductsProps {
   onNext: () => void;
@@ -79,343 +76,362 @@ export const StepProducts: React.FC<StepProductsProps> = ({
   );
 
   return (
-    <div className="w-full max-w-5xl mx-auto py-8 px-4 sm:px-6 space-y-10">
-      {/* Title */}
-      <div className="space-y-2">
-        <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-[#0A0A0A]">
-          Bring your products into one place.
-        </h1>
-        <p className="text-sm text-[#666666] max-w-3xl leading-relaxed">
-          Import your existing catalog or create products from scratch. We'll
-          keep your core product information centralized so you don't have to
-          enter it again for every marketplace.
-        </p>
-      </div>
+    <div className="relative w-full min-h-[1044px] bg-[#FFFFFF] flex flex-col justify-start overflow-hidden">
+      {/* Atmospheric gradient: clean white at top and left, dark/charcoal at bottom-right matching StepBusiness */}
+      <div
+        className="pointer-events-none absolute inset-0 z-0 overflow-hidden"
+        style={{
+          background:
+            "radial-gradient(ellipse 90% 85% at 90% 95%, rgba(45, 45, 45, 0.42) 0%, rgba(130, 130, 130, 0.28) 32%, rgba(215, 215, 215, 0.12) 60%, rgba(255, 255, 255, 0) 80%), linear-gradient(175deg, #FFFFFF 0%, #FFFFFF 38%, #F7F7F7 58%, #E5E5E5 82%, #CCCCCC 100%)",
+        }}
+      />
 
-      {/* 3-column actions: Import / Diagram / Create */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-        {/* Left: Import existing products */}
-        <div className="lg:col-span-5 rounded-xl border border-[#E5E7EB] bg-white p-5 space-y-4 flex flex-col justify-between">
-          <div>
-            <h3 className="text-sm font-bold text-[#0A0A0A]">
-              Import existing products
-            </h3>
-            <p className="text-xs text-[#666666] mt-0.5">
-              Bring products from a connected marketplace or upload your catalog.
-            </p>
-
-            <div className="mt-4 space-y-2.5">
-              {/* Option 1 */}
-              <div className="flex items-center justify-between rounded-lg border border-[#EAEAEA] p-3 hover:bg-neutral-50 transition-colors">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-md bg-neutral-100 text-neutral-700">
-                    <Download className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <div className="text-xs font-semibold text-[#0A0A0A]">
-                      Import from connected marketplace
-                    </div>
-                    <div className="text-[11px] text-[#666666]">
-                      Amazon · 427 products available
-                    </div>
-                  </div>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => toggleImport("amazon")}
-                  className="h-8 text-xs font-semibold border-black"
-                >
-                  {importedRows.includes("amazon") ? "Imported" : "Import catalog"}
-                </Button>
-              </div>
-
-              {/* Option 2 */}
-              <div className="flex items-center justify-between rounded-lg border border-[#EAEAEA] p-3 hover:bg-neutral-50 transition-colors">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-md bg-neutral-100 text-neutral-700">
-                    <FileUp className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <div className="text-xs font-semibold text-[#0A0A0A]">
-                      Upload CSV / Excel
-                    </div>
-                    <div className="text-[11px] text-[#666666]">
-                      Already have a product spreadsheet?
-                    </div>
-                  </div>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-8 text-xs font-semibold border-black"
-                >
-                  Upload file
-                </Button>
-              </div>
-
-              {/* Option 3 */}
-              <div className="flex items-center justify-between rounded-lg border border-[#EAEAEA] p-3 hover:bg-neutral-50 transition-colors">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-md bg-neutral-100 text-neutral-700">
-                    <Plug className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <div className="text-xs font-semibold text-[#0A0A0A]">
-                      Connect another marketplace
-                    </div>
-                    <div className="text-[11px] text-[#666666]">
-                      Products live somewhere else?
-                    </div>
-                  </div>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-8 text-xs font-semibold border-black"
-                >
-                  Connect marketplace
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Center: Architecture preview diagram */}
-        <div className="lg:col-span-3 rounded-xl border border-[#E5E7EB] bg-neutral-50/50 p-5 flex flex-col items-center justify-center text-center">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-[#666666] mb-1">
-            Existing catalogs
-          </span>
-          <ArrowDown className="h-3.5 w-3.5 text-neutral-400 mb-2" />
-
-          {/* Master product box */}
-          <div className="w-full rounded-lg border border-[#D1D5DB] bg-white p-3 shadow-2xs">
-            <div className="text-xs font-bold text-[#0A0A0A]">
-              MASTER PRODUCT
-            </div>
-            <div className="text-[10px] text-[#666666]">
-              One source of truth
-            </div>
-          </div>
-
-          <ArrowDown className="h-3.5 w-3.5 text-neutral-400 my-2" />
-          <span className="text-[10px] font-bold uppercase tracking-wider text-[#666666] mb-2">
-            Channel-specific listings
-          </span>
-
-          <div className="flex items-center justify-center gap-3 text-[10px] font-medium text-neutral-700">
-            <span>Amazon</span>
-            <span>•</span>
-            <span>Flipkart</span>
-            <span>•</span>
-            <span>Meesho</span>
-            <span>•</span>
-            <span>Shopify</span>
-          </div>
-          <p className="text-[10px] text-neutral-400 mt-2">
-            Snapdeal, social commerce and future connectors
+      {/* Main Content Layout matching Figma spec:
+          padding: 40px 144px 32px;
+          gap: 32px;
+          width: 1440px max-w;
+      */}
+      <div className="relative z-10 w-full max-w-[1440px] mx-auto px-6 sm:px-12 xl:px-[144px] pt-[40px] pb-[32px] flex flex-col gap-[32px]">
+        {/* Product introduction: width: 1152px; gap: 16px; */}
+        <div className="flex flex-col gap-[16px] w-full">
+          <h1 className="text-[32px] sm:text-[38px] lg:text-[40px] font-semibold leading-[1.15] text-[#000000] tracking-[-0.02em]">
+            Bring your products into one place.
+          </h1>
+          <p className="text-[14px] font-normal leading-[1.65] text-[#4A4A4A] max-w-[815px]">
+            Import your existing catalog or create products from scratch. We'll keep your core product information centralized so you don't have to enter it again for every marketplace.
           </p>
         </div>
 
-        {/* Right: Create products */}
-        <div className="lg:col-span-4 rounded-xl border border-[#E5E7EB] bg-white p-5 flex flex-col justify-between">
-          <div className="space-y-4">
-            <div>
-              <h3 className="text-sm font-bold text-[#0A0A0A]">
+        {/* Import and create workspace: border-top: 1px solid #EDEDED; padding-top: 24px; gap: 32px; */}
+        <div className="border-t border-[#EDEDED] pt-[24px] grid grid-cols-1 lg:grid-cols-12 gap-[32px] items-start w-full">
+          {/* Column 1: Import existing products (544px on desktop / 6 cols) */}
+          <div className="lg:col-span-5 flex flex-col gap-[16px]">
+            <div className="flex flex-col gap-[6px]">
+              <h2 className="text-[20px] font-semibold leading-[1.5] text-[#000000]">
+                Import existing products
+              </h2>
+              <p className="text-[13px] font-normal leading-[1.5] text-[#4A4A4A]">
+                Bring products from a connected marketplace or upload your catalog.
+              </p>
+            </div>
+
+            {/* Import methods: 3 rows, border-bottom: 1px solid #EDEDED; height: 68px each */}
+            <div className="flex flex-col w-full">
+              {/* Marketplace import action */}
+              <div className="h-[68px] border-b border-[#EDEDED] flex items-center justify-between gap-[16px]">
+                <div className="flex items-center gap-[16px] min-w-0">
+                  <div className="w-[32px] h-[32px] rounded-[8px] bg-[#F7F7F7] flex items-center justify-center shrink-0">
+                    <Store className="w-[18px] h-[18px] text-[#000000] stroke-[1.5]" />
+                  </div>
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-[13px] font-semibold leading-[1.5] text-[#000000] truncate">
+                      Import from connected marketplace
+                    </span>
+                    <span className="text-[12px] font-normal leading-[1.5] text-[#4A4A4A] truncate">
+                      Amazon · 427 products available
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => toggleImport("amazon")}
+                  className="w-[128px] h-[40px] px-4 rounded-[8px] border border-[#666666] bg-white flex items-center justify-center text-[12px] font-semibold text-[#000000] hover:bg-neutral-50 transition-colors cursor-pointer shrink-0"
+                >
+                  {importedRows.includes("amazon") ? "Imported" : "Import catalog"}
+                </button>
+              </div>
+
+              {/* File upload action */}
+              <div className="h-[68px] border-b border-[#EDEDED] flex items-center justify-between gap-[16px]">
+                <div className="flex items-center gap-[16px] min-w-0">
+                  <div className="w-[32px] h-[32px] rounded-[8px] bg-[#F7F7F7] flex items-center justify-center shrink-0">
+                    <FileUp className="w-[18px] h-[18px] text-[#000000] stroke-[1.5]" />
+                  </div>
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-[13px] font-semibold leading-[1.5] text-[#000000] truncate">
+                      Upload CSV / Excel
+                    </span>
+                    <span className="text-[12px] font-normal leading-[1.5] text-[#4A4A4A] truncate">
+                      Already have a product spreadsheet?
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="w-[128px] h-[40px] px-4 rounded-[8px] border border-[#666666] bg-white flex items-center justify-center text-[12px] font-semibold text-[#000000] hover:bg-neutral-50 transition-colors cursor-pointer shrink-0"
+                >
+                  Upload file
+                </button>
+              </div>
+
+              {/* Connect marketplace action */}
+              <div className="h-[68px] border-b border-[#EDEDED] flex items-center justify-between gap-[16px]">
+                <div className="flex items-center gap-[16px] min-w-0">
+                  <div className="w-[32px] h-[32px] rounded-[8px] bg-[#F7F7F7] flex items-center justify-center shrink-0">
+                    <Plug className="w-[18px] h-[18px] text-[#000000] stroke-[1.5]" />
+                  </div>
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-[13px] font-semibold leading-[1.5] text-[#000000] truncate">
+                      Connect another marketplace
+                    </span>
+                    <span className="text-[12px] font-normal leading-[1.5] text-[#4A4A4A] truncate">
+                      Products live somewhere else?
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="w-[160px] h-[40px] px-4 rounded-[8px] border border-[#666666] bg-white flex items-center justify-center text-[12px] font-semibold text-[#000000] hover:bg-neutral-50 transition-colors cursor-pointer shrink-0"
+                >
+                  Connect marketplace
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Column 2: Single catalog architecture preview (Center column / 3 cols) */}
+          <div className="lg:col-span-3 flex flex-col items-center pt-[8px] gap-[8px] w-full text-center">
+            <span className="text-[12px] font-normal leading-[1.5] text-[#4A4A4A]">
+              Existing catalogs
+            </span>
+            <ArrowDown className="w-3.5 h-3.5 text-[#8A8A8A]" />
+
+            {/* Master product node */}
+            <div className="w-[200px] h-[48px] rounded-[8px] bg-[#F7F7F7] border border-[#D9D9D9] flex flex-col justify-center items-center gap-[2px]">
+              <span className="text-[12px] font-semibold leading-[15px] text-[#000000]">
+                MASTER PRODUCT
+              </span>
+              <span className="text-[10px] font-normal leading-[12px] text-[#4A4A4A]">
+                One source of truth
+              </span>
+            </div>
+
+            <ArrowDown className="w-3.5 h-3.5 text-[#8A8A8A]" />
+            <span className="text-[11px] font-normal leading-[1.5] text-[#4A4A4A]">
+              Channel-specific listings
+            </span>
+
+            {/* SVG Branch Connector from Figma */}
+            <svg
+              width="217"
+              height="24"
+              viewBox="0 0 217 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              className="mt-1"
+            >
+              <path
+                d="M108.5 0V10M0.5 24V10H216.5V24M72.5 10V24M144.5 10V24"
+                stroke="#D9D9D9"
+              />
+            </svg>
+
+            {/* Marketplaces horizontal node connection aligned with the 4 branches */}
+            <div className="w-[217px] flex items-center justify-between text-[10px] font-normal leading-[12px] text-[#4A4A4A] pt-1">
+              <div className="flex flex-col items-center w-[44px] -ml-[22px]">
+                <div className="w-1 h-1 rounded-full bg-[#4A4A4A] mb-1" />
+                <span>Amazon</span>
+              </div>
+              <div className="flex flex-col items-center w-[44px]">
+                <div className="w-1 h-1 rounded-full bg-[#4A4A4A] mb-1" />
+                <span>Flipkart</span>
+              </div>
+              <div className="flex flex-col items-center w-[44px]">
+                <div className="w-1 h-1 rounded-full bg-[#4A4A4A] mb-1" />
+                <span>Meesho</span>
+              </div>
+              <div className="flex flex-col items-center w-[44px] -mr-[22px]">
+                <div className="w-1 h-1 rounded-full bg-[#4A4A4A] mb-1" />
+                <span>Shopify</span>
+              </div>
+            </div>
+
+            <p className="text-[10px] font-normal leading-[1.5] text-[#8A8A8A] max-w-[140px] pt-1">
+              Snapdeal, social commerce and future connectors
+            </p>
+          </div>
+
+          {/* Column 3: Create products (304px on desktop / 4 cols) */}
+          <div className="lg:col-span-4 flex flex-col gap-[24px]">
+            <div className="flex flex-col gap-[6px]">
+              <h2 className="text-[20px] font-semibold leading-[1.5] text-[#000000]">
                 Create products
-              </h3>
-              <p className="text-xs text-[#666666] mt-0.5">
+              </h2>
+              <p className="text-[13px] font-normal leading-[1.5] text-[#4A4A4A]">
                 Build your master catalog manually and publish to channels later.
               </p>
             </div>
 
-            <div className="space-y-2.5">
-              <Button
+            {/* Product creation actions */}
+            <div className="flex flex-col gap-[12px] w-full max-w-[304px]">
+              <button
                 type="button"
-                className="w-full h-10 rounded-lg bg-black text-white hover:bg-neutral-800 text-xs font-semibold flex items-center justify-center gap-2"
+                className="w-full h-[40px] rounded-[8px] bg-[#000000] text-white flex items-center justify-center gap-2 hover:bg-[#222222] transition-colors cursor-pointer"
               >
-                <Plus className="h-4 w-4" />
-                <span>+ Create product</span>
-              </Button>
-              <Button
+                <Plus className="w-4 h-4 text-white" />
+                <span className="text-[12px] font-semibold text-white">
+                  Create product
+                </span>
+              </button>
+              <button
                 type="button"
-                variant="outline"
-                className="w-full h-10 rounded-lg border-[#E5E7EB] text-[#0A0A0A] hover:bg-neutral-50 text-xs font-semibold"
+                className="w-full h-[40px] rounded-[8px] bg-[#FFFFFF] border border-[#D6D6D6] flex items-center justify-center text-[12px] font-semibold text-[#000000] hover:bg-neutral-50 transition-colors cursor-pointer"
               >
                 Create multiple products
-              </Button>
+              </button>
+            </div>
+
+            {/* Catalog reassurance */}
+            <div className="flex flex-col gap-[6px] max-w-[304px]">
+              <span className="text-[12px] font-semibold leading-[1.5] text-[#000000]">
+                Create once. List anywhere.
+              </span>
+              <p className="text-[12px] font-normal leading-[1.5] text-[#4A4A4A]">
+                Your master product stays central. Each channel gets its own listing.
+              </p>
             </div>
           </div>
+        </div>
 
-          <div className="border-t border-[#EAEAEA] pt-4 mt-4">
-            <h4 className="text-xs font-semibold text-[#0A0A0A]">
-              Create once. List anywhere.
-            </h4>
-            <p className="text-[11px] text-[#666666] mt-1 leading-relaxed">
-              Your master product stays central. Each channel gets its own
-              listing.
-            </p>
+        {/* Connected catalogs section: width: 1152px; gap: 12px; */}
+        <div className="flex flex-col gap-[12px] w-full pt-4">
+          <div className="flex items-center justify-between w-full">
+            <h3 className="text-[18px] font-semibold leading-[1.5] text-[#000000]">
+              Connected catalogs
+            </h3>
+            <span className="text-[12px] font-normal leading-[1.45] text-[#4A4A4A]">
+              {CATALOGS.length} connected · {totalProducts} products available
+            </span>
           </div>
-        </div>
-      </div>
 
-      {/* Connected Catalogs Table */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-bold text-[#0A0A0A]">
-            Connected catalogs
-          </h2>
-          <span className="text-xs text-[#666666]">
-            {CATALOGS.length} connected · {totalProducts} products available
-          </span>
-        </div>
+          {/* Catalog table */}
+          <div className="w-full rounded-[13px] border border-[#EDEDED] bg-white overflow-hidden shadow-xs">
+            {/* Table headings: height: 50px; background: #F7F7F7; border-bottom: 1px solid #EDEDED; */}
+            <div className="h-[50px] bg-[#F7F7F7] border-b border-[#EDEDED] flex items-center px-[32px] text-[11px] font-normal text-[#4A4A4A]">
+              <span className="w-1/5">Marketplace</span>
+              <span className="w-1/5">Products available</span>
+              <span className="w-1/5">Last synced</span>
+              <span className="w-1/5">Connection status</span>
+              <span className="w-1/5 text-right">Import action</span>
+            </div>
 
-        <div className="overflow-hidden rounded-xl border border-[#E5E7EB] bg-white">
-          <table className="w-full text-left text-xs">
-            <thead className="border-b border-[#EAEAEA] bg-neutral-50/70 text-[#666666] font-semibold">
-              <tr>
-                <th className="py-3 px-4">Marketplace</th>
-                <th className="py-3 px-4">Products available</th>
-                <th className="py-3 px-4">Last synced</th>
-                <th className="py-3 px-4">Connection status</th>
-                <th className="py-3 px-4 text-right">Import action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#EAEAEA]">
+            {/* Table rows: height: 56px each */}
+            <div className="divide-y divide-[#EAEAEA]">
               {CATALOGS.map((row) => {
                 const isImported = importedRows.includes(row.id);
                 return (
-                  <tr key={row.id} className="hover:bg-neutral-50/50">
-                    <td className="py-3.5 px-4 font-semibold text-[#0A0A0A]">
+                  <div
+                    key={row.id}
+                    className="h-[56px] flex items-center px-[32px] text-[12px] hover:bg-neutral-50/50 transition-colors"
+                  >
+                    <span className="w-1/5 font-semibold text-[#333333]">
                       {row.marketplace}
-                    </td>
-                    <td className="py-3.5 px-4 text-[#0A0A0A] tabular-nums font-medium">
+                    </span>
+                    <span className="w-1/5 text-[#333333]">
                       {row.productsAvailable}
-                    </td>
-                    <td className="py-3.5 px-4 text-[#666666]">
-                      {isImported
-                        ? "Last synced: Just now"
-                        : `Last synced: ${row.lastSynced}`}
-                    </td>
-                    <td className="py-3.5 px-4">
-                      <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 border border-emerald-200">
-                        <CheckCircle2 className="h-3 w-3" />
+                    </span>
+                    <span className="w-1/5 text-[#333333] text-[11px]">
+                      {isImported ? "Last synced: Just now" : `Last synced: ${row.lastSynced}`}
+                    </span>
+                    <div className="w-1/5">
+                      <div className="inline-flex items-center gap-[5px] h-[26px] px-[8px] bg-white border border-[#EAEAEA] rounded-[4px] text-[11px] text-[#333333]">
+                        <CheckCircle className="w-[12px] h-[12px] text-[#333333] stroke-[1.5]" />
                         <span>Connected</span>
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-4 text-right">
+                      </div>
+                    </div>
+                    <div className="w-1/5 text-right">
                       <button
                         type="button"
                         onClick={() => toggleImport(row.id)}
-                        className={cn(
-                          "inline-flex items-center gap-1 font-semibold text-xs",
-                          isImported
-                            ? "text-emerald-700 hover:text-emerald-800"
-                            : "text-black hover:underline",
-                        )}
+                        className="text-[12px] font-medium text-[#333333] underline hover:text-black cursor-pointer"
                       >
-                        {isImported ? (
-                          <>
-                            <span>Imported</span>
-                            <CheckCircle2 className="h-3.5 w-3.5" />
-                          </>
-                        ) : (
-                          <>
-                            <span>Import</span>
-                            <ArrowRight className="h-3.5 w-3.5" />
-                          </>
-                        )}
+                        {isImported ? "Imported ✓" : "Import →"}
                       </button>
-                    </td>
-                  </tr>
+                    </div>
+                  </div>
                 );
               })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Collapsible: What we'll import */}
-      <div className="rounded-xl border border-[#E5E7EB] bg-neutral-50/70 p-4 space-y-3">
-        <button
-          type="button"
-          onClick={() => setImportInfoOpen(!importInfoOpen)}
-          className="w-full flex items-center justify-between text-left"
-        >
-          <div className="flex items-center gap-2">
-            <Info className="h-4 w-4 text-neutral-600" />
-            <span className="text-xs font-semibold text-[#0A0A0A]">
-              What we'll import
-            </span>
-          </div>
-          {importInfoOpen ? (
-            <ChevronUp className="h-4 w-4 text-neutral-500" />
-          ) : (
-            <ChevronDown className="h-4 w-4 text-neutral-500" />
-          )}
-        </button>
-
-        {importInfoOpen && (
-          <div className="space-y-3 pt-1">
-            <p className="text-xs text-[#666666]">
-              We'll attempt to map and match your catalog automatically. You can
-              review anything that needs attention before publishing.
-            </p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-xs font-medium text-[#0A0A0A]">
-              <div className="flex items-center gap-1.5">
-                <CheckCircle2 className="h-3.5 w-3.5 text-black" />
-                <span>Field mapping</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <CheckCircle2 className="h-3.5 w-3.5 text-black" />
-                <span>SKU matching</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <CheckCircle2 className="h-3.5 w-3.5 text-black" />
-                <span>Product matching</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <CheckCircle2 className="h-3.5 w-3.5 text-black" />
-                <span>Variant mapping</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <CheckCircle2 className="h-3.5 w-3.5 text-black" />
-                <span>Category mapping</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <CheckCircle2 className="h-3.5 w-3.5 text-black" />
-                <span>Image mapping</span>
-              </div>
             </div>
           </div>
-        )}
-      </div>
+        </div>
 
-      {/* Bottom bar */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-[#EAEAEA] pt-6">
-        <p className="text-xs text-[#666666]">
-          You can import or create products later from your Products workspace.
-        </p>
-        <div className="flex items-center gap-3">
-          <Button
+        {/* Import information / State=Expanded: width: 1152px; background: #F7F7F7; border: 1px solid #EDEDED; border-radius: 12px; padding: 20px; */}
+        <div className="w-full rounded-[12px] bg-[#F7F7F7] border border-[#EDEDED] p-[20px] flex flex-col gap-[12px]">
+          <button
             type="button"
-            variant="outline"
-            onClick={onSkip}
-            className="h-11 px-6 rounded-lg text-xs font-semibold border-[#E5E7EB] text-[#666666] hover:text-black"
+            onClick={() => setImportInfoOpen(!importInfoOpen)}
+            className="w-full flex items-center justify-between text-left cursor-pointer"
           >
-            Skip for now
-          </Button>
-          <Button
-            type="button"
-            onClick={onNext}
-            className="h-11 px-8 rounded-lg bg-black text-white hover:bg-neutral-800 font-medium text-sm flex items-center gap-2"
-          >
-            <span>Continue</span>
-            <ArrowRight className="h-4 w-4" />
-          </Button>
+            <div className="flex items-center gap-[12px]">
+              <Info className="w-[16px] h-[16px] text-[#000000] stroke-[1.5]" />
+              <span className="text-[13px] font-semibold leading-[1.5] text-[#000000]">
+                What we'll import
+              </span>
+            </div>
+            {importInfoOpen ? (
+              <ChevronUp className="w-[16px] h-[16px] text-[#000000] stroke-[1.5]" />
+            ) : (
+              <ChevronDown className="w-[16px] h-[16px] text-[#000000] stroke-[1.5]" />
+            )}
+          </button>
+
+          {importInfoOpen && (
+            <div className="flex flex-col gap-[12px]">
+              <p className="text-[12px] font-normal leading-[1.5] text-[#4A4A4A]">
+                We'll attempt to map and match your catalog automatically. You can review anything that needs attention before publishing.
+              </p>
+              <div className="flex flex-wrap items-center gap-[24px] text-[12px] font-normal text-[#4A4A4A]">
+                <div className="flex items-center gap-[6px]">
+                  <Check className="w-[12px] h-[12px] text-[#000000] stroke-[1.8]" />
+                  <span>Field mapping</span>
+                </div>
+                <div className="flex items-center gap-[6px]">
+                  <Check className="w-[12px] h-[12px] text-[#000000] stroke-[1.8]" />
+                  <span>SKU matching</span>
+                </div>
+                <div className="flex items-center gap-[6px]">
+                  <Check className="w-[12px] h-[12px] text-[#000000] stroke-[1.8]" />
+                  <span>Product matching</span>
+                </div>
+                <div className="flex items-center gap-[6px]">
+                  <Check className="w-[12px] h-[12px] text-[#000000] stroke-[1.8]" />
+                  <span>Variant mapping</span>
+                </div>
+                <div className="flex items-center gap-[6px]">
+                  <Check className="w-[12px] h-[12px] text-[#000000] stroke-[1.8]" />
+                  <span>Category mapping</span>
+                </div>
+                <div className="flex items-center gap-[6px]">
+                  <Check className="w-[12px] h-[12px] text-[#000000] stroke-[1.8]" />
+                  <span>Image mapping</span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Onboarding footer: border-top: 1px solid #EDEDED; height: 96px; */}
+        <div className="border-t border-[#EDEDED] pt-[24px] pb-[16px] flex flex-col sm:flex-row items-center justify-between gap-[16px] w-full">
+          <p className="text-[12px] font-normal leading-[1.5] text-[#4A4A4A]">
+            You can import or create products later from your Products workspace.
+          </p>
+
+          <div className="flex items-center gap-[16px] shrink-0">
+            <button
+              type="button"
+              onClick={onSkip}
+              className="w-[112px] h-[40px] rounded-[8px] bg-[#FFFFFF] border border-[#D6D6D6] flex items-center justify-center text-[12px] font-semibold text-[#000000] hover:bg-neutral-50 transition-colors cursor-pointer"
+            >
+              Skip for now
+            </button>
+            <button
+              type="button"
+              onClick={onNext}
+              className="w-[168px] h-[44px] rounded-[12px] bg-[#0A0A0A] text-white flex items-center justify-center text-[13px] font-semibold hover:bg-[#222222] transition-colors cursor-pointer"
+            >
+              Continue
+            </button>
+          </div>
         </div>
       </div>
     </div>
