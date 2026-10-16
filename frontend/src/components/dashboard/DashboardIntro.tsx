@@ -1,6 +1,4 @@
 
-import { Calendar } from "lucide-react";
-
 interface DashboardIntroProps {
   userName?: string;
   dateLabel?: string;
@@ -13,14 +11,14 @@ export const DashboardIntro: React.FC<DashboardIntroProps> = ({
   return (
     <div className="flex flex-row items-center justify-between gap-6 w-full">
       {/* Greeting info */}
-      <div className="flex flex-col gap-1.5">
-        <span className="text-[10px] font-medium uppercase tracking-wider text-[#707070]">
-          Business Overview
+      <div className="flex flex-col gap-1.5 flex-1">
+        <span className="text-[10px] font-medium leading-[12px] uppercase tracking-normal text-[#707070]">
+          Business overview
         </span>
-        <h1 className="text-[22px] font-semibold tracking-tight text-[#000000]">
+        <h1 className="text-[26px] font-semibold leading-[145%] text-[#000000]">
           Good morning, {userName}.
         </h1>
-        <p className="text-[13px] text-[#666666]">
+        <p className="text-[13px] font-normal leading-[145%] text-[#666666]">
           Here&apos;s what needs your attention today.
         </p>
       </div>
@@ -29,12 +27,12 @@ export const DashboardIntro: React.FC<DashboardIntroProps> = ({
       <div>
         <button
           type="button"
-          className="inline-flex items-center gap-2 rounded-lg border border-[#EAEAEA] bg-white px-3.5 py-2 text-[12px] font-medium text-[#000000] hover:bg-neutral-50 shadow-2xs transition-colors"
+          className="inline-flex items-center justify-center px-4 h-10 gap-2 rounded-lg border border-[#666666] bg-white text-[12px] font-semibold text-[#000000] hover:bg-neutral-50 transition-colors"
         >
-          <Calendar className="h-3.5 w-3.5 text-[#666666]" />
           <span>{dateLabel}</span>
         </button>
       </div>
     </div>
   );
 };
+

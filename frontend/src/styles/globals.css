@@ -1,5 +1,5 @@
 /* ============================================================
- * Omnicom — Design Tokens
+ * Commerce OS — Design Tokens
  * Source of truth for all colors, spacing, radius, shadows.
  * All values are CSS custom properties; Tailwind reads them.
  * ============================================================ */
@@ -107,9 +107,28 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
-  /* Focus ring — always visible (WCAG 2.1 AA) */
+  /* Focus ring — buttons, links and interactive controls */
   :focus-visible {
-    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+    @apply outline-none ring-1 ring-ring/20 ring-offset-0;
+  }
+
+  /* Reset default browser outline/ring on all inputs, textareas, and selects */
+  input,
+  textarea,
+  select {
+    @apply outline-none ring-0 border-none;
+  }
+
+  input:focus,
+  input:focus-visible,
+  textarea:focus,
+  textarea:focus-visible,
+  select:focus,
+  select:focus-visible {
+    outline: none !important;
+    box-shadow: none !important;
+    --tw-ring-shadow: none !important;
+    --tw-ring-offset-shadow: none !important;
   }
 
   /* Sidebar group labels — uppercase, letter-spaced */

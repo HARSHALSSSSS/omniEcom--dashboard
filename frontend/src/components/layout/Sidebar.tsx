@@ -10,7 +10,7 @@ import { cn } from "@/utils/cn";
 export const Sidebar: React.FC = () => {
   const navigate = useNavigate();
   const { sidebarCollapsed, toggleSidebar } = useUiStore();
-  const { user, needsAttentionCount, clearWorkspace } = useWorkspaceStore();
+  const { user, clearWorkspace } = useWorkspaceStore();
 
   const displayName = user?.fullName ?? "Abhishek";
   const displayRole = user?.role === "owner" ? "Business owner" : "Seller";
@@ -71,8 +71,6 @@ export const Sidebar: React.FC = () => {
             <ul className="space-y-1">
               {group.items.map((item) => {
                 const Icon = item.icon;
-                const showBadge =
-                  item.badge === "needs-attention" && needsAttentionCount > 0;
 
                 return (
                   <li key={item.href}>
@@ -92,11 +90,6 @@ export const Sidebar: React.FC = () => {
                       <Icon className="h-4 w-4 shrink-0" />
                       {!sidebarCollapsed && (
                         <span className="flex-1 truncate">{item.label}</span>
-                      )}
-                      {!sidebarCollapsed && showBadge && (
-                        <span className="ml-auto text-[11px] font-medium text-[#000000] tabular-nums">
-                          {needsAttentionCount}
-                        </span>
                       )}
                     </NavLink>
                   </li>

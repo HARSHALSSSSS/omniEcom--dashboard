@@ -2,6 +2,7 @@ import { Outlet } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 import { GlobalSearch } from "./GlobalSearch";
+import { NotificationsPanel } from "./NotificationsPanel";
 
 export default function AppShell() {
   return (
@@ -15,7 +16,7 @@ export default function AppShell() {
 
         {/* Scrollable page outlet */}
         <main className="flex-1 overflow-y-auto bg-[#FAFAFA]">
-          <div className="w-full max-w-[1216px] mx-auto px-10 py-8">
+          <div className="w-full px-12 py-8">
             <Outlet />
           </div>
         </main>
@@ -23,6 +24,9 @@ export default function AppShell() {
 
       {/* ⌘K Global search dialog */}
       <GlobalSearch />
+
+      {/* Slide-out Notifications Panel */}
+      <NotificationsPanel />
     </div>
   );
 }

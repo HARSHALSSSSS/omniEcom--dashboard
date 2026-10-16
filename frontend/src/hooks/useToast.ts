@@ -33,3 +33,12 @@ export const useToastStore = create<ToastStore>((set) => ({
 export function toast(options: Omit<ToastItem, "id">) {
   useToastStore.getState().addToast(options);
 }
+
+export function useToast() {
+  const addToast = useToastStore((state) => state.addToast);
+  return {
+    toast: addToast,
+    toasts: useToastStore((state) => state.toasts),
+    dismiss: useToastStore((state) => state.removeToast),
+  };
+}

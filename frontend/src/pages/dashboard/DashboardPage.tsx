@@ -21,8 +21,7 @@ export default function DashboardPage() {
   const [recommendationDismissed, setRecommendationDismissed] = useState(false);
 
   const handleReviewRecommendation = () => {
-    // Navigate or alert for recommendation review
-    window.location.href = "/inventory?filter=low_stock";
+    window.location.href = "/recommendations";
   };
 
   const handleDismissRecommendation = () => {
@@ -30,7 +29,7 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="flex flex-col gap-8 w-full max-w-[1136px] mx-auto select-none">
+    <div className="flex flex-col gap-8 w-full select-none">
       {/* 1. Intro & Greeting */}
       <DashboardIntro
         userName="Abhishek"
@@ -38,20 +37,12 @@ export default function DashboardPage() {
       />
 
       {/* 2. Attention and Decision */}
-      {!recommendationDismissed ? (
+      {!recommendationDismissed && (
         <AttentionAndDecision
           items={NEEDS_ATTENTION_ITEMS}
           onReviewRecommendation={handleReviewRecommendation}
           onDismissRecommendation={handleDismissRecommendation}
         />
-      ) : (
-        <div className="bg-white border border-[#EAEAEA] rounded-xl p-6">
-          <AttentionAndDecision
-            items={NEEDS_ATTENTION_ITEMS}
-            onReviewRecommendation={handleReviewRecommendation}
-            onDismissRecommendation={handleDismissRecommendation}
-          />
-        </div>
       )}
 
       {/* 3. Business Snapshot */}
@@ -80,3 +71,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+

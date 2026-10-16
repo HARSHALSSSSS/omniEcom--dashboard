@@ -11,6 +11,10 @@ interface UiStore {
   activeDrawer: { type: string; id: string } | null;
   openDrawer: (type: string, id: string) => void;
   closeDrawer: () => void;
+
+  notificationsPanelOpen: boolean;
+  setNotificationsPanelOpen: (open: boolean) => void;
+  toggleNotificationsPanel: () => void;
 }
 
 /**
@@ -29,4 +33,9 @@ export const useUiStore = create<UiStore>((set) => ({
   activeDrawer: null,
   openDrawer: (type, id) => set({ activeDrawer: { type, id } }),
   closeDrawer: () => set({ activeDrawer: null }),
+
+  notificationsPanelOpen: false,
+  setNotificationsPanelOpen: (open) => set({ notificationsPanelOpen: open }),
+  toggleNotificationsPanel: () =>
+    set((s) => ({ notificationsPanelOpen: !s.notificationsPanelOpen })),
 }));

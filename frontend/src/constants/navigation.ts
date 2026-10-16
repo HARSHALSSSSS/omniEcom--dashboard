@@ -26,7 +26,6 @@ export interface NavItem {
   label: string;
   href: string;
   icon: LucideIcon;
-  badge?: "needs-attention"; // special badge driven by store
 }
 
 export interface NavGroup {
@@ -43,7 +42,6 @@ export const NAV_GROUPS: NavGroup[] = [
         label: "Needs Attention",
         href: ROUTES.NEEDS_ATTENTION,
         icon: AlertCircle,
-        badge: "needs-attention",
       },
       { label: "Products", href: ROUTES.PRODUCTS, icon: Package },
       { label: "Inventory", href: ROUTES.INVENTORY, icon: Boxes },

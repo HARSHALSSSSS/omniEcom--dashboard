@@ -1,6 +1,6 @@
 
 import { Link } from "react-router-dom";
-import { Package, Clock, ListFilter, RefreshCw, Sparkles } from "lucide-react";
+import { AlertCircle, Clock, ListFilter, RefreshCw, Sparkles } from "lucide-react";
 import type { NeedsAttentionItem } from "@/types/dashboard";
 
 interface AttentionAndDecisionProps {
@@ -17,48 +17,48 @@ export const AttentionAndDecision: React.FC<AttentionAndDecisionProps> = ({
   const getIcon = (type: NeedsAttentionItem["type"]) => {
     switch (type) {
       case "low_stock":
-        return <Package className="h-4 w-4 text-[#D97706]" />;
+        return <AlertCircle className="h-4 w-4 text-[#666666]" />;
       case "orders_at_risk":
-        return <Clock className="h-4 w-4 text-[#1D4ED8]" />;
+        return <Clock className="h-4 w-4 text-[#666666]" />;
       case "listing_issue":
-        return <ListFilter className="h-4 w-4 text-[#1D4ED8]" />;
+        return <ListFilter className="h-4 w-4 text-[#666666]" />;
       case "sync_issue":
-        return <RefreshCw className="h-4 w-4 text-[#D97706]" />;
+        return <RefreshCw className="h-4 w-4 text-[#666666]" />;
       default:
-        return <Package className="h-4 w-4 text-[#666666]" />;
+        return <AlertCircle className="h-4 w-4 text-[#666666]" />;
     }
   };
 
   return (
     <div className="flex flex-col lg:flex-row items-stretch gap-6 w-full">
       {/* Needs Attention Left Card */}
-      <div className="flex-1 lg:w-[744px] bg-white border border-[#EAEAEA] rounded-xl p-6 flex flex-col justify-between">
+      <div className="flex-1 bg-white border border-[#EAEAEA] rounded-[12px] px-6 pt-5 pb-2 flex flex-col justify-between">
         {/* Section Introduction */}
-        <div className="flex flex-col gap-1 pb-3 border-b border-[#EAEAEA]">
-          <h2 className="text-[18px] font-semibold text-[#000000] leading-[26px]">
+        <div className="flex flex-col gap-1 pb-4">
+          <h2 className="text-[18px] font-semibold text-[#000000] leading-[145%]">
             Needs attention
           </h2>
-          <p className="text-[12px] text-[#666666]">
+          <p className="text-[13px] font-normal text-[#666666] leading-[145%]">
             Issues that may affect orders, inventory or sales.
           </p>
         </div>
 
         {/* Priority Rows */}
-        <div className="divide-y divide-[#EAEAEA] flex-1 flex flex-col justify-around">
+        <div className="flex flex-col">
           {items.map((item) => (
             <div
               key={item.id}
-              className="flex items-center justify-between py-3 gap-4"
+              className="flex items-center justify-between h-[66px] border-t border-[#EAEAEA] gap-3"
             >
               <div className="flex items-center gap-3">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-neutral-100/80">
+                <div className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[8px] bg-[#F5F5F5]">
                   {getIcon(item.type)}
                 </div>
-                <div className="flex flex-col">
-                  <span className="text-[13px] font-semibold text-[#000000]">
+                <div className="flex flex-col gap-[3px]">
+                  <span className="text-[13px] font-semibold text-[#000000] leading-[145%]">
                     {item.title}
                   </span>
-                  <span className="text-[12px] text-[#666666]">
+                  <span className="text-[12px] font-normal text-[#666666] leading-[145%]">
                     {item.description}
                   </span>
                 </div>
@@ -67,8 +67,8 @@ export const AttentionAndDecision: React.FC<AttentionAndDecisionProps> = ({
                 to={item.actionHref}
                 className={
                   item.type === "low_stock" || item.type === "sync_issue"
-                    ? "text-[12px] font-medium text-[#D97706] hover:underline shrink-0"
-                    : "text-[12px] font-medium text-[#1D4ED8] hover:underline shrink-0"
+                    ? "text-[12px] font-medium text-[#F59E0B] hover:underline shrink-0 leading-[145%]"
+                    : "text-[12px] font-medium text-[#1D4ED8] hover:underline shrink-0 leading-[145%]"
                 }
               >
                 {item.actionText}
@@ -78,46 +78,45 @@ export const AttentionAndDecision: React.FC<AttentionAndDecisionProps> = ({
         </div>
       </div>
 
-      {/* Recommended Action Right Card */}
+      {/* Recommended Action Right Card: width 368px */}
       <div
         style={{
-          background:
-            "linear-gradient(107.52deg, rgba(228, 160, 255, 0.49) 0.96%, rgba(37, 99, 235, 0.49) 121.91%)",
+          background: "linear-gradient(107.52deg, #E4A0FF 0.96%, #2563EB 121.91%)",
         }}
-        className="w-full lg:w-[368px] rounded-xl p-6 flex flex-col justify-between shrink-0 shadow-xs"
+        className="w-full lg:w-[368px] rounded-[12px] p-6 flex flex-col justify-between shrink-0"
       >
         {/* Header */}
         <div className="flex items-center justify-between">
-          <span className="text-[10px] font-medium tracking-wider uppercase text-[#707070]">
+          <span className="text-[10px] font-medium uppercase tracking-normal text-white">
             Recommended action
           </span>
-          <Sparkles className="h-4 w-4 text-[#4A4A4A]" />
+          <Sparkles className="h-[22px] w-[22px] text-white" />
         </div>
 
         {/* Rationale Content */}
-        <div className="flex flex-col gap-3 my-4">
+        <div className="flex flex-col gap-3 my-3">
           <h3 className="text-[22px] font-semibold text-[#000000] leading-[135%]">
             18 products are approaching their stock threshold.
           </h3>
-          <p className="text-[13px] text-[#333333] leading-[145%]">
+          <p className="text-[13px] font-normal text-white leading-[145%]">
             Based on recent sales velocity, replenishing 6 products this week
             could reduce potential stockouts.
           </p>
         </div>
 
         {/* Decision Actions */}
-        <div className="flex flex-col gap-2.5 pt-2">
+        <div className="flex flex-col gap-5 pt-1">
           <button
             type="button"
             onClick={onReviewRecommendation}
-            className="flex h-10 w-full items-center justify-center rounded-lg bg-[#000000] text-[12px] font-semibold text-white hover:bg-neutral-800 transition-colors shadow-2xs"
+            className="flex h-10 w-full items-center justify-center rounded-[8px] bg-[#000000] text-[12px] font-semibold text-white hover:bg-neutral-800 transition-colors"
           >
             Review recommendation
           </button>
           <button
             type="button"
             onClick={onDismissRecommendation}
-            className="flex h-10 w-full items-center justify-center rounded-lg bg-white text-[12px] font-semibold text-[#000000] hover:bg-neutral-50 transition-colors shadow-2xs"
+            className="flex h-10 w-full items-center justify-center rounded-[8px] bg-white text-[12px] font-semibold text-[#000000] hover:bg-neutral-50 transition-colors"
           >
             Dismiss
           </button>
@@ -126,3 +125,4 @@ export const AttentionAndDecision: React.FC<AttentionAndDecisionProps> = ({
     </div>
   );
 };
+

@@ -11,8 +11,10 @@ const SignUpPage = lazy(() => import("@/pages/auth/SignUpPage"));
 const SignInPage = lazy(() => import("@/pages/auth/SignInPage"));
 // Onboarding
 const OnboardingPage = lazy(() => import("@/pages/onboarding/OnboardingPage"));
-// Workspace
-const DashboardPage = lazy(() => import("@/pages/dashboard/DashboardPage"));
+import DashboardPage from "@/pages/dashboard/DashboardPage";
+const RecommendationsPage = lazy(
+  () => import("@/pages/recommendations/RecommendationsPage"),
+);
 const NeedsAttentionPage = lazy(
   () => import("@/pages/needs-attention/NeedsAttentionPage"),
 );
@@ -133,8 +135,12 @@ export const router = createBrowserRouter([
       </ProtectedRoute>
     ),
     children: [
-      { index: true, element: <Navigate to={ROUTES.DASHBOARD} replace /> },
-      { path: ROUTES.DASHBOARD, element: withSuspense(DashboardPage) },
+      { index: true, element: <DashboardPage /> },
+      { path: "dashboard", element: <DashboardPage /> },
+      {
+        path: ROUTES.RECOMMENDATIONS,
+        element: withSuspense(RecommendationsPage),
+      },
       {
         path: ROUTES.NEEDS_ATTENTION,
         element: withSuspense(NeedsAttentionPage),

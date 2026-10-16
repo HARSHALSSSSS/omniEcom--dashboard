@@ -9,6 +9,7 @@ export const ROUTES = {
 
   // Workspace
   DASHBOARD: "/",
+  RECOMMENDATIONS: "/recommendations",
   NEEDS_ATTENTION: "/needs-attention",
   PRODUCTS: "/products",
   PRODUCTS_NEW: "/products/new",

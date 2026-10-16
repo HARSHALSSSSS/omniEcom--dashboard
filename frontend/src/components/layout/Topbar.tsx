@@ -18,20 +18,91 @@ export const Topbar: React.FC = () => {
   const breadcrumbText =
     pathParts.length === 0 ? "Dashboard" : pathParts[pathParts.length - 1];
 
+  // Check if we are on a product route
+  const isProductsRoute = location.pathname.startsWith(ROUTES.PRODUCTS);
+  const isProductDetail =
+    isProductsRoute &&
+    pathParts.length >= 2 &&
+    pathParts[1] !== "new" &&
+    pathParts[1] !== "import";
+
+  const isCreateProduct = location.pathname === ROUTES.PRODUCTS_NEW;
+  const isVariantsPage = location.pathname.endsWith("/variants");
+
   return (
-    <header className="flex h-[72px] items-center justify-between border-b border-[#EAEAEA] bg-white px-8 z-20 shrink-0">
+    <header className="flex h-[72px] items-center justify-between border-b border-[#EAEAEA] bg-white px-8 z-20 shrink-0 font-['Inter',sans-serif]">
       {/* Left: Breadcrumbs */}
-      <div className="flex items-center gap-2 text-[13px]">
-        <Link
-          to={ROUTES.DASHBOARD}
-          className="text-[#71717A] hover:text-[#0A0A0A] transition-colors"
-        >
-          Workspace
-        </Link>
-        <span className="text-[#A1A1AA]">/</span>
-        <span className="font-semibold text-[#0A0A0A] capitalize">
-          {breadcrumbText.replace(/-/g, " ")}
-        </span>
+      <div className="flex items-center gap-3 text-[12px] leading-[17px]">
+
+        {isCreateProduct ? (
+          <>
+            <Link
+              to={ROUTES.DASHBOARD}
+              className="text-[#666666] hover:text-[#000000] transition-colors"
+            >
+              Workspace
+            </Link>
+            <span className="text-[#666666]">/</span>
+            <Link
+              to={ROUTES.PRODUCTS}
+              className="text-[#666666] hover:text-[#000000] transition-colors"
+            >
+              Products
+            </Link>
+            <span className="text-[#666666]">/</span>
+            <span className="font-semibold text-[#000000]">
+              Create product
+            </span>
+          </>
+        ) : isProductDetail ? (
+          <>
+            <Link
+              to={ROUTES.DASHBOARD}
+              className="text-[#666666] hover:text-[#000000] transition-colors"
+            >
+              Workspace
+            </Link>
+            <span className="text-[#666666]">/</span>
+            <Link
+              to={ROUTES.PRODUCTS}
+              className="text-[#666666] hover:text-[#000000] transition-colors"
+            >
+              Products
+            </Link>
+            <span className="text-[#666666]">/</span>
+            <Link
+              to={`${ROUTES.PRODUCTS}/${pathParts[1]}`}
+              className={`transition-colors ${
+                isVariantsPage
+                  ? "text-[#666666] hover:text-[#000000]"
+                  : "font-semibold text-[#000000]"
+              }`}
+            >
+              Premium Travel Bag
+            </Link>
+            {isVariantsPage && (
+              <>
+                <span className="text-[#666666]">/</span>
+                <span className="font-semibold text-[#000000]">
+                  Variants &amp; SKU Management
+                </span>
+              </>
+            )}
+          </>
+        ) : (
+          <>
+            <Link
+              to={ROUTES.DASHBOARD}
+              className="text-[#666666] hover:text-[#000000] transition-colors"
+            >
+              Workspace
+            </Link>
+            <span className="text-[#666666]">/</span>
+            <span className="font-semibold text-[#000000] capitalize">
+              {breadcrumbText.replace(/-/g, " ")}
+            </span>
+          </>
+        )}
       </div>
 
       {/* Right controls */}
@@ -54,10 +125,12 @@ export const Topbar: React.FC = () => {
         {/* Notifications */}
         <button
           type="button"
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-[#71717A] hover:bg-neutral-100 hover:text-[#0A0A0A] transition-colors"
+          onClick={() => useUiStore.getState().toggleNotificationsPanel()}
+          className="relative flex h-8 w-8 items-center justify-center rounded-lg text-[#71717A] hover:bg-neutral-100 hover:text-[#0A0A0A] transition-colors"
           title="Notifications"
         >
           <Bell className="h-[18px] w-[18px]" strokeWidth={1.75} />
+          <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500" />
         </button>
 
         {/* Help */}
