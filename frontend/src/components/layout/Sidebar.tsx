@@ -6,20 +6,32 @@ import { useUiStore } from "@/store/ui.store";
 import { useWorkspaceStore } from "@/store/workspace.store";
 import { ROUTES } from "@/constants/routes";
 import { cn } from "@/utils/cn";
+import { signOut } from "@/lib/session";
 
 export const Sidebar: React.FC = () => {
   const navigate = useNavigate();
   const { sidebarCollapsed, toggleSidebar } = useUiStore();
-  const { user, needsAttentionCount, clearWorkspace } = useWorkspaceStore();
+  const { user, shell } = useWorkspaceStore();
+  const { toggleNotificationsPanel } = useUiStore();
 
-  const displayName = user?.fullName ?? "Abhishek";
-  const displayRole = user?.role === "owner" ? "Business owner" : "Seller";
-  const initial = displayName.charAt(0).toUpperCase();
+  const displayName = shell?.user.name ?? user?.fullName ?? "";
+  const displayRole = shell?.user.roleLabel ?? "";
+  const initial = (shell?.user.initials ?? displayName.charAt(0)).toUpperCase();
 
-  const handleSignOut = () => {
-    clearWorkspace();
-    localStorage.removeItem("omni-ecom-workspace-store");
-    navigate(ROUTES.SIGN_IN);
+  // counters the shell endpoint keeps up to date; a badge only shows when there is something to look at
+  const badgeFor = (href: string): number => {
+    const b = shell?.badges;
+    if (!b) return 0;
+    if (href === ROUTES.NEEDS_ATTENTION) return b.needsAttention;
+    if (href === ROUTES.ORDERS) return b.orders;
+    if (href === ROUTES.RETURNS) return b.returns;
+    if (href === "/notifications") return b.notifications;
+    return 0;
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate(ROUTES.SIGN_IN, { replace: true });
   };
 
   return (
@@ -71,8 +83,6 @@ export const Sidebar: React.FC = () => {
             <ul className="space-y-1">
               {group.items.map((item) => {
                 const Icon = item.icon;
-                const showBadge =
-                  item.badge === "needs-attention" && needsAttentionCount > 0;
 
                 return (
                   <li key={item.href}>
@@ -81,21 +91,21 @@ export const Sidebar: React.FC = () => {
                       title={sidebarCollapsed ? item.label : undefined}
                       className={({ isActive }) =>
                         cn(
-                          "flex h-[34px] items-center gap-2.5 rounded-lg px-2.5 text-[12px] leading-[17px] transition-colors",
+                          "flex h-[34px] items-center gap-2.5 rounded-lg px-2.5 text-[13px] transition-colors",
                           isActive
-                            ? "bg-[#F5F5F5] text-[#000000] font-semibold"
+                            ? "bg-[#E6F4FF] text-[#1D4ED8] font-semibold"
                             : "bg-white text-[#666666] font-normal hover:bg-neutral-50 hover:text-[#0A0A0A]",
                           sidebarCollapsed && "justify-center px-0",
                         )
                       }
                     >
-                      <Icon className={cn("h-4 w-4 shrink-0", "stroke-[1.5px]")} />
+                      <Icon className="h-4 w-4 shrink-0" />
                       {!sidebarCollapsed && (
                         <span className="flex-1 truncate">{item.label}</span>
                       )}
-                      {!sidebarCollapsed && showBadge && (
-                        <span className="ml-auto text-[11px] font-semibold text-[#000000] tabular-nums">
-                          {needsAttentionCount}
+                      {!sidebarCollapsed && badgeFor(item.href) > 0 && (
+                        <span className="ml-auto rounded-full bg-[#E4E4E7] px-1.5 text-[10px] font-semibold leading-[16px] text-[#18181B]">
+                          {badgeFor(item.href) > 99 ? "99+" : badgeFor(item.href)}
                         </span>
                       )}
                     </NavLink>
@@ -112,6 +122,30 @@ export const Sidebar: React.FC = () => {
         <ul className="space-y-1">
           {NAV_BOTTOM.map((item) => {
             const Icon = item.icon;
+            if (item.href === "/notifications") {
+              const unread = badgeFor(item.href);
+              return (
+                <li key={item.href}>
+                  <button
+                    type="button"
+                    onClick={toggleNotificationsPanel}
+                    title={sidebarCollapsed ? item.label : undefined}
+                    className={cn(
+                      "flex h-[34px] w-full items-center gap-2.5 rounded-lg bg-white px-2.5 text-[13px] font-normal text-[#666666] transition-colors hover:bg-neutral-50 hover:text-[#0A0A0A]",
+                      sidebarCollapsed && "justify-center px-0",
+                    )}
+                  >
+                    <Icon className="h-4 w-4 shrink-0" />
+                    {!sidebarCollapsed && <span className="flex-1 truncate text-left">{item.label}</span>}
+                    {!sidebarCollapsed && unread > 0 && (
+                      <span className="ml-auto rounded-full bg-red-100 px-1.5 text-[10px] font-semibold leading-[16px] text-red-700">
+                        {unread > 99 ? "99+" : unread}
+                      </span>
+                    )}
+                  </button>
+                </li>
+              );
+            }
             return (
               <li key={item.href}>
                 <NavLink

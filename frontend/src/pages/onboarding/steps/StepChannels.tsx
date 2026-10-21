@@ -1,83 +1,57 @@
 import React, { useState } from "react";
-import {
-  Check,
-  RefreshCw,
-} from "lucide-react";
-import { useWorkspaceStore } from "@/store/workspace.store";
+import { Check } from "lucide-react";
+import type { OnboardingChannel } from "@/api/onboarding.api";
+import { useChannels, useSaveChannels, useSkipStep } from "@/hooks/useOnboarding";
+import { ConnectChannelDialog } from "@/components/onboarding/ConnectChannelDialog";
+import { ChannelLogo, InlineError, Spinner, StepError, StepLoading } from "@/components/onboarding/wizard";
+import { useSavedDraft, useStepStatus, useWizard, useWizardDraft } from "@/components/onboarding/wizardContext";
 import { cn } from "@/utils/cn";
 
-interface StepChannelsProps {
-  onNext: () => void;
-  onSkip: () => void;
-}
+const KIND_LABEL: Record<OnboardingChannel["kind"], string> = {
+  marketplace: "Marketplace",
+  online_store: "Online store",
+  social: "Social selling",
+};
 
-interface ChannelItem {
-  id: string;
-  name: string;
-  category: string;
-  description: string;
-  logo: string;
-}
+export const StepChannels: React.FC = () => {
+  const channels = useChannels();
+  if (channels.isPending) return <StepLoading label="Loading sales channels" />;
+  if (channels.isError) return <StepError error={channels.error} onRetry={() => void channels.refetch()} />;
+  return <ChannelsForm items={channels.data.items} />;
+};
 
-const CHANNELS: ChannelItem[] = [
-  {
-    id: "amazon",
-    name: "Amazon",
-    category: "Marketplace",
-    description: "Products, orders, inventory and listings",
-    logo: "/logos/amazon.svg",
-  },
-  {
-    id: "flipkart",
-    name: "Flipkart",
-    category: "Marketplace",
-    description: "Products, orders, inventory and listings",
-    logo: "/logos/flipkart.svg",
-  },
-  {
-    id: "meesho",
-    name: "Meesho",
-    category: "Marketplace",
-    description: "Catalog, orders and inventory",
-    logo: "/logos/meesho.svg",
-  },
-  {
-    id: "shopify",
-    name: "Shopify",
-    category: "Online store",
-    description: "Products, orders, customers and inventory",
-    logo: "/logos/shopify.svg",
-  },
-  {
-    id: "snapdeal",
-    name: "Snapdeal",
-    category: "Marketplace",
-    description: "Products, orders and inventory",
-    logo: "/logos/snapdeal.svg",
-  },
-  {
-    id: "social_commerce",
-    name: "Social Commerce",
-    category: "Social selling",
-    description: "Catalog and orders from social channels",
-    logo: "/logos/social.svg",
-  },
-];
+const ChannelsForm: React.FC<{ items: OnboardingChannel[] }> = ({ items }) => {
+  const { canWrite, advance } = useWizard();
+  const saved = useSavedDraft<{ selected: string[] }>("channels");
+  const status = useStepStatus("channels");
+  const save = useSaveChannels();
+  const skip = useSkipStep();
+  const [dialogFor, setDialogFor] = useState<string | null>(null);
 
-export const StepChannels: React.FC<StepChannelsProps> = ({
-  onNext,
-  onSkip,
-}) => {
-  const { onboardingData, toggleChannelConnection } = useWorkspaceStore();
-  const [connectingId, setConnectingId] = useState<string | null>(null);
+  // the ticks start from what the server remembers (or the draft from "Save & exit"); connected channels are always ticked
+  const [picked, setPicked] = useState<string[]>(() => saved?.selected ?? items.filter((i) => i.selected).map((i) => i.code));
+  const live = items.map((i) => ({ ...i, ticked: i.connection === "connected" || picked.includes(i.code) }));
+  const tickedCodes = live.filter((i) => i.ticked).map((i) => i.code);
 
-  const connectedChannels = onboardingData.connectedChannels;
+  useWizardDraft(() => ({ selected: tickedCodes }));
 
-  const handleConnect = async (channelId: string) => {
-    setConnectingId(channelId);
-    await new Promise((res) => setTimeout(res, 500));
-    toggleChannelConnection(channelId);
-    setConnectingId(null);
+  const toggle = (code: string) => setPicked((p) => (p.includes(code) ? p.filter((c) => c !== code) : [...p, code]));
+
+  const connectedCount = live.filter((i) => i.connection === "connected").length;
+  const toConnect = live.filter((i) => i.ticked && i.availability === "available" && i.connection !== "connected").length;
+  const interested = live.filter((i) => i.ticked && i.availability === "coming_soon").length;
+
+  const busy = save.isPending || skip.isPending;
+  const error = save.error ?? skip.error;
+  const dialogChannel = items.find((i) => i.code === dialogFor) ?? null;
+
+  const handleContinue = () => {
+    if (busy || !canWrite) return;
+    save.mutate(tickedCodes, { onSuccess: (res) => advance(res.state) });
+  };
+  const handleSkip = () => {
+    if (busy || !canWrite) return;
+    skip.mutate("channels", { onSuccess: (state) => advance(state) });
   };
 
   return (
@@ -175,144 +149,158 @@ export const StepChannels: React.FC<StepChannelsProps> = ({
             </div>
 
             {/* Channel cards */}
-            <div className="flex flex-col gap-3 pt-1">
-              {CHANNELS.map((ch) => {
-                const isConnected = connectedChannels.includes(ch.id);
-                const isConnecting = connectingId === ch.id;
+            {items.length === 0 ? (
+              <p className="rounded-[12px] border border-dashed border-[#D6D6D6] bg-white px-4 py-6 text-center text-[13px] text-[#737373]">
+                No sales channels are available right now. You can skip this step and add channels later from your workspace.
+              </p>
+            ) : (
+              <ul className="flex flex-col gap-3 pt-1" aria-label="Sales channels">
+                {live.map((ch) => {
+                  const isConnected = ch.connection === "connected";
+                  const comingSoon = ch.availability === "coming_soon";
+                  const needsAttention = ch.connection === "needs_attention";
+                  const checkboxId = `onb-channel-${ch.code}`;
 
-                return (
-                  <div
-                    key={ch.id}
-                    className={cn(
-                      "flex flex-col sm:flex-row sm:items-center justify-between rounded-[18px] px-5 py-4 transition-all gap-4 bg-white",
-                      isConnected
-                        ? "border border-[#0A0A0A]"
-                        : "border border-[#EFEFEF] hover:border-[#D6D6D6]",
-                    )}
-                  >
-                    {/* Left: Checkbox + Logo + Info */}
-                    <div className="flex items-center gap-4">
-                      <button
-                        type="button"
-                        onClick={() => handleConnect(ch.id)}
-                        className="cursor-pointer shrink-0"
-                      >
-                        {isConnected ? (
-                          <div className="flex h-5 w-5 items-center justify-center rounded-[6px] bg-black text-white">
-                            <Check className="h-3.5 w-3.5 stroke-[2.5]" />
-                          </div>
-                        ) : (
-                          <div className="h-5 w-5 rounded-[6px] border border-[#CCCCCC] bg-white hover:border-black" />
-                        )}
-                      </button>
-
-                      {/* Brand Logo / Icon */}
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white border border-[#EFEFEF] p-2">
-                        <img
-                          src={ch.logo}
-                          alt={ch.name}
-                          className="h-full w-full object-contain"
-                        />
-                      </div>
-
-                      <div className="flex flex-col">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[13.5px] font-bold text-[#0A0A0A]">
-                            {ch.name}
-                          </span>
-                          <span className="text-[12px] text-[#8E8E8E]">
-                            / {ch.category}
-                          </span>
-                        </div>
-                        <p className="text-[11.5px] text-[#737373]">
-                          {ch.description}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Right: Status pill + Action button */}
-                    <div className="flex items-center gap-4 self-end sm:self-center shrink-0">
-                      {isConnected ? (
-                        <div className="text-right">
-                          <div className="inline-flex items-center gap-1 text-[11.5px] font-medium text-[#0A0A0A]">
-                            <Check className="h-3.5 w-3.5 stroke-[2]" />
-                            <span>Connected</span>
-                          </div>
-                          <p className="text-[10px] text-[#8E8E8E] mt-0.5">
-                            Last sync just now
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="inline-flex items-center gap-1.5 text-[11.5px] text-[#8E8E8E]">
-                          <div className="h-2 w-2 rounded-full border border-[#B0B0B0]" />
-                          <span>Not connected</span>
-                        </div>
+                  return (
+                    <li
+                      key={ch.code}
+                      className={cn(
+                        "flex flex-col sm:flex-row sm:items-center justify-between rounded-[18px] px-5 py-4 transition-all gap-4 bg-white",
+                        isConnected ? "border border-[#0A0A0A]" : "border border-[#EFEFEF] hover:border-[#D6D6D6]",
                       )}
+                    >
+                      {/* Left: Checkbox + Logo + Info */}
+                      <div className="flex items-center gap-4">
+                        <button
+                          type="button"
+                          id={checkboxId}
+                          role="checkbox"
+                          aria-checked={ch.ticked}
+                          aria-label={comingSoon ? `Tell me when ${ch.name} is available` : `Select ${ch.name}`}
+                          disabled={!canWrite || isConnected}
+                          onClick={() => toggle(ch.code)}
+                          className="cursor-pointer shrink-0 disabled:cursor-not-allowed"
+                        >
+                          {ch.ticked ? (
+                            <div className="flex h-5 w-5 items-center justify-center rounded-[6px] bg-black text-white">
+                              <Check className="h-3.5 w-3.5 stroke-[2.5]" />
+                            </div>
+                          ) : (
+                            <div className="h-5 w-5 rounded-[6px] border border-[#CCCCCC] bg-white hover:border-black" />
+                          )}
+                        </button>
 
-                      <button
-                        type="button"
-                        disabled={isConnecting}
-                        onClick={() => handleConnect(ch.id)}
-                        className={cn(
-                          "h-9 px-4 text-xs font-semibold rounded-[10px] border transition-colors cursor-pointer min-w-[76px]",
-                          isConnected
-                            ? "border-[#D6D6D6] bg-white text-[#0A0A0A] hover:bg-neutral-100"
-                            : "border-[#D6D6D6] bg-white text-[#0A0A0A] hover:border-black",
-                        )}
-                      >
-                        {isConnecting ? (
-                          <RefreshCw className="h-3.5 w-3.5 animate-spin mx-auto" />
-                        ) : isConnected ? (
-                          "Manage"
+                        {/* Brand Logo / Icon */}
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white border border-[#EFEFEF] p-2">
+                          <ChannelLogo code={ch.code} name={ch.name} />
+                        </div>
+
+                        <div className="flex flex-col">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[13.5px] font-bold text-[#0A0A0A]">{ch.name}</span>
+                            <span className="text-[12px] text-[#8E8E8E]">/ {KIND_LABEL[ch.kind]}</span>
+                          </div>
+                          <p className="text-[11.5px] text-[#737373]">{ch.description}</p>
+                        </div>
+                      </div>
+
+                      {/* Right: Status pill + Action button */}
+                      <div className="flex items-center gap-4 self-end sm:self-center shrink-0">
+                        {isConnected ? (
+                          <div className="text-right">
+                            <div className="inline-flex items-center gap-1 text-[11.5px] font-medium text-[#0A0A0A]">
+                              <Check className="h-3.5 w-3.5 stroke-[2]" />
+                              <span>Connected</span>
+                            </div>
+                            <p className="text-[10px] text-[#8E8E8E] mt-0.5">
+                              {ch.account?.lastSyncedAt ? `Last sync ${new Date(ch.account.lastSyncedAt).toLocaleString()}` : "Not synced yet"}
+                            </p>
+                          </div>
+                        ) : comingSoon ? (
+                          <div className="text-right text-[11.5px] text-[#8E8E8E]">
+                            <span>Coming soon</span>
+                            <p className="text-[10px] mt-0.5">{ch.ticked ? "We'll let you know" : "Tick to be told"}</p>
+                          </div>
                         ) : (
-                          "Connect"
+                          <div className={cn("inline-flex items-center gap-1.5 text-[11.5px]", needsAttention ? "text-[#B42318]" : "text-[#8E8E8E]")}>
+                            <div className={cn("h-2 w-2 rounded-full border", needsAttention ? "border-[#B42318] bg-[#B42318]" : "border-[#B0B0B0]")} />
+                            <span>{needsAttention ? "Needs attention" : "Not connected"}</span>
+                          </div>
                         )}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
 
-          {/* Bottom count & helper */}
-          <div className="border-t border-[#E5E5E5] pt-4 flex items-center justify-between text-[11px] text-[#737373]">
-            <span>
-              {connectedChannels.length} connected ·{" "}
-              {connectedChannels.length > 0
-                ? `${connectedChannels.length} selected to connect`
-                : "1 selected to connect"}
-            </span>
-            <span className="text-[#8E8E8E] hover:underline cursor-pointer">
-              Example connection & sync
-            </span>
-          </div>
-          <p className="text-[11px] text-[#8E8E8E]">
-            You can add more channels anytime from your workspace.
-          </p>
+                        {!comingSoon && (
+                          <button
+                            type="button"
+                            disabled={!canWrite}
+                            onClick={() => setDialogFor(ch.code)}
+                            aria-label={`${isConnected ? "Manage" : needsAttention ? "Reconnect" : "Connect"} ${ch.name}`}
+                            className="h-9 px-4 text-xs font-semibold rounded-[10px] border border-[#D6D6D6] bg-white text-[#0A0A0A] transition-colors cursor-pointer min-w-[76px] hover:border-black disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {isConnected ? "Manage" : needsAttention ? "Reconnect" : "Connect"}
+                          </button>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
 
-          {/* Footer Actions */}
-          <div className="flex items-center justify-between pt-3">
-            <button
-              type="button"
-              onClick={onSkip}
-              className="h-[42px] px-6 rounded-[12px] bg-white border border-[#E5E5E5] text-[12px] font-semibold text-[#0A0A0A] hover:bg-neutral-50 cursor-pointer shadow-2xs"
-            >
-              Skip for now
-            </button>
-            <button
-              type="button"
-              onClick={onNext}
-              className="w-[150px] h-[42px] rounded-[12px] bg-[#0A0A0A] text-white flex items-center justify-center gap-1.5 hover:bg-[#1F1F1F] transition-colors cursor-pointer"
-            >
-              <span className="text-[12px] font-semibold leading-none text-white">
-                Continue
+            {/* Bottom count & helper */}
+            <div className="border-t border-[#E5E5E5] pt-4 flex items-center justify-between text-[11px] text-[#737373]">
+              <span>
+                {connectedCount} connected · {toConnect} selected to connect
+                {interested > 0 ? ` · ${interested} coming soon` : ""}
               </span>
-              <span className="text-white text-[13px] leading-none">→</span>
-            </button>
+            </div>
+            <p className="text-[11px] text-[#8E8E8E]">
+              You can add more channels anytime from your workspace.
+            </p>
+
+            <InlineError error={error} />
+
+            {/* Footer Actions */}
+            <div className="flex items-center justify-between pt-3">
+              {status === "completed" ? (
+                <span />
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleSkip}
+                  disabled={busy || !canWrite}
+                  className="h-[42px] px-6 rounded-[12px] bg-white border border-[#E5E5E5] text-[12px] font-semibold text-[#0A0A0A] hover:bg-neutral-50 cursor-pointer shadow-2xs disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {skip.isPending ? "Skipping…" : "Skip for now"}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleContinue}
+                disabled={busy || !canWrite}
+                className="w-[150px] h-[42px] rounded-[12px] bg-[#0A0A0A] text-white flex items-center justify-center gap-1.5 hover:bg-[#1F1F1F] transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {save.isPending ? (
+                  <>
+                    <Spinner />
+                    <span className="text-[12px] font-semibold leading-none text-white">Saving…</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-[12px] font-semibold leading-none text-white">Continue</span>
+                    <span className="text-white text-[13px] leading-none">→</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </div>
+
+      <ConnectChannelDialog
+        channel={dialogChannel}
+        onClose={() => setDialogFor(null)}
+        onConnected={(code) => setPicked((p) => (p.includes(code) ? p : [...p, code]))}
+      />
     </div>
-  </div>
   );
 };

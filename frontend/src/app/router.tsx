@@ -3,12 +3,16 @@ import { lazy, Suspense } from "react";
 import { ROUTES } from "@/constants/routes";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { PublicOnlyRoute } from "@/components/auth/PublicOnlyRoute";
+import { useWorkspaceStore } from "@/store/workspace.store";
 
 // Layouts
 const AppShell = lazy(() => import("@/components/layout/AppShell"));
 // Auth
 const SignUpPage = lazy(() => import("@/pages/auth/SignUpPage"));
 const SignInPage = lazy(() => import("@/pages/auth/SignInPage"));
+const ForgotPasswordPage = lazy(() => import("@/pages/auth/ForgotPasswordPage"));
+const ResetPasswordPage = lazy(() => import("@/pages/auth/ResetPasswordPage"));
+const VerifyEmailPage = lazy(() => import("@/pages/auth/VerifyEmailPage"));
 // Onboarding
 const OnboardingPage = lazy(() => import("@/pages/onboarding/OnboardingPage"));
 import DashboardPage from "@/pages/dashboard/DashboardPage";
@@ -35,24 +39,6 @@ const ShippingPage = lazy(() => import("@/pages/shipping/ShippingPage"));
 const ReturnsPage = lazy(() => import("@/pages/returns/ReturnsPage"));
 // Commerce
 const ListingsPage = lazy(() => import("@/pages/listings/ListingsPage"));
-const PublishingPreparationPage = lazy(
-  () => import("@/pages/listings/PublishingPreparationPage"),
-);
-const BulkSelectedListingsPage = lazy(
-  () => import("@/pages/listings/BulkSelectedListingsPage"),
-);
-const ListingReadinessPage = lazy(
-  () => import("@/pages/listings/ListingReadinessPage"),
-);
-const ListingBlockerPage = lazy(
-  () => import("@/pages/listings/ListingBlockerPage"),
-);
-const ListingSyncPage = lazy(
-  () => import("@/pages/listings/ListingSyncPage"),
-);
-const ListingUnlistedPage = lazy(
-  () => import("@/pages/listings/ListingUnlistedPage"),
-);
 const ListingStudioPage = lazy(
   () => import("@/pages/listings/ListingStudioPage"),
 );
@@ -67,6 +53,9 @@ const ConnectorDetailPage = lazy(
 );
 const ConnectionSetupPage = lazy(
   () => import("@/pages/marketplace-hub/ConnectionSetupPage"),
+);
+const OAuthCallbackPage = lazy(
+  () => import("@/pages/marketplace-hub/OAuthCallbackPage"),
 );
 const ConnectionHealthPage = lazy(
   () => import("@/pages/marketplace-hub/ConnectionHealthPage"),
@@ -92,6 +81,11 @@ const AutomationPage = lazy(() => import("@/pages/automation/AutomationPage"));
 const SettingsPage = lazy(() => import("@/pages/settings/SettingsPage"));
 // Dev
 const ComponentsDevPage = lazy(() => import("@/pages/dev/ComponentsDevPage"));
+
+function OnboardingIndex() {
+  const step = useWorkspaceStore((s) => s.onboardingResumeStep);
+  return <Navigate to={`${ROUTES.ONBOARDING}/${step}`} replace />;
+}
 
 function PageLoader() {
   return (
@@ -127,10 +121,24 @@ export const router = createBrowserRouter([
       </PublicOnlyRoute>
     ),
   },
+  {
+    path: ROUTES.FORGOT_PASSWORD,
+    element: (
+      <PublicOnlyRoute>
+        {withSuspense(ForgotPasswordPage)}
+      </PublicOnlyRoute>
+    ),
+  },
+  { path: ROUTES.RESET_PASSWORD, element: withSuspense(ResetPasswordPage) },
+  { path: ROUTES.VERIFY_EMAIL, element: withSuspense(VerifyEmailPage) },
   // Onboarding (wizard layout, no app shell)
   {
     path: ROUTES.ONBOARDING,
-    element: <Navigate to={`${ROUTES.ONBOARDING}/business`} replace />,
+    element: (
+      <ProtectedRoute requireOnboarding={false}>
+        <OnboardingIndex />
+      </ProtectedRoute>
+    ),
   },
   {
     path: `${ROUTES.ONBOARDING}/:step`,
@@ -191,46 +199,6 @@ export const router = createBrowserRouter([
       // Listings
       { path: ROUTES.LISTINGS, element: withSuspense(ListingsPage) },
       {
-        path: ROUTES.LISTINGS_PUBLISH,
-        element: withSuspense(PublishingPreparationPage),
-      },
-      {
-        path: ROUTES.LISTINGS_BULK,
-        element: withSuspense(BulkSelectedListingsPage),
-      },
-      {
-        path: ROUTES.LISTINGS_SELECTED,
-        element: withSuspense(BulkSelectedListingsPage),
-      },
-      {
-        path: ROUTES.LISTINGS_READINESS,
-        element: withSuspense(ListingReadinessPage),
-      },
-      {
-        path: ROUTES.LISTINGS_BLOCKER,
-        element: withSuspense(ListingBlockerPage),
-      },
-      {
-        path: ROUTES.LISTINGS_BLOCKED,
-        element: withSuspense(ListingBlockerPage),
-      },
-      {
-        path: ROUTES.LISTINGS_SYNC,
-        element: withSuspense(ListingSyncPage),
-      },
-      {
-        path: "/listings/sync",
-        element: withSuspense(ListingSyncPage),
-      },
-      {
-        path: ROUTES.LISTINGS_UNLISTED,
-        element: withSuspense(ListingUnlistedPage),
-      },
-      {
-        path: "/listings/unlisted",
-        element: withSuspense(ListingUnlistedPage),
-      },
-      {
         path: `${ROUTES.LISTINGS}/:id`,
         element: withSuspense(ListingStudioPage),
       },
@@ -250,6 +218,10 @@ export const router = createBrowserRouter([
       {
         path: `${ROUTES.MARKETPLACE_HUB}/connect/:id`,
         element: withSuspense(ConnectionSetupPage),
+      },
+      {
+        path: ROUTES.MARKETPLACE_HUB_OAUTH_CALLBACK,
+        element: withSuspense(OAuthCallbackPage),
       },
       {
         path: ROUTES.MARKETPLACE_HUB_HEALTH,

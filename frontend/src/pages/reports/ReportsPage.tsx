@@ -1,182 +1,294 @@
-import { useState, useEffect } from "react";
-import { Download, Plus } from "lucide-react";
-import { MOCK_SCHEDULED_REPORTS } from "@/mocks/data/phase10.data";
-import type { ScheduledReport } from "@/types/intelligence";
-import { useReports } from "@/hooks/useIntelligence";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Plus } from "lucide-react";
+import { PageHeader } from "@/components/common/PageHeader";
+import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import { Button } from "@/components/ui/button";
+import { LoadError, Pagination, StateBox, TableSkeleton } from "@/components/procurement/procurementUi";
+import { CatalogGrid, FeaturedCard } from "@/components/reports/ReportCards";
+import { GenerateDialog, type GenerateTarget } from "@/components/reports/GenerateDialog";
+import { RunDetailDialog } from "@/components/reports/RunDetailDialog";
+import { RunFilters, RunsTable } from "@/components/reports/RunsTable";
+import { RunWatcher, type WatchedRun } from "@/components/reports/RunWatcher";
+import { ScheduleDialog, type ScheduleFormTarget } from "@/components/reports/ScheduleDialog";
+import { ScheduleFilters, SchedulesTable } from "@/components/reports/SchedulesTable";
+import { isRunFiltered, runQueryOf, scheduleQueryOf, useReportsUrlState } from "@/components/reports/reportsParams";
+import { entryOf, reportErrorMessage } from "@/components/reports/reportsFormat";
+import { useRunExport } from "@/components/reports/useRunExport";
+import { errorMessage } from "@/api/errors";
+import { useCan } from "@/hooks/useCan";
+import { toast } from "@/hooks/useToast";
+import { useDeleteSchedule, useReportCatalog, useReportRuns, useReportSchedules, useReportsOverview, useScheduleAction } from "@/hooks/useReports";
+import { useWorkspaceStore } from "@/store/workspace.store";
+import { cn } from "@/utils/cn";
+import { formatDateTime, formatNumber } from "@/utils/format";
+import type { CatalogEntry, FeaturedReport, ReportFormat, ReportRun, ReportSchedule, ReportsTab } from "@/types/reports";
+
+const TAB_LABEL: Record<ReportsTab, string> = { reports: "Reports", history: "History", schedules: "Schedules" };
 
 export default function ReportsPage() {
-  const { data: reportsData } = useReports();
-  const [reports, setReports] = useState<ScheduledReport[]>(
-    MOCK_SCHEDULED_REPORTS,
-  );
-  const [exportingId, setExportingId] = useState<string | null>(null);
+  const url = useReportsUrlState();
+  const { update, tab, page, pageSize } = url;
+  const canWrite = useCan("reports:write");
+  const noWrite = canWrite ? undefined : "You need report permission to do this";
+  const shellTimezone = useWorkspaceStore((s) => s.shell?.business.timezone);
 
+  const overview = useReportsOverview();
+  const catalog = useReportCatalog();
+  const runs = useReportRuns(runQueryOf(url), tab === "history");
+  const schedules = useReportSchedules(scheduleQueryOf(url), tab === "schedules");
+  const scheduleAction = useScheduleAction();
+  const deleteSchedule = useDeleteSchedule();
+
+  const [watched, setWatched] = useState<WatchedRun[]>([]);
+  const [generate, setGenerate] = useState<GenerateTarget | null>(null);
+  const [scheduleForm, setScheduleForm] = useState<ScheduleFormTarget | null>(null);
+  const [removing, setRemoving] = useState<ReportSchedule | null>(null);
+  const [busyScheduleId, setBusyScheduleId] = useState<string | null>(null);
+
+  const watch = useCallback((run: ReportRun, download: boolean) => {
+    setWatched((w) => (w.some((x) => x.id === run.id) ? w : [...w, { id: run.id, title: run.reportTitle, download }]));
+  }, []);
+  const onQueued = useCallback((run: ReportRun) => watch(run, true), [watch]);
+  const settled = useCallback((id: string) => setWatched((w) => w.filter((x) => x.id !== id)), []);
+  const exporter = useRunExport(onQueued);
+
+  const runRows = useMemo(() => runs.data?.items ?? [], [runs.data]);
+  const scheduleRows = useMemo(() => schedules.data?.items ?? [], [schedules.data]);
+  const list = tab === "history" ? runs : schedules;
+
+  // a page past the end (a shrinking result set, an old link) falls back to the last page
   useEffect(() => {
-    if (reportsData?.reports && reportsData.reports.length > 0) {
-      setReports(reportsData.reports);
-    }
-  }, [reportsData?.reports]);
+    const d = tab === "reports" ? undefined : list.data;
+    if (d && d.total > 0 && d.items.length === 0 && page > d.pages) update({ page: String(d.pages) }, { replace: true });
+  }, [list.data, tab, page, update]);
 
-  const handleExport = (reportId: string) => {
-    setExportingId(reportId);
-    setTimeout(() => {
-      setExportingId(null);
-      alert("Report generated and downloaded successfully.");
-    }, 800);
+  const runFiltered = isRunFiltered(url);
+  const cat = catalog.data;
+  const timezone = overview.data?.timezone ?? shellTimezone ?? "Asia/Kolkata";
+
+  const generateFeatured = (report: FeaturedReport, format: ReportFormat) => {
+    exporter.start({ type: report.type, format, params: report.suggestedParams }, `featured:${report.type}`).catch((e) => {
+      toast({ title: `Could not generate ${report.title}`, description: reportErrorMessage(e, "The report could not be generated."), variant: "destructive" });
+    });
   };
 
+  const customise = (report: FeaturedReport, format: ReportFormat) => {
+    const entry = entryOf(cat, report.type);
+    if (entry) setGenerate({ entry, format, params: report.suggestedParams });
+  };
+
+  const generateFromDialog = (entry: CatalogEntry, format: ReportFormat, params: Record<string, unknown>, background: boolean) =>
+    exporter.start({ type: entry.type, format, params, background }, "dialog");
+
+  const toggle = async (s: ReportSchedule) => {
+    setBusyScheduleId(s.id);
+    const action = s.status === "active" ? "pause" : "resume";
+    try {
+      await scheduleAction.mutateAsync({ id: s.id, action });
+      toast({ title: action === "pause" ? "Schedule paused" : "Schedule resumed", description: s.name, variant: "success" });
+    } catch (e) {
+      toast({ title: `Could not ${action} the schedule`, description: reportErrorMessage(e, "Try again."), variant: "destructive" });
+    } finally {
+      setBusyScheduleId(null);
+    }
+  };
+
+  const runNow = async (s: ReportSchedule) => {
+    setBusyScheduleId(s.id);
+    try {
+      const run = (await scheduleAction.mutateAsync({ id: s.id, action: "run-now" })) as ReportRun;
+      toast({ title: "Report started", description: `${s.name} is being generated and its recipients will be told.` });
+      watch(run, false);
+    } catch (e) {
+      toast({ title: "Could not run the schedule", description: reportErrorMessage(e, "Try again."), variant: "destructive" });
+    } finally {
+      setBusyScheduleId(null);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!removing) return;
+    try {
+      await deleteSchedule.mutateAsync(removing.id);
+      toast({ title: "Schedule deleted", description: `${removing.name}. Its past runs stay in History.`, variant: "success" });
+      setRemoving(null);
+    } catch (e) {
+      toast({ title: "Could not delete the schedule", description: reportErrorMessage(e, "Try again."), variant: "destructive" });
+      setRemoving(null);
+    }
+  };
+
+  const counts: Partial<Record<ReportsTab, number>> = { schedules: overview.data?.schedules.total };
+  const headerAction = (
+    <Button size="sm" className="gap-2" disabled={!canWrite || !cat} title={noWrite} onClick={() => setScheduleForm({ kind: "create" })}>
+      <Plus className="h-4 w-4" aria-hidden />
+      Schedule a report
+    </Button>
+  );
+
+  const refreshing = list.isFetching && list.isPlaceholderData;
+
   return (
-    <div className="flex flex-col gap-6 w-full select-none pb-12 font-['Inter',sans-serif]">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[#EAEAEA] pb-5">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-[22px] font-semibold text-[#000000] tracking-tight">
-            Financial &amp; Operational Reports
-          </h1>
-          <p className="text-[13px] text-[#666666]">
-            Download tax-compliant reconciliation sheets, ledger exports, and automated
-            scheduled briefs.
-          </p>
-        </div>
+    <div className="w-full space-y-6 pb-16">
+      <PageHeader eyebrow="INTELLIGENCE" title="Reports" description="Download tax, settlement, stock and sales reports as CSV, Excel or PDF, and schedule them to reach your team and accountant on time." actions={headerAction} />
 
-        <button
-          type="button"
-          className="inline-flex items-center gap-2 px-3.5 py-2 bg-black text-white text-[12px] font-semibold rounded-lg hover:bg-neutral-800 transition-colors shadow-2xs"
-        >
-          <Plus className="h-4 w-4" />
-          Schedule New Report
-        </button>
+      <div role="tablist" aria-label="Reports sections" className="inline-flex flex-wrap items-center gap-1 rounded-lg border border-border bg-muted p-1">
+        {(["reports", "history", "schedules"] as const).map((t) => (
+          <button
+            key={t}
+            type="button"
+            role="tab"
+            aria-selected={tab === t}
+            onClick={() => update({ tab: t })}
+            className={cn("rounded-md px-3.5 py-1.5 text-xs font-medium transition-all", tab === t ? "bg-background font-semibold text-foreground shadow-xs" : "text-muted-foreground hover:text-foreground")}
+          >
+            {TAB_LABEL[t]}
+            {counts[t] !== undefined && <span className="ml-1.5 font-mono text-[11px] text-muted-foreground">{formatNumber(counts[t] ?? 0)}</span>}
+          </button>
+        ))}
       </div>
 
-      {/* Instant Downloads Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        <div className="bg-white border border-[#EAEAEA] rounded-xl p-5 flex flex-col justify-between gap-4 shadow-2xs">
-          <div>
-            <span className="text-[10px] font-mono uppercase bg-neutral-100 px-2 py-0.5 rounded text-neutral-700">
-              CSV / XLSX
-            </span>
-            <h3 className="text-[15px] font-semibold text-[#000000] mt-2">
-              GST Tax &amp; Sales Invoicing Register
-            </h3>
-            <p className="text-[12px] text-[#666666] mt-1">
-              Monthly consolidated GSTR-1 ready invoice register with HSN codes
-              and tax splits across states.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => handleExport("gst")}
-            disabled={exportingId === "gst"}
-            className="w-full py-2 bg-neutral-50 hover:bg-neutral-100 border border-[#EAEAEA] rounded-lg text-[12px] font-medium text-[#000000] flex items-center justify-center gap-2 transition-colors"
-          >
-            <Download className="h-4 w-4 text-[#666666]" />
-            {exportingId === "gst" ? "Exporting..." : "Download October 2026"}
-          </button>
-        </div>
-
-        <div className="bg-white border border-[#EAEAEA] rounded-xl p-5 flex flex-col justify-between gap-4 shadow-2xs">
-          <div>
-            <span className="text-[10px] font-mono uppercase bg-neutral-100 px-2 py-0.5 rounded text-neutral-700">
-              CSV
-            </span>
-            <h3 className="text-[15px] font-semibold text-[#000000] mt-2">
-              Marketplace Settlement &amp; Deduction Audit
-            </h3>
-            <p className="text-[12px] text-[#666666] mt-1">
-              Reconciles bank deposits with Amazon and Flipkart remittance advice,
-              highlighting commission variances.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => handleExport("settle")}
-            disabled={exportingId === "settle"}
-            className="w-full py-2 bg-neutral-50 hover:bg-neutral-100 border border-[#EAEAEA] rounded-lg text-[12px] font-medium text-[#000000] flex items-center justify-center gap-2 transition-colors"
-          >
-            <Download className="h-4 w-4 text-[#666666]" />
-            {exportingId === "settle" ? "Exporting..." : "Download Settlement Log"}
-          </button>
-        </div>
-
-        <div className="bg-white border border-[#EAEAEA] rounded-xl p-5 flex flex-col justify-between gap-4 shadow-2xs">
-          <div>
-            <span className="text-[10px] font-mono uppercase bg-neutral-100 px-2 py-0.5 rounded text-neutral-700">
-              PDF
-            </span>
-            <h3 className="text-[15px] font-semibold text-[#000000] mt-2">
-              Monthly Inventory Valuation Ledger
-            </h3>
-            <p className="text-[12px] text-[#666666] mt-1">
-              FIFO valuation statement for accounting audits, detailing ending stock
-              and cost allowances.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => handleExport("inv")}
-            disabled={exportingId === "inv"}
-            className="w-full py-2 bg-neutral-50 hover:bg-neutral-100 border border-[#EAEAEA] rounded-lg text-[12px] font-medium text-[#000000] flex items-center justify-center gap-2 transition-colors"
-          >
-            <Download className="h-4 w-4 text-[#666666]" />
-            {exportingId === "inv" ? "Exporting..." : "Download Valuation PDF"}
-          </button>
-        </div>
-      </div>
-
-      {/* Scheduled Automation Table */}
-      <div className="bg-white border border-[#EAEAEA] rounded-xl overflow-hidden shadow-2xs">
-        <div className="p-4 border-b border-[#EAEAEA]">
-          <h2 className="text-[14px] font-semibold text-[#000000]">
-            Scheduled Automated Dispatches
-          </h2>
-          <p className="text-[11px] text-[#666666]">
-            Reports emailed directly to management and accounting teams.
-          </p>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-[12px]">
-            <thead>
-              <tr className="bg-neutral-50 border-b border-[#EAEAEA] text-[#666666] font-medium text-[11px]">
-                <th className="py-3 px-4">Report Name</th>
-                <th className="py-3 px-4 text-center">Format</th>
-                <th className="py-3 px-4">Cadence</th>
-                <th className="py-3 px-4">Recipients</th>
-                <th className="py-3 px-4">Next Delivery</th>
-                <th className="py-3 px-4 text-center">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#EAEAEA]">
-              {reports.map((r) => (
-                <tr key={r.id} className="hover:bg-neutral-50 transition-colors">
-                  <td className="py-3.5 px-4 font-semibold text-[#000000]">
-                    {r.name}
-                  </td>
-                  <td className="py-3.5 px-4 text-center">
-                    <span className="font-mono text-[10px] uppercase bg-neutral-100 px-1.5 py-0.5 rounded text-neutral-800">
-                      {r.format}
-                    </span>
-                  </td>
-                  <td className="py-3.5 px-4 capitalize font-medium text-[#000000]">
-                    {r.frequency}
-                  </td>
-                  <td className="py-3.5 px-4 text-[#666666] text-[11px]">
-                    {r.recipients.join(", ")}
-                  </td>
-                  <td className="py-3.5 px-4 text-[#666666] text-[11px]">
-                    {r.nextRun}
-                  </td>
-                  <td className="py-3.5 px-4 text-center">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                      {r.status}
-                    </span>
-                  </td>
-                </tr>
+      {tab === "reports" && (
+        <div className="space-y-8">
+          {overview.isLoading ? (
+            <div role="status" aria-label="Loading reports" className="grid grid-cols-1 gap-5 md:grid-cols-3">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="h-52 animate-pulse rounded-xl bg-muted" />
               ))}
-            </tbody>
-          </table>
+            </div>
+          ) : overview.isError && !overview.data ? (
+            <LoadError title="Reports could not be loaded." message={errorMessage(overview.error)} onRetry={() => void overview.refetch()} />
+          ) : (
+            overview.data && (
+              <>
+                <section aria-label="Quick downloads" className="space-y-3">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <h2 className="text-sm font-semibold text-foreground">Quick downloads</h2>
+                    <p className="text-xs text-muted-foreground">
+                      {overview.data.schedules.active > 0
+                        ? `${formatNumber(overview.data.schedules.active)} active ${overview.data.schedules.active === 1 ? "schedule" : "schedules"}${overview.data.schedules.nextRunAt ? `, next delivery ${formatDateTime(overview.data.schedules.nextRunAt)}` : ""}`
+                        : "No active schedules"}
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+                    {overview.data.featured.map((f) => (
+                      <FeaturedCard key={f.type} report={f} entry={entryOf(cat, f.type)} canWrite={canWrite} noWrite={noWrite} busyKey={exporter.busyKey} onGenerate={generateFeatured} onCustomise={customise} />
+                    ))}
+                  </div>
+                </section>
+              </>
+            )
+          )}
+
+          <section aria-label="All reports" className="space-y-3">
+            <h2 className="text-sm font-semibold text-foreground">All reports</h2>
+            {catalog.isLoading ? (
+              <TableSkeleton rows={3} label="Loading the report catalog" />
+            ) : catalog.isError && !cat ? (
+              <LoadError title="The report catalog could not be loaded." message={errorMessage(catalog.error)} onRetry={() => void catalog.refetch()} />
+            ) : (
+              cat && <CatalogGrid catalog={cat} canWrite={canWrite} noWrite={noWrite} onGenerate={(entry) => setGenerate({ entry })} onSchedule={(entry) => setScheduleForm({ kind: "create", entry })} />
+            )}
+          </section>
         </div>
-      </div>
+      )}
+
+      {tab === "history" && (
+        <div className="space-y-4">
+          <RunFilters
+            type={url.type}
+            status={url.status}
+            trigger={url.trigger}
+            filtered={runFiltered}
+            total={runs.data?.total ?? 0}
+            onType={(v) => update({ type: v })}
+            onStatus={(v) => update({ status: v })}
+            onTrigger={(v) => update({ trigger: v })}
+            onClear={url.clearRunFilters}
+          />
+          {runs.isLoading ? (
+            <TableSkeleton rows={8} label="Loading report history" />
+          ) : runs.isError && !runs.data ? (
+            <LoadError title="The report history could not be loaded." message={errorMessage(runs.error)} onRetry={() => void runs.refetch()} />
+          ) : runRows.length === 0 ? (
+            runFiltered ? (
+              <StateBox title="No runs match these filters." description="Try another report, status or start.">
+                <Button variant="outline" size="sm" className="text-xs" onClick={url.clearRunFilters}>
+                  Clear filters
+                </Button>
+              </StateBox>
+            ) : (
+              <StateBox title="No reports generated yet." description="Reports you generate or schedule show up here for 30 days, so you can download them again.">
+                <Button size="sm" className="text-xs" onClick={() => update({ tab: "reports" })}>
+                  Go to reports
+                </Button>
+              </StateBox>
+            )
+          ) : (
+            <div className={cn("space-y-3 transition-opacity", refreshing && "opacity-60")} aria-busy={refreshing}>
+              <RunsTable runs={runRows} onOpen={(r) => update({ run: r.id })} />
+              <Pagination page={runs.data?.page ?? page} pages={runs.data?.pages ?? 1} total={runs.data?.total ?? 0} pageSize={pageSize} shown={runRows.length} noun="runs" onPage={(p) => update({ page: String(p) })} onPageSize={(s) => update({ size: String(s), page: null })} />
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === "schedules" && (
+        <div className="space-y-4">
+          <ScheduleFilters status={url.scheduleStatus} total={schedules.data?.total ?? 0} onStatus={(v) => update({ sstatus: v })} />
+          {schedules.isLoading ? (
+            <TableSkeleton rows={5} label="Loading schedules" />
+          ) : schedules.isError && !schedules.data ? (
+            <LoadError title="Schedules could not be loaded." message={errorMessage(schedules.error)} onRetry={() => void schedules.refetch()} />
+          ) : scheduleRows.length === 0 ? (
+            url.scheduleStatus ? (
+              <StateBox title="No schedules match this filter." description="Show active and paused schedules together to see all of them.">
+                <Button variant="outline" size="sm" className="text-xs" onClick={() => update({ sstatus: null })}>
+                  Clear filter
+                </Button>
+              </StateBox>
+            ) : (
+              <StateBox title="No scheduled reports." description="Schedule the GST register for your accountant, or a weekly sales report for your team. Each run covers its own period.">
+                <Button size="sm" className="text-xs" disabled={!canWrite || !cat} title={noWrite} onClick={() => setScheduleForm({ kind: "create" })}>
+                  Schedule a report
+                </Button>
+              </StateBox>
+            )
+          ) : (
+            <div className={cn("space-y-3 transition-opacity", refreshing && "opacity-60")} aria-busy={refreshing}>
+              <SchedulesTable
+                schedules={scheduleRows}
+                catalog={cat}
+                canWrite={canWrite}
+                noWrite={noWrite}
+                busyId={busyScheduleId}
+                onEdit={(s) => setScheduleForm({ kind: "edit", schedule: s })}
+                onToggle={(s) => void toggle(s)}
+                onRunNow={(s) => void runNow(s)}
+                onDelete={setRemoving}
+              />
+              <Pagination page={schedules.data?.page ?? page} pages={schedules.data?.pages ?? 1} total={schedules.data?.total ?? 0} pageSize={pageSize} shown={scheduleRows.length} noun="schedules" onPage={(p) => update({ page: String(p) })} onPageSize={(s) => update({ size: String(s), page: null })} />
+            </div>
+          )}
+        </div>
+      )}
+
+      <GenerateDialog target={generate} periods={cat?.periods ?? []} onClose={() => setGenerate(null)} onGenerate={generateFromDialog} />
+      {cat && <ScheduleDialog target={scheduleForm} catalog={cat} timezone={timezone} onClose={() => setScheduleForm(null)} onSaved={() => setScheduleForm(null)} />}
+      <RunDetailDialog runId={url.runId} catalog={cat} onClose={() => update({ run: null })} />
+      <ConfirmDialog
+        open={removing !== null}
+        onOpenChange={(o) => !o && !deleteSchedule.isPending && setRemoving(null)}
+        title="Delete this schedule?"
+        description={removing ? `${removing.name} will stop running. Reports it already generated stay in History until they expire.` : ""}
+        confirmText="Delete schedule"
+        variant="destructive"
+        loading={deleteSchedule.isPending}
+        onConfirm={() => void confirmDelete()}
+      />
+      {watched.map((w) => (
+        <RunWatcher key={w.id} run={w} onSettled={settled} />
+      ))}
     </div>
   );
 }

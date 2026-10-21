@@ -1,473 +1,353 @@
-import { useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import {
-  AlertTriangle,
-  CheckCircle2,
-  RefreshCw,
-  Sparkles,
-  Check,
-} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useParams } from "react-router-dom";
+import { Download, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/common/PageHeader";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { ImportProgress } from "@/components/import/ImportProgress";
+import { ImportPagination } from "@/components/import/ImportPagination";
+import { ImportStatusChip } from "@/components/import/ImportStatusChip";
+import { Alert, ImportNotFound, LoadError, NoAccess, PanelSkeleton, StateBox } from "@/components/import/ImportStates";
+import { canReview, importErrorMessage, isBusy, isNotFound, isResumable, num } from "@/components/import/importFormat";
+import { isIssueFiltered, resumeUrl, useIssuesUrl } from "@/components/import/importParams";
+import { BulkResolveDialog } from "@/components/import/issues/BulkResolveDialog";
+import { CommitDialog } from "@/components/import/issues/CommitDialog";
+import { IssueDetail, type BulkRequest } from "@/components/import/issues/IssueDetail";
+import { RowsToolbar, IssueFilters } from "@/components/import/issues/IssueFilters";
+import { IssueList, IssueListSkeleton } from "@/components/import/issues/IssueList";
+import { RowsSkeleton, RowsTable } from "@/components/import/issues/RowsTable";
 import { ROUTES } from "@/constants/routes";
-import {
-  useImportIssues,
-  useResolveIssue,
-  useRevalidateImport,
-  useCommitImport,
-  useImportJob,
-} from "@/hooks/useImport";
-import { ImportIssue } from "@/types/import";
+import { useCan } from "@/hooks/useCan";
+import { useBulkResolve, useDownloadErrors, useImportIssues, useImportOptions, useImportRows, useImportSession, useImportSummary, useResolveIssue, useRevalidateImport } from "@/hooks/useImport";
+import { useCategoryOptions } from "@/hooks/useProducts";
+import { toast } from "@/hooks/useToast";
+import type { ImportIssue } from "@/types/import";
 
-const CATEGORY_TAXONOMY = [
-  "Apparel & Accessories > Ethnic Wear > Kurtas",
-  "Apparel & Accessories > Casual Tops > T-Shirts",
-  "Apparel & Accessories > Outerwear > Jackets",
-  "Footwear > Traditional > Mojaris & Juttis",
-  "Home & Living > Furnishing > Cushion Covers",
-];
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function Counter({ label, value, tone = "text-foreground" }: { label: string; value: number; tone?: string }) {
+  return (
+    <div className="flex items-baseline gap-1.5">
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      <span className={`font-mono text-sm font-bold tabular-nums ${tone}`}>{num(value)}</span>
+    </div>
+  );
+}
 
 export default function ImportIssuesPage() {
-  const { importId } = useParams<{ importId: string }>();
-  const navigate = useNavigate();
-  const effectiveImportId = importId || "imp-2026-9041";
+  const params = useParams<{ importId: string }>();
+  const importId = params.importId && UUID.test(params.importId) ? params.importId : null;
+  const canRead = useCan("imports:read");
+  const canWrite = useCan("imports:write");
+  const url = useIssuesUrl();
+  const { update, clearFilters, view, page, pageSize } = url;
 
-  const { data: job } = useImportJob(effectiveImportId);
-  const { data: issuesData } = useImportIssues(effectiveImportId);
-  const resolveIssueMutation = useResolveIssue(effectiveImportId);
-  const revalidateMutation = useRevalidateImport(effectiveImportId);
-  const commitMutation = useCommitImport(effectiveImportId);
+  const sessionQuery = useImportSession(canRead ? importId : null);
+  const session = sessionQuery.data;
+  const reviewable = Boolean(session && canReview(session.status));
+  const validated = Boolean(session && session.headers.length > 0 && !["created", "uploaded", "analyzed"].includes(session.status));
 
-  const [selectedIssueId, setSelectedIssueId] = useState<string>("iss-001");
-  const [filterType, setFilterType] = useState<string>("all");
-  const [customInputValue, setCustomInputValue] = useState<string>("");
+  const summary = useImportSummary(canRead ? importId : null, validated);
+  const options = useImportOptions(canRead);
+  const categories = useCategoryOptions();
+  const issuesQuery = useImportIssues(canRead && validated ? importId : null, { code: url.code, severity: url.severity, status: url.status === "all" ? undefined : url.status, q: url.q, page, pageSize }, view === "issues");
+  const rowsQuery = useImportRows(canRead && validated ? importId : null, { status: url.rowStatus, q: url.q, page, pageSize }, view === "rows");
 
-  const issues = issuesData?.issues ?? [];
-  const selectedIssue =
-    issues.find((i) => i.id === selectedIssueId) ?? issues[0];
+  const resolve = useResolveIssue(importId ?? "");
+  const bulk = useBulkResolve(importId ?? "");
+  const revalidate = useRevalidateImport(importId ?? "");
+  const download = useDownloadErrors(importId ?? "");
 
-  const filteredIssues = issues.filter((i) => {
-    if (filterType === "all") return true;
-    if (filterType === "open") return i.status === "open";
-    if (filterType === "resolved") return i.status === "resolved";
-    return i.type === filterType;
-  });
+  const [bulkRequest, setBulkRequest] = useState<BulkRequest | null>(null);
+  const [commitOpen, setCommitOpen] = useState(false);
+  const [needsRevalidate, setNeedsRevalidate] = useState(false);
 
-  const openIssuesCount = issues.filter((i) => i.status === "open").length;
-  const resolvedIssuesCount = issues.filter((i) => i.status === "resolved").length;
+  const list = view === "issues" ? issuesQuery : rowsQuery;
+  const issues = useMemo<ImportIssue[]>(() => issuesQuery.data?.items ?? [], [issuesQuery.data]);
+  const selected = issues.find((i) => i.id === url.issueId) ?? issues[0];
+  const editable = canWrite && reviewable;
 
-  const handleApplySuggested = (issue: ImportIssue) => {
-    if (!issue.suggestedFix) return;
-    resolveIssueMutation.mutate({
-      issueId: issue.id,
-      action: "accept_suggestion",
-    });
-  };
+  // a page past the end (issues were resolved, an old link) falls back to the last page
+  useEffect(() => {
+    const d = list.data;
+    if (d && d.total > 0 && d.items.length === 0 && page > d.pages) update({ page: String(d.pages) }, { replace: true });
+  }, [list.data, page, update]);
 
-  const handleApplyCustom = (issue: ImportIssue) => {
-    if (!customInputValue.trim()) return;
-    resolveIssueMutation.mutate(
-      {
-        issueId: issue.id,
-        action: "custom_value",
-        customValue: customInputValue,
-      },
-      {
-        onSuccess: () => {
-          setCustomInputValue("");
-        },
-      },
-    );
-  };
+  const eligible = summary.data?.rows ? (summary.data.rows.valid ?? 0) + (summary.data.rows.warning ?? 0) : undefined;
+  const openOfCode = (code: string) => summary.data?.byCode.find((c) => c.code === code)?.open;
 
-  const handleRevalidate = () => {
-    revalidateMutation.mutate();
-  };
-
-  const handleCommit = () => {
-    commitMutation.mutate(undefined, {
-      onSuccess: () => {
-        navigate(ROUTES.PRODUCTS);
-      },
-    });
-  };
-
-  return (
-    <div className="w-full space-y-6 pb-16">
-      {/* Page Header with Action buttons */}
-      <PageHeader
-        eyebrow="BATCH EXCEPTION RESOLUTION"
-        title="Resolve Import Exceptions"
-        description={`Review and resolve data validation warnings for ${
-          job?.fileName ?? "festive_apparel_catalog_v2.csv"
-        } before committing.`}
-        actions={
-          <div className="flex items-center gap-3">
+  const header = (
+    <PageHeader
+      eyebrow="BATCH EXCEPTION RESOLUTION"
+      title="Resolve import issues"
+      description={session ? `Review and fix the problems found in ${session.fileName ?? "your file"} before it is imported.` : "Review and fix the problems found in your import file."}
+      actions={
+        <div className="flex flex-wrap items-center gap-2">
+          {session && session.issues.total > 0 && (
+            <Button variant="outline" size="sm" className="gap-2" loading={download.isPending} onClick={() => download.mutate(undefined, { onError: (e) => toast({ title: "Could not download the issues", description: importErrorMessage(e), variant: "destructive" }) })}>
+              <Download className="h-3.5 w-3.5" /> Download issues (CSV)
+            </Button>
+          )}
+          {editable && (
             <Button
               variant="outline"
               size="sm"
               className="gap-2"
-              onClick={handleRevalidate}
-              disabled={revalidateMutation.isPending}
+              loading={revalidate.isPending}
+              onClick={() =>
+                revalidate.mutate(undefined, {
+                  onSuccess: (res) => {
+                    setNeedsRevalidate(false);
+                    toast(
+                      res.queued
+                        ? { title: "Revalidation started", description: "Large files are checked in the background." }
+                        : { title: res.status === "clean" ? "All issues resolved" : "Revalidated", description: `${num(res.resolvedCount)} fixed, ${num(res.remainingIssuesCount)} issue(s) remain.`, variant: res.status === "clean" ? "success" : "default" },
+                    );
+                  },
+                  onError: (e) => toast({ title: "Could not revalidate", description: importErrorMessage(e), variant: "destructive" }),
+                })
+              }
             >
-              <RefreshCw
-                className={`h-3.5 w-3.5 ${
-                  revalidateMutation.isPending ? "animate-spin" : ""
-                }`}
-              />
-              Revalidate All
+              <RefreshCw className="h-3.5 w-3.5" /> Revalidate
             </Button>
-            <Button
-              size="sm"
-              className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
-              onClick={handleCommit}
-              disabled={commitMutation.isPending}
-            >
-              {openIssuesCount === 0 ? (
-                <>
-                  <CheckCircle2 className="h-4 w-4" /> Commit All (
-                  {(job?.validRows ?? 414) + resolvedIssuesCount} Products)
-                </>
-              ) : (
-                <>
-                  Commit Clean Records Only ({job?.validRows ?? 414})
-                </>
-              )}
+          )}
+          {editable && (
+            <Button size="sm" onClick={() => setCommitOpen(true)}>
+              Import rows
             </Button>
-          </div>
-        }
-      />
-
-      {/* Progress & Summary Ribbon */}
-      <div className="flex items-center justify-between rounded-xl border border-border bg-card p-4 shadow-sm">
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-muted-foreground">
-              Total Rows:
-            </span>
-            <span className="font-mono text-sm font-bold text-foreground">
-              {job?.totalRows ?? 420}
-            </span>
-          </div>
-          <div className="h-4 w-px bg-border" />
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-emerald-600">
-              Valid:
-            </span>
-            <span className="font-mono text-sm font-bold text-emerald-700">
-              {job?.validRows ?? 414}
-            </span>
-          </div>
-          <div className="h-4 w-px bg-border" />
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-amber-600">
-              Resolved:
-            </span>
-            <span className="font-mono text-sm font-bold text-amber-700">
-              {resolvedIssuesCount}
-            </span>
-          </div>
-          <div className="h-4 w-px bg-border" />
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-destructive">
-              Remaining Issues:
-            </span>
-            <span className="font-mono text-sm font-bold text-destructive">
-              {openIssuesCount}
-            </span>
-          </div>
-        </div>
-
-        {/* Quick status message */}
-        <div className="text-xs">
-          {openIssuesCount === 0 ? (
-            <span className="flex items-center gap-1.5 font-medium text-emerald-600">
-              <CheckCircle2 className="h-4 w-4" /> All exceptions resolved. Ready
-              to commit.
-            </span>
-          ) : (
-            <span className="flex items-center gap-1.5 font-medium text-amber-600">
-              <AlertTriangle className="h-4 w-4" /> {openIssuesCount} issue(s)
-              require attention.
-            </span>
           )}
         </div>
+      }
+    />
+  );
+
+  if (!canRead) {
+    return (
+      <div className="w-full space-y-6 pb-16">
+        {header}
+        <NoAccess />
       </div>
-
-      {/* Filter Tabs */}
-      <div className="flex items-center gap-2 border-b border-border pb-2 text-xs">
-        <button
-          onClick={() => setFilterType("all")}
-          className={`rounded-lg px-3 py-1.5 font-medium transition-colors ${
-            filterType === "all"
-              ? "bg-primary text-primary-foreground"
-              : "text-muted-foreground hover:bg-muted"
-          }`}
-        >
-          All Issues ({issues.length})
-        </button>
-        <button
-          onClick={() => setFilterType("open")}
-          className={`rounded-lg px-3 py-1.5 font-medium transition-colors ${
-            filterType === "open"
-              ? "bg-primary text-primary-foreground"
-              : "text-muted-foreground hover:bg-muted"
-          }`}
-        >
-          Open ({openIssuesCount})
-        </button>
-        <button
-          onClick={() => setFilterType("resolved")}
-          className={`rounded-lg px-3 py-1.5 font-medium transition-colors ${
-            filterType === "resolved"
-              ? "bg-primary text-primary-foreground"
-              : "text-muted-foreground hover:bg-muted"
-          }`}
-        >
-          Resolved ({resolvedIssuesCount})
-        </button>
+    );
+  }
+  if (!importId) {
+    return (
+      <div className="w-full space-y-6 pb-16">
+        {header}
+        <ImportNotFound />
       </div>
+    );
+  }
+  if (sessionQuery.isLoading) {
+    return (
+      <div className="w-full space-y-6 pb-16">
+        {header}
+        <PanelSkeleton rows={6} />
+      </div>
+    );
+  }
+  if (!session) {
+    return (
+      <div className="w-full space-y-6 pb-16">
+        {header}
+        {isNotFound(sessionQuery.error) ? <ImportNotFound /> : <LoadError title="This import could not be loaded." message={importErrorMessage(sessionQuery.error)} onRetry={() => void sessionQuery.refetch()} />}
+      </div>
+    );
+  }
 
-      {/* Main Two-Panel Layout */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        {/* Left Column: Issue List (5 cols) */}
-        <div className="space-y-3 lg:col-span-5">
-          {filteredIssues.map((issue) => {
-            const isSelected = selectedIssue?.id === issue.id;
-            const isResolved = issue.status === "resolved";
+  const busy = isBusy(session.status);
+  const filtered = isIssueFiltered(url);
 
-            return (
-              <div
-                key={issue.id}
-                onClick={() => setSelectedIssueId(issue.id)}
-                className={`cursor-pointer rounded-xl border p-4 transition-all ${
-                  isSelected
-                    ? "border-[#1D4ED8] bg-[#E6F4FF]/30 shadow-sm ring-1 ring-[#1D4ED8]"
-                    : "border-border bg-card hover:border-border-subtle hover:bg-muted/30"
-                }`}
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs font-semibold text-muted-foreground">
-                      Row {issue.rowNumber}
-                    </span>
-                    <span
-                      className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
-                        isResolved
-                          ? "bg-emerald-100 text-emerald-800"
-                          : "bg-amber-100 text-amber-800"
-                      }`}
-                    >
-                      {issue.type.replace("_", " ")}
-                    </span>
-                  </div>
-                  {isResolved ? (
-                    <span className="flex items-center gap-1 text-[11px] font-medium text-emerald-600">
-                      <Check className="h-3.5 w-3.5" /> Resolved
-                    </span>
-                  ) : (
-                    <span className="text-[11px] font-medium text-destructive">
-                      Action Required
-                    </span>
-                  )}
-                </div>
+  const settle = (issue: ImportIssue, action: "accept_suggestion" | "custom_value" | "ignore", customValue?: string) => {
+    // the next issue of the list takes the place of the one that leaves the "open" list
+    const index = issues.findIndex((i) => i.id === issue.id);
+    const next = issues[index + 1] ?? issues[index - 1];
+    resolve.mutate(
+      { issueId: issue.id, action, customValue },
+      {
+        onSuccess: () => {
+          setNeedsRevalidate(true);
+          toast({ title: action === "ignore" ? "Issue ignored" : "Issue resolved", description: `Row ${issue.rowNumber}.`, variant: "success" });
+          if (url.status === "open") update({ issue: next?.id ?? null }, { replace: true });
+        },
+        onError: (e) => toast({ title: "Could not change the issue", description: importErrorMessage(e), variant: "destructive" }),
+      },
+    );
+  };
 
-                <h4 className="mt-2 text-xs font-semibold text-foreground">
-                  {issue.title}
-                </h4>
-                <p className="mt-1 line-clamp-1 text-[11px] text-muted-foreground">
-                  {issue.productData.title}
-                </p>
+  const sendBulk = async (input: Parameters<typeof bulk.mutateAsync>[0]) => {
+    const res = await bulk.mutateAsync(input);
+    if (res.applied > 0) setNeedsRevalidate(true);
+    return res;
+  };
 
-                {issue.currentFix && (
-                  <div className="mt-2.5 rounded bg-muted/50 px-2 py-1 text-[11px] font-mono text-muted-foreground">
-                    Applied:{" "}
-                    <span className="text-foreground">{issue.currentFix}</span>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+  let body: React.ReactNode;
+  if (!validated) {
+    body = (
+      <StateBox title="This import has not been validated yet." description="Issues appear after the file has been checked. Continue the import to map the columns and start the validation.">
+        {canWrite && isResumable(session.status) && (
+          <Link to={resumeUrl(session.id)} className={buttonVariants({ size: "sm", className: "text-xs" })}>
+            Continue the import
+          </Link>
+        )}
+      </StateBox>
+    );
+  } else if (session.status === "validating" && session.issues.total === 0) {
+    body = (
+      <section className="rounded-xl border border-border bg-card p-8 text-center shadow-sm">
+        <h2 className="text-lg font-bold text-foreground">Validating your file</h2>
+        <div className="mt-6">
+          <ImportProgress session={session} mode="validate" />
+        </div>
+      </section>
+    );
+  } else if (summary.data && summary.data.total === 0 && session.issues.total === 0) {
+    body = (
+      <StateBox title="No issues found." description={reviewable ? "Every row passed the checks. You can import the file now." : "Nothing needs attention in this import."}>
+        {editable && <Button size="sm" className="text-xs" onClick={() => setCommitOpen(true)}>Import rows</Button>}
+        <Link to={ROUTES.PRODUCTS} className={buttonVariants({ variant: "outline", size: "sm", className: "text-xs" })}>
+          Go to products
+        </Link>
+      </StateBox>
+    );
+  } else {
+    body = (
+      <>
+        <div role="tablist" aria-label="View" className="flex gap-1.5">
+          {(["issues", "rows"] as const).map((v) => (
+            <button key={v} type="button" role="tab" aria-selected={view === v} onClick={() => update({ view: v, code: null, severity: null, status: null, q: null, rows: null })} className={`rounded-lg px-3 py-1.5 text-xs font-medium ${view === v ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}>
+              {v === "issues" ? "Issues" : "All rows"}
+            </button>
+          ))}
         </div>
 
-        {/* Right Column: Fix & Inspection Workspace (7 cols) */}
-        <div className="space-y-6 lg:col-span-7">
-          {selectedIssue ? (
-            <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-              <div className="flex items-start justify-between border-b border-border pb-4">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs font-semibold text-muted-foreground">
-                      Row {selectedIssue.rowNumber}
-                    </span>
-                    <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium text-foreground">
-                      {selectedIssue.type.replace("_", " ")}
-                    </span>
-                  </div>
-                  <h3 className="mt-2 text-base font-semibold text-foreground">
-                    {selectedIssue.title}
-                  </h3>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {selectedIssue.description}
-                  </p>
-                </div>
-                {selectedIssue.status === "resolved" ? (
-                  <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
-                    Resolved
-                  </span>
-                ) : (
-                  <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
-                    Open
-                  </span>
-                )}
-              </div>
-
-              {/* Product Preview Card */}
-              <div className="mt-4 flex gap-4 rounded-lg border border-border bg-muted/20 p-4">
-                {selectedIssue.productData.imageUrl && (
-                  <img
-                    src={selectedIssue.productData.imageUrl}
-                    alt=""
-                    className="h-16 w-16 rounded-md object-cover border border-border bg-muted"
-                  />
-                )}
-                <div className="space-y-1 text-xs">
-                  <p className="font-semibold text-foreground">
-                    {selectedIssue.productData.title}
-                  </p>
-                  <p className="text-muted-foreground">
-                    SKU:{" "}
-                    <span className="font-mono text-foreground">
-                      {selectedIssue.productData.sku ?? "None"}
-                    </span>{" "}
-                    · Category:{" "}
-                    <span className="text-foreground">
-                      {selectedIssue.productData.category ?? "Unassigned"}
-                    </span>
-                  </p>
-                  <p className="text-muted-foreground">
-                    Price: ₹{selectedIssue.productData.price} · Barcode:{" "}
-                    <span className="font-mono">
-                      {selectedIssue.productData.barcode ?? "—"}
-                    </span>
-                  </p>
-                </div>
-              </div>
-
-              {/* Resolution Panel */}
-              <div className="mt-6 space-y-4">
-                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Choose Resolution
-                </h4>
-
-                {/* Option A: Suggested Fix (AI / Catalog Rule) */}
-                {selectedIssue.suggestedFix && (
-                  <div className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-4">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-2 text-xs font-semibold text-emerald-950">
-                        <Sparkles className="h-4 w-4 text-emerald-600" />
-                        Suggested Fix (Auto-Detected)
-                      </div>
-                      <Button
-                        size="sm"
-                        className="h-7 text-xs bg-emerald-700 hover:bg-emerald-800 text-white"
-                        onClick={() => handleApplySuggested(selectedIssue)}
-                        disabled={resolveIssueMutation.isPending}
-                      >
-                        Accept Suggestion
-                      </Button>
-                    </div>
-                    <p className="mt-2 font-mono text-xs font-medium text-emerald-900">
-                      {selectedIssue.suggestedFix}
-                    </p>
-                  </div>
-                )}
-
-                {/* Option B: Category Selector if category issue */}
-                {selectedIssue.type === "category_unmapped" && (
-                  <div className="rounded-lg border border-border p-4 space-y-2">
-                    <p className="text-xs font-semibold text-foreground">
-                      Map to Standard Category Taxonomy
-                    </p>
-                    <select
-                      className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
-                      onChange={(e) => {
-                        if (e.target.value) {
-                          resolveIssueMutation.mutate({
-                            issueId: selectedIssue.id,
-                            action: "custom_value",
-                            customValue: e.target.value,
-                          });
-                        }
-                      }}
-                      defaultValue=""
-                    >
-                      <option value="" disabled>
-                        Select matching taxonomy category...
-                      </option>
-                      {CATEGORY_TAXONOMY.map((cat) => (
-                        <option key={cat} value={cat}>
-                          {cat}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {/* Option C: Custom Manual Entry */}
-                <div className="rounded-lg border border-border p-4 space-y-3">
-                  <p className="text-xs font-semibold text-foreground">
-                    Custom Manual Value
-                  </p>
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder={`Enter manual ${selectedIssue.affectedFields.join(", ")}...`}
-                      value={customInputValue}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                        setCustomInputValue(e.target.value)
-                      }
-                      className="text-xs"
-                    />
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleApplyCustom(selectedIssue)}
-                      disabled={
-                        !customInputValue.trim() ||
-                        resolveIssueMutation.isPending
-                      }
-                    >
-                      Apply
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Option D: Ignore Row */}
-                <div className="pt-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-xs text-muted-foreground hover:text-destructive"
-                    onClick={() => {
-                      resolveIssueMutation.mutate({
-                        issueId: selectedIssue.id,
-                        action: "ignore",
-                      });
-                    }}
-                  >
-                    Ignore this row (Skip from import)
+        {view === "issues" ? (
+          <>
+            <IssueFilters summary={summary.data} url={url} filtered={filtered} onChange={(patch) => update(patch)} onClear={clearFilters} />
+            {issuesQuery.isLoading ? (
+              <IssueListSkeleton />
+            ) : issuesQuery.isError && !issuesQuery.data ? (
+              <LoadError title="The issues could not be loaded." message={importErrorMessage(issuesQuery.error)} onRetry={() => void issuesQuery.refetch()} />
+            ) : issues.length === 0 ? (
+              <StateBox title={filtered ? "No issues match these filters." : "No open issues."} description={filtered ? "Try another kind, severity or search." : "Everything that needed attention has been settled. Revalidate, then import."}>
+                {filtered && (
+                  <Button variant="outline" size="sm" className="text-xs" onClick={clearFilters}>
+                    Clear filters
                   </Button>
+                )}
+              </StateBox>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+                  <div className="space-y-3 lg:col-span-5">
+                    <IssueList issues={issues} selectedId={selected?.id} refreshing={issuesQuery.isFetching && issuesQuery.isPlaceholderData} onSelect={(i) => update({ issue: i.id }, { replace: true })} />
+                    <ImportPagination
+                      page={issuesQuery.data?.page ?? page}
+                      pages={issuesQuery.data?.pages ?? 1}
+                      total={issuesQuery.data?.total ?? 0}
+                      pageSize={pageSize}
+                      shown={issues.length}
+                      noun="issues"
+                      onPage={(p) => update({ page: p > 1 ? String(p) : null })}
+                      onPageSize={(size) => update({ size: size === 25 ? null : String(size) })}
+                    />
+                  </div>
+                  <div className="lg:col-span-7">
+                    {selected && (
+                      <IssueDetail
+                        key={selected.id}
+                        issue={selected}
+                        editable={editable && !busy}
+                        busy={resolve.isPending}
+                        openOfCode={openOfCode(selected.code)}
+                        categories={categories.data ?? []}
+                        onResolve={({ action, customValue }) => settle(selected, action, customValue)}
+                        onBulk={setBulkRequest}
+                      />
+                    )}
+                  </div>
                 </div>
-              </div>
-            </div>
-          ) : (
-            <div className="flex h-64 items-center justify-center rounded-xl border border-dashed border-border bg-muted/10 text-xs text-muted-foreground">
-              Select an issue from the list to review details.
-            </div>
-          )}
+              </>
+            )}
+          </>
+        ) : (
+          <>
+            <RowsToolbar q={url.q ?? ""} status={url.rowStatus} onChange={(patch) => update(patch)} />
+            {rowsQuery.isLoading ? (
+              <RowsSkeleton />
+            ) : rowsQuery.isError && !rowsQuery.data ? (
+              <LoadError title="The rows could not be loaded." message={importErrorMessage(rowsQuery.error)} onRetry={() => void rowsQuery.refetch()} />
+            ) : (rowsQuery.data?.items.length ?? 0) === 0 ? (
+              <StateBox title="No rows match." description="Try another status or search." />
+            ) : (
+              <>
+                <RowsTable rows={rowsQuery.data?.items ?? []} refreshing={rowsQuery.isFetching && rowsQuery.isPlaceholderData} />
+                <ImportPagination
+                  page={rowsQuery.data?.page ?? page}
+                  pages={rowsQuery.data?.pages ?? 1}
+                  total={rowsQuery.data?.total ?? 0}
+                  pageSize={pageSize}
+                  shown={rowsQuery.data?.items.length ?? 0}
+                  noun="rows"
+                  onPage={(p) => update({ page: p > 1 ? String(p) : null })}
+                  onPageSize={(size) => update({ size: size === 25 ? null : String(size) })}
+                />
+              </>
+            )}
+          </>
+        )}
+      </>
+    );
+  }
+
+  const c = session.counters;
+  return (
+    <div className="w-full space-y-6 pb-16">
+      {header}
+
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border bg-card p-4 shadow-sm">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+          <ImportStatusChip status={session.status} />
+          <Counter label="Rows" value={c.total} />
+          <Counter label="Valid" value={c.valid} tone="text-emerald-700" />
+          <Counter label="Warnings" value={c.warning} tone="text-amber-700" />
+          <Counter label="Errors" value={c.error} tone="text-red-700" />
+          <Counter label="Open issues" value={session.issues.open} tone="text-red-700" />
+          <Counter label="Resolved" value={session.issues.resolved} tone="text-emerald-700" />
+          <Counter label="Ignored" value={session.issues.ignored} />
         </div>
+        {session.status === "committed" && (
+          <Link to={ROUTES.PRODUCTS} className={buttonVariants({ variant: "outline", size: "sm", className: "text-xs" })}>
+            View products
+          </Link>
+        )}
       </div>
+
+      {!canWrite && <Alert tone="info">You are viewing this import read-only. Changing issues needs the imports write permission.</Alert>}
+      {session.status === "failed" && <Alert>{session.failureMessage ?? "This import failed."}</Alert>}
+      {session.status === "cancelled" && <Alert tone="warning">This import was cancelled. Its issues can be viewed but not changed.</Alert>}
+      {session.status === "committing" && (
+        <section className="rounded-xl border border-border bg-card p-6 text-center shadow-sm">
+          <h2 className="text-base font-bold text-foreground">Importing your products</h2>
+          <div className="mt-4">
+            <ImportProgress session={session} mode="commit" />
+          </div>
+        </section>
+      )}
+      {session.status === "validating" && session.issues.total > 0 && (
+        <section className="rounded-xl border border-border bg-card p-6 text-center shadow-sm">
+          <h2 className="text-base font-bold text-foreground">Revalidating</h2>
+          <div className="mt-4">
+            <ImportProgress session={session} mode="validate" />
+          </div>
+        </section>
+      )}
+      {editable && needsRevalidate && !busy && <Alert tone="warning">You changed rows since the last validation. Revalidate to refresh the counts before importing.</Alert>}
+
+      {body}
+
+      <BulkResolveDialog request={bulkRequest} categories={categories.data ?? []} onSubmit={sendBulk} onClose={() => setBulkRequest(null)} />
+      {canWrite && ["validated", "partially_committed", "committing", "committed"].includes(session.status) && (
+        <CommitDialog open={commitOpen} onOpenChange={setCommitOpen} session={session} options={options.data} eligible={eligible} needsRevalidate={needsRevalidate} onRevalidated={() => setNeedsRevalidate(false)} />
+      )}
     </div>
   );
 }

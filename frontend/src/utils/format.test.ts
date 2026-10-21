@@ -1,5 +1,7 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect } from "vitest";
 import {
+  getFormatPreferences,
+  setFormatPreferences,
   formatINR,
   formatLakh,
   formatNumber,
@@ -13,6 +15,8 @@ describe("Formatting utils", () => {
   it("formats INR correctly in standard notation", () => {
     expect(formatINR(28400)).toBe("₹284");
     expect(formatINR(100000)).toBe("₹1,000");
+    expect(formatINR(249950)).toBe("₹2,499.50");
+    expect(formatINR(-1050)).toBe("-₹10.50");
   });
 
   it("formats lakh and crore correctly in compact notation", () => {
@@ -35,6 +39,40 @@ describe("Formatting utils", () => {
   it("formats ISO date to DD/MM/YYYY in IST", () => {
     // 2026-10-15T06:00:00Z is 11:30 AM IST on 15/10/2026
     expect(formatDate("2026-10-15T06:00:00Z")).toBe("15/10/2026");
+  });
+});
+
+describe("business format preferences", () => {
+  afterEach(() => setFormatPreferences(null));
+
+  it("defaults to INR, Indian grouping and IST", () => {
+    expect(getFormatPreferences()).toEqual({ currency: "INR", numberFormat: "indian", timezone: "Asia/Kolkata" });
+  });
+
+  it("groups and abbreviates in the international style", () => {
+    setFormatPreferences({ currency: "INR", numberFormat: "international", timezone: "Asia/Kolkata" });
+    expect(formatNumber(1234567)).toBe("1,234,567");
+    expect(formatLakh(284000)).toBe("₹284.0K");
+    expect(formatLakh(2840000)).toBe("₹2.84M");
+    expect(formatINR(100000000)).toBe("₹1,000,000");
+  });
+
+  it("follows the business currency", () => {
+    setFormatPreferences({ currency: "USD", numberFormat: "international", timezone: "UTC" });
+    expect(formatINR(249950)).toBe("$2,499.50");
+    expect(formatLakh(2840000)).toBe("$2.84M");
+  });
+
+  it("shows dates in the business time zone", () => {
+    // 2026-10-15T20:00:00Z is already 16/10 in Asia/Kolkata and still 15/10 in UTC
+    expect(formatDate("2026-10-15T20:00:00Z")).toBe("16/10/2026");
+    setFormatPreferences({ timezone: "UTC" });
+    expect(formatDate("2026-10-15T20:00:00Z")).toBe("15/10/2026");
+  });
+
+  it("ignores values it cannot use", () => {
+    setFormatPreferences({ currency: "XX", numberFormat: "bogus" as never, timezone: "Not/AZone" });
+    expect(getFormatPreferences()).toEqual({ currency: "INR", numberFormat: "indian", timezone: "Asia/Kolkata" });
   });
 });
 

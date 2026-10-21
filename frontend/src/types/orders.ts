@@ -1,110 +1,294 @@
-import { z } from "zod";
-import { OrderStatus, SlaState, ReturnStatus, ReturnDisposition } from "@/constants/enums";
-export { OrderStatus, SlaState, ReturnStatus, ReturnDisposition };
+/** The Orders contract: shapes of GET /orders/{summary,workspace,ledger,{id},{id}/drawer,{id}/next-actions,...}. Money is integer minor units (paise). */
 
-export interface OrderItem {
+export const ORDER_STATUSES = [
+  "new",
+  "confirmed",
+  "picking",
+  "packed",
+  "ready_to_dispatch",
+  "dispatched",
+  "in_transit",
+  "delivered",
+  "cancelled",
+  "returned",
+] as const;
+export type OrderStatus = (typeof ORDER_STATUSES)[number];
+
+export const SLA_STATES = ["safe", "approaching", "at_risk", "breached", "none"] as const;
+export type SlaState = (typeof SLA_STATES)[number];
+
+export const ORDER_TABS = ["all", "needs_attention", "new", "processing", "shipped", "delivered", "returns_disputes"] as const;
+export type OrderTab = (typeof ORDER_TABS)[number];
+
+export const PAYMENT_FILTERS = ["prepaid", "cod"] as const;
+export type PaymentFilter = (typeof PAYMENT_FILTERS)[number];
+
+/** `-placedAt` is the API default */
+export const ORDER_SORTS = ["-placedAt", "placedAt", "-value", "value", "sla", "-sla"] as const;
+export type OrderSort = (typeof ORDER_SORTS)[number];
+
+export interface MarketplaceRef {
+  code: string;
+  name: string;
+}
+
+export interface OrdersSummary {
+  asOf: string;
+  statusCounts: Record<OrderStatus, number>;
+  tabs: { all: number; needsAttention: number; new: number; processing: number; shipped: number; delivered: number; returnsDisputes: number };
+  sla: { safe: number; approaching: number; atRisk: number; breached: number; atRiskMinutes: number; approachingMinutes: number };
+  today: { orders: number; newOrders: number; revenueMinor: number; currency: string };
+  pendingDispatchCount: number;
+  avgFulfillmentHours: number | null;
+  cancellationRatePct: number | null;
+  windowDays: number;
+}
+
+export interface OrdersWorkspace {
+  asOf: string;
+  needsAttention: { slaRisk: number; unprocessed: number; inventoryIssue: number; paymentIssue: number; cancellationRisk: number; returns: number };
+  slaPressure: { summary: string; reviewHref: string; thresholds: { atRiskMinutes: number; approachingMinutes: number } };
+}
+
+export interface LedgerSla {
+  state: SlaState;
+  dueAt: string | null;
+  minutesRemaining: number | null;
+  label: string | null;
+}
+
+export interface LedgerOrder {
+  id: string;
+  number: string;
+  marketplace: MarketplaceRef;
+  customerName: string | null;
+  /** units on the order */
+  itemCount: number;
+  /** order lines */
+  lineCount: number;
+  valueMinor: number;
+  currency: string;
+  payment: { status: string; method: string };
+  paymentLabel: string;
+  fulfillmentStatus: string | null;
+  sla: LedgerSla;
+  status: OrderStatus;
+  statusLabel: string;
+  placedAt: string;
+  rowTone: "red" | "amber" | "green" | "none";
+  inventoryIssue: { productTitle: string; sku: string; required: number; available: number; action: "allocate" | "restock" | "map_sku" } | null;
+  destination: { city: string | null; state: string | null; pincode: string | null };
+  firstItem: { title: string; sku: string; imageUrl: string | null } | null;
+  carrier: { name: string | null; trackingNumber: string | null } | null;
+  warehouse: { id: string; name: string } | null;
+  priority: boolean;
+}
+
+export interface LedgerPage {
+  items: LedgerOrder[];
+  page: number;
+  pageSize: number;
+  total: number;
+  pages: number;
+}
+
+/** what the ledger and the export are filtered by (the API's `filter[...]` parameters) */
+export interface OrderFilters {
+  q?: string;
+  tab?: OrderTab;
+  marketplace?: string[];
+  status?: OrderStatus[];
+  slaState?: SlaState[];
+  payment?: PaymentFilter;
+}
+
+export interface LedgerQuery extends OrderFilters {
+  sort?: OrderSort;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface OrderLine {
   id: string;
   sku: string;
   title: string;
   quantity: number;
-  unitPrice: number;
-  mrp: number;
-  imageUrl?: string;
-  hsn?: string;
-  taxRatePct: number;
+  reservedQuantity: number;
+  unitPriceMinor: number;
+  taxMinor: number;
+  discountMinor: number;
+  status: string;
+  variantId: string | null;
 }
 
-export interface CustomerDetails {
-  name: string;
-  email?: string;
-  phone: string;
-  city: string;
-  state: string;
-  pincode: string;
-  addressLine: string;
-}
-
-export interface Order {
+/** GET /orders/{id} */
+export interface OrderDetail {
   id: string;
   orderNumber: string;
-  channel: "amazon" | "flipkart" | "meesho" | "shopify";
-  channelOrderId: string;
+  marketplace: string;
+  externalOrderId: string;
   status: OrderStatus;
-  slaState: SlaState;
-  slaDeadline: string;
-  orderedAt: string;
-  customer: CustomerDetails;
-  items: OrderItem[];
-  totalAmount: number;
-  paymentMethod: "prepaid" | "cod";
-  paymentStatus: "paid" | "pending" | "failed";
-  shippingCarrier?: "Delhivery" | "Blue Dart" | "Amazon ATS" | "Ekart";
-  awbNumber?: string;
-  warehouseId: string;
-  warehouseName: string;
-  timeline: Array<{
-    status: OrderStatus;
-    timestamp: string;
-    description: string;
-  }>;
+  marketplaceStatus: string | null;
+  placedAt: string;
+  currency: string;
+  subtotalMinor: number;
+  taxMinor: number;
+  shippingMinor: number;
+  discountMinor: number;
+  totalMinor: number;
+  customer: Record<string, unknown>;
+  shippingAddress: Record<string, unknown>;
+  payment: { method: "prepaid" | "cod" | "unknown"; status: string; codAmountMinor: number | null };
+  inventoryStatus: string;
+  attentionReason: string | null;
+  warehouseId: string | null;
+  tracking: { number: string | null; carrier: string | null };
+  dispatchedAt: string | null;
+  deliveredAt: string | null;
+  cancelledAt: string | null;
+  cancelReason: string | null;
+  items: OrderLine[];
+  version: number;
 }
 
-export interface OrdersSummaryKPIs {
-  totalOrdersToday: number;
-  revenueTodayPaise: number;
-  pendingDispatchCount: number;
-  slaAtRiskCount: number;
-  avgFulfillmentTimeHours: number;
-  cancellationRatePct: number;
-}
-
-export interface FulfillmentBatch {
-  id: string;
-  batchNumber: string;
-  carrier: string;
-  orderCount: number;
-  status: "picking" | "packing" | "manifested" | "dispatched";
+export interface OrderTimelineEntry {
+  id: number;
+  fromStatus: OrderStatus | null;
+  toStatus: OrderStatus;
+  marketplaceStatus: string | null;
+  source: string;
+  applied: boolean;
+  note: string | null;
   createdAt: string;
-  orderIds: string[];
 }
 
-export interface ShippingMethod {
+/** GET /orders/{id}/drawer */
+export interface OrderDrawerData {
   id: string;
-  carrier: string;
-  serviceType: "express" | "surface" | "same_day";
-  avgCostINR: number;
-  deliveryTimeDays: string;
-  isRecommended?: boolean;
+  number: string;
+  status: OrderStatus;
+  channel: MarketplaceRef;
+  placedAt: string;
+  sla: LedgerSla & { progressPct: number | null; stageLabel: string };
+  customer: { name: string | null; city: string | null; state: string | null };
+  value: { totalMinor: number; currency: string; paymentStatus: string; paymentMethod: string };
+  items: { units: number; lines: Array<{ title: string; sku: string; qty: number }> };
+  fulfillment: { warehouse: string | null; picking: "pending" | "in_progress" | "done" | null; fulfillmentId: string | null; status: string | null };
+  marketplaceStatus: string | null;
+  activity: Array<{ at: string; text: string }>;
 }
 
-export interface ReturnOrder {
-  id: string;
-  returnNumber: string;
+export type NextActionKind = "transition" | "cancel" | "allocate" | "fulfillment";
+
+export interface NextAction {
+  key: string;
+  label: string;
+  kind: NextActionKind;
+  method: "GET" | "POST";
+  href: string;
+  body: Record<string, unknown> | null;
+  enabled: boolean;
+  disabledReason: string | null;
+  message: string | null;
+  useInstead: { key: string; href: string } | null;
+}
+
+export interface NextActions {
+  orderId: string;
   orderNumber: string;
-  channel: "amazon" | "flipkart" | "meesho" | "shopify";
-  customerName: string;
-  reason: string;
-  status: ReturnStatus;
-  requestedAt: string;
-  receivedAt?: string;
-  inspectionStatus?: "pending" | "review" | "not_started" | "passed" | "failed";
-  items: Array<{
-    sku: string;
-    title: string;
-    quantity: number;
-    disposition?: ReturnDisposition;
-  }>;
-  refundAmount: number;
-  refundStatus: "pending" | "ready" | "processed" | "refunded" | "rejected" | "na";
-  inventoryDisposition?: "pending" | "damaged" | "sellable" | "rejected";
-  issueNote?: string;
-  actionText?: string;
+  status: OrderStatus;
+  version: number;
+  managedByFulfillment: boolean;
+  fulfillment: { id: string; number: string; status: string } | null;
+  primaryAction: string | null;
+  actions: NextAction[];
 }
 
-export const orderFilterSchema = z.object({
-  channel: z.string().optional(),
-  status: z.string().optional(),
-  slaState: z.string().optional(),
-  search: z.string().optional(),
-});
-export type OrderFilterInput = z.infer<typeof orderFilterSchema>;
+export interface StatusUpdate {
+  id: string;
+  requestedStatus: OrderStatus;
+  status: "requested" | "sent" | "successful" | "failed" | "retrying" | "skipped";
+  errorMessage: string | null;
+}
+
+export interface TransitionResult {
+  order: OrderDetail;
+  statusUpdate: StatusUpdate;
+}
+
+export interface TransitionInput {
+  id: string;
+  status: OrderStatus;
+  /** the version the caller saw: a stale one is a 409 VERSION_CONFLICT */
+  version: number;
+  tracking?: { number?: string; carrier?: string };
+}
+
+export interface CancelInput {
+  id: string;
+  reason: string;
+  reasonCode: string;
+}
+
+export interface CancellationReason {
+  code: string;
+  label: string;
+  initiators: string[];
+}
+
+export type BulkOrderAction = "confirm" | "cancel" | "assign_warehouse" | "mark_priority";
+
+export interface BulkOrderParams {
+  reason?: string;
+  reasonCode?: string;
+  warehouseId?: string;
+  priority?: boolean;
+}
+
+export interface BulkOrderResult {
+  orderId: string;
+  orderNumber: string | null;
+  ok: boolean;
+  changed: boolean;
+  status: string | null;
+  error?: { code: string; message: string; rule?: string };
+}
+
+export interface BulkOrdersResponse {
+  action: BulkOrderAction;
+  total: number;
+  succeeded: number;
+  failed: number;
+  results: BulkOrderResult[];
+}
+
+/** a connected marketplace account (an order-sync target) */
+export interface OrderAccount {
+  id: string;
+  marketplace: string;
+  displayName: string;
+  status: string;
+}
+
+export interface WarehouseOption {
+  id: string;
+  code: string;
+  name: string;
+  isDefault: boolean;
+}
+
+export interface SyncJob {
+  id: string;
+  status: "queued" | "running" | "retrying" | "succeeded" | "partially_failed" | "failed" | "dead_lettered" | "cancelled";
+  error: { code: string; message: string } | null;
+}
+
+export interface SyncOrdersResult {
+  job: SyncJob;
+  alreadyQueued: boolean;
+}
+
+export interface DownloadedFile {
+  blob: Blob;
+  fileName: string;
+}

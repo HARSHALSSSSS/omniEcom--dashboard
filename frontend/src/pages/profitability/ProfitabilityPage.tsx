@@ -1,264 +1,194 @@
 import { useState } from "react";
-import { Download, ArrowDownRight, ArrowUpRight, RotateCw } from "lucide-react";
-import {
-  MOCK_PROFITABILITY_WATERFALL,
-  MOCK_CHANNEL_PROFITABILITY,
-} from "@/mocks/data/phase10.data";
-import { formatINR } from "@/utils/format";
-import { useProfitability } from "@/hooks/useIntelligence";
+import { PageHeader } from "@/components/common/PageHeader";
+import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import { Button } from "@/components/ui/button";
+import { ChannelsTable } from "@/components/profitability/ChannelsTable";
+import { ProfitBanners } from "@/components/profitability/ProfitBanners";
+import { ProfitKpis } from "@/components/profitability/ProfitKpis";
+import { RangeControls } from "@/components/profitability/RangeControls";
+import { SpendFormDialog } from "@/components/profitability/SpendFormDialog";
+import { SpendImportDialog } from "@/components/profitability/SpendImportDialog";
+import { SpendPanel } from "@/components/profitability/SpendPanel";
+import { WaterfallCard } from "@/components/profitability/WaterfallCard";
+import { channelsCsv, channelsFileName, csvBlob, money, presetRange, waterfallCsv, waterfallFileName } from "@/components/profitability/profitFormat";
+import { DEFAULT_PAGE_SIZE, useProfitUrlState, waterfallQueryOf } from "@/components/profitability/profitParams";
+import { saveBlob } from "@/components/products/list/saveBlob";
+import { errorMessage } from "@/api/errors";
+import { useCan } from "@/hooks/useCan";
+import { useDeleteSpend, useSpendAccounts, useWaterfall } from "@/hooks/useProfitability";
+import { toast } from "@/hooks/useToast";
+import type { ProfitView, RangePreset, SpendRow } from "@/types/profitability";
+
+const VIEWS: Array<{ id: ProfitView; label: string }> = [
+  { id: "waterfall", label: "Waterfall" },
+  { id: "spend", label: "Advertising spend" },
+];
+
+function Notice({ title, description, onRetry }: { title: string; description: string; onRetry?: () => void }) {
+  return (
+    <div role="alert" className="flex min-h-[200px] flex-col items-center justify-center gap-2 rounded-xl border border-border bg-card px-6 text-center">
+      <h2 className="text-base font-semibold text-foreground">{title}</h2>
+      <p className="max-w-[520px] text-xs text-muted-foreground">{description}</p>
+      {onRetry && (
+        <Button variant="outline" size="sm" className="mt-2 text-xs" onClick={onRetry}>
+          Retry
+        </Button>
+      )}
+    </div>
+  );
+}
 
 export default function ProfitabilityPage() {
-  const { data: profitData, refetch, isFetching } = useProfitability();
-  const [selectedRange, setSelectedRange] = useState<"30d" | "mtd" | "ytd">(
-    "30d",
-  );
+  const url = useProfitUrlState();
+  const { view, preset, range, rangeError, compare, update, clearFilters } = url;
+  const canRead = useCan("analytics:read");
+  const canWrite = useCan("pricing:write");
 
-  const waterfallData = profitData?.waterfall ?? MOCK_PROFITABILITY_WATERFALL;
-  const channelData = profitData?.channels ?? MOCK_CHANNEL_PROFITABILITY;
+  const waterfall = useWaterfall(canRead ? waterfallQueryOf(url) : null);
+  const accounts = useSpendAccounts();
+  const remove = useDeleteSpend();
 
-  const totalGMV = 2840000;
-  const netContribution = 630480;
-  const netMargin = ((netContribution / totalGMV) * 100).toFixed(1);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<SpendRow | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [deleting, setDeleting] = useState<SpendRow | null>(null);
+
+  const data = waterfall.data;
+  const refreshing = waterfall.isFetching && waterfall.isPlaceholderData;
+
+  const startAdd = () => {
+    setEditing(null);
+    setFormOpen(true);
+  };
+  const startEdit = (row: SpendRow) => {
+    setEditing(row);
+    setFormOpen(true);
+  };
+
+  const pickPreset = (next: RangePreset) => {
+    if (next === "custom") {
+      // a custom range starts from the dates on screen, so it is valid straight away
+      const shown = range ?? presetRange("30d", new Date().toISOString().slice(0, 10));
+      update({ range: "custom", from: shown.from, to: shown.to });
+    } else update({ range: next });
+  };
+
+  const runDelete = (row: SpendRow) =>
+    remove.mutate(row.id, {
+      onSuccess: () => toast({ title: "Spend deleted", description: `${row.spendDate}: ${money(row.amountMinor)}`, variant: "success" }),
+      onError: (e) => toast({ title: "Could not delete the spend", description: errorMessage(e), variant: "destructive" }),
+      onSettled: () => setDeleting(null),
+    });
+
+  const exportWaterfall = () => {
+    if (data) saveBlob(csvBlob(waterfallCsv(data)), waterfallFileName(data));
+  };
+  const exportChannels = () => {
+    if (data) saveBlob(csvBlob(channelsCsv(data)), channelsFileName(data));
+  };
 
   return (
-    <div className="flex flex-col gap-6 w-full select-none pb-12 font-['Inter',sans-serif]">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[#EAEAEA] pb-5">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-3">
-            <h1 className="text-[22px] font-semibold text-[#000000] tracking-tight">
-              Profitability &amp; Unit Economics
-            </h1>
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-800 border border-emerald-200">
-              Screen 32 Spec
-            </span>
-          </div>
-          <p className="text-[13px] text-[#666666]">
-            Transparent breakdown from Gross Merchandise Value (GMV) to true net
-            cash contribution after channel commissions, logistics, and returns.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => refetch()}
-            className="box-border flex flex-row items-center px-[10px] gap-[6px] h-[34px] bg-white border border-[#EAEAEA] rounded-lg hover:bg-neutral-50 transition-colors cursor-pointer"
-          >
-            <RotateCw className={`w-[14px] h-[14px] text-[#666666] stroke-[1.5px] ${isFetching ? "animate-spin" : ""}`} />
-            <span className="text-[12px] font-normal leading-[145%] text-[#666666]">
-              Refresh
-            </span>
-          </button>
-          <div className="inline-flex items-center bg-neutral-100 p-1 rounded-lg border border-[#EAEAEA]">
-            <button
-              type="button"
-              onClick={() => setSelectedRange("mtd")}
-              className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-all ${
-                selectedRange === "mtd"
-                  ? "bg-white text-black shadow-xs font-semibold"
-                  : "text-[#666666] hover:text-black"
-              }`}
-            >
-              MTD
-            </button>
-            <button
-              type="button"
-              onClick={() => setSelectedRange("30d")}
-              className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-all ${
-                selectedRange === "30d"
-                  ? "bg-white text-black shadow-xs font-semibold"
-                  : "text-[#666666] hover:text-black"
-              }`}
-            >
-              Last 30 Days
-            </button>
-            <button
-              type="button"
-              onClick={() => setSelectedRange("ytd")}
-              className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-all ${
-                selectedRange === "ytd"
-                  ? "bg-white text-black shadow-xs font-semibold"
-                  : "text-[#666666] hover:text-black"
-              }`}
-            >
-              YTD
-            </button>
-          </div>
-
-          <button
-            type="button"
-            className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-[#EAEAEA] text-[#000000] text-[12px] font-medium rounded-lg hover:bg-neutral-50 transition-colors shadow-2xs"
-          >
-            <Download className="h-4 w-4 text-[#666666]" />
-            Export Waterfall
-          </button>
-        </div>
-      </div>
-
-      {/* Snapshot Pulse */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        <div className="bg-white border border-[#EAEAEA] rounded-xl p-5 shadow-2xs">
-          <span className="text-[11px] font-medium text-[#666666] uppercase">
-            Gross Merchandise Value (GMV)
-          </span>
-          <div className="text-[28px] font-bold text-[#000000] mt-1">
-            {formatINR(totalGMV)}
-          </div>
-          <span className="text-[11px] text-emerald-600 font-medium">
-            +12.4% vs previous period
-          </span>
-        </div>
-
-        <div className="bg-white border border-[#EAEAEA] rounded-xl p-5 shadow-2xs">
-          <span className="text-[11px] font-medium text-[#666666] uppercase">
-            Net Realized Contribution
-          </span>
-          <div className="text-[28px] font-bold text-emerald-600 mt-1">
-            {formatINR(netContribution)}
-          </div>
-          <span className="text-[11px] text-[#666666]">
-            After all take-rates &amp; fulfillment
-          </span>
-        </div>
-
-        <div className="bg-white border border-[#EAEAEA] rounded-xl p-5 shadow-2xs">
-          <span className="text-[11px] font-medium text-[#666666] uppercase">
-            Net Margin Realization
-          </span>
-          <div className="text-[28px] font-bold text-[#000000] mt-1">
-            {netMargin}%
-          </div>
-          <span className="text-[11px] text-emerald-600 font-medium">
-            +1.8% margin efficiency lift
-          </span>
-        </div>
-      </div>
-
-      {/* Screen 32 Waterfall Breakdown */}
-      <div className="bg-white border border-[#EAEAEA] rounded-xl p-6 shadow-2xs flex flex-col gap-5">
-        <div className="flex items-center justify-between border-b border-[#EAEAEA] pb-4">
-          <div>
-            <h2 className="text-[16px] font-semibold text-[#000000]">
-              P&amp;L Margin Waterfall (Step-Down Reconciliation)
-            </h2>
-            <p className="text-[12px] text-[#666666]">
-              Detailed accounting bridge from gross channel billings down to net operating income.
-            </p>
-          </div>
-          <span className="text-[11px] text-[#666666]">All amounts in INR</span>
-        </div>
-
-        <div className="flex flex-col divide-y divide-[#EAEAEA]">
-          {waterfallData.map((step, idx) => {
-            const isSubtotal = step.type === "subtotal";
-            const isNegative = step.type === "negative";
-
-            return (
-              <div
-                key={step.label}
-                className={`py-3.5 flex items-center justify-between text-[13px] ${
-                  isSubtotal ? "bg-neutral-50/75 font-semibold px-3 rounded-lg" : ""
-                }`}
+    <div className="w-full space-y-6 pb-24">
+      <PageHeader
+        eyebrow="INTELLIGENCE"
+        title="Profitability and unit economics"
+        description="Where each rupee of revenue goes: refunds, product cost, marketplace fees, shipping and advertising, with every figure marked actual, estimated or missing."
+        actions={
+          <div role="tablist" aria-label="Profitability view" className="inline-flex items-center rounded-lg border border-border bg-muted p-1">
+            {VIEWS.map((v) => (
+              <button
+                key={v.id}
+                type="button"
+                role="tab"
+                aria-selected={view === v.id}
+                onClick={() => update({ view: v.id, account: null, q: null })}
+                className={`rounded-md px-3.5 py-1.5 text-xs font-medium transition-all ${view === v.id ? "bg-background font-semibold text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
               >
-                <div className="flex items-center gap-3">
-                  <span className="text-[#888888] font-mono text-[11px]">
-                    0{idx + 1}
-                  </span>
-                  <span
-                    className={
-                      isSubtotal
-                        ? "text-[#000000] font-bold"
-                        : "text-[#333333] font-normal"
-                    }
-                  >
-                    {step.label}
-                  </span>
-                </div>
+                {v.label}
+              </button>
+            ))}
+          </div>
+        }
+      />
 
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`font-mono font-semibold ${
-                      isSubtotal
-                        ? "text-[#000000]"
-                        : isNegative
-                          ? "text-red-600"
-                          : "text-emerald-600"
-                    }`}
-                  >
-                    {isNegative ? "-" : isSubtotal ? "" : "+"}
-                    {formatINR(Math.abs(step.amount))}
-                  </span>
-                  {isNegative ? (
-                    <ArrowDownRight className="h-4 w-4 text-red-500" />
-                  ) : isSubtotal ? null : (
-                    <ArrowUpRight className="h-4 w-4 text-emerald-500" />
-                  )}
-                </div>
+      {!canRead ? (
+        <Notice title="You do not have access to profitability." description="Ask an owner or admin to grant you the analytics:read permission." />
+      ) : (
+        <>
+          <RangeControls
+            preset={preset}
+            range={range}
+            rangeError={rangeError}
+            customFrom={url.customFrom}
+            customTo={url.customTo}
+            compare={compare}
+            onPreset={pickPreset}
+            onCustom={(patch) => update({ range: "custom", from: patch.from ?? url.customFrom, to: patch.to ?? url.customTo })}
+            onCompare={(on) => update({ compare: on ? null : "off" })}
+          />
+
+          {range === null ? (
+            <Notice title="Choose a date range." description={rangeError ?? "Pick a start and an end date."} />
+          ) : view === "waterfall" ? (
+            waterfall.isError && !data ? (
+              <Notice title="Profitability could not be loaded." description={errorMessage(waterfall.error)} onRetry={() => void waterfall.refetch()} />
+            ) : (
+              <div className={refreshing ? "space-y-6 opacity-60 transition-opacity" : "space-y-6"} aria-busy={refreshing}>
+                <ProfitKpis data={data} loading={waterfall.isLoading} />
+                {data && (
+                  <>
+                    <ProfitBanners
+                      data={data}
+                      canWrite={canWrite}
+                      onAddSpend={() => {
+                        update({ view: "spend" });
+                        startAdd();
+                      }}
+                    />
+                    <WaterfallCard data={data} onExport={exportWaterfall} />
+                    <ChannelsTable data={data} onExport={exportChannels} />
+                  </>
+                )}
               </div>
-            );
-          })}
-        </div>
-      </div>
+            )
+          ) : (
+            <SpendPanel
+              state={url}
+              range={range}
+              accounts={accounts.data ?? []}
+              canWrite={canWrite}
+              onAdd={startAdd}
+              onImport={() => setImportOpen(true)}
+              onEdit={startEdit}
+              onDelete={setDeleting}
+              onSearch={(q) => update({ q }, { replace: true })}
+              onAccount={(account) => update({ account })}
+              onPage={(p) => update({ page: p > 1 ? String(p) : null })}
+              onPageSize={(size) => update({ size: size === DEFAULT_PAGE_SIZE ? null : String(size) })}
+              onClear={clearFilters}
+            />
+          )}
+        </>
+      )}
 
-      {/* Channel Profitability Contribution Map */}
-      <div className="bg-white border border-[#EAEAEA] rounded-xl overflow-hidden shadow-2xs">
-        <div className="p-4 border-b border-[#EAEAEA]">
-          <h2 className="text-[14px] font-semibold text-[#000000]">
-            Channel Net Margin Contribution Table
-          </h2>
-          <p className="text-[11px] text-[#666666]">
-            Compare take rates and logistics overhead by marketplace partner.
-          </p>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-[12px]">
-            <thead>
-              <tr className="bg-neutral-50 border-b border-[#EAEAEA] text-[#666666] font-medium text-[11px]">
-                <th className="py-3 px-4">Channel</th>
-                <th className="py-3 px-4 text-right">Gross GMV</th>
-                <th className="py-3 px-4 text-right">COGS</th>
-                <th className="py-3 px-4 text-right">Marketplace Fees</th>
-                <th className="py-3 px-4 text-right">Shipping</th>
-                <th className="py-3 px-4 text-right">Returns Loss</th>
-                <th className="py-3 px-4 text-right">Net Profit</th>
-                <th className="py-3 px-4 text-right">Net Margin</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#EAEAEA]">
-              {channelData.map((c) => (
-                <tr key={c.channel} className="hover:bg-neutral-50 transition-colors">
-                  <td className="py-3.5 px-4 font-semibold text-[#000000]">
-                    {c.channel}
-                  </td>
-                  <td className="py-3.5 px-4 text-right font-medium text-[#000000]">
-                    {formatINR(c.grossRevenue)}
-                  </td>
-                  <td className="py-3.5 px-4 text-right text-neutral-600">
-                    {formatINR(c.cogs)}
-                  </td>
-                  <td className="py-3.5 px-4 text-right text-red-600">
-                    {formatINR(c.marketplaceFees)}
-                  </td>
-                  <td className="py-3.5 px-4 text-right text-neutral-600">
-                    {formatINR(c.shippingCosts)}
-                  </td>
-                  <td className="py-3.5 px-4 text-right text-red-600">
-                    {formatINR(c.returnsImpact)}
-                  </td>
-                  <td className="py-3.5 px-4 text-right font-bold text-emerald-600">
-                    {formatINR(c.netProfit)}
-                  </td>
-                  <td className="py-3.5 px-4 text-right font-semibold text-[#000000]">
-                    {c.netMarginPercent}%
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <SpendFormDialog
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        row={editing}
+        accounts={accounts.data ?? []}
+        onSaved={(row, created) => toast({ title: created ? "Spend recorded" : "Spend updated", description: `${row.spendDate}: ${money(row.amountMinor)}`, variant: "success" })}
+      />
+      <SpendImportDialog open={importOpen} onClose={() => setImportOpen(false)} />
+      <ConfirmDialog
+        open={deleting !== null}
+        onOpenChange={(o) => !o && !remove.isPending && setDeleting(null)}
+        title="Delete this spend row?"
+        description={deleting ? `${deleting.spendDate}: ${money(deleting.amountMinor)}${deleting.campaign ? ` (${deleting.campaign})` : ""}. The advertising step of the waterfall is recalculated.` : ""}
+        confirmText="Delete spend"
+        variant="destructive"
+        loading={remove.isPending}
+        onConfirm={() => deleting && runDelete(deleting)}
+      />
     </div>
   );
 }

@@ -1,52 +1,20 @@
 import { useWorkspaceStore } from "@/store/workspace.store";
 
-export type Role = "owner" | "admin" | "seller" | "viewer";
-
-export type Permission =
-  | "manage:workspace"
-  | "manage:products"
-  | "manage:orders"
-  | "manage:inventory"
-  | "manage:channels"
-  | "manage:finance"
-  | "manage:settings"
-  | "view:analytics";
-
-const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
-  owner: [
-    "manage:workspace",
-    "manage:products",
-    "manage:orders",
-    "manage:inventory",
-    "manage:channels",
-    "manage:finance",
-    "manage:settings",
-    "view:analytics",
-  ],
-  admin: [
-    "manage:products",
-    "manage:orders",
-    "manage:inventory",
-    "manage:channels",
-    "manage:settings",
-    "view:analytics",
-  ],
-  seller: [
-    "manage:products",
-    "manage:orders",
-    "manage:inventory",
-    "view:analytics",
-  ],
-  viewer: ["view:analytics"],
-};
-
 /**
- * Role-based permission hook.
- * Checks if the currently authenticated user has the requested permission.
+ * Permission check against what the server granted this session (GET /me -> permissions, strings like
+ * "products:write" or "pricing:approve"). Nothing is allowed until the session has loaded: the default is deny.
+ * The server stays the authority; this only decides what to show or disable.
  */
-export function useCan(permission: Permission): boolean {
-  const { user } = useWorkspaceStore();
-  const role = (user?.role as Role) || "owner";
-  const permissions = ROLE_PERMISSIONS[role] || ROLE_PERMISSIONS.owner;
-  return permissions.includes(permission);
+export function useCan(permission: string): boolean {
+  return useWorkspaceStore((s) => s.permissions.includes(permission));
+}
+
+/** true when the session holds at least one of the permissions */
+export function useCanAny(...permissions: string[]): boolean {
+  return useWorkspaceStore((s) => permissions.some((p) => s.permissions.includes(p)));
+}
+
+/** true when a platform feature flag from the shell is on (e.g. "ai.enabled", "automation.enabled") */
+export function useFeature(flag: string): boolean {
+  return useWorkspaceStore((s) => s.shell?.features?.[flag] === true);
 }

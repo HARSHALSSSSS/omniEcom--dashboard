@@ -1,78 +1,111 @@
-import axios from "axios";
+import axios, { type AxiosError, type InternalAxiosRequestConfig } from "axios";
+import { ApiError } from "./errors";
+import { getAccessToken, getRefreshToken, setAccessToken, setRefreshToken, clearTokens } from "@/lib/tokens";
+
+/** `/api/v1` in development (Vite proxies it to the API) or the absolute API URL in staging / production. */
+export const API_BASE: string = import.meta.env.VITE_API_BASE_URL ?? "/api/v1";
 
 /**
- * The ONE Axios instance for the whole app.
- * All api/*.api.ts functions use this — nothing else calls the network.
+ * The ONE Axios instance. Every api/*.api.ts goes through it.
+ * Bearer tokens only: the API does not use cookies, so credentials are never sent.
  */
 export const client = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL
-    ? import.meta.env.VITE_API_BASE_URL.replace(/\/api\/v\d+\/?$/, "")
-    : undefined,
-  headers: {
-    "Content-Type": "application/json",
-  },
-  withCredentials: true, // sends the httpOnly refresh-token cookie
+  baseURL: API_BASE,
+  headers: { "Content-Type": "application/json" },
+  withCredentials: false,
 });
 
-// ---- Access token storage (in-memory only, never localStorage) ----
-let _accessToken: string | null = null;
-
-export function setAccessToken(token: string | null) {
-  _accessToken = token;
+/** the token pair the server returns from a login or a refresh */
+export interface SessionTokens {
+  accessToken: string;
+  refreshToken: string;
+  expiresIn: number;
+  sessionId: string;
 }
 
-export function getAccessToken() {
-  return _accessToken;
-}
+type SessionEvent = { type: "refreshed"; data: unknown } | { type: "expired" };
+let listener: ((event: SessionEvent) => void) | null = null;
+/** the session layer subscribes here, so this file never imports stores or routers */
+export const onSessionEvent = (fn: ((event: SessionEvent) => void) | null) => {
+  listener = fn;
+};
 
-// ---- Request interceptor: attach access token ----
-client.interceptors.request.use((config) => {
-  if (_accessToken) {
-    config.headers.Authorization = `Bearer ${_accessToken}`;
-  }
+const PUBLIC_AUTH_PATHS = ["/auth/login", "/auth/register", "/auth/refresh", "/auth/forgot-password", "/auth/reset-password", "/auth/verify-email"];
+const isPublicAuth = (url: string | undefined) => !!url && PUBLIC_AUTH_PATHS.some((p) => url.includes(p));
+
+// Endpoint constants already carry the API base; send those as-is instead of prefixing the base a second time.
+client.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  if (typeof config.url === "string" && config.url.startsWith(API_BASE)) config.baseURL = "";
+  const token = getAccessToken();
+  if (token && !config.headers.Authorization) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
-// ---- Response interceptor: normalize errors, handle 401 ----
+let inflight: Promise<unknown> | null = null;
+
+/**
+ * Trades the refresh token for a new pair. The server rotates the refresh token on every call and treats a reused
+ * token as theft (the whole session dies), so concurrent callers MUST share one request.
+ */
+export function refreshSession(): Promise<unknown> {
+  inflight ??= (async () => {
+    const refreshToken = getRefreshToken();
+    if (!refreshToken) throw new ApiError({ code: "UNAUTHENTICATED", message: "Not signed in", status: 401 });
+    try {
+      const res = await axios.post(`${API_BASE}/auth/refresh`, { refreshToken }, { withCredentials: false });
+      const data = res.data.data as SessionTokens & Record<string, unknown>;
+      setAccessToken(data.accessToken);
+      setRefreshToken(data.refreshToken);
+      listener?.({ type: "refreshed", data });
+      return data;
+    } catch (e) {
+      const err = toApiError(e);
+      // only a definitive "no" ends the session; a network blip keeps the stored token for the next attempt
+      if (err.status === 401 || err.status === 403 || err.status === 400) {
+        clearTokens();
+        listener?.({ type: "expired" });
+      }
+      throw err;
+    }
+  })().finally(() => {
+    inflight = null;
+  });
+  return inflight;
+}
+
+export function toApiError(e: unknown): ApiError {
+  if (e instanceof ApiError) return e;
+  const err = e as AxiosError<{ error?: { code?: string; message?: string; details?: Record<string, unknown> }; requestId?: string }>;
+  const body = err.response?.data;
+  if (err.response) {
+    return new ApiError({
+      code: body?.error?.code ?? "UNKNOWN_ERROR",
+      message: body?.error?.message ?? err.message ?? "An unexpected error occurred",
+      status: err.response.status,
+      details: body?.error?.details ?? null,
+      requestId: body?.requestId ?? null,
+    });
+  }
+  return new ApiError({ code: "NETWORK_ERROR", message: "Cannot reach the server", status: 0 });
+}
+
 client.interceptors.response.use(
   (response) => response,
-  async (error) => {
-    const originalRequest = error.config as typeof error.config & {
-      _retry?: boolean;
-    };
-
-    // 401 → attempt token refresh once
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
+  async (error: AxiosError) => {
+    const original = error.config as (InternalAxiosRequestConfig & { _retried?: boolean }) | undefined;
+    if (error.response?.status === 401 && original && !original._retried && !isPublicAuth(original.url) && getRefreshToken()) {
+      original._retried = true;
       try {
-        const { data } = await axios.post(
-          `${import.meta.env.VITE_API_BASE_URL}/auth/refresh`,
-          {},
-          { withCredentials: true },
-        );
-        setAccessToken(data.data.accessToken);
-        originalRequest.headers.Authorization = `Bearer ${data.data.accessToken}`;
-        return client(originalRequest);
-      } catch {
-        // Refresh failed → clear token, redirect to sign-in
-        setAccessToken(null);
-        window.location.href = "/signin";
-        return Promise.reject(error);
+        await refreshSession();
+        original.headers.Authorization = `Bearer ${getAccessToken()}`;
+        return client(original);
+      } catch (refreshError) {
+        return Promise.reject(refreshError);
       }
     }
-
-    // Normalize error shape → AppError
-    const appError = {
-      code: error.response?.data?.error?.code ?? "UNKNOWN_ERROR",
-      message:
-        error.response?.data?.error?.message ??
-        error.message ??
-        "An unexpected error occurred",
-      details: error.response?.data?.error?.details ?? null,
-      fields: error.response?.data?.error?.fields ?? null,
-      status: error.response?.status ?? 0,
-    };
-
-    return Promise.reject(appError);
+    return Promise.reject(toApiError(error));
   },
 );
+
+/** unwraps the success envelope: { success, data } -> data */
+export const unwrap = <T>(res: { data: { data: T } }): T => res.data.data;

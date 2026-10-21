@@ -8,101 +8,79 @@ import {
   MoreHorizontal,
   Check,
   LocateFixed,
+  type LucideIcon,
 } from "lucide-react";
-import { useWorkspaceStore } from "@/store/workspace.store";
+import { ApiError } from "@/api/errors";
+import type { BusinessType, OnboardingOptions, TeamSize } from "@/api/onboarding.api";
+import { useOnboardingOptions, useSaveBusiness } from "@/hooks/useOnboarding";
+import { FieldError, InlineError, Spinner, StepError, StepLoading } from "@/components/onboarding/wizard";
+import { useSavedDraft, useWizard, useWizardDraft } from "@/components/onboarding/wizardContext";
 import { cn } from "@/utils/cn";
 
-interface StepBusinessProps {
-  onNext: () => void;
-}
+const TYPE_ICONS: Record<BusinessType, LucideIcon> = {
+  d2c_brand: ShoppingBag,
+  marketplace_seller: Store,
+  retail: Building2,
+  wholesaler: Boxes,
+  social_commerce: MessageSquare,
+  other: MoreHorizontal,
+};
 
-const BUSINESS_TYPES = [
-  {
-    id: "d2c_brand",
-    title: "D2C Brand",
-    description: "Sell your own brand directly.",
-    icon: ShoppingBag,
-  },
-  {
-    id: "marketplace_seller",
-    title: "Marketplace Seller",
-    description: "Sell on online marketplaces.",
-    icon: Store,
-  },
-  {
-    id: "retail_business",
-    title: "Retail Business",
-    description: "Sell through physical stores.",
-    icon: Building2,
-  },
-  {
-    id: "wholesaler",
-    title: "Wholesaler",
-    description: "Supply products to businesses.",
-    icon: Boxes,
-  },
-  {
-    id: "social_commerce",
-    title: "Social Commerce",
-    description: "Sell through social channels.",
-    icon: MessageSquare,
-  },
-  {
-    id: "other",
-    title: "Other",
-    description: "Build a business your way.",
-    icon: MoreHorizontal,
-  },
-];
+const TIERS = [
+  { key: "starter", label: "Starter" },
+  { key: "growing", label: "Growing" },
+  { key: "scale", label: "Scale" },
+] as const;
 
-const TEAM_SIZES = [
-  { id: "just_me", label: "Just me" },
-  { id: "2-5", label: "2–5" },
-  { id: "6-20", label: "6–20" },
-  { id: "21-50", label: "21–50" },
-  { id: "50+", label: "50+" },
-];
+/** the same rule the server uses for the workspace tier */
+const tierOf = (size: TeamSize): (typeof TIERS)[number]["key"] =>
+  size === "21_50" || size === "50_plus" ? "scale" : size === "6_20" ? "growing" : "starter";
 
-export const StepBusiness: React.FC<StepBusinessProps> = ({ onNext }) => {
-  const { onboardingData, updateOnboardingData, user, setUser } =
-    useWorkspaceStore();
+type Draft = { businessName: string; businessType: BusinessType; teamSize: TeamSize; operatingLocation: string };
 
-  const [businessName, setBusinessName] = useState(
-    onboardingData.business.name || user?.businessName || "",
-  );
-  const [selectedType, setSelectedType] = useState(
-    onboardingData.business.type || "d2c_brand",
-  );
-  const [teamSize, setTeamSize] = useState(
-    onboardingData.business.teamSize || "just_me",
-  );
-  const [city, setCity] = useState(
-    onboardingData.business.city || "",
-  );
+export const StepBusiness: React.FC = () => {
+  const options = useOnboardingOptions();
+  if (options.isPending) return <StepLoading label="Loading business options" />;
+  if (options.isError) return <StepError error={options.error} onRetry={() => void options.refetch()} />;
+  return <BusinessForm options={options.data} />;
+};
+
+const BusinessForm: React.FC<{ options: OnboardingOptions }> = ({ options }) => {
+  const { progress, canWrite, advance } = useWizard();
+  const saved = useSavedDraft<Draft>("business");
+  const save = useSaveBusiness();
+
+  // the server's saved profile (or the draft from "Save & exit") is the start; typing is only a buffer until Continue succeeds
+  const [businessName, setBusinessName] = useState(saved?.businessName ?? progress.business.businessName ?? "");
+  const [selectedType, setSelectedType] = useState<BusinessType>(saved?.businessType ?? progress.business.businessType ?? "d2c_brand");
+  const [teamSize, setTeamSize] = useState<TeamSize>(saved?.teamSize ?? progress.business.teamSize ?? "just_me");
+  const [city, setCity] = useState(saved?.operatingLocation ?? progress.business.operatingLocation ?? "");
+  const [touched, setTouched] = useState(false);
+
+  useWizardDraft(() => ({ businessName, businessType: selectedType, teamSize, operatingLocation: city }));
+
+  const local: Record<string, string> = {};
+  if (businessName.trim().length < 2) local.businessName = "Enter your business or brand name (at least 2 characters).";
+  else if (businessName.trim().length > 120) local.businessName = "Keep the name under 120 characters.";
+  if (city.trim().length < 2) local.operatingLocation = "Tell us where you operate from, for example Mumbai, Maharashtra.";
+  else if (city.trim().length > 160) local.operatingLocation = "Keep the location under 160 characters.";
+
+  const serverFields = save.error instanceof ApiError ? save.error.fields : null;
+  const fieldError = (key: string) => (touched ? local[key] : undefined) ?? serverFields?.[key];
+  const generalError = save.isError && !serverFields ? save.error : null;
 
   const handleContinue = (e: React.FormEvent) => {
     e.preventDefault();
-    updateOnboardingData({
-      business: {
-        name: businessName || "Nova Living",
-        type: selectedType,
-        teamSize,
-        city: city || "Mumbai, Maharashtra",
-      },
-    });
-
-    if (user) {
-      setUser({
-        ...user,
-        businessName: businessName || "Nova Living",
-        businessType: selectedType,
-        teamSize,
-        city: city || "Mumbai, Maharashtra",
-      });
-    }
-
-    onNext();
+    setTouched(true);
+    if (Object.keys(local).length || !canWrite || save.isPending) return;
+    save.mutate(
+      { businessName: businessName.trim(), businessType: selectedType, teamSize, operatingLocation: city.trim() },
+      { onSuccess: (res) => advance(res.state) },
+    );
   };
+
+  const tier = tierOf(teamSize);
+  const busy = save.isPending;
 
   return (
     <div className="relative w-full min-h-[calc(100vh-104px)] bg-[#FFFFFF] flex flex-col justify-center overflow-hidden">
@@ -189,10 +167,7 @@ export const StepBusiness: React.FC<StepBusinessProps> = ({ onNext }) => {
 
         {/* Right Column: Form Area stretching to the complete width */}
         <div className="flex-1 min-w-0 w-full flex items-start justify-start mt-8 lg:mt-0">
-          <form
-            onSubmit={handleContinue}
-            className="w-full flex flex-col"
-          >
+          <form onSubmit={handleContinue} noValidate aria-busy={busy} className="w-full flex flex-col">
             {/* Form Title & Subtitle */}
             <div className="flex flex-col gap-1.5">
               <h2 className="text-[24px] sm:text-[26px] font-bold leading-[1.2] text-[#0A0A0A] tracking-[-0.02em]">
@@ -205,41 +180,51 @@ export const StepBusiness: React.FC<StepBusinessProps> = ({ onNext }) => {
 
             {/* Business / Brand Name */}
             <div className="mt-6 flex flex-col gap-2">
-              <label className="text-[12.5px] font-semibold leading-none text-[#0A0A0A]">
+              <label htmlFor="onb-business-name" className="text-[12.5px] font-semibold leading-none text-[#0A0A0A]">
                 Business / Brand name
               </label>
-              <div className="h-[42px] w-full rounded-[10px] border border-[#E5E5E5] bg-white px-3.5 flex items-center focus-within:border-[#0A0A0A] transition-colors">
+              <div className={cn("h-[42px] w-full rounded-[10px] border bg-white px-3.5 flex items-center focus-within:border-[#0A0A0A] transition-colors", fieldError("businessName") ? "border-[#B42318]" : "border-[#E5E5E5]")}>
                 <input
+                  id="onb-business-name"
                   type="text"
                   value={businessName}
                   onChange={(e) => setBusinessName(e.target.value)}
+                  disabled={!canWrite}
+                  maxLength={120}
+                  autoComplete="organization"
+                  aria-invalid={!!fieldError("businessName")}
+                  aria-describedby="onb-business-name-hint"
                   placeholder="e.g. Nova Living"
-                  className="w-full bg-transparent text-[12.5px] text-[#0A0A0A] placeholder-[#A3A3A3] outline-none"
+                  className="w-full bg-transparent text-[12.5px] text-[#0A0A0A] placeholder-[#A3A3A3] outline-none disabled:opacity-60"
                 />
               </div>
-              <p className="text-[10.5px] font-normal leading-none text-[#8E8E8E]">
+              <p id="onb-business-name-hint" className="text-[10.5px] font-normal leading-none text-[#8E8E8E]">
                 The name customers know your business by.
               </p>
+              <FieldError message={fieldError("businessName")} />
             </div>
 
             {/* What best describes your business? */}
             <div className="mt-6 flex flex-col gap-2.5">
-              <label className="text-[12.5px] font-semibold leading-none text-[#0A0A0A]">
+              <span id="onb-type-label" className="text-[12.5px] font-semibold leading-none text-[#0A0A0A]">
                 What best describes your business?
-              </label>
+              </span>
 
-              {/* 2-column grid: 3 rows of options */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                {BUSINESS_TYPES.map((bt) => {
-                  const Icon = bt.icon;
-                  const isSelected = selectedType === bt.id;
+              {/* 2-column grid of options (from GET /onboarding/options) */}
+              <div role="radiogroup" aria-labelledby="onb-type-label" className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {options.businessTypes.map((bt) => {
+                  const Icon = TYPE_ICONS[bt.value] ?? MoreHorizontal;
+                  const isSelected = selectedType === bt.value;
                   return (
                     <button
-                      key={bt.id}
+                      key={bt.value}
                       type="button"
-                      onClick={() => setSelectedType(bt.id)}
+                      role="radio"
+                      aria-checked={isSelected}
+                      disabled={!canWrite}
+                      onClick={() => setSelectedType(bt.value)}
                       className={cn(
-                        "h-[56px] rounded-[14px] px-3.5 flex items-center justify-between text-left border transition-all cursor-pointer",
+                        "h-[56px] rounded-[14px] px-3.5 flex items-center justify-between text-left border transition-all cursor-pointer disabled:cursor-not-allowed",
                         isSelected
                           ? "bg-[#F5F5F5] border-[#262626]"
                           : "bg-white border-transparent hover:border-[#E5E5E5] shadow-[0_1px_2px_rgba(0,0,0,0.03)]",
@@ -249,7 +234,7 @@ export const StepBusiness: React.FC<StepBusinessProps> = ({ onNext }) => {
                         <Icon className="h-[16px] w-[16px] text-[#171717] shrink-0 stroke-[1.7]" />
                         <div className="flex flex-col min-w-0 gap-0.5">
                           <span className="text-[12px] font-bold leading-[1.2] text-[#0A0A0A]">
-                            {bt.title}
+                            {bt.label}
                           </span>
                           <span className="text-[10.5px] font-normal leading-[1.2] text-[#8E8E8E] truncate">
                             {bt.description}
@@ -267,19 +252,22 @@ export const StepBusiness: React.FC<StepBusinessProps> = ({ onNext }) => {
 
             {/* Team Size */}
             <div className="mt-6 flex flex-col gap-2">
-              <label className="text-[12.5px] font-semibold leading-none text-[#0A0A0A]">
+              <span id="onb-team-label" className="text-[12.5px] font-semibold leading-none text-[#0A0A0A]">
                 How many people manage the business?
-              </label>
-              <div className="h-[40px] w-full rounded-[10px] bg-[#F5F5F5] p-[3px] flex items-center">
-                {TEAM_SIZES.map((ts) => {
-                  const isSelected = teamSize === ts.id;
+              </span>
+              <div role="radiogroup" aria-labelledby="onb-team-label" className="h-[40px] w-full rounded-[10px] bg-[#F5F5F5] p-[3px] flex items-center">
+                {options.teamSizes.map((ts) => {
+                  const isSelected = teamSize === ts.value;
                   return (
                     <button
-                      key={ts.id}
+                      key={ts.value}
                       type="button"
-                      onClick={() => setTeamSize(ts.id)}
+                      role="radio"
+                      aria-checked={isSelected}
+                      disabled={!canWrite}
+                      onClick={() => setTeamSize(ts.value)}
                       className={cn(
-                        "flex-1 h-full rounded-[7px] flex items-center justify-center text-[12px] transition-all cursor-pointer",
+                        "flex-1 h-full rounded-[7px] flex items-center justify-center text-[12px] transition-all cursor-pointer disabled:cursor-not-allowed",
                         isSelected
                           ? "bg-white text-[#0A0A0A] font-semibold shadow-[0_1px_3px_rgba(0,0,0,0.08)]"
                           : "text-[#737373] font-normal hover:text-[#0A0A0A]",
@@ -294,22 +282,28 @@ export const StepBusiness: React.FC<StepBusinessProps> = ({ onNext }) => {
 
             {/* Location */}
             <div className="mt-6 flex flex-col gap-2">
-              <label className="text-[12.5px] font-semibold leading-none text-[#0A0A0A]">
+              <label htmlFor="onb-location" className="text-[12.5px] font-semibold leading-none text-[#0A0A0A]">
                 Where do you operate from?
               </label>
-              <div className="h-[42px] w-full rounded-[10px] border border-[#E5E5E5] bg-white px-3.5 flex items-center gap-2.5 focus-within:border-[#0A0A0A] transition-colors">
+              <div className={cn("h-[42px] w-full rounded-[10px] border bg-white px-3.5 flex items-center gap-2.5 focus-within:border-[#0A0A0A] transition-colors", fieldError("operatingLocation") ? "border-[#B42318]" : "border-[#E5E5E5]")}>
                 <LocateFixed className="h-3.5 w-3.5 text-[#A3A3A3] shrink-0 stroke-[1.6]" />
                 <input
+                  id="onb-location"
                   type="text"
                   value={city}
                   onChange={(e) => setCity(e.target.value)}
+                  disabled={!canWrite}
+                  maxLength={160}
+                  aria-invalid={!!fieldError("operatingLocation")}
+                  aria-describedby="onb-location-hint"
                   placeholder="Search city or enter location"
-                  className="w-full bg-transparent text-[12.5px] text-[#0A0A0A] placeholder-[#A3A3A3] outline-none"
+                  className="w-full bg-transparent text-[12.5px] text-[#0A0A0A] placeholder-[#A3A3A3] outline-none disabled:opacity-60"
                 />
               </div>
-              <p className="text-[10.5px] font-normal leading-none text-[#737373]">
+              <p id="onb-location-hint" className="text-[10.5px] font-normal leading-none text-[#737373]">
                 e.g. Mumbai, Maharashtra
               </p>
+              <FieldError message={fieldError("operatingLocation")} />
             </div>
 
             {/* Workspace Preview */}
@@ -319,20 +313,36 @@ export const StepBusiness: React.FC<StepBusinessProps> = ({ onNext }) => {
               </span>
               <div className="flex items-center justify-between text-[11px] leading-normal text-[#737373]">
                 <span>Your workspace will adapt to your business as it grows.</span>
-                <span className="text-[#737373]">Starter → Growing → Scale</span>
+                <span className="text-[#737373]" aria-label={`Workspace tier: ${tier}`}>
+                  {TIERS.map((t, i) => (
+                    <React.Fragment key={t.key}>
+                      {i > 0 && " → "}
+                      <span className={t.key === tier ? "font-semibold text-[#0A0A0A]" : undefined}>{t.label}</span>
+                    </React.Fragment>
+                  ))}
+                </span>
               </div>
             </div>
 
             {/* Continue Action */}
             <div className="mt-5 flex flex-col items-end gap-2.5">
+              <InlineError error={generalError} className="w-full" />
               <button
                 type="submit"
-                className="w-[150px] h-[42px] rounded-[12px] bg-[#0A0A0A] text-white flex items-center justify-center gap-1.5 hover:bg-[#1F1F1F] transition-colors cursor-pointer"
+                disabled={busy || !canWrite}
+                className="w-[150px] h-[42px] rounded-[12px] bg-[#0A0A0A] text-white flex items-center justify-center gap-1.5 hover:bg-[#1F1F1F] transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
               >
-                <span className="text-[12px] font-semibold leading-none text-white">
-                  Continue
-                </span>
-                <span className="text-white text-[13px] leading-none">→</span>
+                {busy ? (
+                  <>
+                    <Spinner />
+                    <span className="text-[12px] font-semibold leading-none text-white">Saving…</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-[12px] font-semibold leading-none text-white">Continue</span>
+                    <span className="text-white text-[13px] leading-none">→</span>
+                  </>
+                )}
               </button>
               <span className="text-[10.5px] font-normal leading-none text-[#8E8E8E]">
                 You can update these details anytime in Settings.

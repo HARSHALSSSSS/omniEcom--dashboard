@@ -1,21 +1,28 @@
-import { useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import {
-  ArrowLeft,
-  UploadCloud,
-  CheckCircle2,
-  AlertTriangle,
-  History,
-  Eye,
-} from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { AlertTriangle, ArrowLeft, ExternalLink, UploadCloud } from "lucide-react";
 import { PageHeader } from "@/components/common/PageHeader";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { StatusPill } from "@/components/common/StatusPill";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { LeaveDialog } from "@/components/products/edit/Dialogs";
+import { ActivityTab } from "@/components/listings/studio/ActivityTab";
+import { AttributesTab } from "@/components/listings/studio/AttributesTab";
+import { CategoryDialog } from "@/components/listings/studio/CategoryDialog";
+import { ConflictDialog } from "@/components/listings/studio/ConflictDialog";
+import { ContentTab } from "@/components/listings/studio/ContentTab";
+import { fieldId } from "@/components/listings/studio/form";
+import { MediaTab, VariationsTab } from "@/components/listings/studio/MediaVariationsTabs";
+import { OverviewTab } from "@/components/listings/studio/OverviewTab";
+import { PreviewTab } from "@/components/listings/studio/PreviewTab";
+import { PricingStockTab } from "@/components/listings/studio/PricingStockTab";
+import { ReadinessTab } from "@/components/listings/studio/ReadinessTab";
+import { ContentSyncPanel, FlowCard, JobBanner } from "@/components/listings/studio/StudioBanners";
 import { ROUTES } from "@/constants/routes";
-import { useListingStudio, usePublishListing, useUpdateListing } from "@/hooks/useListings";
-import { formatINR, formatRelativeTime } from "@/utils/format";
+import { isApiError, errorMessage } from "@/api/errors";
+import { useActivityTimeline, useStudioController } from "@/hooks/useListingStudio";
+import { isJobDone, type ContentState, type ReadinessItem, type StudioActionKey } from "@/types/listingStudio";
 
 const TABS = [
   { id: "overview", label: "Overview" },
@@ -23,445 +30,281 @@ const TABS = [
   { id: "attributes", label: "Attributes" },
   { id: "media", label: "Media Runway" },
   { id: "variations", label: "Variations" },
-  { id: "pricing", label: "Pricing & Margins" },
+  { id: "pricing", label: "Pricing & Stock" },
   { id: "readiness", label: "Readiness Check" },
+  { id: "preview", label: "Preview" },
   { id: "activity", label: "Activity Log" },
-];
+] as const;
+type TabId = (typeof TABS)[number]["id"];
+
+const CONTENT_CHIP: Record<ContentState, { label: string; cls: string }> = {
+  synced: { label: "Content synced", cls: "border-emerald-200 bg-emerald-50 text-emerald-700" },
+  sync_pending: { label: "Content update queued", cls: "border-sky-200 bg-sky-50 text-sky-700" },
+  needs_review: { label: "Category review needed", cls: "border-amber-200 bg-amber-50 text-amber-700" },
+  needs_republish: { label: "Republish needed", cls: "border-amber-200 bg-amber-50 text-amber-700" },
+  failed: { label: "Content update failed", cls: "border-rose-200 bg-rose-50 text-rose-700" },
+};
+
+function StudioSkeleton() {
+  return (
+    <div className="w-full space-y-6" aria-busy="true" aria-label="Loading the listing studio">
+      <Skeleton className="h-24" />
+      <Skeleton className="h-10 w-2/3" />
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        <Skeleton className="h-64 lg:col-span-8" />
+        <Skeleton className="h-64 lg:col-span-4" />
+      </div>
+    </div>
+  );
+}
 
 export default function ListingStudioPage() {
-  const { id } = useParams<{ id: string }>();
+  const { id = "" } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const listingId = id || "list-msh-03";
+  const ctl = useStudioController(id);
+  const { studio: s, studioQuery, blocker } = ctl;
+  const timeline = useActivityTimeline(id, s);
 
-  const { data: studioData } = useListingStudio(listingId);
-  const publishMutation = usePublishListing();
-  const updateMutation = useUpdateListing(listingId);
+  const [tab, setTab] = useState<TabId>("overview");
+  const [categoryOpen, setCategoryOpen] = useState(false);
+  const [confirmUnpublish, setConfirmUnpublish] = useState(false);
+  const focusId = useRef<string | null>(null);
+  const [focusTick, setFocusTick] = useState(0);
 
-  const [activeTab, setActiveTab] = useState("overview");
-  const [editedTitle, setEditedTitle] = useState("");
-  const [editedPrice, setEditedPrice] = useState<number | undefined>(undefined);
+  const go = useCallback((next: TabId, field?: string) => {
+    focusId.current = field ?? null;
+    setTab(next);
+    setFocusTick((n) => n + 1);
+  }, []);
+  useEffect(() => {
+    const target = focusId.current;
+    if (!target) return;
+    focusId.current = null;
+    const el = document.getElementById(target);
+    if (el) {
+      el.scrollIntoView?.({ behavior: "smooth", block: "center" });
+      el.focus();
+    }
+  }, [focusTick, tab]);
 
-  const listing = studioData?.listing;
-  const content = studioData?.content;
-  const readiness = studioData?.readiness;
-  const pricing = studioData?.pricing;
+  if (studioQuery.isLoading) return <StudioSkeleton />;
+  if (studioQuery.isError || !s) {
+    const notFound = isApiError(studioQuery.error) && studioQuery.error.status === 404;
+    return (
+      <div role="alert" className="flex min-h-[320px] w-full flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border bg-card/50 p-8 text-center">
+        <h2 className="text-base font-semibold text-foreground">{notFound ? "Listing not found" : "Could not load this listing"}</h2>
+        <p className="max-w-sm text-xs text-muted-foreground">{notFound ? "It may have been deleted, or the link is wrong." : errorMessage(studioQuery.error, "Something went wrong while loading the listing studio.")}</p>
+        <div className="flex gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={() => navigate(ROUTES.LISTINGS)}>
+            Back to Listings
+          </Button>
+          {!notFound && (
+            <Button type="button" size="sm" onClick={() => void studioQuery.refetch()}>
+              Retry
+            </Button>
+          )}
+        </div>
+      </div>
+    );
+  }
 
-  const currentTitle = editedTitle || content?.title || listing?.productTitle || "";
-  const currentPrice = editedPrice ?? listing?.sellingPrice ?? 2899;
+  const { listing, product, account } = s;
+  const act = (key: StudioActionKey) => {
+    const a = s.actions.find((x) => x.action === key);
+    return { enabled: !!a?.enabled, reason: a ? a.disabledReason : "Not available for this listing", label: a?.label };
+  };
+  const readOnlyReason = "You have read-only access to listings.";
+  const live = listing.status === "active" || listing.status === "pending";
+  const jobRunning = !!ctl.jobAction && !ctl.jobPollFailed && !(ctl.job && isJobDone(ctl.job.status));
+  const busy = ctl.saving || ctl.publishing || ctl.running || ctl.resolving || jobRunning;
 
-  const handlePublish = () => {
-    publishMutation.mutate(listingId);
+  const edit = act("edit");
+  const flow = act("publish_flow");
+  const validate = act("validate");
+  const refresh = act("refresh_status");
+  const unpublish = act("unpublish");
+  const reasonFor = (a: { enabled: boolean; reason: string | null }) => (!ctl.canWrite ? readOnlyReason : (a.reason ?? undefined));
+
+  const resolving = listing.contentState === "needs_review";
+  const categoryAllowed = ctl.canWrite && (resolving ? act("resolve_review").enabled : !live);
+  const categoryReason = !ctl.canWrite ? readOnlyReason : categoryAllowed ? null : live && !resolving ? "The category of a live listing cannot be changed. Unpublish it to choose another category." : act("resolve_review").reason;
+
+  const onFix = (item: ReadinessItem) => {
+    const fix = item.fix;
+    if (!fix) return;
+    const field = fix.field ?? item.field;
+    switch (fix.action) {
+      case "edit_content":
+        return go("content", fieldId(field && ["title", "description", "brand"].includes(field) ? field : "title"));
+      case "fill_attribute":
+        return go("attributes", field ? fieldId(`attr:${field}`) : undefined);
+      case "set_price":
+        return go("pricing", fieldId("price"));
+      case "set_mrp":
+        return go("pricing", fieldId("mrp"));
+      case "map_category":
+        return setCategoryOpen(true);
+      case "upload_images":
+        return navigate(`${ROUTES.PRODUCTS}/${listing.productId}?tab=media`);
+      case "add_barcode":
+        return navigate(`${ROUTES.PRODUCTS}/${listing.productId}/variants`);
+      case "restock":
+        return navigate(ROUTES.INVENTORY);
+      case "reconnect_account":
+        return navigate(ROUTES.MARKETPLACE_HUB_CONNECTORS);
+      case "validate":
+        return void ctl.run("validate");
+      case "review_marketplace_feedback":
+        return go("overview");
+    }
   };
 
-  const handleSave = () => {
-    updateMutation.mutate({
-      productTitle: currentTitle,
-      sellingPrice: currentPrice,
-    });
+  const pickCategory = async (marketplaceCategoryId: string) => {
+    const ok = resolving ? await ctl.resolveReview({ action: "set_category", marketplaceCategoryId }) : await ctl.setCategory(marketplaceCategoryId);
+    if (ok) setCategoryOpen(false);
   };
+
+  const chip = CONTENT_CHIP[listing.contentState];
+  const rejected = listing.status === "rejected" || listing.status === "correction_required";
+  const firstIssue = s.marketplaceIssues.find((i) => i.severity === "error") ?? s.marketplaceIssues[0];
 
   return (
     <div className="w-full space-y-6 pb-24">
-      {/* Page Header */}
       <PageHeader
-        eyebrow={`CHANNEL STUDIO · ${listing?.channelName.toUpperCase() ?? "MEESHO"}`}
-        title={listing?.productTitle ?? "Traverse All-Weather Travel Jacket"}
-        description={`Configure marketplace-specific tags, image specifications, and attributes for ${listing?.channelName ?? "Meesho"}.`}
+        eyebrow={`CHANNEL STUDIO · ${account.marketplaceName.toUpperCase()}`}
+        title={product.title}
+        description={`Configure marketplace-specific tags, image specifications, and attributes for ${account.marketplaceName} (${account.displayName}).`}
         actions={
           <div className="flex items-center gap-3">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => navigate(ROUTES.LISTINGS)}
-              className="gap-1.5"
-            >
-              <ArrowLeft className="h-4 w-4" /> Back to Listings
+            <Button variant="outline" size="sm" onClick={() => navigate(ROUTES.LISTINGS)} className="gap-1.5">
+              <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Back to Listings
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleSave}
-              disabled={updateMutation.isPending}
-            >
-              Save Changes
+            <Button variant="outline" size="sm" loading={ctl.saving} disabled={!ctl.canWrite || !ctl.dirty || !edit.enabled || busy} title={reasonFor(edit)} onClick={() => void ctl.save()}>
+              {live ? "Save Changes" : "Save Draft"}
             </Button>
-            <Button
-              size="sm"
-              className="gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90"
-              onClick={handlePublish}
-              disabled={publishMutation.isPending}
-            >
-              <UploadCloud className="h-4 w-4" />
-              {listing?.status === "failed" ? "Fix & Retry Publish" : "Publish to Channel"}
+            <Button size="sm" className="gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90" loading={ctl.publishing} disabled={!ctl.canWrite || !flow.enabled || busy} title={reasonFor(flow)} onClick={() => void ctl.publish()}>
+              {!ctl.publishing && <UploadCloud className="h-4 w-4" aria-hidden="true" />}
+              {flow.label ?? "Publish to Channel"}
             </Button>
           </div>
         }
       />
 
-      {/* Failure / Warning Banner if listing has errors (Screen 24 - Publish failure) */}
-      {listing?.status === "failed" && (
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
+        <StatusPill status={listing.table.screenStatus} />
+        <span className={`rounded border px-1.5 py-0.5 font-medium ${chip.cls}`}>{chip.label}</span>
+        <span className="text-muted-foreground">
+          {account.marketplaceName} · {account.displayName}
+        </span>
+        <Link to={`${ROUTES.PRODUCTS}/${listing.productId}`} className="font-medium text-primary underline-offset-2 hover:underline">
+          {product.title} <span className="font-mono text-muted-foreground">({product.sku})</span>
+        </Link>
+        {listing.externalListingId && (
+          <span className="flex items-center gap-1.5 font-mono text-muted-foreground">
+            {listing.externalListingId}
+            {s.externalUrl && (
+              <a href={s.externalUrl} target="_blank" rel="noreferrer" aria-label="Open the listing on the marketplace" className="text-primary">
+                <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+              </a>
+            )}
+          </span>
+        )}
+        <span className="ml-auto flex items-center gap-2">
+          <Button type="button" variant="outline" size="sm" className="h-7 text-[11px]" disabled={!ctl.canWrite || !validate.enabled || busy} title={reasonFor(validate)} onClick={() => void ctl.run("validate")}>
+            Validate
+          </Button>
+          <Button type="button" variant="outline" size="sm" className="h-7 text-[11px]" disabled={!ctl.canWrite || !refresh.enabled || busy} title={reasonFor(refresh)} onClick={() => void ctl.run("refresh_status")}>
+            Refresh status
+          </Button>
+          <Button type="button" variant="outline" size="sm" className="h-7 text-[11px]" disabled={!ctl.canWrite || !unpublish.enabled || busy} title={reasonFor(unpublish)} onClick={() => setConfirmUnpublish(true)}>
+            Unpublish
+          </Button>
+        </span>
+      </div>
+
+      {!ctl.canWrite && (
+        <p role="note" className="rounded-md border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+          {readOnlyReason} You can look at the listing, its readiness and its history, but not change it.
+        </p>
+      )}
+      {ctl.banner && (
+        <div role="alert" className="flex items-start justify-between gap-3 rounded-md border border-destructive/40 bg-red-50 p-3 text-xs text-red-900">
+          <p>{ctl.banner}</p>
+          <button type="button" className="font-medium underline" onClick={ctl.dismissBanner}>
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {rejected && (
         <div className="flex items-start justify-between rounded-xl border border-rose-200 bg-rose-50/70 p-4 text-destructive shadow-sm">
           <div className="flex items-start gap-3">
-            <AlertTriangle className="h-5 w-5 text-rose-600 mt-0.5" />
+            <AlertTriangle className="mt-0.5 h-5 w-5 text-rose-600" aria-hidden="true" />
             <div>
-              <h4 className="text-sm font-bold text-rose-950">
-                Publication Rejected by {listing.channelName}
-              </h4>
-              <p className="mt-0.5 text-xs text-rose-800">
-                {listing.syncErrors?.[0] ?? "Validation checks failed on marketplace ingestion."}
-              </p>
+              <h4 className="text-sm font-bold text-rose-950">Publication Rejected by {account.marketplaceName}</h4>
+              <p className="mt-0.5 text-xs text-rose-800">{firstIssue?.message ?? "Validation checks failed on marketplace ingestion."}</p>
             </div>
           </div>
-          <Button
-            size="sm"
-            className="h-8 text-xs bg-rose-700 hover:bg-rose-800 text-white"
-            onClick={handlePublish}
-            disabled={publishMutation.isPending}
-          >
+          <Button size="sm" className="h-8 bg-rose-700 text-xs text-white hover:bg-rose-800" disabled={!ctl.canWrite || !flow.enabled || busy} title={reasonFor(flow)} onClick={() => void ctl.publish()}>
             Retry Now
           </Button>
         </div>
       )}
 
-      {/* Tabs Row */}
-      <div className="flex items-center gap-1 border-b border-border pb-1 overflow-x-auto text-xs">
-        {TABS.map((tab) => (
+      <JobBanner ctl={ctl} />
+      <FlowCard ctl={ctl} />
+      <ContentSyncPanel s={s} ctl={ctl} act={act} onChooseCategory={() => setCategoryOpen(true)} />
+
+      <div role="tablist" aria-label="Listing studio sections" className="flex items-center gap-1 overflow-x-auto border-b border-border pb-1 text-xs">
+        {TABS.map((t) => (
           <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`whitespace-nowrap rounded-lg px-3.5 py-2 font-medium transition-colors ${
-              activeTab === tab.id
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:bg-muted"
-            }`}
+            key={t.id}
+            type="button"
+            role="tab"
+            id={`studio-tab-${t.id}`}
+            aria-selected={tab === t.id}
+            aria-controls="studio-panel"
+            onClick={() => go(t.id)}
+            className={`whitespace-nowrap rounded-lg px-3.5 py-2 font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${tab === t.id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
           >
-            {tab.label}
+            {t.label}
           </button>
         ))}
       </div>
 
-      {/* TAB 1: OVERVIEW */}
-      {activeTab === "overview" && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-          <div className="space-y-6 lg:col-span-8">
-            <div className="rounded-xl border border-border bg-card p-6 shadow-sm space-y-4">
-              <h3 className="text-base font-semibold text-foreground">
-                Channel Listing Specifications
-              </h3>
-              <div className="grid grid-cols-2 gap-4 text-xs">
-                <div>
-                  <label className="text-muted-foreground">Marketplace Category</label>
-                  <p className="mt-1 font-semibold text-foreground">
-                    {listing?.category}
-                  </p>
-                </div>
-                <div>
-                  <label className="text-muted-foreground">Channel SKU</label>
-                  <p className="mt-1 font-mono font-semibold text-foreground">
-                    {listing?.channelSku ?? listing?.sku}
-                  </p>
-                </div>
-                <div>
-                  <label className="text-muted-foreground">Channel ASIN / Identifier</label>
-                  <p className="mt-1 font-mono font-semibold text-foreground">
-                    {listing?.channelListingId ?? "Pending Creation"}
-                  </p>
-                </div>
-                <div>
-                  <label className="text-muted-foreground">Publication State</label>
-                  <div className="mt-1">
-                    <StatusPill status={listing?.status ?? "needs_review"} />
-                  </div>
-                </div>
-              </div>
-            </div>
+      <div id="studio-panel" role="tabpanel" aria-labelledby={`studio-tab-${tab}`}>
+        {tab === "overview" && <OverviewTab s={s} canChangeCategory={categoryAllowed} categoryReason={categoryReason} dirty={ctl.dirty} onChangeCategory={() => setCategoryOpen(true)} onOpenReadiness={() => go("readiness")} />}
+        {tab === "content" && <ContentTab s={s} ctl={ctl} />}
+        {tab === "attributes" && <AttributesTab s={s} ctl={ctl} />}
+        {tab === "media" && <MediaTab s={s} />}
+        {tab === "variations" && <VariationsTab s={s} />}
+        {tab === "pricing" && <PricingStockTab s={s} ctl={ctl} />}
+        {tab === "readiness" && <ReadinessTab readiness={s.readiness} canWrite={ctl.canWrite} checking={studioQuery.isFetching} onFix={onFix} onRecheck={() => void studioQuery.refetch()} />}
+        {tab === "preview" && <PreviewTab s={s} />}
+        {tab === "activity" && <ActivityTab items={timeline.items} total={timeline.total} hasMore={timeline.hasMore} loading={timeline.loading} failed={timeline.failed} onLoadMore={() => void timeline.loadMore()} />}
+      </div>
 
-            {/* Quick Preview Box ("What the customer sees") */}
-            <div className="rounded-xl border border-border bg-card p-6 shadow-sm space-y-3">
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                <Eye className="h-4 w-4" /> Marketplace Customer Preview
-              </h4>
-              <div className="flex gap-4 rounded-lg border border-border bg-muted/20 p-4">
-                {listing?.imageUrl && (
-                  <img
-                    src={listing.imageUrl}
-                    alt=""
-                    className="h-24 w-24 rounded-lg object-cover border border-border"
-                  />
-                )}
-                <div className="space-y-1.5 text-xs">
-                  <p className="font-bold text-foreground text-sm">{currentTitle}</p>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-base font-bold text-foreground">
-                      {formatINR(currentPrice)}
-                    </span>
-                    <span className="text-muted-foreground line-through">
-                      {formatINR(listing?.mrp ?? 4999)}
-                    </span>
-                    <span className="text-emerald-600 font-semibold text-[11px]">
-                      {Math.round((1 - currentPrice / (listing?.mrp ?? 4999)) * 100)}% off
-                    </span>
-                  </div>
-                  <p className="text-muted-foreground line-clamp-2">
-                    {content?.description}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
+      <footer className="sticky bottom-0 z-30 border-t border-border bg-background/95 py-2 text-xs backdrop-blur">
+        <p role="status" className={ctl.dirty ? "font-medium text-amber-700" : "text-muted-foreground"}>
+          {ctl.dirty ? "Unsaved changes" : "All changes saved"}
+        </p>
+      </footer>
 
-          {/* Right Rail: Readiness & Health */}
-          <div className="space-y-6 lg:col-span-4">
-            <div className="rounded-xl border border-border bg-card p-6 shadow-sm space-y-4">
-              <div className="flex items-center justify-between">
-                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Readiness Score
-                </h4>
-                <span className="font-mono text-sm font-bold text-foreground">
-                  {readiness?.score ?? 72}%
-                </span>
-              </div>
-              <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-                <div
-                  className="h-full bg-amber-500"
-                  style={{ width: `${readiness?.score ?? 72}%` }}
-                />
-              </div>
-
-              <div className="space-y-2 pt-2">
-                {readiness?.issues.map((iss) => (
-                  <div
-                    key={iss.id}
-                    className="rounded-lg border border-rose-200 bg-rose-50/50 p-2.5 text-xs text-rose-900"
-                  >
-                    <p className="font-semibold">{iss.field}: {iss.message}</p>
-                    {iss.suggestedFix && (
-                      <p className="mt-1 text-[11px] text-rose-700">
-                        Fix: {iss.suggestedFix}
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 2: CONTENT & SEO */}
-      {activeTab === "content" && (
-        <div className="rounded-xl border border-border bg-card p-6 shadow-sm space-y-6">
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-foreground">
-              Marketplace Product Title
-            </label>
-            <Input
-              value={currentTitle}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                setEditedTitle(e.target.value)
-              }
-              className="text-xs"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-foreground">
-              Description
-            </label>
-            <Textarea
-              rows={4}
-              defaultValue={content?.description}
-              className="text-xs"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-xs font-semibold text-foreground">
-              Key Features / Bullet Points
-            </label>
-            {content?.bulletPoints.map((bp, i) => (
-              <Input key={i} defaultValue={bp} className="text-xs" />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* TAB 3: ATTRIBUTES */}
-      {activeTab === "attributes" && (
-        <div className="rounded-xl border border-border bg-card p-6 shadow-sm space-y-4">
-          <h3 className="text-base font-semibold text-foreground">
-            Marketplace Category Attributes
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {studioData?.attributes.map((attr) => (
-              <div key={attr.key} className="space-y-1.5">
-                <label className="text-xs font-semibold text-foreground">
-                  {attr.label} {attr.isRequired && <span className="text-destructive">*</span>}
-                </label>
-                <Input defaultValue={attr.value} className="text-xs" />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* TAB 4: MEDIA RUNWAY */}
-      {activeTab === "media" && (
-        <div className="rounded-xl border border-border bg-card p-6 shadow-sm space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-base font-semibold text-foreground">
-              Media Runway & Image Compliance
-            </h3>
-            <span className="rounded bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
-              1:1 Square Required
-            </span>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {studioData?.media.map((med) => (
-              <div key={med.id} className="relative rounded-xl border border-border overflow-hidden">
-                <img src={med.url} alt="" className="h-44 w-full object-cover" />
-                {med.isPrimary && (
-                  <span className="absolute top-2 left-2 rounded bg-black/80 px-2 py-0.5 text-[10px] text-white">
-                    Primary
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* TAB 5: VARIATIONS */}
-      {activeTab === "variations" && (
-        <div className="rounded-xl border border-border bg-card p-6 shadow-sm space-y-4">
-          <h3 className="text-base font-semibold text-foreground">
-            SKU Variations on {listing?.channelName}
-          </h3>
-          <div className="overflow-hidden rounded-lg border border-border">
-            <table className="w-full text-left text-xs">
-              <thead className="border-b border-border bg-muted/40 font-medium text-muted-foreground">
-                <tr>
-                  <th className="py-3 pl-4 pr-3">SKU</th>
-                  <th className="px-3 py-3">Variant Name</th>
-                  <th className="px-3 py-3">Price</th>
-                  <th className="px-3 py-3">Stock</th>
-                  <th className="py-3 pl-3 pr-4">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {studioData?.variations.map((v) => (
-                  <tr key={v.id} className="hover:bg-muted/20">
-                    <td className="py-3 pl-4 pr-3 font-mono font-medium">{v.sku}</td>
-                    <td className="px-3 py-3">{v.name}</td>
-                    <td className="px-3 py-3 font-semibold">{formatINR(v.price)}</td>
-                    <td className="px-3 py-3 font-mono">{v.stock}</td>
-                    <td className="py-3 pl-3 pr-4">
-                      <StatusPill status={v.status} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 6: PRICING & MARGINS */}
-      {activeTab === "pricing" && (
-        <div className="rounded-xl border border-border bg-card p-6 shadow-sm space-y-6">
-          <h3 className="text-base font-semibold text-foreground">
-            Channel Pricing & Commission Breakdown
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="rounded-lg border border-border p-4">
-              <label className="text-xs text-muted-foreground">Channel Selling Price</label>
-              <div className="mt-1 flex items-center gap-2">
-                <Input
-                  type="number"
-                  value={currentPrice}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                    setEditedPrice(Number(e.target.value))
-                  }
-                  className="text-xs font-bold"
-                />
-              </div>
-            </div>
-            <div className="rounded-lg border border-border p-4">
-              <label className="text-xs text-muted-foreground">Marketplace Commission</label>
-              <p className="mt-2 text-lg font-bold text-foreground">
-                {pricing?.channelCommissionPct}% (₹0)
-              </p>
-            </div>
-            <div className="rounded-lg border border-border p-4">
-              <label className="text-xs text-muted-foreground">Estimated Net Payout</label>
-              <p className="mt-2 text-lg font-bold text-emerald-600">
-                {formatINR(pricing?.estimatedPayout ?? 2754)}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 7: READINESS CHECK */}
-      {activeTab === "readiness" && (
-        <div className="rounded-xl border border-border bg-card p-6 shadow-sm space-y-4">
-          <h3 className="text-base font-semibold text-foreground">
-            Marketplace Gateway Validation
-          </h3>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50/40 p-3 text-xs">
-              <span className="flex items-center gap-2 font-medium text-emerald-950">
-                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                Barcode / EAN Registered
-              </span>
-              <span className="font-mono text-emerald-800">8901234567890</span>
-            </div>
-            <div className="flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50/40 p-3 text-xs">
-              <span className="flex items-center gap-2 font-medium text-emerald-950">
-                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                Mandatory Category Attributes Complete
-              </span>
-              <span className="text-emerald-800">5 of 5 passed</span>
-            </div>
-            <div className="flex items-center justify-between rounded-lg border border-rose-200 bg-rose-50/40 p-3 text-xs">
-              <span className="flex items-center gap-2 font-medium text-destructive">
-                <AlertTriangle className="h-4 w-4 text-destructive" />
-                Primary Image Square Aspect Ratio
-              </span>
-              <span className="text-destructive font-semibold">Failed</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 8: ACTIVITY LOG */}
-      {activeTab === "activity" && (
-        <div className="rounded-xl border border-border bg-card p-6 shadow-sm space-y-4">
-          <h3 className="text-base font-semibold text-foreground">
-            Publication History & Activity
-          </h3>
-          <div className="space-y-4 pt-2">
-            {studioData?.activity.map((act) => (
-              <div key={act.id} className="flex items-start gap-3 text-xs border-b border-border pb-3">
-                <History className="h-4 w-4 text-muted-foreground mt-0.5" />
-                <div className="space-y-0.5 flex-1">
-                  <div className="flex items-center justify-between">
-                    <p className="font-semibold text-foreground">{act.action}</p>
-                    <span className="text-[11px] text-muted-foreground">
-                      {formatRelativeTime(act.timestamp)}
-                    </span>
-                  </div>
-                  <p className="text-muted-foreground">{act.details}</p>
-                  <p className="text-[10px] text-muted-foreground font-mono">
-                    Actor: {act.actor}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      <CategoryDialog open={categoryOpen} accountId={account.id} marketplaceName={account.marketplaceName} busy={ctl.resolving || ctl.saving} onClose={() => setCategoryOpen(false)} onPick={(cid) => void pickCategory(cid)} />
+      <ConfirmDialog
+        open={confirmUnpublish}
+        onOpenChange={setConfirmUnpublish}
+        title="Unpublish this listing?"
+        description={`The listing is taken down from ${account.marketplaceName}. You can publish it again later.`}
+        confirmText="Unpublish"
+        variant="destructive"
+        onConfirm={() => {
+          setConfirmUnpublish(false);
+          void ctl.run("unpublish");
+        }}
+      />
+      <ConflictDialog open={!!ctl.conflict} hasMyEdits={ctl.dirty} onReload={(keep) => void ctl.reloadFromConflict(keep)} onClose={ctl.closeConflict} />
+      <LeaveDialog open={blocker.state === "blocked"} saving={ctl.saving} onKeep={() => blocker.reset?.()} onDiscard={ctl.revertAll} onSave={() => void ctl.save().then((o) => o === "saved" && blocker.proceed?.())} />
     </div>
   );
 }

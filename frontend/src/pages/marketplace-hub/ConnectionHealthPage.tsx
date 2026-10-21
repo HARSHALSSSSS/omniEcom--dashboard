@@ -1,184 +1,111 @@
 import { useNavigate } from "react-router-dom";
-import {
-  Activity,
-  ArrowLeft,
-  Cpu,
-  Zap,
-} from "lucide-react";
+import { Activity, ArrowLeft, Cpu, Zap } from "lucide-react";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Button } from "@/components/ui/button";
-import { StatusPill } from "@/components/common/StatusPill";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ROUTES } from "@/constants/routes";
-import { useConnectorHealth } from "@/hooks/useConnectors";
+import { errorMessage } from "@/api/errors";
+import { useHubHealth } from "@/hooks/useHub";
+import type { HubHealth } from "@/types/hub";
+import { ConnectionRows, DataFlowLanes, TokenWarnings } from "@/components/marketplace-hub/health/HealthSections";
+import { LoadError, StateBox } from "@/components/marketplace-hub/accounts/hubUi";
+
+const NETWORK_TEXT: Record<HubHealth["networkStatus"], { label: string; className: string }> = {
+  optimal: { label: "Optimal condition", className: "text-emerald-600" },
+  degraded: { label: "Degraded", className: "text-amber-600" },
+  critical: { label: "Critical", className: "text-red-600" },
+  not_connected: { label: "Nothing connected", className: "text-muted-foreground" },
+};
+
+function Tile({ title, icon, value, caption, captionClass = "text-muted-foreground" }: { title: string; icon: React.ReactNode; value: string; caption: string; captionClass?: string }) {
+  return (
+    <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</span>
+        {icon}
+      </div>
+      <div className="mt-3 flex items-baseline gap-2">
+        <span className="font-mono text-3xl font-bold text-foreground">{value}</span>
+        <span className={`text-xs font-medium ${captionClass}`}>{caption}</span>
+      </div>
+    </div>
+  );
+}
 
 export default function ConnectionHealthPage() {
   const navigate = useNavigate();
-  const { data: health } = useConnectorHealth();
+  const health = useHubHealth();
+  const data = health.data;
+  const net = data ? NETWORK_TEXT[data.networkStatus] : null;
 
   return (
     <div className="w-full space-y-6 pb-20">
       <PageHeader
         eyebrow="NETWORK DIAGNOSTICS"
         title="Connection Health DNA"
-        description="Real-time telemetry, API rate limits, data-flow pipelines, and gateway latency."
+        description="Pulse scores, data-flow pipelines and credential status of every connected channel, from the last 24 hours of sync runs."
         actions={
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => navigate(ROUTES.MARKETPLACE_HUB)}
-            className="gap-1.5"
-          >
-            <ArrowLeft className="h-4 w-4" /> Back to Hub
+          <Button variant="outline" size="sm" onClick={() => navigate(ROUTES.MARKETPLACE_HUB)} className="gap-1.5">
+            <ArrowLeft className="h-4 w-4" aria-hidden /> Back to Hub
           </Button>
         }
       />
 
-      {/* Network Pulse DNA Ribbon */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Overall Pulse Score
-            </span>
-            <Activity className="h-4 w-4 text-emerald-600" />
+      {health.isPending && (
+        <div className="space-y-6" aria-busy="true" aria-label="Loading connection health">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            {Array.from({ length: 3 }, (_, i) => (
+              <Skeleton key={i} className="h-[104px] rounded-xl" />
+            ))}
           </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="font-mono text-3xl font-bold text-foreground">
-              {health?.overallPulseScore ?? 92}%
-            </span>
-            <span className="text-xs font-medium text-emerald-600">
-              Optimal Condition
-            </span>
-          </div>
+          <Skeleton className="h-[360px] rounded-xl" />
         </div>
+      )}
+      {health.isError && <LoadError title="Connection health could not be loaded." message={errorMessage(health.error)} onRetry={() => void health.refetch()} />}
 
-        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Active Network Nodes
-            </span>
-            <Cpu className="h-4 w-4 text-[#1D4ED8]" />
+      {data && net && (
+        <>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <Tile
+              title="Overall Pulse Score"
+              icon={<Activity className="h-4 w-4 text-emerald-600" aria-hidden />}
+              value={data.overallPulseScore === null ? "n/a" : `${data.overallPulseScore}%`}
+              caption={net.label}
+              captionClass={net.className}
+            />
+            <Tile
+              title="Active Network Nodes"
+              icon={<Cpu className="h-4 w-4 text-[#1D4ED8]" aria-hidden />}
+              value={String(data.connectionsCount)}
+              caption={data.connectionsCount === 1 ? "Gateway connected" : "Gateways connected"}
+            />
+            <Tile
+              title="Sync Reliability Rate"
+              icon={<Zap className="h-4 w-4 text-amber-600" aria-hidden />}
+              value={data.syncReliability.successRate === null ? "n/a" : `${data.syncReliability.successRate}%`}
+              caption={
+                data.syncReliability.finished === 0
+                  ? `No runs in the last ${data.syncReliability.windowHours} hours`
+                  : `${data.syncReliability.finished - data.syncReliability.failed} of ${data.syncReliability.finished} runs, last ${data.syncReliability.windowHours} hours`
+              }
+            />
           </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="font-mono text-3xl font-bold text-foreground">
-              {health?.connectionsCount ?? 4}
-            </span>
-            <span className="text-xs text-muted-foreground">
-              Gateways Connected
-            </span>
-          </div>
-        </div>
 
-        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Sync Reliability Rate
-            </span>
-            <Zap className="h-4 w-4 text-amber-600" />
-          </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="font-mono text-3xl font-bold text-foreground">
-              99.4%
-            </span>
-            <span className="text-xs text-muted-foreground">
-              Last 24 Hours
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Data Flow Lanes */}
-      <div className="rounded-xl border border-border bg-card p-6 shadow-sm space-y-4">
-        <h3 className="text-base font-semibold text-foreground">
-          Data Flow Pipelines
-        </h3>
-        <p className="text-xs text-muted-foreground">
-          Bi-directional pipelines handling real-time catalog changes, stock deductions, and dispatch notifications.
-        </p>
-
-        <div className="space-y-3 pt-2">
-          {health?.dataFlowLanes.map((lane, idx) => (
-            <div
-              key={idx}
-              className="flex items-center justify-between rounded-lg border border-border bg-muted/20 p-4 text-xs"
-            >
-              <div className="space-y-1">
-                <p className="font-semibold text-foreground">{lane.lane}</p>
-                <p className="text-muted-foreground">Throughput: {lane.throughput}</p>
-              </div>
-              <div className="flex items-center gap-4">
-                <span className="font-mono font-medium text-muted-foreground">
-                  Success: {lane.successRate}
-                </span>
-                <StatusPill status={lane.status} />
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Connection Nodes Detail Grid */}
-      <div className="rounded-xl border border-border bg-card p-6 shadow-sm space-y-4">
-        <h3 className="text-base font-semibold text-foreground">
-          Connector Gateway Telemetry
-        </h3>
-
-        <div className="overflow-hidden rounded-lg border border-border">
-          <table className="w-full text-left text-xs">
-            <thead className="border-b border-border bg-muted/50 font-medium text-muted-foreground">
-              <tr>
-                <th className="py-3 pl-4 pr-3">Channel / Gateway</th>
-                <th className="px-3 py-3">Pulse Score</th>
-                <th className="px-3 py-3">API Quota Remaining</th>
-                <th className="px-3 py-3">Token Expiry</th>
-                <th className="py-3 pl-3 pr-4">Health Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {health?.connections.map((c) => (
-                <tr key={c.id} className="hover:bg-muted/20">
-                  <td className="py-3 pl-4 pr-3">
-                    <p className="font-semibold text-foreground">{c.name}</p>
-                    <p className="font-mono text-[11px] text-muted-foreground">
-                      {c.accountIdentifier}
-                    </p>
-                  </td>
-                  <td className="px-3 py-3 font-mono font-medium">
-                    {c.health.pulseScore}%
-                  </td>
-                  <td className="px-3 py-3">
-                    <div className="flex items-center gap-2">
-                      <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
-                        <div
-                          className={`h-full ${
-                            c.health.rateLimitRemainingPct > 30
-                              ? "bg-emerald-500"
-                              : "bg-amber-500"
-                          }`}
-                          style={{
-                            width: `${c.health.rateLimitRemainingPct}%`,
-                          }}
-                        />
-                      </div>
-                      <span className="font-mono text-[11px]">
-                        {c.health.rateLimitRemainingPct}%
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-3 py-3 text-muted-foreground">
-                    {c.health.tokenExpiresInDays
-                      ? `${c.health.tokenExpiresInDays} days`
-                      : "Permanent"}
-                  </td>
-                  <td className="py-3 pl-3 pr-4">
-                    <StatusPill status={c.status} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+          {data.connections.length === 0 ? (
+            <StateBox title="No marketplace connected yet" description="Health appears here once you connect a channel and its first sync has run.">
+              <Button size="sm" className="text-xs" onClick={() => navigate(ROUTES.MARKETPLACE_HUB_CONNECTORS)}>
+                Connect a marketplace
+              </Button>
+            </StateBox>
+          ) : (
+            <>
+              <TokenWarnings warnings={data.tokenWarnings} />
+              <DataFlowLanes lanes={data.dataFlowLanes} windowHours={data.syncReliability.windowHours} />
+              <ConnectionRows connections={data.connections} />
+            </>
+          )}
+        </>
+      )}
     </div>
   );
 }

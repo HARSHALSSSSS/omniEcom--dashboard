@@ -1,223 +1,119 @@
-import { useState, useEffect } from "react";
-import { Sparkles, Lightbulb, RotateCw } from "lucide-react";
-import { MOCK_PRODUCT_INTELLIGENCE } from "@/mocks/data/phase10.data";
-import type { ProductIntelligenceItem } from "@/types/intelligence";
-import { formatINR } from "@/utils/format";
-import { useProductIntelligence } from "@/hooks/useIntelligence";
+import { Link } from "react-router-dom";
+import { RefreshCw, Sparkles } from "lucide-react";
+import { errorMessage } from "@/api/errors";
+import { PageHeader } from "@/components/common/PageHeader";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { PricingPagination } from "@/components/pricing/PricingPagination";
+import { ListSkeleton, LoadError, StateBox } from "@/components/pricing/PricingStates";
+import { IntelDrawer } from "@/components/product-intelligence/IntelDrawer";
+import { IntelFilters } from "@/components/product-intelligence/IntelFilters";
+import { IntelKpis } from "@/components/product-intelligence/IntelKpis";
+import { IntelTable } from "@/components/product-intelligence/IntelTable";
+import { NO_READ_REASON, ACTION_LABELS } from "@/components/product-intelligence/intelFormat";
+import { intelFiltered, useIntelUrlState } from "@/components/product-intelligence/intelParams";
+import { ROUTES } from "@/constants/routes";
+import { useCan } from "@/hooks/useCan";
+import { useIntelCategories, useIntelWarehouses, useProductIntelligence } from "@/hooks/useProductIntelligence";
+import { cn } from "@/utils/cn";
 
 export default function ProductIntelligencePage() {
-  const { data: productIntelData, refetch, isFetching } = useProductIntelligence();
-  const [items, setItems] = useState<ProductIntelligenceItem[]>(
-    MOCK_PRODUCT_INTELLIGENCE,
-  );
-  const [selectedFilter, setSelectedFilter] = useState<
-    "all" | "reorder" | "raise_price" | "liquidate"
-  >("all");
+  const url = useIntelUrlState();
+  const { query, open, update, clearFilters } = url;
+  const canRead = useCan("analytics:read");
+  const list = useProductIntelligence(query, canRead);
+  const categories = useIntelCategories(canRead);
+  const warehouses = useIntelWarehouses(canRead);
 
-  useEffect(() => {
-    if (productIntelData?.items && productIntelData.items.length > 0) {
-      setItems(productIntelData.items);
+  if (!canRead) {
+    return (
+      <div className="w-full space-y-6 pb-24">
+        <PageHeader eyebrow="INTELLIGENCE" title="Product Intelligence" />
+        <StateBox title="You do not have access to product intelligence." description={NO_READ_REASON} />
+      </div>
+    );
+  }
+
+  const data = list.data;
+  const filtered = intelFiltered(query);
+  const selected = open ? (data?.items.find((i) => i.variantId === open) ?? null) : null;
+
+  const body = () => {
+    if (list.isLoading && !data) return <ListSkeleton label="Loading recommendations" />;
+    if (!data) return <LoadError what="Product recommendations" message={errorMessage(list.error)} onRetry={() => void list.refetch()} />;
+    if (data.items.length === 0) {
+      if (data.variantsAnalysed === 0) {
+        return (
+          <StateBox title="There is nothing to analyse yet." description="Recommendations appear once you have products with stock or sales. Add your first product to get started.">
+            <Link to={ROUTES.PRODUCTS_NEW} className={cn(buttonVariants({ size: "sm" }), "text-xs")}>
+              Add a product
+            </Link>
+          </StateBox>
+        );
+      }
+      const what = query.action ? `No variants are recommended for “${ACTION_LABELS[query.action]}”.` : "No variants match your filters.";
+      return (
+        <StateBox title={what} description="Try another action, search or filter.">
+          <Button variant="outline" size="sm" className="text-xs" onClick={clearFilters}>
+            Clear filters
+          </Button>
+        </StateBox>
+      );
     }
-  }, [productIntelData?.items]);
-
-  const filteredItems =
-    selectedFilter === "all"
-      ? items
-      : items.filter((i) => i.recommendedAction === selectedFilter);
-
-  const getActionBadge = (action: ProductIntelligenceItem["recommendedAction"]) => {
-    switch (action) {
-      case "reorder":
-        return "bg-amber-50 text-amber-800 border-amber-200";
-      case "raise_price":
-        return "bg-blue-50 text-blue-800 border-blue-200";
-      case "liquidate":
-        return "bg-red-50 text-red-800 border-red-200";
-      case "promote":
-        return "bg-purple-50 text-purple-800 border-purple-200";
-      default:
-        return "bg-neutral-100 text-neutral-800 border-neutral-200";
-    }
+    return (
+      <div className="space-y-3">
+        <IntelTable items={data.items} selectedVariantId={open} onOpen={(item) => update({ open: item.variantId })} />
+        <PricingPagination
+          page={data.page}
+          pages={data.pages}
+          total={data.total}
+          pageSize={data.pageSize}
+          shown={data.items.length}
+          noun="variants"
+          onPage={(p) => update({ page: p > 1 ? String(p) : null })}
+          onPageSize={(s) => update({ size: s === 25 ? null : String(s) })}
+        />
+      </div>
+    );
   };
 
   return (
-    <div className="flex flex-col gap-6 w-full select-none pb-12 font-['Inter',sans-serif]">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[#EAEAEA] pb-5">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-3">
-            <h1 className="text-[22px] font-semibold text-[#000000] tracking-tight">
-              Product Intelligence &amp; Velocity
-            </h1>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-purple-50 text-purple-800 border border-purple-200">
-              <Sparkles className="h-3 w-3" />
-              Prescriptive Stock &amp; Pricing Insights
-            </span>
-          </div>
-          <p className="text-[13px] text-[#666666]">
-            Algorithmic inventory runway analysis, competitor buy-box price
-            intelligence, and automated action signals.
-          </p>
-        </div>
+    <div className="w-full space-y-6 pb-24">
+      <PageHeader
+        eyebrow="INTELLIGENCE"
+        title="Product Intelligence"
+        description="One recommended action per variant, worked out from your sales, stock, cost prices and competitor prices, with the facts behind it."
+        actions={
+          <Button variant="outline" size="sm" className="gap-2 text-xs" disabled={list.isFetching} onClick={() => void list.refetch()}>
+            <RefreshCw className={cn("h-3.5 w-3.5", list.isFetching && "animate-spin")} aria-hidden />
+            Refresh
+          </Button>
+        }
+      />
 
-        {/* Filter Pills & Refresh */}
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => refetch()}
-            className="box-border flex flex-row items-center px-[10px] gap-[6px] h-[34px] bg-white border border-[#EAEAEA] rounded-lg hover:bg-neutral-50 transition-colors cursor-pointer"
-          >
-            <RotateCw className={`w-[14px] h-[14px] text-[#666666] stroke-[1.5px] ${isFetching ? "animate-spin" : ""}`} />
-            <span className="text-[12px] font-normal leading-[145%] text-[#666666]">
-              Refresh
-            </span>
-          </button>
-          <div className="inline-flex items-center bg-neutral-100 p-1 rounded-lg border border-[#EAEAEA]">
-            <button
-              type="button"
-              onClick={() => setSelectedFilter("all")}
-              className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-all ${
-                selectedFilter === "all"
-                  ? "bg-white text-black shadow-xs font-semibold"
-                  : "text-[#666666] hover:text-black"
-              }`}
-            >
-              All Insights ({items.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setSelectedFilter("reorder")}
-              className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-all ${
-                selectedFilter === "reorder"
-                  ? "bg-white text-black shadow-xs font-semibold"
-                  : "text-[#666666] hover:text-black"
-              }`}
-            >
-              Reorder Urgently
-            </button>
-            <button
-              type="button"
-              onClick={() => setSelectedFilter("raise_price")}
-              className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-all ${
-                selectedFilter === "raise_price"
-                  ? "bg-white text-black shadow-xs font-semibold"
-                  : "text-[#666666] hover:text-black"
-              }`}
-            >
-              Pricing Upside
-            </button>
-            <button
-              type="button"
-              onClick={() => setSelectedFilter("liquidate")}
-              className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-all ${
-                selectedFilter === "liquidate"
-                  ? "bg-white text-black shadow-xs font-semibold"
-                  : "text-[#666666] hover:text-black"
-              }`}
-            >
-              Slow Movers
-            </button>
-          </div>
-        </div>
+      <IntelKpis data={data} loading={list.isLoading} error={list.error} onRetry={() => void list.refetch()} onAction={(a) => update({ action: a })} />
+
+      <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+        <Sparkles className="h-3 w-3" aria-hidden />
+        Rule-based from your own data. Nothing here is generated by AI, and no action goes live without your review.
       </div>
 
-      {/* Intelligence Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        {filteredItems.map((prod) => (
-          <div
-            key={prod.id}
-            className="bg-white border border-[#EAEAEA] rounded-xl p-5 flex flex-col justify-between gap-4 shadow-2xs hover:border-neutral-300 transition-all"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <span className="text-[11px] font-medium text-[#666666] uppercase">
-                  {prod.category}
-                </span>
-                <h3 className="text-[15px] font-semibold text-[#000000] mt-0.5">
-                  {prod.productName}
-                </h3>
-                <span className="text-[11px] text-[#666666] font-mono">
-                  {prod.sku}
-                </span>
-              </div>
-              <span
-                className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider border ${getActionBadge(
-                  prod.recommendedAction,
-                )}`}
-              >
-                {prod.recommendedAction.replace("_", " ")}
-              </span>
-            </div>
+      <IntelFilters
+        query={query}
+        counts={data?.summary}
+        categories={categories.data ?? []}
+        warehouses={warehouses.data ?? []}
+        filtered={filtered}
+        onAction={(a) => update({ action: a })}
+        onSearch={(q) => update({ q }, { replace: true })}
+        onCategory={(id) => update({ category: id })}
+        onWarehouse={(id) => update({ warehouse: id })}
+        onSort={(s) => update({ sort: s === "priority" ? null : s })}
+        onClear={clearFilters}
+      />
 
-            <div className="grid grid-cols-3 gap-3 bg-neutral-50/75 p-3.5 rounded-lg border border-[#EAEAEA] text-[12px]">
-              <div>
-                <span className="text-[10px] text-[#666666] block">
-                  Daily Velocity
-                </span>
-                <span className="text-[14px] font-semibold text-[#000000]">
-                  {prod.salesVelocity} units/day
-                </span>
-                <span className="text-[10px] text-emerald-600 block">
-                  Trend: {prod.velocityTrend}
-                </span>
-              </div>
-              <div>
-                <span className="text-[10px] text-[#666666] block">
-                  Stock Runway
-                </span>
-                <span
-                  className={`text-[14px] font-semibold ${
-                    prod.inventoryRunwayDays <= 10
-                      ? "text-red-600 font-bold"
-                      : "text-[#000000]"
-                  }`}
-                >
-                  {prod.inventoryRunwayDays} days left
-                </span>
-                <span className="text-[10px] text-[#666666] block">
-                  Margin: {prod.marginPercent}%
-                </span>
-              </div>
-              <div>
-                <span className="text-[10px] text-[#666666] block">
-                  Competitor Benchmark
-                </span>
-                <span className="text-[14px] font-semibold text-[#000000]">
-                  {prod.competitorBuyBoxPrice
-                    ? formatINR(prod.competitorBuyBoxPrice)
-                    : "Exclusive SKU"}
-                </span>
-                <span className="text-[10px] text-blue-600 block">
-                  Confidence: {prod.confidenceScore}%
-                </span>
-              </div>
-            </div>
+      {body()}
 
-            <div className="flex items-center justify-between pt-1">
-              <span className="text-[11px] text-[#666666] flex items-center gap-1.5">
-                <Lightbulb className="h-3.5 w-3.5 text-amber-500" />
-                {prod.recommendedAction === "reorder"
-                  ? "Stockout probability 89% within 9 days without purchase order."
-                  : prod.recommendedAction === "raise_price"
-                    ? "Competitors out of stock; raise price by ₹100 without losing Buy Box."
-                    : prod.recommendedAction === "liquidate"
-                      ? "Aging stock holding capital; discount 20% to free up warehouse slot."
-                      : "Promotional campaign can stimulate dormant marketplace ranking."}
-              </span>
-
-              <button
-                type="button"
-                onClick={() =>
-                  alert(`Executing action: ${prod.recommendedAction} on ${prod.sku}`)
-                }
-                className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#000000] hover:underline shrink-0 ml-3"
-              >
-                Apply Action →
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
+      <IntelDrawer item={selected} onClose={() => update({ open: null })} />
     </div>
   );
 }

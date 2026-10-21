@@ -3,10 +3,56 @@
  * Always use these; never do formatting inline in JSX.
  */
 
+// ---- Business formatting preferences (Settings > Regional) ----
+
+export interface FormatPreferences {
+  /** ISO 4217 code, e.g. "INR" */
+  currency: string;
+  /** "indian" groups 12,34,567 and abbreviates L / Cr; "international" groups 1,234,567 and abbreviates K / M / B */
+  numberFormat: "indian" | "international";
+  /** IANA time zone the dates are shown in */
+  timezone: string;
+}
+
+const DEFAULT_PREFERENCES: FormatPreferences = { currency: "INR", numberFormat: "indian", timezone: "Asia/Kolkata" };
+let preferences: FormatPreferences = DEFAULT_PREFERENCES;
+
+/** The session layer calls this with the business settings from the shell; unknown or invalid values fall back to the defaults. */
+export function setFormatPreferences(next: Partial<FormatPreferences> | null | undefined): void {
+  const currency = typeof next?.currency === "string" && /^[A-Za-z]{3}$/.test(next.currency.trim()) ? next.currency.trim().toUpperCase() : DEFAULT_PREFERENCES.currency;
+  const numberFormat = next?.numberFormat === "international" ? "international" : "indian";
+  let timezone = DEFAULT_PREFERENCES.timezone;
+  if (typeof next?.timezone === "string" && next.timezone) {
+    try {
+      new Intl.DateTimeFormat("en-IN", { timeZone: next.timezone });
+      timezone = next.timezone;
+    } catch {
+      // an unknown zone keeps the default
+    }
+  }
+  try {
+    new Intl.NumberFormat("en-IN", { style: "currency", currency });
+  } catch {
+    preferences = { currency: DEFAULT_PREFERENCES.currency, numberFormat, timezone };
+    return;
+  }
+  preferences = { currency, numberFormat, timezone };
+}
+
+export const getFormatPreferences = (): FormatPreferences => preferences;
+
+const numberLocale = () => (preferences.numberFormat === "international" ? "en-US" : "en-IN");
+
+/** the currency symbol alone (₹, $, €), as the number locale writes it */
+export function currencySymbol(currency: string = preferences.currency): string {
+  const part = new Intl.NumberFormat(numberLocale(), { style: "currency", currency, minimumFractionDigits: 0, maximumFractionDigits: 0 }).formatToParts(0).find((p) => p.type === "currency");
+  return part?.value ?? currency;
+}
+
 // ---- Currency / numbers ----
 
 /**
- * Format an integer paise value as INR with lakh/crore grouping.
+ * Format an integer minor-unit value (paise for INR) as the business currency, grouped by the business number format.
  * E.g. 284000 paise → ₹2,840 or 28400000 paise → ₹2.84L
  */
 export function formatINR(paise: number, compact = false): string {
@@ -14,36 +60,59 @@ export function formatINR(paise: number, compact = false): string {
   if (compact) {
     return formatLakh(rupees);
   }
-  return new Intl.NumberFormat("en-IN", {
+  // whole rupees stay short (₹2,500); a price with paise shows them (₹2,499.50) so nothing is silently rounded
+  const hasPaise = Math.abs(paise) % 100 !== 0;
+  return new Intl.NumberFormat(numberLocale(), {
     style: "currency",
-    currency: "INR",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
+    currency: preferences.currency,
+    minimumFractionDigits: hasPaise ? 2 : 0,
+    maximumFractionDigits: hasPaise ? 2 : 0,
   }).format(rupees);
 }
 
 /**
- * Format a rupee number in compact lakh/crore notation.
- * E.g. 284000 → ₹2.84L | 10000000 → ₹1Cr
+ * Format an amount in compact notation: lakh / crore (₹2.84L, ₹1Cr) for the Indian number format,
+ * thousand / million / billion (₹284K, ₹2.84M) for the international one.
  */
 export function formatLakh(rupees: number): string {
+  const symbol = currencySymbol();
+  if (preferences.numberFormat === "international") {
+    if (rupees >= 1_000_000_000) return `${symbol}${(rupees / 1_000_000_000).toFixed(2)}B`;
+    if (rupees >= 1_000_000) return `${symbol}${(rupees / 1_000_000).toFixed(2)}M`;
+    if (rupees >= 1_000) return `${symbol}${(rupees / 1_000).toFixed(1)}K`;
+    return `${symbol}${rupees.toFixed(0)}`;
+  }
   if (rupees >= 1_00_00_000) {
-    return `₹${(rupees / 1_00_00_000).toFixed(2)}Cr`;
+    return `${symbol}${(rupees / 1_00_00_000).toFixed(2)}Cr`;
   }
   if (rupees >= 1_00_000) {
-    return `₹${(rupees / 1_00_000).toFixed(2)}L`;
+    return `${symbol}${(rupees / 1_00_000).toFixed(2)}L`;
   }
   if (rupees >= 1_000) {
-    return `₹${(rupees / 1_000).toFixed(1)}K`;
+    return `${symbol}${(rupees / 1_000).toFixed(1)}K`;
   }
-  return `₹${rupees.toFixed(0)}`;
+  return `${symbol}${rupees.toFixed(0)}`;
 }
 
 /**
- * Format a plain number with en-IN grouping (e.g. 12,34,567).
+ * Format an integer minor-unit amount in any currency (an order or return can be in a currency other than the business one),
+ * grouped by the business number format. The business currency goes through formatINR so paise rules stay in one place.
+ */
+export function formatCurrency(minor: number, currency?: string | null): string {
+  const code = (currency ?? "").trim().toUpperCase();
+  if (!code || code === preferences.currency) return formatINR(minor);
+  try {
+    return new Intl.NumberFormat(numberLocale(), { style: "currency", currency: code }).format(minor / 100);
+  } catch {
+    return formatINR(minor);
+  }
+}
+
+/**
+ * Format a plain number with the business grouping (12,34,567 Indian, 1,234,567 international).
  */
 export function formatNumber(value: number): string {
-  return new Intl.NumberFormat("en-IN").format(value);
+  return new Intl.NumberFormat(numberLocale()).format(value);
 }
 
 /**
@@ -75,10 +144,9 @@ export function deltaClass(value: number): string {
 // ---- Dates ----
 
 const IST_LOCALE = "en-IN";
-const IST_TZ = "Asia/Kolkata";
 
 /**
- * Format an ISO UTC timestamp to DD/MM/YYYY in IST.
+ * Format an ISO UTC timestamp to DD/MM/YYYY in the business time zone (IST until the settings say otherwise).
  * E.g. "2026-10-15T06:00:00Z" → "15/10/2026"
  */
 export function formatDate(iso: string): string {
@@ -86,12 +154,12 @@ export function formatDate(iso: string): string {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
-    timeZone: IST_TZ,
+    timeZone: preferences.timezone,
   }).format(new Date(iso));
 }
 
 /**
- * Format as DD/MM/YYYY HH:MM in IST.
+ * Format as DD/MM/YYYY HH:MM in the business time zone.
  */
 export function formatDateTime(iso: string): string {
   return new Intl.DateTimeFormat(IST_LOCALE, {
@@ -101,8 +169,15 @@ export function formatDateTime(iso: string): string {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
-    timeZone: IST_TZ,
+    timeZone: preferences.timezone,
   }).format(new Date(iso));
+}
+
+/**
+ * Format an ISO timestamp with your own Intl options (e.g. "21 Oct, 10:57 am") in the business time zone.
+ */
+export function formatInZone(iso: string, options: Intl.DateTimeFormatOptions): string {
+  return new Intl.DateTimeFormat(IST_LOCALE, { ...options, timeZone: preferences.timezone }).format(new Date(iso));
 }
 
 /**

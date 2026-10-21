@@ -1,300 +1,106 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  listingsApi,
-  ListingsListResponse,
-} from "@/api/listings.api";
-import {
-  ChannelListingItem,
-  ListingStudioData,
-  ListingMatrixRow,
-  CatalogReachKPIs,
-  ListingIssueSummary,
-  ListingFilterParams,
-  CreateListingInput,
-} from "@/types/listing";
-import { useToast } from "@/hooks/useToast";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { listingsApi } from "@/api/listings.api";
+import { refreshShell } from "@/lib/session";
+import { useWorkspaceStore } from "@/store/workspace.store";
+import type { CreateOutcome, CreateTarget, JobStatus, ListingBulkAction, ListingFilters, ListingsQuery } from "@/types/listing";
 
-export const LISTING_KEYS = {
+export const listingKeys = {
   all: ["listings"] as const,
-  list: (params?: ListingFilterParams) =>
-    ["listings", "list", params] as const,
-  matrix: ["listings", "matrix"] as const,
-  reach: ["listings", "reach"] as const,
-  issues: ["listings", "issues"] as const,
-  publishingPreparation: ["listings", "publishing-preparation"] as const,
-  readinessAudit: ["listings", "readiness-audit"] as const,
-  blocker: (id: string) => ["listings", "blocker", id] as const,
-  syncTelemetry: (id: string) => ["listings", "sync-telemetry", id] as const,
-  unlisted: (id: string) => ["listings", "unlisted", id] as const,
-  detail: (id: string) => ["listings", "detail", id] as const,
+  overview: (businessId: string | undefined, f: Pick<ListingFilters, "marketplace" | "accountId">) => ["listings", "overview", businessId, f] as const,
+  table: (businessId: string | undefined, q: ListingsQuery) => ["listings", "table", businessId, q] as const,
+  notListed: (businessId: string | undefined, q: Pick<ListingsQuery, "q" | "marketplace" | "accountId" | "page" | "pageSize">) => ["listings", "not-listed", businessId, q] as const,
+  channels: (businessId: string | undefined) => ["listings", "channels", businessId] as const,
+  job: (id: string) => ["listings", "job", id] as const,
 };
 
-export function useListingUnlisted(id: string) {
+const useBusinessId = () => useWorkspaceStore((s) => s.shell?.business.id);
+
+/** tab counts (the strip above the table); follows the marketplace and account filters */
+export function useListingsOverview(filters: Pick<ListingFilters, "marketplace" | "accountId">, enabled = true) {
+  const businessId = useBusinessId();
+  const key = { marketplace: filters.marketplace, accountId: filters.accountId };
+  return useQuery({ queryKey: listingKeys.overview(businessId, key), queryFn: ({ signal }) => listingsApi.overview(key, signal), staleTime: 30_000, enabled });
+}
+
+/** one numbered page of the listings table; the previous page stays on screen while the next one loads */
+export function useListingsTable(query: ListingsQuery, enabled = true) {
+  const businessId = useBusinessId();
   return useQuery({
-    queryKey: LISTING_KEYS.unlisted(id),
-    queryFn: () => listingsApi.getListingUnlisted(id),
-    enabled: Boolean(id),
+    queryKey: listingKeys.table(businessId, query),
+    queryFn: ({ signal }) => (query.productId ? listingsApi.productListings(query, signal) : listingsApi.table(query, signal)),
+    staleTime: 15_000,
+    placeholderData: keepPreviousData,
+    enabled,
   });
 }
 
-export function usePrepareListing() {
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-
-  return useMutation({
-    mutationFn: ({ id, channel }: { id: string; channel?: string }) =>
-      listingsApi.prepareListing(id, channel),
-    onSuccess: (res) => {
-      queryClient.invalidateQueries({ queryKey: LISTING_KEYS.all });
-      toast({
-        title: "Listing prepared!",
-        description: res.message,
-      });
-    },
-    onError: () => {
-      toast({
-        title: "Failed to prepare listing",
-        description: "Please check channel connector status.",
-        variant: "destructive",
-      });
-    },
-  });
-}
-
-export function useListingSyncTelemetry(id: string) {
+/** the "Not listed" tab: variants that could be listed on a connected account */
+export function useNotListed(query: ListingsQuery, enabled: boolean) {
+  const businessId = useBusinessId();
+  const key = { q: query.q, marketplace: query.marketplace, accountId: query.accountId, page: query.page, pageSize: query.pageSize };
   return useQuery({
-    queryKey: LISTING_KEYS.syncTelemetry(id),
-    queryFn: () => listingsApi.getListingSyncTelemetry(id),
-    enabled: Boolean(id),
-    refetchInterval: 4000,
+    queryKey: listingKeys.notListed(businessId, key),
+    queryFn: ({ signal }) => listingsApi.notListed(key, signal),
+    staleTime: 15_000,
+    placeholderData: keepPreviousData,
+    enabled,
   });
 }
 
-export function usePublishingPreparation() {
+/** connected accounts and the marketplaces' names (filter chips, create-listing targets) */
+export function useListingChannels() {
+  const businessId = useBusinessId();
+  return useQuery({ queryKey: listingKeys.channels(businessId), queryFn: listingsApi.channels, staleTime: 5 * 60_000, retry: false });
+}
+
+const TERMINAL: readonly JobStatus[] = ["succeeded", "partially_failed", "failed", "dead_lettered", "cancelled"];
+export const isTerminalJob = (status: JobStatus): boolean => TERMINAL.includes(status);
+export const JOB_POLL_MS = 2000;
+
+/** follows one publish/sync job until it ends (polling stops on its own) */
+export function useJobStatus(jobId: string | null) {
   return useQuery({
-    queryKey: LISTING_KEYS.publishingPreparation,
-    queryFn: () => listingsApi.getPublishingPreparation(),
+    queryKey: listingKeys.job(jobId ?? ""),
+    queryFn: () => listingsApi.syncJob(jobId as string),
+    enabled: Boolean(jobId),
+    refetchInterval: (q) => (q.state.data && isTerminalJob(q.state.data.status) ? false : JOB_POLL_MS),
+    retry: false,
   });
 }
 
-export function useListingReadinessAudit() {
-  return useQuery({
-    queryKey: LISTING_KEYS.readinessAudit,
-    queryFn: () => listingsApi.getReadinessAudit(),
-  });
-}
-
-export function useApplyReadinessSuggestion() {
+/** every write changes the listings on screen, the product pages' channel statuses and the sidebar badges */
+function useAfterWrite() {
   const queryClient = useQueryClient();
-  const { toast } = useToast();
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: listingKeys.all });
+    void queryClient.invalidateQueries({
+      predicate: (q) => (q.queryKey[0] === "products" && q.queryKey[1] !== "thumbnail") || q.queryKey[0] === "productDetail",
+    });
+    refreshShell().catch(() => undefined);
+  };
+}
 
+export function useBulkListings() {
+  const afterWrite = useAfterWrite();
   return useMutation({
-    mutationFn: ({
-      suggestionId,
-      action = "apply",
-      value,
-    }: {
-      suggestionId: string;
-      action?: "apply" | "dismiss";
-      value?: string;
-    }) => listingsApi.applyReadinessSuggestion(suggestionId, action, value),
-    onSuccess: (res) => {
-      queryClient.invalidateQueries({ queryKey: LISTING_KEYS.all });
-      queryClient.invalidateQueries({ queryKey: LISTING_KEYS.readinessAudit });
-      toast({
-        title: "Suggestion applied!",
-        description: res.message,
-      });
-    },
-    onError: () => {
-      toast({
-        title: "Failed to apply suggestion",
-        description: "Please review the taxonomy fields manually in studio.",
-        variant: "destructive",
-      });
-    },
+    mutationFn: (input: { action: ListingBulkAction; ids: string[] }) => listingsApi.bulk(input.action, input.ids),
+    onSuccess: afterWrite,
   });
 }
 
-export function useListingBlocker(id: string) {
-  return useQuery({
-    queryKey: LISTING_KEYS.blocker(id),
-    queryFn: () => listingsApi.getListingBlocker(id),
-    enabled: Boolean(id),
-  });
-}
+const CREATE_CONCURRENCY = 5;
 
-export function useResolveListingBlocker(id: string) {
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-
+/** starts a draft listing for each variant x account pair; a failure of one never stops the rest */
+export function useCreateListings() {
+  const afterWrite = useAfterWrite();
   return useMutation({
-    mutationFn: ({ value, attributeKey }: { value: string; attributeKey?: string }) =>
-      listingsApi.resolveListingBlocker(id, value, attributeKey),
-    onSuccess: (res) => {
-      queryClient.invalidateQueries({ queryKey: LISTING_KEYS.all });
-      queryClient.invalidateQueries({ queryKey: LISTING_KEYS.blocker(id) });
-      queryClient.invalidateQueries({ queryKey: LISTING_KEYS.detail(id) });
-      toast({
-        title: "Listing unblocked",
-        description: res.message,
-      });
+    mutationFn: async (targets: CreateTarget[]): Promise<CreateOutcome[]> => {
+      const out: CreateOutcome[] = [];
+      for (let i = 0; i < targets.length; i += CREATE_CONCURRENCY) {
+        out.push(...(await Promise.all(targets.slice(i, i + CREATE_CONCURRENCY).map((t) => listingsApi.create(t)))));
+      }
+      return out;
     },
-    onError: () => {
-      toast({
-        title: "Failed to resolve blocker",
-        description: "Please check attribute requirements.",
-        variant: "destructive",
-      });
-    },
-  });
-}
-
-export function useConfirmPublishCohort() {
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-
-  return useMutation({
-    mutationFn: (acknowledgement: boolean) =>
-      listingsApi.confirmPublishCohort(acknowledgement),
-    onSuccess: (res) => {
-      queryClient.invalidateQueries({ queryKey: LISTING_KEYS.all });
-      toast({
-        title: "Catalog publishing initiated!",
-        description: res.message,
-      });
-    },
-    onError: () => {
-      toast({
-        title: "Publishing failed",
-        description: "Could not trigger cohort publish.",
-        variant: "destructive",
-      });
-    },
-  });
-}
-
-export function useListings(params?: ListingFilterParams) {
-  return useQuery<ListingsListResponse>({
-    queryKey: LISTING_KEYS.list(params),
-    queryFn: () => listingsApi.getListings(params),
-  });
-}
-
-export function useListingMatrix() {
-  return useQuery<ListingMatrixRow[]>({
-    queryKey: LISTING_KEYS.matrix,
-    queryFn: () => listingsApi.getListingMatrix(),
-  });
-}
-
-export function useListingReachKPIs() {
-  return useQuery<CatalogReachKPIs>({
-    queryKey: LISTING_KEYS.reach,
-    queryFn: () => listingsApi.getListingReachKPIs(),
-  });
-}
-
-export function useListingIssueSummary() {
-  return useQuery<ListingIssueSummary>({
-    queryKey: LISTING_KEYS.issues,
-    queryFn: () => listingsApi.getListingIssueSummary(),
-  });
-}
-
-export function useListingStudio(id: string | null) {
-  return useQuery<ListingStudioData>({
-    queryKey: LISTING_KEYS.detail(id ?? ""),
-    queryFn: () => (id ? listingsApi.getListingStudio(id) : Promise.reject(new Error("No id"))),
-    enabled: Boolean(id),
-  });
-}
-
-export function usePublishListing() {
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-
-  return useMutation({
-    mutationFn: (id: string) => listingsApi.publishListing(id),
-    onSuccess: (res) => {
-      queryClient.invalidateQueries({ queryKey: LISTING_KEYS.all });
-      toast({
-        title: "Listing published!",
-        description: res.message,
-      });
-    },
-    onError: () => {
-      toast({
-        title: "Publish failed",
-        description: "Marketplace rejected listing payload. Check studio blockers.",
-        variant: "destructive",
-      });
-    },
-  });
-}
-
-export function useBulkPublishListings() {
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-
-  return useMutation({
-    mutationFn: (listingIds: string[]) =>
-      listingsApi.bulkPublish(listingIds),
-    onSuccess: (res) => {
-      queryClient.invalidateQueries({ queryKey: LISTING_KEYS.all });
-      toast({
-        title: "Bulk publish triggered",
-        description: `Queued ${res.publishedCount} listings for channel publishing.`,
-      });
-    },
-    onError: () => {
-      toast({
-        title: "Bulk publish failed",
-        description: "Could not trigger bulk publish.",
-        variant: "destructive",
-      });
-    },
-  });
-}
-
-export function useCreateListing() {
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-
-  return useMutation({
-    mutationFn: (payload: CreateListingInput) =>
-      listingsApi.createListing(payload),
-    onSuccess: (created) => {
-      queryClient.invalidateQueries({ queryKey: LISTING_KEYS.all });
-      toast({
-        title: "Listing created",
-        description: `Created new listing for ${created.productTitle}`,
-      });
-    },
-    onError: () => {
-      toast({
-        title: "Creation failed",
-        description: "Could not create listing.",
-        variant: "destructive",
-      });
-    },
-  });
-}
-
-export function useUpdateListing(id: string) {
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-
-  return useMutation({
-    mutationFn: (payload: Partial<ChannelListingItem>) =>
-      listingsApi.updateListing(id, payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: LISTING_KEYS.detail(id) });
-      queryClient.invalidateQueries({ queryKey: LISTING_KEYS.all });
-      toast({
-        title: "Listing updated",
-        description: "Studio changes saved.",
-      });
-    },
+    onSettled: afterWrite,
   });
 }

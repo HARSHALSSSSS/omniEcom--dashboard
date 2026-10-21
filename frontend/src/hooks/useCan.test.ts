@@ -1,48 +1,58 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { renderHook } from "@testing-library/react";
-import { useCan } from "./useCan";
-import { useWorkspaceStore } from "@/store/workspace.store";
+import { useCan, useCanAny, useFeature } from "./useCan";
+import { useWorkspaceStore, type ShellData } from "@/store/workspace.store";
 
-describe("useCan permission hook", () => {
+const user = { id: "u-1", fullName: "Test User", email: "t@test.com", businessName: "Test Co", role: "owner" as const };
+
+const shell = (features: Record<string, boolean>): ShellData => ({
+  user: { id: "u-1", name: "Test User", initials: "TU", roleLabel: "Business owner" },
+  business: { id: "b-1", name: "Test Co", plan: "free", tier: "starter" },
+  badges: { needsAttention: 0, orders: 0, returns: 0, notifications: 0 },
+  features,
+});
+
+const sessionWith = (permissions: string[], features: Record<string, boolean> = {}) =>
+  useWorkspaceStore.getState().setSession({
+    user,
+    permissions,
+    shell: shell(features),
+    onboardingStatus: "completed",
+    onboardingResumeStep: "ready",
+  });
+
+describe("permission hooks", () => {
   beforeEach(() => {
     useWorkspaceStore.getState().clearWorkspace();
   });
 
-  it("grants owner all permissions", () => {
-    useWorkspaceStore.getState().setUser({
-      id: "u-1",
-      fullName: "Owner User",
-      email: "owner@test.com",
-      businessName: "Test Co",
-      role: "owner",
-    });
-
-    const { result } = renderHook(() => useCan("manage:workspace"));
-    expect(result.current).toBe(true);
-
-    const { result: financeResult } = renderHook(() =>
-      useCan("manage:finance"),
-    );
-    expect(financeResult.current).toBe(true);
+  it("denies everything before a session exists", () => {
+    const { result } = renderHook(() => useCan("products:read"));
+    expect(result.current).toBe(false);
   });
 
-  it("restricts viewer to analytics only", () => {
-    useWorkspaceStore.getState().setUser({
-      id: "u-2",
-      fullName: "Viewer User",
-      email: "viewer@test.com",
-      businessName: "Test Co",
-      role: "viewer",
-    });
+  it("grants exactly the permissions the server sent", () => {
+    sessionWith(["products:read", "orders:read"]);
+    expect(renderHook(() => useCan("products:read")).result.current).toBe(true);
+    expect(renderHook(() => useCan("products:write")).result.current).toBe(false);
+  });
 
-    const { result: analyticsResult } = renderHook(() =>
-      useCan("view:analytics"),
-    );
-    expect(analyticsResult.current).toBe(true);
+  it("useCanAny is true when one of several is held", () => {
+    sessionWith(["pricing:read"]);
+    expect(renderHook(() => useCanAny("pricing:approve", "pricing:read")).result.current).toBe(true);
+    expect(renderHook(() => useCanAny("pricing:approve", "pricing:write")).result.current).toBe(false);
+  });
 
-    const { result: workspaceResult } = renderHook(() =>
-      useCan("manage:workspace"),
-    );
-    expect(workspaceResult.current).toBe(false);
+  it("reads feature flags from the shell", () => {
+    sessionWith([], { "ai.enabled": true, "automation.enabled": false });
+    expect(renderHook(() => useFeature("ai.enabled")).result.current).toBe(true);
+    expect(renderHook(() => useFeature("automation.enabled")).result.current).toBe(false);
+    expect(renderHook(() => useFeature("unknown.flag")).result.current).toBe(false);
+  });
+
+  it("clearing the workspace removes every permission", () => {
+    sessionWith(["products:read"]);
+    useWorkspaceStore.getState().clearWorkspace();
+    expect(renderHook(() => useCan("products:read")).result.current).toBe(false);
   });
 });

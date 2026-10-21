@@ -1,423 +1,286 @@
-import { useState, useEffect } from "react";
-import { Plus, Sparkles, RotateCw } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { PageHeader } from "@/components/common/PageHeader";
+import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import { Button } from "@/components/ui/button";
+import { AddProductsDialog } from "@/components/promotions/AddProductsDialog";
+import { CampaignDrawer } from "@/components/promotions/CampaignDrawer";
+import { CampaignFormDialog } from "@/components/promotions/CampaignFormDialog";
+import { CampaignsTable } from "@/components/promotions/CampaignsTable";
+import { ProductsTable } from "@/components/promotions/ProductsTable";
+import { PromoFilters } from "@/components/promotions/PromoFilters";
+import { PromoOverview } from "@/components/promotions/PromoOverview";
+import { EmptyCampaigns, EmptyProducts, LoadError, NoMatches, PromoPagination, TableSkeleton } from "@/components/promotions/PromoUi";
+import { ACTION_LABELS, WRITE_REASON } from "@/components/promotions/promoFormat";
+import { DEFAULT_PAGE_SIZE, campaignsQueryOf, isFiltered, productsQueryOf, usePromotionsUrlState } from "@/components/promotions/promoParams";
+import { errorMessage, isApiError } from "@/api/errors";
+import { useCan } from "@/hooks/useCan";
 import {
-  MOCK_CAMPAIGNS,
-  MOCK_PROMO_PRODUCTS,
-} from "@/mocks/data/phase10.data";
-import type { PromotionCampaign, PromotionProductLink } from "@/types/promotions";
-import { formatINR } from "@/utils/format";
-import { usePromotionsOverview } from "@/hooks/usePromotions";
+  useCampaignLifecycle,
+  useDeleteCampaign,
+  useDuplicateCampaign,
+  usePromotedProducts,
+  usePromotionAccounts,
+  usePromotionCampaigns,
+  usePromotionOverview,
+  useProcessPromotions,
+} from "@/hooks/usePromotions";
+import { toast } from "@/hooks/useToast";
+import type { PromotionCampaign, PromotionLifecycleAction } from "@/types/promotions";
+
+type CampaignRef = Pick<PromotionCampaign, "id" | "name" | "code" | "version" | "status">;
+type Confirm = { kind: "lifecycle"; campaign: CampaignRef; action: PromotionLifecycleAction } | { kind: "delete"; campaign: CampaignRef };
 
 export default function PromotionsPage() {
-  const { data: promoOverview, refetch, isFetching } = usePromotionsOverview();
-  const [activeTab, setActiveTab] = useState<"campaigns" | "products">("campaigns");
-  const [campaigns, setCampaigns] = useState<PromotionCampaign[]>(MOCK_CAMPAIGNS);
-  const [products, setProducts] = useState<PromotionProductLink[]>(MOCK_PROMO_PRODUCTS);
-  const [showCreateModal, setShowCreateModal] = useState(false);
+  const url = usePromotionsUrlState();
+  const { view, update, clearFilters, page, pageSize, open } = url;
+  const canWrite = useCan("promotions:write");
+  const campaignsView = view === "campaigns";
 
+  const overview = usePromotionOverview();
+  const accounts = usePromotionAccounts();
+  const campaigns = usePromotionCampaigns(campaignsQueryOf(url), campaignsView);
+  const products = usePromotedProducts(productsQueryOf(url), !campaignsView);
+  // the products view filters by campaign: offer the campaigns (the first 100 are plenty for a select)
+  const campaignOptions = usePromotionCampaigns({ page: 1, pageSize: 100 }, !campaignsView);
+  const lifecycle = useCampaignLifecycle();
+  const remove = useDeleteCampaign();
+  const duplicate = useDuplicateCampaign();
+  const process = useProcessPromotions();
+
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<PromotionCampaign | null>(null);
+  const [confirm, setConfirm] = useState<Confirm | null>(null);
+  const [addFor, setAddFor] = useState<PromotionCampaign | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const list = campaignsView ? campaigns : products;
+  const rows = campaignsView ? (campaigns.data?.items ?? []) : (products.data?.items ?? []);
+  const counts = list.data?.counts as Record<string, number> | undefined;
+  const filtered = isFiltered(url);
+  const noun = campaignsView ? "campaigns" : "products";
+  const refreshing = list.isFetching && list.isPlaceholderData;
+  const accountList = useMemo(() => accounts.data ?? [], [accounts.data]);
+
+  // a page past the end (a shrinking result set, an old link) falls back to the last page
   useEffect(() => {
-    if (promoOverview?.campaigns && promoOverview.campaigns.length > 0) {
-      setCampaigns(promoOverview.campaigns);
-    }
-    if (promoOverview?.products && promoOverview.products.length > 0) {
-      setProducts(promoOverview.products);
-    }
-  }, [promoOverview]);
+    const d = list.data;
+    if (d && d.total > 0 && d.items.length === 0 && page > d.pages) update({ page: String(d.pages) }, { replace: true });
+  }, [list.data, page, update]);
 
-  // New campaign form state
-  const [newCampaignName, setNewCampaignName] = useState("");
-  const [newCampaignCode, setNewCampaignCode] = useState("");
-  const [newCampaignType, setNewCampaignType] =
-    useState<"percentage_discount" | "flat_discount">("percentage_discount");
-  const [newCampaignValue, setNewCampaignValue] = useState("15");
+  const openCampaign = (id: string | null) => update({ open: id });
 
-  const handleCreateCampaign = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newCampaignName.trim()) return;
-
-    const created: PromotionCampaign = {
-      id: `camp-${Date.now()}`,
-      name: newCampaignName,
-      code: newCampaignCode || "PROMO" + Math.floor(Math.random() * 900 + 100),
-      type: newCampaignType,
-      value: Number(newCampaignValue) || 10,
-      channels: ["Amazon", "Flipkart", "Shopify"],
-      startDate: "2026-10-25",
-      endDate: "2026-11-05",
-      status: "scheduled",
-      budget: 50000,
-      spendToDate: 0,
-      revenueGenerated: 0,
-      unitsMoved: 0,
-    };
-
-    setCampaigns([created, ...campaigns]);
-    setShowCreateModal(false);
-    setNewCampaignName("");
-    setNewCampaignCode("");
+  const startCreate = () => {
+    setEditing(null);
+    setFormOpen(true);
+  };
+  const startEdit = (c: PromotionCampaign) => {
+    setEditing(c);
+    setFormOpen(true);
   };
 
+  const runLifecycle = (c: CampaignRef, action: PromotionLifecycleAction) => {
+    setBusyId(c.id);
+    lifecycle.mutate(
+      { id: c.id, action, version: c.version },
+      {
+        onSuccess: (res) => {
+          const skipped = res.pushed.filter((p) => p.skipped);
+          if (!res.changed) toast({ title: `${c.name} is already ${ACTION_LABELS[action].done}`, variant: "default" });
+          else if (skipped.length > 0) toast({ title: `${c.name} ${ACTION_LABELS[action].done}`, description: `The sale price is saved, but ${skipped.length} marketplace connection${skipped.length === 1 ? " cannot" : "s cannot"} take prices automatically: ${skipped.map((s) => s.skipped).join("; ")}`, variant: "warning", duration: 9000 });
+          else toast({ title: `${c.name} ${ACTION_LABELS[action].done}`, variant: "success" });
+        },
+        onError: (e) => {
+          const noneCanRun = isApiError(e) && e.rule === "no_eligible_items";
+          toast({
+            title: `Could not ${ACTION_LABELS[action].verb.replace(/ now$/i, "").toLowerCase()} the campaign`,
+            description:
+              isApiError(e) && e.code === "VERSION_CONFLICT"
+                ? "Someone changed this campaign. The list was refreshed, check it and try again."
+                : noneCanRun
+                  ? "None of its products can run yet. We opened the campaign for you: its Ineligible tab shows the reason for each product. A product needs an active listing on the marketplace before it can be on promotion."
+                  : errorMessage(e),
+            variant: "destructive",
+            duration: noneCanRun ? 10000 : undefined,
+          });
+          // show the per-product reasons straight away instead of sending the seller to look for them
+          if (noneCanRun) openCampaign(c.id);
+        },
+        onSettled: () => {
+          setBusyId(null);
+          setConfirm(null);
+        },
+      },
+    );
+  };
+
+  const runDelete = (c: CampaignRef) => {
+    setBusyId(c.id);
+    remove.mutate(
+      { id: c.id, version: c.version },
+      {
+        onSuccess: () => {
+          toast({ title: "Draft deleted", description: c.name, variant: "success" });
+          if (open === c.id) openCampaign(null);
+        },
+        onError: (e) => toast({ title: "Could not delete the draft", description: errorMessage(e), variant: "destructive" }),
+        onSettled: () => {
+          setBusyId(null);
+          setConfirm(null);
+        },
+      },
+    );
+  };
+
+  const runDuplicate = (c: CampaignRef) => {
+    setBusyId(c.id);
+    duplicate.mutate(c.id, {
+      onSuccess: (copy) => {
+        toast({ title: "Copied as a new draft", description: `${copy.name} (${copy.code}). Set its dates, then schedule it.`, variant: "success" });
+        openCampaign(copy.id);
+      },
+      onError: (e) => toast({ title: "Could not duplicate the campaign", description: errorMessage(e), variant: "destructive" }),
+      onSettled: () => setBusyId(null),
+    });
+  };
+
+  const refreshResults = () =>
+    process.mutate(undefined, {
+      onSuccess: (r) => toast({ title: "Campaigns refreshed", description: `${r.activated} started, ${r.ended} ended, ${r.refreshed} updated.`, variant: "success" }),
+      onError: (e) => toast({ title: "Could not refresh campaigns", description: errorMessage(e), variant: "destructive" }),
+    });
+
+  const confirmText = confirm?.kind === "delete" ? { title: "Delete this draft?", body: `${confirm.campaign.name} and its product list will be removed. This cannot be undone.`, verb: "Delete draft", destructive: true } : confirm ? { title: ACTION_LABELS[confirm.action].title, body: ACTION_LABELS[confirm.action].body, verb: ACTION_LABELS[confirm.action].verb, destructive: ACTION_LABELS[confirm.action].destructive } : null;
+  const asRef = (c: PromotionCampaign): CampaignRef => c;
+
   return (
-    <div className="flex flex-col gap-6 w-full select-none pb-12 font-['Inter',sans-serif]">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[#EAEAEA] pb-5">
-        <div className="flex flex-col gap-1">
+    <div className="w-full space-y-6 pb-24">
+      <PageHeader
+        eyebrow="GROWTH"
+        title="Promotions & Discounts"
+        description="Plan discount campaigns across your marketplaces. Sale prices are scheduled on the listings and results come from real orders."
+        actions={
           <div className="flex items-center gap-3">
-            <h1 className="text-[22px] font-semibold text-[#000000] tracking-tight">
-              Promotions &amp; Discounts
-            </h1>
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-blue-50 text-blue-700 border border-blue-200">
-              <Sparkles className="h-3 w-3" />
-              Omnichannel Campaign Sync
-            </span>
-          </div>
-          <p className="text-[13px] text-[#666666]">
-            Coordinate marketing discounts, marketplace deal events, and coupon codes
-            without accidental double-discounting.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <div className="inline-flex items-center bg-neutral-100 p-1 rounded-lg border border-[#EAEAEA]">
-            <button
-              type="button"
-              onClick={() => setActiveTab("campaigns")}
-              className={`px-3.5 py-1.5 rounded-md text-[12px] font-medium transition-all ${
-                activeTab === "campaigns"
-                  ? "bg-white text-black shadow-xs font-semibold"
-                  : "text-[#666666] hover:text-black"
-              }`}
-            >
-              Campaigns ({campaigns.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("products")}
-              className={`px-3.5 py-1.5 rounded-md text-[12px] font-medium transition-all ${
-                activeTab === "products"
-                  ? "bg-white text-black shadow-xs font-semibold"
-                  : "text-[#666666] hover:text-black"
-              }`}
-            >
-              Promoted SKUs ({products.length})
-            </button>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => refetch()}
-            className="box-border flex flex-row items-center px-[10px] gap-[6px] h-[34px] bg-white border border-[#EAEAEA] rounded-lg hover:bg-neutral-50 transition-colors cursor-pointer"
-          >
-            <RotateCw className={`w-[14px] h-[14px] text-[#666666] stroke-[1.5px] ${isFetching ? "animate-spin" : ""}`} />
-            <span className="text-[12px] font-normal leading-[145%] text-[#666666]">
-              Refresh
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setShowCreateModal(true)}
-            className="inline-flex items-center gap-2 px-3.5 py-2 bg-black text-white text-[12px] font-semibold rounded-lg hover:bg-neutral-800 transition-colors shadow-2xs"
-          >
-            <Plus className="h-4 w-4" />
-            Create Campaign
-          </button>
-        </div>
-      </div>
-
-      {/* Metrics Banner */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white border border-[#EAEAEA] rounded-xl p-4 flex flex-col gap-1 shadow-2xs">
-          <span className="text-[11px] text-[#666666] uppercase font-medium">
-            Active Campaigns
-          </span>
-          <span className="text-[24px] font-bold text-[#000000]">
-            {campaigns.filter((c) => c.status === "active").length}
-          </span>
-          <span className="text-[11px] text-emerald-600 font-medium">
-            Live across marketplaces
-          </span>
-        </div>
-        <div className="bg-white border border-[#EAEAEA] rounded-xl p-4 flex flex-col gap-1 shadow-2xs">
-          <span className="text-[11px] text-[#666666] uppercase font-medium">
-            Revenue Generated
-          </span>
-          <span className="text-[24px] font-bold text-[#000000]">
-            {formatINR(
-              campaigns.reduce((sum, c) => sum + c.revenueGenerated, 0),
-            )}
-          </span>
-          <span className="text-[11px] text-[#666666]">
-            From promotional orders
-          </span>
-        </div>
-        <div className="bg-white border border-[#EAEAEA] rounded-xl p-4 flex flex-col gap-1 shadow-2xs">
-          <span className="text-[11px] text-[#666666] uppercase font-medium">
-            Units Moved
-          </span>
-          <span className="text-[24px] font-bold text-[#000000]">
-            {campaigns.reduce((sum, c) => sum + c.unitsMoved, 0)} units
-          </span>
-          <span className="text-[11px] text-blue-600 font-medium">
-            Velocity lift: +18.4%
-          </span>
-        </div>
-        <div className="bg-white border border-[#EAEAEA] rounded-xl p-4 flex flex-col gap-1 shadow-2xs">
-          <span className="text-[11px] text-[#666666] uppercase font-medium">
-            Discount Spend
-          </span>
-          <span className="text-[24px] font-bold text-[#000000]">
-            {formatINR(campaigns.reduce((sum, c) => sum + c.spendToDate, 0))}
-          </span>
-          <span className="text-[11px] text-[#666666]">
-            Within allocated budget
-          </span>
-        </div>
-      </div>
-
-      {/* Tab 1: Campaigns Table */}
-      {activeTab === "campaigns" && (
-        <div className="bg-white border border-[#EAEAEA] rounded-xl overflow-hidden shadow-2xs">
-          <div className="p-4 border-b border-[#EAEAEA] flex items-center justify-between">
-            <span className="text-[13px] font-semibold text-[#000000]">
-              Campaign Ledger
-            </span>
-            <span className="text-[11px] text-[#666666]">
-              All marketplace promotional runs
-            </span>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-[12px]">
-              <thead>
-                <tr className="bg-neutral-50/75 border-b border-[#EAEAEA] text-[#666666] font-medium text-[11px]">
-                  <th className="py-3 px-4">Campaign Name &amp; Code</th>
-                  <th className="py-3 px-4">Type &amp; Value</th>
-                  <th className="py-3 px-4">Channels</th>
-                  <th className="py-3 px-4">Duration</th>
-                  <th className="py-3 px-4 text-right">Revenue</th>
-                  <th className="py-3 px-4 text-right">Spend</th>
-                  <th className="py-3 px-4 text-center">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#EAEAEA]">
-                {campaigns.map((camp) => (
-                  <tr key={camp.id} className="hover:bg-neutral-50 transition-colors">
-                    <td className="py-3.5 px-4">
-                      <div className="flex flex-col">
-                        <span className="font-semibold text-[#000000]">
-                          {camp.name}
-                        </span>
-                        <span className="text-[11px] text-blue-600 font-mono">
-                          {camp.code}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="py-3.5 px-4 font-medium text-[#000000]">
-                      {camp.type === "percentage_discount"
-                        ? `${camp.value}% Off`
-                        : `₹${camp.value} Flat Off`}
-                    </td>
-                    <td className="py-3.5 px-4">
-                      <div className="flex flex-wrap gap-1">
-                        {camp.channels.map((ch) => (
-                          <span
-                            key={ch}
-                            className="inline-block px-1.5 py-0.5 rounded bg-neutral-100 text-[10px] text-neutral-700 font-medium"
-                          >
-                            {ch}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="py-3.5 px-4 text-[#666666] text-[11px]">
-                      {camp.startDate} → {camp.endDate}
-                    </td>
-                    <td className="py-3.5 px-4 text-right font-semibold text-[#000000]">
-                      {formatINR(camp.revenueGenerated)}
-                    </td>
-                    <td className="py-3.5 px-4 text-right font-medium text-[#666666]">
-                      {formatINR(camp.spendToDate)}
-                    </td>
-                    <td className="py-3.5 px-4 text-center">
-                      <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold border ${
-                          camp.status === "active"
-                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                            : camp.status === "scheduled"
-                              ? "bg-blue-50 text-blue-700 border-blue-200"
-                              : "bg-neutral-100 text-neutral-600 border-neutral-200"
-                        }`}
-                      >
-                        {camp.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Tab 2: Promoted Products */}
-      {activeTab === "products" && (
-        <div className="bg-white border border-[#EAEAEA] rounded-xl overflow-hidden shadow-2xs">
-          <div className="p-4 border-b border-[#EAEAEA] flex items-center justify-between">
-            <span className="text-[13px] font-semibold text-[#000000]">
-              SKU Promotion Mapping
-            </span>
-            <span className="text-[11px] text-[#666666]">
-              Real-time discount calculation per product
-            </span>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-[12px]">
-              <thead>
-                <tr className="bg-neutral-50/75 border-b border-[#EAEAEA] text-[#666666] font-medium text-[11px]">
-                  <th className="py-3 px-4">Product / SKU</th>
-                  <th className="py-3 px-4">Campaign</th>
-                  <th className="py-3 px-4">Channel</th>
-                  <th className="py-3 px-4 text-right">Original Price</th>
-                  <th className="py-3 px-4 text-right">Promotional Price</th>
-                  <th className="py-3 px-4 text-center">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#EAEAEA]">
-                {products.map((p) => (
-                  <tr key={p.id} className="hover:bg-neutral-50 transition-colors">
-                    <td className="py-3.5 px-4">
-                      <div className="flex flex-col">
-                        <span className="font-semibold text-[#000000]">
-                          {p.productName}
-                        </span>
-                        <span className="text-[11px] text-[#666666] font-mono">
-                          {p.sku}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="py-3.5 px-4 font-medium text-[#000000]">
-                      {p.campaignName}
-                    </td>
-                    <td className="py-3.5 px-4 font-medium text-[#666666]">
-                      {p.channel}
-                    </td>
-                    <td className="py-3.5 px-4 text-right text-neutral-500 line-through">
-                      {formatINR(p.originalPrice)}
-                    </td>
-                    <td className="py-3.5 px-4 text-right font-bold text-emerald-600">
-                      {formatINR(p.promoPrice)}
-                    </td>
-                    <td className="py-3.5 px-4 text-center">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        {p.status.replace("_", " ")}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Create Campaign Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 backdrop-blur-xs">
-          <div className="bg-white rounded-xl max-w-lg w-full p-6 shadow-2xl flex flex-col gap-5 animate-in fade-in zoom-in-95">
-            <div className="flex items-center justify-between border-b border-[#EAEAEA] pb-3">
-              <h3 className="text-[16px] font-semibold text-[#000000]">
-                Launch New Promotional Campaign
-              </h3>
-              <button
-                type="button"
-                onClick={() => setShowCreateModal(false)}
-                className="text-neutral-400 hover:text-black"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateCampaign} className="flex flex-col gap-4 text-[12px]">
-              <div>
-                <label className="block text-[11px] font-medium text-[#666666] mb-1">
-                  Campaign Title
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Diwali Mega Fest 2026"
-                  value={newCampaignName}
-                  onChange={(e) => setNewCampaignName(e.target.value)}
-                  className="w-full px-3 py-2 border border-[#EAEAEA] rounded-lg text-[13px] focus:outline-none focus:ring-1 focus:ring-black"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11px] font-medium text-[#666666] mb-1">
-                    Discount Type
-                  </label>
-                  <select
-                    value={newCampaignType}
-                    onChange={(e) =>
-                      setNewCampaignType(
-                        e.target.value as "percentage_discount" | "flat_discount",
-                      )
-                    }
-                    className="w-full px-3 py-2 border border-[#EAEAEA] rounded-lg text-[13px] bg-white"
-                  >
-                    <option value="percentage_discount">Percentage (%)</option>
-                    <option value="flat_discount">Flat INR (₹)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[11px] font-medium text-[#666666] mb-1">
-                    Value
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    value={newCampaignValue}
-                    onChange={(e) => setNewCampaignValue(e.target.value)}
-                    className="w-full px-3 py-2 border border-[#EAEAEA] rounded-lg text-[13px] focus:outline-none focus:ring-1 focus:ring-black"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-medium text-[#666666] mb-1">
-                  Coupon Code (Optional)
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. FESTIVE20"
-                  value={newCampaignCode}
-                  onChange={(e) => setNewCampaignCode(e.target.value)}
-                  className="w-full px-3 py-2 border border-[#EAEAEA] rounded-lg text-[13px] uppercase font-mono"
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 pt-3 border-t border-[#EAEAEA]">
+            <div role="tablist" aria-label="Promotions view" className="inline-flex items-center rounded-lg border border-border bg-muted p-1">
+              {(["campaigns", "products"] as const).map((v) => (
                 <button
+                  key={v}
                   type="button"
-                  onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2 border border-[#EAEAEA] rounded-lg text-neutral-700 hover:bg-neutral-50"
+                  role="tab"
+                  aria-selected={view === v}
+                  onClick={() => update({ view: v, status: null, type: null, campaign: null, account: null })}
+                  className={`rounded-md px-3.5 py-1.5 text-xs font-medium transition-all ${view === v ? "bg-background font-semibold text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
                 >
-                  Cancel
+                  {v === "campaigns" ? "Campaigns" : "Promoted SKUs"}
                 </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-black text-white font-semibold rounded-lg hover:bg-neutral-800"
-                >
-                  Create &amp; Schedule
-                </button>
-              </div>
-            </form>
+              ))}
+            </div>
+            <Button variant="outline" size="sm" loading={process.isPending} disabled={!canWrite} title={canWrite ? "Start due campaigns, end finished ones and refresh the results now" : WRITE_REASON} onClick={refreshResults}>
+              Refresh results
+            </Button>
+            <Button size="sm" disabled={!canWrite} title={canWrite ? undefined : WRITE_REASON} onClick={startCreate}>
+              Create campaign
+            </Button>
           </div>
-        </div>
+        }
+      />
+
+      <PromoOverview overview={overview.data} loading={overview.isLoading} error={overview.isError} onRetry={() => void overview.refetch()} />
+
+      <PromoFilters
+        state={url}
+        counts={counts}
+        accounts={accountList}
+        campaigns={campaignOptions.data?.items ?? []}
+        filtered={filtered}
+        onSearch={(q) => update({ q }, { replace: true })}
+        onStatus={(status) => update({ status })}
+        onType={(type) => update({ type })}
+        onAccount={(id) => update({ account: id })}
+        onCampaign={(id) => update({ campaign: id })}
+        onClear={clearFilters}
+      />
+
+      {list.isLoading ? (
+        <TableSkeleton label={`Loading ${noun}`} />
+      ) : list.isError && !list.data ? (
+        <LoadError noun={campaignsView ? "Campaigns" : "Promoted products"} message={errorMessage(list.error)} onRetry={() => void list.refetch()} />
+      ) : rows.length === 0 ? (
+        filtered ? (
+          <NoMatches noun={noun} onClear={clearFilters} />
+        ) : campaignsView ? (
+          <EmptyCampaigns canWrite={canWrite} onCreate={startCreate} />
+        ) : (
+          <EmptyProducts />
+        )
+      ) : (
+        <>
+          {campaignsView ? (
+            <CampaignsTable
+              rows={campaigns.data?.items ?? []}
+              canWrite={canWrite}
+              refreshing={refreshing}
+              busyId={busyId}
+              onOpen={(c) => openCampaign(c.id)}
+              onEdit={startEdit}
+              onLifecycle={(c, action) => setConfirm({ kind: "lifecycle", campaign: asRef(c), action })}
+              onDuplicate={(c) => runDuplicate(asRef(c))}
+              onDelete={(c) => setConfirm({ kind: "delete", campaign: asRef(c) })}
+            />
+          ) : (
+            <ProductsTable rows={products.data?.items ?? []} refreshing={refreshing} showCampaign onOpenCampaign={(id) => openCampaign(id)} />
+          )}
+          <PromoPagination
+            page={list.data?.page ?? page}
+            pages={list.data?.pages ?? 1}
+            total={list.data?.total ?? 0}
+            pageSize={pageSize}
+            shown={rows.length}
+            noun={noun}
+            onPage={(p) => update({ page: p > 1 ? String(p) : null })}
+            onPageSize={(size) => update({ size: size === DEFAULT_PAGE_SIZE ? null : String(size) })}
+          />
+        </>
       )}
+
+      <CampaignDrawer
+        campaignId={open ?? null}
+        canWrite={canWrite}
+        busy={busyId !== null && busyId === open}
+        onClose={() => openCampaign(null)}
+        onEdit={startEdit}
+        onLifecycle={(c, action) => setConfirm({ kind: "lifecycle", campaign: asRef(c), action })}
+        onDuplicate={(c) => runDuplicate(asRef(c))}
+        onDelete={(c) => setConfirm({ kind: "delete", campaign: asRef(c) })}
+        onAddProducts={setAddFor}
+      />
+
+      <CampaignFormDialog
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        campaign={editing}
+        accounts={accountList}
+        onSaved={(c) => {
+          toast({ title: editing ? "Campaign updated" : c.status === "draft" ? "Draft saved" : "Campaign scheduled", description: `${c.name} (${c.code})`, variant: "success" });
+          openCampaign(c.id);
+        }}
+      />
+
+      <AddProductsDialog campaign={addFor} onClose={() => setAddFor(null)} />
+
+      <ConfirmDialog
+        open={confirm !== null}
+        onOpenChange={(o) => !o && !lifecycle.isPending && !remove.isPending && setConfirm(null)}
+        title={confirmText?.title ?? ""}
+        description={confirmText?.body ?? ""}
+        confirmText={confirmText?.verb}
+        variant={confirmText?.destructive ? "destructive" : "default"}
+        loading={lifecycle.isPending || remove.isPending}
+        onConfirm={() => {
+          if (!confirm) return;
+          if (confirm.kind === "delete") runDelete(confirm.campaign);
+          else runLifecycle(confirm.campaign, confirm.action);
+        }}
+      />
     </div>
   );
 }

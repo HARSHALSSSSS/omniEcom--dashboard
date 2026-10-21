@@ -3,7 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { Search, Package, ShoppingBag, Layers, CornerDownLeft } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { useUiStore } from "@/store/ui.store";
-import { ROUTES } from "@/constants/routes";
+
+import { useQuery } from "@tanstack/react-query";
+import { workspaceApi, type SearchGroup } from "@/api/workspace.api";
+import { toAppPath } from "@/lib/links";
+import { errorMessage } from "@/api/errors";
 
 interface SearchItem {
   id: string;
@@ -14,46 +18,35 @@ interface SearchItem {
   href: string;
 }
 
-const SEARCH_DATA: SearchItem[] = [
-  {
-    id: "p1",
-    category: "product",
-    title: "Premium Travel Bag",
-    subtitle: "TRV-1042 · 4 available · Low stock",
-    typeLabel: "Product",
-    href: `${ROUTES.PRODUCTS}`,
-  },
-  {
-    id: "p2",
-    category: "product",
-    title: "Classic Backpack",
-    subtitle: "BP-1021 · Bags & travel · 8 available · Low stock",
-    typeLabel: "Product",
-    href: `${ROUTES.PRODUCTS}`,
-  },
-  {
-    id: "o1",
-    category: "order",
-    title: "Order #1042",
-    subtitle: "Premium Travel Bag · Amazon · Picking · Dispatch today",
-    typeLabel: "Order",
-    href: `${ROUTES.ORDERS}?search=1042`,
-  },
-  {
-    id: "s1",
-    category: "sku",
-    title: "TRV-1042 / Home Inventory",
-    subtitle: "Premium Travel Bag · Available 4 · Threshold 10",
-    typeLabel: "SKU",
-    href: `${ROUTES.INVENTORY}?search=TRV-1042`,
-  },
-];
-
 type CategoryFilter = "all" | "product" | "order" | "sku";
+
+const SCOPE: Record<CategoryFilter, "all" | "products" | "orders" | "skus"> = {
+  all: "all",
+  product: "products",
+  order: "orders",
+  sku: "skus",
+};
+const TYPE_LABEL: Record<SearchItem["category"], string> = { product: "Product", order: "Order", sku: "SKU" };
+const MIN_CHARS = 2;
+const DEBOUNCE_MS = 250;
+
+function toItems(groups: SearchGroup[]): SearchItem[] {
+  return groups.flatMap((g) =>
+    g.items.map((i) => ({
+      id: `${g.type}:${i.id}`,
+      category: g.type,
+      title: i.title,
+      subtitle: i.subtitle ?? "",
+      typeLabel: TYPE_LABEL[g.type],
+      href: toAppPath(i.href),
+    })),
+  );
+}
 
 export const GlobalSearch: React.FC = () => {
   const { globalSearchOpen, setGlobalSearchOpen } = useUiStore();
-  const [query, setQuery] = useState("bag");
+  const [query, setQuery] = useState("");
+  const [debounced, setDebounced] = useState("");
   const [activeTab, setActiveTab] = useState<CategoryFilter>("all");
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
   const navigate = useNavigate();
@@ -69,33 +62,26 @@ export const GlobalSearch: React.FC = () => {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [globalSearchOpen, setGlobalSearchOpen]);
 
-  // Filter items based on active tab and query
-  const filteredItems = useMemo(() => {
-    return SEARCH_DATA.filter((item) => {
-      const matchesTab = activeTab === "all" || item.category === activeTab;
-      const q = query.trim().toLowerCase();
-      const matchesQuery =
-        !q ||
-        item.title.toLowerCase().includes(q) ||
-        item.subtitle.toLowerCase().includes(q) ||
-        item.typeLabel.toLowerCase().includes(q);
-      return matchesTab && matchesQuery;
-    });
-  }, [query, activeTab]);
+  // wait for a pause in typing before asking the server
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebounced(query.trim()), DEBOUNCE_MS);
+    return () => window.clearTimeout(t);
+  }, [query]);
 
-  // Group by section
-  const productItems = useMemo(
-    () => filteredItems.filter((i) => i.category === "product"),
-    [filteredItems]
-  );
-  const orderItems = useMemo(
-    () => filteredItems.filter((i) => i.category === "order"),
-    [filteredItems]
-  );
-  const skuItems = useMemo(
-    () => filteredItems.filter((i) => i.category === "sku"),
-    [filteredItems]
-  );
+  const enabled = globalSearchOpen && debounced.length >= MIN_CHARS;
+  const search = useQuery({
+    queryKey: ["search", debounced, activeTab],
+    enabled,
+    staleTime: 15_000,
+    queryFn: ({ signal }) => workspaceApi.search(debounced, SCOPE[activeTab], signal),
+    placeholderData: (previous) => previous,
+  });
+
+  const filteredItems = useMemo(() => (enabled && search.data ? toItems(search.data.groups) : []), [enabled, search.data]);
+
+  const productItems = useMemo(() => filteredItems.filter((i) => i.category === "product"), [filteredItems]);
+  const orderItems = useMemo(() => filteredItems.filter((i) => i.category === "order"), [filteredItems]);
+  const skuItems = useMemo(() => filteredItems.filter((i) => i.category === "sku"), [filteredItems]);
 
   // Flattened for keyboard arrow navigation
   const flatVisibleItems = useMemo(() => {
@@ -104,7 +90,7 @@ export const GlobalSearch: React.FC = () => {
 
   useEffect(() => {
     setSelectedIndex(0);
-  }, [query, activeTab]);
+  }, [debounced, activeTab]);
 
   const handleSelect = (href: string) => {
     setGlobalSearchOpen(false);
@@ -370,9 +356,22 @@ export const GlobalSearch: React.FC = () => {
             </div>
           )}
 
-          {flatVisibleItems.length === 0 && (
+          {query.trim().length < MIN_CHARS && (
             <div className="py-12 text-center text-[12px] text-[#666666]">
-              No results found for &ldquo;{query}&rdquo;
+              Type at least {MIN_CHARS} characters to search products, orders and SKUs
+            </div>
+          )}
+          {enabled && search.isFetching && flatVisibleItems.length === 0 && (
+            <div className="py-12 text-center text-[12px] text-[#666666]">Searching...</div>
+          )}
+          {enabled && search.isError && (
+            <div role="alert" className="py-12 text-center text-[12px] text-red-700">
+              {errorMessage(search.error)}
+            </div>
+          )}
+          {enabled && search.isSuccess && !search.isFetching && flatVisibleItems.length === 0 && (
+            <div className="py-12 text-center text-[12px] text-[#666666]">
+              No results found for &ldquo;{debounced}&rdquo;
             </div>
           )}
         </div>

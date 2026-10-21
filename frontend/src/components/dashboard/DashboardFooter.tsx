@@ -1,22 +1,19 @@
-
+import type { Dashboard } from "@/types/dashboard";
+import { relativeTime } from "./format";
 
 interface DashboardFooterProps {
-  lastSyncedText?: string;
-  systemStatusText?: string;
+  sync: NonNullable<Dashboard["sync"]>;
 }
 
-export const DashboardFooter: React.FC<DashboardFooterProps> = ({
-  lastSyncedText = "Last synced 2 minutes ago",
-  systemStatusText = "All systems operational",
-}) => {
+export const DashboardFooter: React.FC<DashboardFooterProps> = ({ sync }) => {
+  const ok = sync.systemStatus === "operational";
   return (
     <footer className="w-full pt-5 pb-6 border-t border-[#EAEAEA] flex items-center justify-between text-[11px] font-normal leading-[145%] text-[#666666]">
-      <span>{lastSyncedText}</span>
+      <span>{sync.lastSyncedAt ? `Last synced ${relativeTime(sync.lastSyncedAt)}` : "No channel has synced yet"}</span>
       <div className="flex items-center gap-1.5">
-        <span className="h-1 w-1 rounded-full bg-[#666666]" />
-        <span>{systemStatusText}</span>
+        <span className={`h-1 w-1 rounded-full ${ok ? "bg-[#666666]" : "bg-[#D97706]"}`} />
+        <span>{ok ? "All systems operational" : "Some connections need attention"}</span>
       </div>
     </footer>
   );
 };
-

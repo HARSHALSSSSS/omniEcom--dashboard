@@ -1,70 +1,69 @@
 import React, { useState } from "react";
-import { useWorkspaceStore } from "@/store/workspace.store";
+import type { FulfillmentMethod, FulfillmentPreference, FulfillmentSetup, OnboardingProgress } from "@/api/onboarding.api";
+import { useFulfillment, useSaveFulfillment, useSkipStep } from "@/hooks/useOnboarding";
+import { InlineError, Spinner, StepError, StepLoading } from "@/components/onboarding/wizard";
+import { useSavedDraft, useStepStatus, useWizard, useWizardDraft } from "@/components/onboarding/wizardContext";
 import { cn } from "@/utils/cn";
 
-interface StepFulfillmentProps {
-  onNext: () => void;
-  onSkip: () => void;
-}
+const UNAVAILABLE_TEXT: Record<string, string> = {
+  no_marketplace_connected: "Not available yet: connect a marketplace first",
+  connection_required: "Not available yet: connect a shipping provider first",
+};
 
-export const StepFulfillment: React.FC<StepFulfillmentProps> = ({
-  onNext,
-  onSkip,
-}) => {
-  const { onboardingData, updateOnboardingData } = useWorkspaceStore();
+type Draft = { defaultMethod: FulfillmentMethod; defaultPreference: FulfillmentPreference; overrides: Record<string, FulfillmentMethod> };
 
-  const [method, setMethod] = useState<
-    "marketplace" | "seller" | "third_party"
-  >(onboardingData.fulfillment?.method || "marketplace");
+export const StepFulfillment: React.FC = () => {
+  const setup = useFulfillment();
+  if (setup.isPending) return <StepLoading label="Loading fulfillment options" />;
+  if (setup.isError) return <StepError error={setup.error} onRetry={() => void setup.refetch()} />;
+  return <FulfillmentForm setup={setup.data} />;
+};
 
-  const [preference, setPreference] = useState(
-    onboardingData.fulfillment?.preference || "Recommended for most orders",
-  );
+const FulfillmentForm: React.FC<{ setup: FulfillmentSetup }> = ({ setup }) => {
+  const { canWrite, advance } = useWizard();
+  const status = useStepStatus("fulfillment");
+  const saved = useSavedDraft<Draft>("fulfillment");
+  const save = useSaveFulfillment();
+  const skip = useSkipStep();
 
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [shippingProviderConnected, setShippingProviderConnected] = useState(false);
+  const [method, setMethod] = useState<FulfillmentMethod>(saved?.defaultMethod ?? setup.defaultMethod);
+  const [preference, setPreference] = useState<FulfillmentPreference>(saved?.defaultPreference ?? setup.defaultPreference);
+  const [overrides, setOverrides] = useState<Record<string, FulfillmentMethod>>(saved?.overrides ?? setup.overrides);
+  const [editing, setEditing] = useState<string | null>(null);
+  /** the server saved it but warned: show the warnings before moving on */
+  const [saved_, setSaved] = useState<{ state: OnboardingProgress; warnings: FulfillmentSetup["warnings"] } | null>(null);
 
-  const handleContinue = () => {
-    updateOnboardingData({
-      fulfillment: {
-        method,
-        preference,
-      },
-    });
-    onNext();
+  useWizardDraft(() => ({ defaultMethod: method, defaultPreference: preference, overrides }));
+
+  const edit = <T,>(setter: (v: T) => void) => (v: T) => {
+    setSaved(null);
+    setter(v);
   };
 
-  const fulfillmentOptions = [
-    {
-      id: "marketplace" as const,
-      title: "Marketplace Shipping",
-      desc: "Use the shipping service provided by the marketplace when available.",
-      sub: "Marketplace service · When supported",
-    },
-    {
-      id: "seller" as const,
-      title: "Seller Shipping",
-      desc: "Manage shipping through your own configured logistics provider.",
-      sub: "Your logistics · Your control",
-    },
-    {
-      id: "third_party" as const,
-      title: "Third-party Shipping",
-      desc: "Use a connected shipping or logistics provider.",
-      sub: "Connected provider · Connection required",
-    },
-  ];
+  const methodLabel = (m: FulfillmentMethod) => setup.methods.find((o) => o.value === m)?.label ?? m;
+  const selectedOption = setup.methods.find((m) => m.value === method);
+  const unavailableNote = selectedOption && !selectedOption.available ? (UNAVAILABLE_TEXT[selectedOption.unavailableReason ?? ""] ?? "Not available yet") : null;
 
-  const preferenceOptions = [
-    "Recommended for most orders",
-    "Lowest shipping rate first",
-    "Fastest delivery time",
-    "Manual selection per order",
-  ];
+  const marketplaceRows = setup.preview.filter((p) => p.kind === "marketplace");
+  const providers = setup.connections.thirdParty.providers;
+  const busy = save.isPending || skip.isPending;
+
+  const handleContinue = () => {
+    if (saved_) return advance(saved_.state);
+    if (busy || !canWrite) return;
+    save.mutate(
+      { defaultMethod: method, defaultPreference: preference, overrides },
+      {
+        onSuccess: (res) => {
+          if (res.fulfillment.warnings.length) setSaved({ state: res.state, warnings: res.fulfillment.warnings });
+          else advance(res.state);
+        },
+      },
+    );
+  };
 
   return (
     <div className="relative w-full min-h-[1012px] bg-[#FFFFFF] flex flex-col justify-start overflow-hidden">
-      {/* Background Gradient matching StepBusiness: clean white at top/left, soft dark radial fade at bottom-right */}
       <div
         className="pointer-events-none absolute inset-0 z-0 overflow-hidden"
         style={{
@@ -73,13 +72,7 @@ export const StepFulfillment: React.FC<StepFulfillmentProps> = ({
         }}
       />
 
-      {/* Main Content Layout matching Figma spec:
-          padding: 40px 144px;
-          gap: 32px;
-          width: 1440px max-w;
-      */}
       <div className="relative z-10 w-full max-w-[1440px] mx-auto px-6 sm:px-12 xl:px-[144px] pt-[40px] pb-[32px] flex flex-col gap-[32px]">
-        {/* Fulfillment introduction: width: 1152px; gap: 16px; */}
         <div className="flex flex-col gap-[16px] w-full">
           <h1 className="text-[32px] sm:text-[38px] lg:text-[40px] font-semibold leading-[1.15] text-[#000000] tracking-[-0.02em]">
             How will you fulfill your orders?
@@ -89,317 +82,201 @@ export const StepFulfillment: React.FC<StepFulfillmentProps> = ({
           </p>
         </div>
 
-        {/* Shipping workspace:
-            display: flex; flex-direction: row; gap: 64px;
-            width: 1152px; border-top: 1px solid #EAEAEA; padding-top: 24px;
-        */}
         <div className="border-t border-[#EAEAEA] pt-[24px] grid grid-cols-1 lg:grid-cols-12 gap-[64px] items-start w-full">
-          {/* Left Column: Fulfillment configuration (720px width / approx 7 cols in 12-col grid) */}
+          {/* Left Column: Fulfillment configuration */}
           <div className="lg:col-span-7 flex flex-col gap-[24px] w-full max-w-[720px]">
-            {/* Default fulfillment method */}
             <div className="flex flex-col gap-[16px] w-full">
-              <h2 className="text-[18px] font-semibold leading-[1.45] text-[#000000]">
+              <h2 id="onb-ful-method" className="text-[18px] font-semibold leading-[1.45] text-[#000000]">
                 Default fulfillment method
               </h2>
 
-              {/* Fulfillment methods list: gap 8px */}
-              <div className="flex flex-col gap-[8px] w-full">
-                {fulfillmentOptions.map((opt) => {
-                  const isSelected = method === opt.id;
+              <div role="radiogroup" aria-labelledby="onb-ful-method" className="flex flex-col gap-[8px] w-full">
+                {setup.methods.map((opt) => {
+                  const isSelected = method === opt.value;
                   return (
-                    <div
-                      key={opt.id}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => setMethod(opt.id)}
+                    <button
+                      key={opt.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={isSelected}
+                      disabled={!canWrite}
+                      onClick={() => edit(setMethod)(opt.value)}
                       className={cn(
-                        "w-full min-h-[96px] sm:h-[100px] rounded-[12px] p-[12px] flex flex-row items-center gap-[8px] cursor-pointer transition-all text-left select-none box-border",
-                        isSelected
-                          ? "bg-[#F5F5F5] border border-[#000000]"
-                          : "bg-[#FFFFFF] border border-[#EAEAEA] hover:border-[#CCCCCC]",
+                        "w-full min-h-[96px] rounded-[12px] p-[12px] flex flex-row items-center gap-[8px] cursor-pointer transition-all text-left box-border disabled:cursor-not-allowed",
+                        isSelected ? "bg-[#F5F5F5] border border-[#000000]" : "bg-[#FFFFFF] border border-[#EAEAEA] hover:border-[#CCCCCC]",
                       )}
                     >
-                      {/* Radio selection control */}
                       <div className="w-[32px] h-[32px] rounded-[16px] flex items-center justify-center shrink-0">
                         <div className="w-[18px] h-[18px] rounded-[9px] bg-white border border-[#000000] flex items-center justify-center box-border">
-                          {isSelected && (
-                            <div className="w-[8px] h-[8px] rounded-[4px] bg-[#000000]" />
-                          )}
+                          {isSelected && <div className="w-[8px] h-[8px] rounded-[4px] bg-[#000000]" />}
                         </div>
                       </div>
 
-                      {/* Method details */}
                       <div className="flex-1 flex flex-col justify-center min-w-0">
-                        <span className="text-[13px] font-semibold leading-[1.5] text-[#000000]">
-                          {opt.title}
-                        </span>
-                        <p className="text-[12px] font-normal leading-[1.45] text-[#666666]">
-                          {opt.desc}
-                        </p>
-                        <p className="text-[11px] font-normal leading-[1.45] text-[#8E8E8E] mt-[2px]">
-                          {opt.sub}
-                        </p>
+                        <span className="text-[13px] font-semibold leading-[1.5] text-[#000000]">{opt.label}</span>
+                        <p className="text-[12px] font-normal leading-[1.45] text-[#666666]">{opt.description}</p>
+                        <p className="text-[11px] font-normal leading-[1.45] text-[#8E8E8E] mt-[2px]">{opt.hint}</p>
+                        {!opt.available && (
+                          <p className="text-[11px] font-medium leading-[1.45] text-[#8A5A00] mt-[2px]">{UNAVAILABLE_TEXT[opt.unavailableReason ?? ""] ?? "Not available yet"}</p>
+                        )}
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
+              {unavailableNote && (
+                <p role="status" className="text-[12px] leading-[1.45] text-[#8A5A00]">
+                  {unavailableNote}. You can still save this choice and it will start working once the connection exists.
+                </p>
+              )}
             </div>
 
             {/* Default preference */}
             <div className="flex flex-col gap-[8px] w-full">
-              {/* Preference dropdown */}
-              <div className="flex flex-col gap-[6px] w-full relative">
-                <label className="text-[12px] font-medium leading-[1.45] text-[#333333]">
+              <div className="flex flex-col gap-[6px] w-full">
+                <label htmlFor="onb-ful-pref" className="text-[12px] font-medium leading-[1.45] text-[#333333]">
                   Your default preference
                 </label>
-
-                {/* Dropdown Control: height 40px, border: 1px solid #666666 */}
-                <button
-                  type="button"
-                  onClick={() => setDropdownOpen(!dropdownOpen)}
-                  className="w-full h-[40px] px-[12px] bg-[#FFFFFF] border border-[#666666] rounded-[8px] flex flex-row items-center justify-between box-border text-left cursor-pointer"
+                <select
+                  id="onb-ful-pref"
+                  value={preference}
+                  disabled={!canWrite}
+                  onChange={(e) => edit(setPreference)(e.target.value as FulfillmentPreference)}
+                  className="w-full h-[40px] px-[12px] bg-[#FFFFFF] border border-[#666666] rounded-[8px] text-[13px] font-normal leading-[1.45] text-[#333333] cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  <span className="text-[13px] font-normal leading-[1.45] text-[#333333] truncate">
-                    {preference}
-                  </span>
-                  <div className="w-[16px] h-[16px] flex items-center justify-center shrink-0 text-[#000000]">
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 12 12"
-                      fill="none"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <path
-                        d="M2.5 4.5L6 8L9.5 4.5"
-                        stroke="#000000"
-                        strokeWidth="1.4"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </div>
-                </button>
-
-                {/* Dropdown list */}
-                {dropdownOpen && (
-                  <div className="absolute top-[68px] left-0 w-full bg-white border border-[#EAEAEA] rounded-[8px] shadow-lg py-1 z-30">
-                    {preferenceOptions.map((opt) => (
-                      <button
-                        key={opt}
-                        type="button"
-                        onClick={() => {
-                          setPreference(opt);
-                          setDropdownOpen(false);
-                        }}
-                        className={cn(
-                          "w-full text-left px-3 py-2 text-[13px] hover:bg-[#F5F5F5] transition-colors",
-                          preference === opt ? "font-semibold text-black" : "text-[#333333]",
-                        )}
-                      >
-                        {opt}
-                      </button>
-                    ))}
-                  </div>
-                )}
+                  {setup.preferenceOptions.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
               </div>
-
-              {/* Override guidance */}
-              <p className="text-[12px] font-normal leading-[1.45] text-[#666666]">
-                You can override this preference when supported.
-              </p>
+              <p className="text-[12px] font-normal leading-[1.45] text-[#666666]">You can override this preference when supported.</p>
             </div>
 
             {/* Shipping connections */}
             <div className="flex flex-col gap-[8px] w-full pt-[8px]">
-              <h2 className="text-[18px] font-semibold leading-[1.45] text-[#000000]">
-                Shipping connections
-              </h2>
+              <h2 className="text-[18px] font-semibold leading-[1.45] text-[#000000]">Shipping connections</h2>
 
-              {/* Row 1: Marketplace connection (height: 76px, border-b: 1px solid #EAEAEA) */}
               <div className="w-full min-h-[76px] border-b border-[#EAEAEA] flex flex-row items-center justify-between gap-[16px] py-3 box-border">
                 <div className="flex flex-col gap-[4px] min-w-0">
-                  <span className="text-[13px] font-semibold leading-[1.45] text-[#000000]">
-                    Marketplace Shipping
-                  </span>
+                  <span className="text-[13px] font-semibold leading-[1.45] text-[#000000]">Marketplace Shipping</span>
                   <span className="text-[12px] font-normal leading-[1.45] text-[#666666]">
-                    Available through connected marketplaces
+                    {setup.connections.marketplaceShipping.available
+                      ? `Available through ${marketplaceRows.map((r) => r.label.replace("Marketplace / ", "")).join(", ")}`
+                      : "Available once a marketplace is connected"}
                   </span>
                 </div>
-
-                {/* Availability badge: width 80px, height 26px, bg #F5F5F5, border 1px solid #EAEAEA */}
-                <div className="w-[80px] h-[26px] bg-[#F5F5F5] border border-[#EAEAEA] rounded-[4px] px-[8px] flex flex-row items-center justify-center gap-[5px] shrink-0 box-border">
-                  <svg
-                    width="12"
-                    height="12"
-                    viewBox="0 0 12 12"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path
-                      d="M2.5 6.5L4.5 8.5L9.5 3.5"
-                      stroke="#333333"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                  <span className="text-[11px] font-normal leading-[1.45] text-[#333333]">
-                    Available
-                  </span>
-                </div>
+                <Badge ok={setup.connections.marketplaceShipping.available} yes="Available" no="Not connected" />
               </div>
 
-              {/* Row 2: Provider connection (height: 76px, border-b: 1px solid #EAEAEA) */}
               <div className="w-full min-h-[76px] border-b border-[#EAEAEA] flex flex-row items-center justify-between gap-[16px] py-3 box-border">
                 <div className="flex flex-col gap-[4px] min-w-0">
-                  <span className="text-[13px] font-semibold leading-[1.45] text-[#000000]">
-                    Third-party provider
-                  </span>
+                  <span className="text-[13px] font-semibold leading-[1.45] text-[#000000]">Third-party provider</span>
                   <span className="text-[12px] font-normal leading-[1.45] text-[#666666]">
-                    {shippingProviderConnected ? "Shiprocket connected" : "Connect a shipping provider"}
+                    {providers.length > 0 ? `${providers.map((p) => p.label).join(", ")} connected` : "No shipping provider connected. You can connect one from Shipping once setup is finished."}
                   </span>
                 </div>
-
-                {/* Connection action button: width 88px, height 40px, border 1px solid #666666 */}
-                <button
-                  type="button"
-                  onClick={() => setShippingProviderConnected(!shippingProviderConnected)}
-                  className="w-[88px] h-[40px] px-[16px] bg-[#FFFFFF] border border-[#666666] rounded-[8px] flex items-center justify-center text-[12px] font-semibold leading-[1.45] text-[#000000] hover:bg-[#F9F9F9] transition-colors cursor-pointer shrink-0 box-border"
-                >
-                  {shippingProviderConnected ? "Manage" : "Connect"}
-                </button>
+                <Badge ok={providers.length > 0} yes="Connected" no="Not connected" />
               </div>
             </div>
           </div>
 
-          {/* Right Column: Shipping overview (368px width / border-left: 1px solid #EAEAEA; padding-left: 32px;) */}
+          {/* Right Column: Shipping overview */}
           <div className="lg:col-span-5 flex flex-col gap-[24px] w-full lg:border-l lg:border-[#EAEAEA] lg:pl-[32px] max-w-[368px]">
-            {/* Preferences preview */}
             <div className="flex flex-col gap-[16px] w-full">
-              {/* Preview heading */}
               <div className="flex flex-row justify-between items-center w-full h-[19px]">
-                <span className="text-[13px] font-semibold leading-[1.45] text-[#000000]">
-                  Your shipping preferences
-                </span>
-                <span className="text-[11px] font-normal leading-[1.45] text-[#666666]">
-                  Preview
-                </span>
+                <span className="text-[13px] font-semibold leading-[1.45] text-[#000000]">Your shipping preferences</span>
+                <span className="text-[11px] font-normal leading-[1.45] text-[#666666]">Preview</span>
               </div>
 
-              {/* Preference rows: 3 items (68px height each, border-b: 1px solid #EAEAEA) */}
-              <div className="flex flex-col w-full bg-[#FFFFFF] rounded-[8px]">
-                {/* Row 1: Marketplace / Amazon */}
-                <div className="h-[68px] border-b border-[#EAEAEA] flex flex-row items-center justify-between px-[12px] box-border">
-                  <span className="text-[12px] font-semibold leading-[1.45] text-[#333333]">
-                    Marketplace / Amazon
-                  </span>
-                  <div className="flex flex-col items-end">
-                    <span className="text-[11px] font-normal leading-[1.45] text-[#333333]">
-                      Marketplace Shipping
-                    </span>
-                    <button
-                      type="button"
-                      className="text-[11px] font-normal leading-[1.45] text-[#000000] underline hover:text-[#4A4A4A] cursor-pointer"
-                    >
-                      Edit
-                    </button>
-                  </div>
-                </div>
+              <ul className="flex flex-col w-full bg-[#FFFFFF] rounded-[8px]">
+                {marketplaceRows.map((row) => {
+                  const code = row.marketplace ?? "";
+                  const effective = overrides[code] ?? method;
+                  const isEditing = editing === code;
+                  return (
+                    <li key={code} className="min-h-[68px] border-b border-[#EAEAEA] flex flex-row items-center justify-between px-[12px] py-2 box-border gap-2">
+                      <span className="text-[12px] font-semibold leading-[1.45] text-[#333333]">{row.label}</span>
+                      <div className="flex flex-col items-end">
+                        {isEditing ? (
+                          <select
+                            aria-label={`Shipping for ${row.label}`}
+                            value={overrides[code] ?? ""}
+                            onChange={(e) => {
+                              const v = e.target.value as FulfillmentMethod | "";
+                              edit(setOverrides)(
+                                v
+                                  ? { ...overrides, [code]: v }
+                                  : Object.fromEntries(Object.entries(overrides).filter(([k]) => k !== code)),
+                              );
+                              setEditing(null);
+                            }}
+                            className="h-[30px] rounded-[6px] border border-[#666666] bg-white px-2 text-[11px]"
+                          >
+                            <option value="">Same as default ({methodLabel(method)})</option>
+                            {setup.methods.map((m) => (
+                              <option key={m.value} value={m.value}>
+                                {m.label}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <>
+                            <span className="text-[11px] font-normal leading-[1.45] text-[#333333]">
+                              {methodLabel(effective)}
+                              {code in overrides ? " (override)" : ""}
+                            </span>
+                            <button
+                              type="button"
+                              disabled={!canWrite}
+                              onClick={() => setEditing(code)}
+                              aria-label={`Edit shipping for ${row.label}`}
+                              className="text-[11px] font-normal leading-[1.45] text-[#000000] underline hover:text-[#4A4A4A] cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              Edit
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
 
-                {/* Row 2: Marketplace / Flipkart */}
-                <div className="h-[68px] border-b border-[#EAEAEA] flex flex-row items-center justify-between px-[12px] box-border">
-                  <span className="text-[12px] font-semibold leading-[1.45] text-[#333333]">
-                    Marketplace / Flipkart
-                  </span>
+                <li className="min-h-[68px] border-b border-[#EAEAEA] flex flex-row items-center justify-between px-[12px] py-2 box-border gap-2">
+                  <span className="text-[12px] font-semibold leading-[1.45] text-[#333333]">Other orders</span>
                   <div className="flex flex-col items-end">
-                    <span className="text-[11px] font-normal leading-[1.45] text-[#333333]">
-                      Marketplace Shipping
+                    <span className="text-[11px] font-normal leading-[1.45] text-[#333333]">{methodLabel(method)}</span>
+                    <span className="text-[11px] font-normal leading-[1.45] text-[#666666]">
+                      {setup.preferenceOptions.find((o) => o.value === preference)?.label}
                     </span>
-                    <button
-                      type="button"
-                      className="text-[11px] font-normal leading-[1.45] text-[#000000] underline hover:text-[#4A4A4A] cursor-pointer"
-                    >
-                      Edit
-                    </button>
                   </div>
-                </div>
+                </li>
+              </ul>
 
-                {/* Row 3: Other orders */}
-                <div className="h-[68px] border-b border-[#EAEAEA] flex flex-row items-center justify-between px-[12px] box-border">
-                  <span className="text-[12px] font-semibold leading-[1.45] text-[#333333]">
-                    Other orders
-                  </span>
-                  <div className="flex flex-col items-end">
-                    <span className="text-[11px] font-normal leading-[1.45] text-[#333333]">
-                      Default preference
-                    </span>
-                    <button
-                      type="button"
-                      className="text-[11px] font-normal leading-[1.45] text-[#000000] underline hover:text-[#4A4A4A] cursor-pointer"
-                    >
-                      Edit
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Advanced rules guidance */}
-              <p className="text-[12px] font-normal leading-[1.45] text-[#666666]">
-                Manage advanced shipping rules later
-              </p>
+              {marketplaceRows.length === 0 && (
+                <p className="text-[12px] leading-[1.45] text-[#666666]">Connect a marketplace to set shipping for it separately.</p>
+              )}
+              <p className="text-[12px] font-normal leading-[1.45] text-[#666666]">Manage advanced shipping rules later</p>
             </div>
 
             {/* Order process flow */}
             <div className="flex flex-col items-center pt-[8px] gap-[12px] w-full">
-              <span className="w-full text-left text-[11px] font-medium leading-[1.45] uppercase tracking-[0.04em] text-[#000000]">
-                FROM ORDER TO DISPATCH
-              </span>
+              <span className="w-full text-left text-[11px] font-medium leading-[1.45] uppercase tracking-[0.04em] text-[#000000]">FROM ORDER TO DISPATCH</span>
 
-              {/* Fulfillment flow vertical steps */}
-              <div className="w-full flex flex-col items-center gap-[4px] py-1">
-                {/* Step 1: Order received */}
-                <div className="flex flex-col items-center gap-[4px]">
-                  <span className="text-[13px] font-normal leading-[1.45] text-[#000000]">
-                    Order received
-                  </span>
-                  <span className="text-[16px] leading-[18px] text-[#000000]">↓</span>
-                </div>
+              <ol className="w-full flex flex-col items-center gap-[4px] py-1">
+                {setup.flow.map((label, i) => (
+                  <li key={label} className="flex flex-col items-center gap-[4px]">
+                    <span className="text-[13px] font-normal leading-[1.45] text-[#000000]">{label}</span>
+                    {i < setup.flow.length - 1 && (
+                      <span aria-hidden className="text-[16px] leading-[18px] text-[#000000]">
+                        ↓
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ol>
 
-                {/* Step 2: Pick */}
-                <div className="flex flex-col items-center gap-[4px]">
-                  <span className="text-[13px] font-normal leading-[1.45] text-[#000000]">
-                    Pick
-                  </span>
-                  <span className="text-[16px] leading-[18px] text-[#000000]">↓</span>
-                </div>
-
-                {/* Step 3: Pack */}
-                <div className="flex flex-col items-center gap-[4px]">
-                  <span className="text-[13px] font-normal leading-[1.45] text-[#000000]">
-                    Pack
-                  </span>
-                  <span className="text-[16px] leading-[18px] text-[#000000]">↓</span>
-                </div>
-
-                {/* Step 4: Shipping */}
-                <div className="flex flex-col items-center gap-[4px]">
-                  <span className="text-[13px] font-normal leading-[1.45] text-[#000000]">
-                    Shipping
-                  </span>
-                  <span className="text-[16px] leading-[18px] text-[#000000]">↓</span>
-                </div>
-
-                {/* Step 5: Dispatch */}
-                <div className="flex flex-col items-center">
-                  <span className="text-[13px] font-normal leading-[1.45] text-[#000000]">
-                    Dispatch
-                  </span>
-                </div>
-              </div>
-
-              {/* Footnote reassurance */}
               <p className="w-full text-left text-[11px] font-normal leading-[1.45] text-[#8E8E8E] mt-1">
                 One workspace to manage each step, with shipping based on your preferences.
               </p>
@@ -407,20 +284,9 @@ export const StepFulfillment: React.FC<StepFulfillmentProps> = ({
           </div>
         </div>
 
-        {/* Shipping availability insight banner:
-            width: 1152px; height: 48px; background: #F5F5F5; border: 1px solid #EAEAEA; border-radius: 8px;
-            padding: 14px; gap: 10px;
-        */}
         <div className="w-full max-w-[1152px] min-h-[48px] rounded-[8px] bg-[#F5F5F5] border border-[#EAEAEA] px-[14px] py-[12px] flex flex-row items-center gap-[10px] box-border">
-          {/* circle-alert icon */}
           <div className="w-[16px] h-[16px] shrink-0 flex items-center justify-center">
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 16 16"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
               <circle cx="8" cy="8" r="6.75" stroke="#000000" strokeWidth="1.3" />
               <line x1="8" y1="4.5" x2="8" y2="8.5" stroke="#000000" strokeWidth="1.3" strokeLinecap="round" />
               <circle cx="8" cy="11.25" r="0.75" fill="#000000" />
@@ -431,32 +297,41 @@ export const StepFulfillment: React.FC<StepFulfillmentProps> = ({
           </span>
         </div>
 
-        {/* Onboarding footer:
-            height: 96px; border-top: 1px solid #EDEDED;
-            display: flex; justify-content: space-between; align-items: center;
-        */}
+        {saved_ && (
+          <div role="status" className="w-full max-w-[1152px] rounded-[8px] border border-[#F0D9A8] bg-[#FFF8E6] px-[14px] py-[12px] text-[12px] leading-[1.5] text-[#6B4500]">
+            <p className="font-semibold">Saved. Heads up:</p>
+            <ul className="list-disc pl-5">
+              {saved_.warnings.map((w) => (
+                <li key={`${w.code}-${w.marketplace ?? ""}`}>{w.message}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <InlineError error={save.error ?? skip.error} />
+
         <div className="w-full border-t border-[#EDEDED] pt-[24px] pb-[16px] flex flex-col sm:flex-row justify-between items-center gap-4">
-          <p className="text-[12px] font-normal leading-[1.5] text-[#4A4A4A]">
-            You can configure advanced fulfillment rules from Settings.
-          </p>
+          <p className="text-[12px] font-normal leading-[1.5] text-[#4A4A4A]">You can configure advanced fulfillment rules from Settings.</p>
 
           <div className="flex flex-row items-center gap-[16px]">
-            {/* Skip for now button: width: 112px; height: 40px; background: #FFFFFF; border-radius: 8px; */}
+            {status !== "completed" && !saved_ && (
+              <button
+                type="button"
+                disabled={busy || !canWrite}
+                onClick={() => skip.mutate("fulfillment", { onSuccess: (state) => advance(state) })}
+                className="w-[112px] h-[40px] px-[16px] rounded-[8px] bg-white border border-[#D6D6D6] flex items-center justify-center text-[12px] font-semibold leading-[1.45] text-[#000000] hover:bg-[#F9F9F9] transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {skip.isPending ? "Skipping…" : "Skip for now"}
+              </button>
+            )}
             <button
               type="button"
-              onClick={onSkip}
-              className="w-[112px] h-[40px] px-[16px] rounded-[8px] bg-white border border-[#D6D6D6] flex items-center justify-center text-[12px] font-semibold leading-[1.45] text-[#000000] hover:bg-[#F9F9F9] transition-colors cursor-pointer"
-            >
-              Skip for now
-            </button>
-
-            {/* Continue button: width: 168px; height: 44px; background: #0A0A0A; border-radius: 12px; */}
-            <button
-              type="button"
+              disabled={busy || (!canWrite && !saved_)}
               onClick={handleContinue}
-              className="w-[168px] h-[44px] px-[16px] rounded-[12px] bg-[#0A0A0A] flex items-center justify-center text-[13px] font-semibold leading-[1.45] text-[#FFFFFF] hover:bg-[#262626] transition-colors cursor-pointer"
+              className="w-[168px] h-[44px] px-[16px] rounded-[12px] bg-[#0A0A0A] flex items-center justify-center gap-1.5 text-[13px] font-semibold leading-[1.45] text-[#FFFFFF] hover:bg-[#262626] transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Continue
+              {save.isPending && <Spinner />}
+              {save.isPending ? "Saving…" : saved_ ? "Continue anyway" : "Continue"}
             </button>
           </div>
         </div>
@@ -464,3 +339,14 @@ export const StepFulfillment: React.FC<StepFulfillmentProps> = ({
     </div>
   );
 };
+
+const Badge: React.FC<{ ok: boolean; yes: string; no: string }> = ({ ok, yes, no }) => (
+  <div className="min-w-[80px] h-[26px] bg-[#F5F5F5] border border-[#EAEAEA] rounded-[4px] px-[8px] flex flex-row items-center justify-center gap-[5px] shrink-0 box-border">
+    {ok && (
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+        <path d="M2.5 6.5L4.5 8.5L9.5 3.5" stroke="#333333" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    )}
+    <span className="text-[11px] font-normal leading-[1.45] text-[#333333]">{ok ? yes : no}</span>
+  </div>
+);

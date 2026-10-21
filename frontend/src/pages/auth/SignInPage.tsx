@@ -10,6 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ROUTES } from "@/constants/routes";
 import { useWorkspaceStore } from "@/store/workspace.store";
+import { signIn } from "@/lib/session";
+import { errorMessage } from "@/api/errors";
 
 const signInSchema = z.object({
   email: z.string().email("Please enter a valid work email"),
@@ -22,50 +24,36 @@ type SignInFormData = z.infer<typeof signInSchema>;
 export default function SignInPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { setUser, setAuthenticated, onboardingComplete } = useWorkspaceStore();
   const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
 
   const {
     register,
     handleSubmit,
     setValue,
     watch,
-    formState: { errors },
+    formState: { errors, isSubmitting },
   } = useForm<SignInFormData>({
     resolver: zodResolver(signInSchema),
-    defaultValues: {
-      email: "aayush@gmail.com",
-      password: "password123",
-      rememberMe: true,
-    },
+    defaultValues: { email: "", password: "", rememberMe: true },
   });
 
   const rememberMe = watch("rememberMe");
 
   const onSubmit = async (data: SignInFormData) => {
-    setIsLoading(true);
-    await new Promise((res) => setTimeout(res, 500));
-
-    setUser({
-      id: "user-001",
-      fullName: "Abhishek Kumar",
-      email: data.email,
-      businessName: "Nova Living",
-      role: "owner",
-    });
-    setAuthenticated(true);
-    setIsLoading(false);
-
-    // If there was a redirect origin, go there; otherwise check onboarding status
-    const from = (location.state as { from?: { pathname: string } })?.from?.pathname;
-    if (from) {
-      navigate(from);
-    } else if (onboardingComplete) {
-      navigate(ROUTES.DASHBOARD);
-    } else {
-      navigate(`${ROUTES.ONBOARDING}/business`);
+    setServerError(null);
+    try {
+      await signIn(data.email, data.password, data.rememberMe ?? false);
+    } catch (e) {
+      setServerError(errorMessage(e));
+      return;
     }
+
+    // back to where the visitor was heading; otherwise the workspace, or the wizard while onboarding is open
+    const { onboardingComplete, onboardingResumeStep } = useWorkspaceStore.getState();
+    const from = (location.state as { from?: { pathname: string; search?: string } } | null)?.from;
+    if (!onboardingComplete) navigate(`${ROUTES.ONBOARDING}/${onboardingResumeStep}`, { replace: true });
+    else navigate(from ? `${from.pathname}${from.search ?? ""}` : ROUTES.DASHBOARD, { replace: true });
   };
 
   return (
@@ -85,14 +73,22 @@ export default function SignInPage() {
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-2">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-2" noValidate>
+          {serverError && (
+            <div role="alert" className="rounded-[12px] border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs text-red-700">
+              {serverError}
+            </div>
+          )}
+
           {/* Work Email */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-[#0A0A0A]">
+            <label htmlFor="email" className="text-xs font-semibold text-[#0A0A0A]">
               Work email
             </label>
             <Input
+              id="email"
               type="email"
+              autoComplete="email"
               placeholder="you@company.com"
               {...register("email")}
               className="h-11 rounded-[18px] border-[#E5E7EB] bg-white px-3.5 text-sm focus:border-black"
@@ -105,20 +101,21 @@ export default function SignInPage() {
           {/* Password */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-semibold text-[#0A0A0A]">
+              <label htmlFor="password" className="text-xs font-semibold text-[#0A0A0A]">
                 Password
               </label>
-              <button
-                type="button"
+              <Link
+                to={ROUTES.FORGOT_PASSWORD}
                 className="text-xs text-[#666666] hover:text-black underline underline-offset-2"
-                onClick={() => alert("Password reset link sent to registered email")}
               >
                 Forgot password?
-              </button>
+              </Link>
             </div>
             <div className="relative">
               <Input
+                id="password"
                 type={showPassword ? "text" : "password"}
+                autoComplete="current-password"
                 placeholder="Enter your password"
                 {...register("password")}
                 className="h-11 rounded-[18px] border-[#E5E7EB] bg-white px-3.5 pr-10 text-sm focus:border-black"
@@ -128,6 +125,7 @@ export default function SignInPage() {
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-700"
                 tabIndex={-1}
+                aria-label={showPassword ? "Hide password" : "Show password"}
               >
                 {showPassword ? (
                   <EyeOff className="h-4 w-4" />
@@ -159,10 +157,10 @@ export default function SignInPage() {
           {/* Submit button */}
           <Button
             type="submit"
-            disabled={isLoading}
+            disabled={isSubmitting}
             className="w-full h-11 rounded-[18px] bg-black text-white hover:bg-neutral-800 font-medium text-sm mt-3 flex items-center justify-center gap-2"
           >
-            {isLoading ? (
+            {isSubmitting ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
                 <span>Signing in...</span>

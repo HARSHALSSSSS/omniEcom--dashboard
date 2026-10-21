@@ -72,26 +72,6 @@ export interface Product {
   updatedAt: string;
 }
 
-export interface ProductsKpiSummary {
-  totalProducts: number;
-  activeListings: number;
-  lowStockCount: number;
-  incompleteCatalogCount: number;
-}
-
-export interface ProductFilterParams {
-  search?: string;
-  status?: string;
-  category?: string;
-  channel?: string;
-  readiness?: "all" | "ready" | "incomplete";
-  stockFilter?: "all" | "in_stock" | "low_stock" | "out_of_stock";
-  page?: number;
-  limit?: number;
-  sortBy?: "updatedAt" | "title" | "price" | "stock" | "readinessScore";
-  sortOrder?: "asc" | "desc";
-}
-
 export const createProductSchema = z.object({
   title: z.string().min(3, "Title must be at least 3 characters"),
   sku: z.string().min(2, "Master SKU is required").regex(/^[A-Z0-9_-]+$/, "SKU must contain only uppercase letters, numbers, hyphens or underscores"),
@@ -109,3 +89,145 @@ export const createProductSchema = z.object({
 });
 
 export type CreateProductInput = z.infer<typeof createProductSchema>;
+
+// ---------------------------------------------------------------------------------------------------------
+// Products list (GET /products/catalog, /products/stats, /products/bulk-actions, /views, /products/export)
+// ---------------------------------------------------------------------------------------------------------
+
+export type CatalogProductStatus = "draft" | "active" | "archived";
+export type CatalogProductType = "physical" | "digital" | "service";
+export type CatalogInventoryStatus = "healthy" | "low" | "out";
+export type CatalogListingStatus = "active" | "attention" | "pending" | "draft" | "unpublished";
+export type CatalogPrimaryActionKey = "open" | "review_inventory" | "update_inventory" | "continue_editing";
+
+export interface CatalogChannel {
+  code: string;
+  name: string;
+  listingStatus: CatalogListingStatus;
+}
+
+export interface CatalogSummary {
+  /** `/api/v1/documents/{id}/content`: bearer protected, load it through the API client */
+  thumbnailUrl: string | null;
+  skuFamily: string;
+  variantCount: number;
+  availableUnits: number;
+  inventoryStatus: CatalogInventoryStatus;
+  channels: CatalogChannel[];
+  publishReadinessPct: number;
+  hint: { key: string; text: string };
+  primaryAction: { key: CatalogPrimaryActionKey; href: string };
+}
+
+/** one card of the Products list: the product core (only the fields the screen reads) plus the summary block */
+export interface CatalogProduct {
+  id: string;
+  productCode: string;
+  title: string;
+  categoryId: string | null;
+  productType: CatalogProductType;
+  status: CatalogProductStatus;
+  variantCount: number;
+  version: number;
+  updatedAt: string;
+  summary: CatalogSummary;
+}
+
+export interface CatalogPage {
+  items: CatalogProduct[];
+  page: number;
+  pageSize: number;
+  total: number;
+  pages: number;
+}
+
+export interface CatalogStats {
+  products: number;
+  variants: number;
+  activeProducts: number;
+  activeVariants: number;
+  draft: number;
+  archived: number;
+  needsAttention: number;
+  tabs: { all: number; active: number; draft: number; archived: number; needsAttention: number };
+}
+
+/** the filters the catalog endpoints share (stats takes everything except status / needsAttention) */
+export interface CatalogFilters {
+  q?: string;
+  status?: CatalogProductStatus;
+  categoryId?: string;
+  channel?: string;
+  inventory?: CatalogInventoryStatus;
+  productType?: CatalogProductType;
+  needsAttention?: boolean;
+}
+
+export interface CatalogQuery extends CatalogFilters {
+  page?: number;
+  pageSize?: number;
+  /** `updatedAt` (default, newest first), `title`, `sku`, `inventory`; a leading `-` flips the direction */
+  sort?: string;
+}
+
+export type BulkProductAction = "archive" | "unarchive" | "duplicate" | "check_publish_readiness";
+
+export interface BulkCheck {
+  code: string;
+  message: string;
+}
+
+export interface BulkResult {
+  index: number;
+  id: string | null;
+  ok: boolean;
+  error: BulkCheck | null;
+  productId: string;
+  status?: string;
+  newProductId?: string;
+  newProductCode?: string;
+  canPublish?: boolean;
+  missing?: BulkCheck[];
+  warnings?: BulkCheck[];
+}
+
+export interface BulkResponse {
+  action: BulkProductAction;
+  summary: { total: number; succeeded: number; failed: number; canPublish?: number };
+  results: BulkResult[];
+}
+
+export interface SavedView {
+  id: string;
+  screen: "products" | "inventory" | "orders" | "returns";
+  name: string;
+  filters: Record<string, unknown>;
+  sort: string | null;
+  shared: boolean;
+  createdBy: string;
+  mine: boolean;
+  canEdit: boolean;
+  createdAt: string;
+  updatedAt: string;
+  version: number;
+}
+
+export interface CategoryNode {
+  id: string;
+  parentId: string | null;
+  name: string;
+  slug: string;
+  path: string;
+  children: CategoryNode[];
+}
+
+/** a data job (the asynchronous CSV export) */
+export interface DataJob {
+  id: string;
+  kind: "import" | "export";
+  entity: string;
+  status: string;
+  format: string;
+  hasOutput: boolean;
+  errors: Array<{ row: number; message: string }>;
+}

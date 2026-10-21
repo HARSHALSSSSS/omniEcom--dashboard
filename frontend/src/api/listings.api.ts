@@ -1,204 +1,118 @@
-import { client } from "./client";
+import { client, toApiError, unwrap } from "./client";
 import { ENDPOINTS } from "./endpoints";
-import {
-  ChannelListingItem,
-  ListingStudioData,
-  ListingMatrixRow,
-  CatalogReachKPIs,
-  ListingIssueSummary,
-  ListingFilterParams,
-  CreateListingInput,
-  PublishingPreparationData,
-  ListingReadinessAuditData,
-  ListingBlockerDetail,
-  ListingSyncTelemetryDetail,
-  ListingUnlistedDetail,
+import type {
+  BulkListingsResponse,
+  CreateOutcome,
+  CreateTarget,
+  ListingAccount,
+  ListingBulkAction,
+  ListingChannels,
+  ListingFilters,
+  ListingRow,
+  ListingsOverview,
+  ListingsQuery,
+  ListingsTablePage,
+  NotListedPage,
+  SyncJobView,
+  TabCounts,
 } from "@/types/listing";
+import { SCREEN_STATUSES } from "@/types/listing";
 
-export interface ListingsListResponse {
-  data: ChannelListingItem[];
-  meta: {
-    total: number;
-    page: number;
-    pageSize: number;
-    totalPages: number;
-    showingFrom: number;
-    showingTo: number;
-    live: number;
-    syncing: number;
-    needsReview: number;
-    failed: number;
-    blocked: number;
-    notListed: number;
-    ready: number;
-    draft: number;
-  };
+const ATTENTION = ["needs_review", "failed", "blocked"];
+
+/** the filters both the table and the product view send, in the API's `filter[...]` style; empty values are left out */
+function commonParams(f: Pick<ListingFilters, "q" | "marketplace" | "accountId">): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (f.q) out.q = f.q;
+  if (f.marketplace) out["filter[marketplace]"] = f.marketplace;
+  if (f.accountId) out["filter[accountId]"] = f.accountId;
+  return out;
+}
+
+export function tableParams(query: ListingsQuery): Record<string, string | number> {
+  const params: Record<string, string | number> = commonParams(query);
+  if (query.tab !== "all" && query.tab !== "not_listed") params["filter[screenStatus]"] = query.tab;
+  if (query.status) params["filter[status]"] = query.status;
+  if (query.contentState) params["filter[contentState]"] = query.contentState;
+  if (query.source) params["filter[source]"] = query.source;
+  if (query.attention) params["filter[attention]"] = "true";
+  if (query.page > 1) params.page = query.page;
+  params.pageSize = query.pageSize;
+  params.sort = query.sort;
+  return params;
+}
+
+function countsOf(items: ListingRow[]): TabCounts {
+  const counts = { all: items.length } as TabCounts;
+  for (const s of SCREEN_STATUSES) counts[s] = items.filter((i) => i.table.screenStatus === s).length;
+  return counts;
 }
 
 export const listingsApi = {
-  getListings: async (
-    params?: ListingFilterParams,
-  ): Promise<ListingsListResponse> => {
-    const query = new URLSearchParams();
-    if (params?.channel) query.append("channel", params.channel);
-    if (params?.status) query.append("status", params.status);
-    if (params?.search) query.append("search", params.search);
-    if (params?.marketplace) query.append("marketplace", params.marketplace);
-    if (params?.category) query.append("category", params.category);
-    if (params?.readiness) query.append("readiness", params.readiness);
-    if (params?.inventory) query.append("inventory", params.inventory);
-    if (params?.productStatus) query.append("productStatus", params.productStatus);
-    if (params?.potential) query.append("potential", params.potential);
-    if (params?.issue) query.append("issue", params.issue);
-    if (params?.page) query.append("page", String(params.page));
-    if (params?.pageSize) query.append("pageSize", String(params.pageSize));
-
-    const queryString = query.toString();
-    const url = `${ENDPOINTS.LISTINGS}${queryString ? `?${queryString}` : ""}`;
-    const res = await client.get<ListingsListResponse>(url);
-    return res.data;
+  overview: async (filters: Pick<ListingFilters, "marketplace" | "accountId">, signal?: AbortSignal) => {
+    const params: Record<string, string> = {};
+    if (filters.marketplace) params["filter[marketplace]"] = filters.marketplace;
+    if (filters.accountId) params["filter[accountId]"] = filters.accountId;
+    return unwrap<ListingsOverview>(await client.get(ENDPOINTS.LISTINGS_OVERVIEW, { params, signal }));
   },
 
-  getListingMatrix: async (): Promise<ListingMatrixRow[]> => {
-    const res = await client.get<{ data: ListingMatrixRow[] }>(
-      ENDPOINTS.LISTINGS_MATRIX,
-    );
-    return res.data.data;
+  table: async (query: ListingsQuery, signal?: AbortSignal) =>
+    unwrap<ListingsTablePage>(await client.get(ENDPOINTS.LISTINGS_TABLE, { params: tableParams(query), signal })),
+
+  /** active variants x connected accounts that have no listing yet (rows are variants, not listings) */
+  notListed: async (query: Pick<ListingsQuery, "q" | "marketplace" | "accountId" | "page" | "pageSize">, signal?: AbortSignal) => {
+    const params: Record<string, string | number> = commonParams(query);
+    if (query.page > 1) params.page = query.page;
+    params.pageSize = query.pageSize;
+    return unwrap<NotListedPage>(await client.get(ENDPOINTS.LISTINGS_NOT_LISTED, { params, signal }));
   },
 
-  getListingReachKPIs: async (): Promise<CatalogReachKPIs> => {
-    const res = await client.get<{ data: CatalogReachKPIs }>(
-      ENDPOINTS.LISTINGS_REACH,
-    );
-    return res.data.data;
+  /**
+   * The listings of one product. The numbered table has no product filter, so this reads the cursor list
+   * (`filter[productId]`, with the table block) and applies the tab on the client; a product has few listings.
+   */
+  productListings: async (query: ListingsQuery, signal?: AbortSignal): Promise<ListingsTablePage> => {
+    const params: Record<string, string | number> = { ...commonParams(query), include: "table", limit: 100, "filter[productId]": query.productId ?? "" };
+    if (query.status) params["filter[status]"] = query.status;
+    if (query.contentState) params["filter[contentState]"] = query.contentState;
+    if (query.source) params["filter[source]"] = query.source;
+    const res = await client.get<{ data: ListingRow[] }>(ENDPOINTS.LISTINGS, { params, signal });
+    const all = res.data.data;
+    const items = all.filter((i) => (query.tab === "all" || query.tab === "not_listed" || i.table.screenStatus === query.tab) && (!query.attention || ATTENTION.includes(i.table.screenStatus)));
+    return { items, page: 1, pageSize: Math.max(items.length, 1), total: items.length, pages: 1, counts: countsOf(all) };
   },
 
-  getListingIssueSummary: async (): Promise<ListingIssueSummary> => {
-    const res = await client.get<{ data: ListingIssueSummary }>(
-      ENDPOINTS.LISTINGS_ISSUES,
-    );
-    return res.data.data;
+  /** a 200 with a result per listing, even when some failed; publish and retry answer with a sync job id per listing */
+  bulk: async (action: ListingBulkAction, ids: string[]) =>
+    unwrap<BulkListingsResponse>(await client.post(ENDPOINTS.LISTINGS_BULK_ACTIONS, { action, ids })),
+
+  /** starts a draft listing for a variant on a connected account */
+  create: async (target: CreateTarget): Promise<CreateOutcome> => {
+    const key = `${target.variantId}:${target.accountId}`;
+    try {
+      const listing = unwrap<{ id: string }>(await client.post(ENDPOINTS.LISTINGS, { marketplaceAccountId: target.accountId, variantId: target.variantId }));
+      return { key, label: target.label, ok: true, message: "Draft listing created", listingId: listing.id };
+    } catch (e) {
+      return { key, label: target.label, ok: false, message: toApiError(e).message, listingId: null };
+    }
   },
 
-  getPublishingPreparation: async (): Promise<PublishingPreparationData> => {
-    const res = await client.get<{ data: PublishingPreparationData }>(
-      ENDPOINTS.LISTINGS_PUBLISHING_PREPARATION,
-    );
-    return res.data.data;
-  },
+  syncJob: async (jobId: string) => unwrap<SyncJobView>(await client.get(ENDPOINTS.SYNC_JOB(jobId))),
 
-  confirmPublishCohort: async (
-    acknowledgement: boolean,
-  ): Promise<{ success: boolean; publishedCount: number; message: string }> => {
-    const res = await client.post<{
-      data: { success: boolean; publishedCount: number; message: string };
-    }>(ENDPOINTS.LISTINGS_CONFIRM_PUBLISH, { acknowledgement });
-    return res.data.data;
-  },
-
-  getReadinessAudit: async (): Promise<ListingReadinessAuditData> => {
-    const res = await client.get<{ data: ListingReadinessAuditData }>(
-      ENDPOINTS.LISTINGS_READINESS_AUDIT,
-    );
-    return res.data.data;
-  },
-
-  applyReadinessSuggestion: async (
-    suggestionId: string,
-    action: "apply" | "dismiss" = "apply",
-    value?: string,
-  ): Promise<{ success: boolean; message: string }> => {
-    const res = await client.post<{
-      data: { success: boolean; message: string };
-    }>(ENDPOINTS.LISTINGS_APPLY_SUGGESTION, { suggestionId, action, value });
-    return res.data.data;
-  },
-
-  getListingBlocker: async (id: string): Promise<ListingBlockerDetail> => {
-    const res = await client.get<{ data: ListingBlockerDetail }>(
-      ENDPOINTS.LISTING_BLOCKER(id),
-    );
-    return res.data.data;
-  },
-
-  resolveListingBlocker: async (
-    id: string,
-    value: string,
-    attributeKey: string = "Material",
-  ): Promise<{ success: boolean; message: string; blocker: ListingBlockerDetail }> => {
-    const res = await client.post<{
-      data: { success: boolean; message: string; blocker: ListingBlockerDetail };
-    }>(ENDPOINTS.LISTING_RESOLVE_BLOCKER(id), { value, attributeKey });
-    return res.data.data;
-  },
-
-  getListingSyncTelemetry: async (id: string): Promise<ListingSyncTelemetryDetail> => {
-    const res = await client.get<{ data: ListingSyncTelemetryDetail }>(
-      ENDPOINTS.LISTING_SYNC_TELEMETRY(id),
-    );
-    return res.data.data;
-  },
-
-  getListingUnlisted: async (id: string): Promise<ListingUnlistedDetail> => {
-    const res = await client.get<{ data: ListingUnlistedDetail }>(
-      ENDPOINTS.LISTING_UNLISTED(id),
-    );
-    return res.data.data;
-  },
-
-  prepareListing: async (
-    id: string,
-    channel: string = "meesho",
-  ): Promise<{ success: boolean; listingId: string; message: string }> => {
-    const res = await client.post<{
-      data: { success: boolean; listingId: string; message: string };
-    }>(ENDPOINTS.LISTING_PREPARE(id), { channel });
-    return res.data.data;
-  },
-
-  getListingStudio: async (id: string): Promise<ListingStudioData> => {
-    const res = await client.get<{ data: ListingStudioData }>(
-      `${ENDPOINTS.LISTINGS}/${id}`,
-    );
-    return res.data.data;
-  },
-
-  updateListing: async (
-    id: string,
-    payload: Partial<ChannelListingItem>,
-  ): Promise<ChannelListingItem> => {
-    const res = await client.put<{ data: ChannelListingItem }>(
-      `${ENDPOINTS.LISTINGS}/${id}`,
-      payload,
-    );
-    return res.data.data;
-  },
-
-  createListing: async (
-    payload: CreateListingInput,
-  ): Promise<ChannelListingItem> => {
-    const res = await client.post<{ data: ChannelListingItem }>(
-      ENDPOINTS.LISTINGS,
-      payload,
-    );
-    return res.data.data;
-  },
-
-  publishListing: async (
-    id: string,
-  ): Promise<{ success: boolean; listing: ChannelListingItem; message: string }> => {
-    const res = await client.post<{
-      data: { success: boolean; listing: ChannelListingItem; message: string };
-    }>(`${ENDPOINTS.LISTING_PUBLISH(id)}`);
-    return res.data.data;
-  },
-
-  bulkPublish: async (
-    listingIds: string[],
-  ): Promise<{ success: boolean; publishedCount: number }> => {
-    const res = await client.post<{
-      data: { success: boolean; publishedCount: number };
-    }>(ENDPOINTS.LISTINGS_BULK_PUBLISH, { listingIds });
-    return res.data.data;
+  /** connected accounts and the marketplaces' own names (filters, create-listing targets) */
+  channels: async (): Promise<ListingChannels> => {
+    const [accounts, marketplaces] = await Promise.all([
+      client.get<{ data: ListingAccount[] }>(ENDPOINTS.MARKETPLACE_ACCOUNTS, { params: { limit: 100 } }),
+      client.get<{ data: Array<{ code: string; displayName: string }> }>(ENDPOINTS.MARKETPLACES).catch(() => null),
+    ]);
+    const names = new Map((marketplaces?.data.data ?? []).map((m) => [m.code, m.displayName]));
+    const seen = new Map<string, { code: string; name: string }>();
+    for (const a of accounts.data.data) {
+      if (!seen.has(a.marketplace)) seen.set(a.marketplace, { code: a.marketplace, name: names.get(a.marketplace) ?? a.displayName });
+    }
+    return {
+      accounts: accounts.data.data.map((a) => ({ id: a.id, marketplace: a.marketplace, displayName: a.displayName, status: a.status })),
+      marketplaces: [...seen.values()].sort((x, y) => x.name.localeCompare(y.name)),
+    };
   },
 };

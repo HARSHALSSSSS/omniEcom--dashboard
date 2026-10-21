@@ -1,71 +1,53 @@
-
 import { Link } from "react-router-dom";
-import type { OrderPipelineStage } from "@/types/dashboard";
+import { DONE_STAGES, STAGE_LABELS } from "@/constants/dashboard.data";
+import { ROUTES } from "@/constants/routes";
+import { formatNumber } from "@/utils/format";
+import type { Dashboard } from "@/types/dashboard";
 
 interface OrderFlowSectionProps {
-  stages: OrderPipelineStage[];
+  stages: NonNullable<Dashboard["orderFlow"]>;
 }
 
-export const OrderFlowSection: React.FC<OrderFlowSectionProps> = ({
-  stages,
-}) => {
+export const OrderFlowSection: React.FC<OrderFlowSectionProps> = ({ stages }) => {
+  const empty = stages.every((s) => s.count === 0);
   return (
-    <div className="w-full bg-white border border-[#EAEAEA] rounded-[12px] p-6 flex flex-col gap-6">
-      {/* Section Introduction */}
+    <section
+      aria-labelledby="order-flow-title"
+      className="w-full bg-white border border-[#EAEAEA] rounded-[12px] p-6 flex flex-col gap-6"
+    >
       <div className="flex items-center justify-between">
         <div className="flex flex-col gap-1">
-          <h2 className="text-[18px] font-semibold text-[#000000] leading-[145%]">
+          <h2 id="order-flow-title" className="text-[18px] font-semibold text-[#000000] leading-[145%]">
             Order flow
           </h2>
           <p className="text-[13px] font-normal text-[#666666] leading-[145%]">
-            Today&apos;s operational pipeline
+            {empty ? "No orders placed today yet" : "Today’s operational pipeline"}
           </p>
         </div>
 
-        <Link
-          to="/orders"
-          className="text-[12px] font-medium text-[#000000] hover:underline leading-[145%]"
-        >
+        <Link to={ROUTES.ORDERS} className="text-[12px] font-medium text-[#000000] hover:underline leading-[145%]">
           View all orders →
         </Link>
       </div>
 
-      {/* Pipeline Stages */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-6">
-        {stages.map((stage, idx) => {
-          const isLast = idx === stages.length - 1;
-          const isGreen = stage.indicatorColor === "green";
-
-          return (
-            <div key={stage.id} className="flex flex-col gap-2.5">
-              {/* Stage label and arrow */}
-              <div className="flex items-center justify-between h-[17px]">
-                <span className="text-[12px] font-normal text-[#666666] leading-[145%]">
-                  {stage.label}
+      <ol className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-6">
+        {stages.map(({ stage, count }, idx) => (
+          <li key={stage} className="flex flex-col gap-2.5">
+            <div className="flex items-center justify-between h-[17px]">
+              <span className="text-[12px] font-normal text-[#666666] leading-[145%]">{STAGE_LABELS[stage]}</span>
+              {idx < stages.length - 1 && (
+                <span aria-hidden="true" className="text-[13px] text-[#BDBDBD] font-normal select-none">
+                  →
                 </span>
-                {!isLast && (
-                  <span className="text-[13px] text-[#BDBDBD] font-normal select-none">
-                    →
-                  </span>
-                )}
-              </div>
-
-              {/* Order Count */}
-              <div className="text-[26px] font-semibold text-[#000000] leading-[120%] tracking-normal">
-                {stage.count}
-              </div>
-
-              {/* Colored Indicator Line (height 3px, radius 2px) */}
-              <div
-                className={`h-[3px] w-full rounded-[2px] ${
-                  isGreen ? "bg-[#16A34A]" : "bg-[#2563EB]"
-                }`}
-              />
+              )}
             </div>
-          );
-        })}
-      </div>
-    </div>
+            <div className="text-[26px] font-semibold text-[#000000] leading-[120%] tracking-normal">
+              {formatNumber(count)}
+            </div>
+            <div className={`h-[3px] w-full rounded-[2px] ${DONE_STAGES.has(stage) ? "bg-[#16A34A]" : "bg-[#2563EB]"}`} />
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 };
-
