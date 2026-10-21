@@ -34,6 +34,11 @@ export default function ShippingPage() {
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
   const [expandedException, setExpandedException] = useState<string | null>("no-method");
 
+  // Tracking attention state
+  const [dismissedTrackingAlerts, setDismissedTrackingAlerts] = useState<string[]>([]);
+  const [retryingTrackingOrder, setRetryingTrackingOrder] = useState<string | null>(null);
+  const [showExceptions, setShowExceptions] = useState<boolean>(false);
+
   // Drawers state
   const [activeDrawer, setActiveDrawer] = useState<
     "choose-shipping" | "add-provider" | "create-rule" | null
@@ -61,6 +66,12 @@ export default function ShippingPage() {
   const orders = shippingData?.orders || [];
   const trackingList = shippingData?.tracking || [];
   const exceptionsList = shippingData?.exceptions || [];
+
+  // Derived tracking issues
+  const failedTrackingItems = trackingList.filter((trk) => trk.status === "Sync Failed");
+  const activeFailedTracking = failedTrackingItems.find(
+    (item) => !dismissedTrackingAlerts.includes(item.orderNumber)
+  );
 
   // Drawer 1: Choose Shipping state
   const [selectedOrderForDrawer, setSelectedOrderForDrawer] = useState<{
@@ -115,6 +126,15 @@ export default function ShippingPage() {
 
   const triggerSync = () => {
     syncMutation.mutate();
+  };
+
+  const handleRetryTracking = (orderNumber: string) => {
+    setRetryingTrackingOrder(orderNumber);
+    syncMutation.mutate(undefined, {
+      onSettled: () => {
+        setRetryingTrackingOrder(null);
+      },
+    });
   };
 
   return (
@@ -173,28 +193,100 @@ export default function ShippingPage() {
           Choose, configure and monitor the shipping method used to move every order.
         </p>
 
-        {/* Operational Status area */}
+        {/* Dynamic Operational Status Area */}
         {syncMutation.isPending ? (
-          <div className="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50/60 px-3.5 py-2 text-[11px] text-blue-900 animate-pulse">
-            <div className="flex items-center gap-2">
-              <RefreshCw className="h-3.5 w-3.5 text-blue-600 animate-spin" />
-              <span className="font-medium">Synchronizing shipping data…</span>
-              <span className="text-blue-700">Orders: 184 · Tracking updates: processing</span>
+          /* Card A: Syncing (Light blue tinted box with progress bar) */
+          <div className="rounded-xl border border-[#DCEBFE] bg-[#F7FAFF] p-4 sm:p-5 space-y-3 shadow-sm animate-in fade-in duration-200">
+            {/* Header / Eyebrow */}
+            <div className="flex items-center gap-2 text-[10px]">
+              <span className="font-semibold uppercase tracking-wider text-[#666666]">STATUS REPLACEMENT</span>
+              <span className="h-2.5 w-[1px] bg-[#BDBDBD]" />
+              <span className="font-semibold text-black text-[11px]">Syncing</span>
             </div>
-            <span className="text-[11px] font-mono text-blue-700">Shipping statuses: 176 / 184</span>
+
+            {/* Title with blue rotating refresh icon */}
+            <div className="flex items-center gap-2 text-[13px] font-semibold text-black">
+              <RefreshCw className="h-4 w-4 text-[#2563EB] animate-spin stroke-[2]" />
+              <span>Synchronizing shipping data…</span>
+            </div>
+
+            {/* Orders and Shipping statuses count */}
+            <div className="flex items-center justify-between text-[11px] text-black">
+              <span>Orders: 184</span>
+              <span>Shipping statuses: 176 / 184</span>
+            </div>
+
+            {/* Progress bar */}
+            <div className="h-1.5 w-full rounded-full bg-[#EAEAEA] overflow-hidden">
+              <div className="h-full w-[95%] rounded-full bg-[#2563EB]" />
+            </div>
+
+            {/* Tracking updates indicator */}
+            <div className="flex items-center gap-2 text-[11px] font-medium text-[#2563EB] pt-0.5">
+              <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full border border-[#2563EB]">
+                <span className="h-1 w-1 rounded-full bg-[#2563EB]" />
+              </span>
+              <span>Tracking updates: processing</span>
+            </div>
+
+            {/* Sub-note */}
+            <p className="text-[11px] text-[#666666]">
+              Keep working while shipping data synchronizes.
+            </p>
           </div>
         ) : syncMutation.isSuccess ? (
-          <div className="flex items-center justify-between rounded-lg border border-emerald-200 bg-[#F3FAF5] px-3.5 py-2 text-[11px] text-emerald-900">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-3.5 w-3.5 text-[#16A34A]" />
-              <span className="font-semibold text-black">Shipping sync complete</span>
-              <span className="text-[#666666]">184 processed · 181 updated · 3 require attention</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="text-[10px] text-[#666666]">3 exceptions from this sync</span>
+          /* Card B: Completion (Light green tinted box with View Exceptions button and dismiss) */
+          <div className="rounded-xl border border-[#DCFCE7] bg-[#F9FEFA] p-4 sm:p-5 space-y-3 shadow-sm animate-in fade-in duration-200">
+            {/* Header / Eyebrow */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-[10px]">
+                <span className="font-semibold uppercase tracking-wider text-[#666666]">STATUS REPLACEMENT</span>
+                <span className="h-2.5 w-[1px] bg-[#BDBDBD]" />
+                <span className="font-semibold text-black text-[11px]">Completion</span>
+              </div>
               <button
                 onClick={() => syncMutation.reset()}
-                className="text-[11px] font-medium text-emerald-700 underline hover:text-emerald-900"
+                className="p-1 rounded text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100/50 transition-colors cursor-pointer"
+                title="Dismiss"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            {/* Title with green checkmark circle */}
+            <div className="flex items-center gap-2 text-[13px] font-semibold text-black">
+              <CheckCircle2 className="h-4 w-4 text-[#16A34A] stroke-[2]" />
+              <span>Shipping sync complete</span>
+            </div>
+
+            {/* Stat counts row */}
+            <div className="flex flex-wrap items-center gap-3 text-[11px]">
+              <span className="font-bold text-black">184 processed</span>
+              <span className="font-medium text-[#16A34A]">181 updated</span>
+              <span className="font-medium text-[#D97706]">3 require attention</span>
+            </div>
+
+            {/* Explanation text */}
+            <p className="text-[11px] text-[#666666] leading-relaxed">
+              3 exceptions from this sync only; Overview's 7 represent overall shipping attention.
+            </p>
+
+            {/* Action button: View Exceptions */}
+            <div className="pt-1 flex items-center justify-between">
+              <button
+                onClick={() => {
+                  setShowExceptions(true);
+                  const el = document.getElementById("exception-matrix-section");
+                  el?.scrollIntoView({ behavior: "smooth" });
+                }}
+                className="inline-flex h-8 items-center gap-2 rounded-lg border border-[#EAEAEA] bg-white px-3.5 text-[12px] font-medium text-black hover:bg-neutral-50 transition-colors shadow-sm cursor-pointer"
+              >
+                <ArrowRight className="h-3.5 w-3.5 text-black stroke-[1.75]" />
+                <span>View Exceptions</span>
+              </button>
+              <button
+                onClick={() => syncMutation.reset()}
+                className="text-[11px] font-medium text-[#666666] hover:text-black underline cursor-pointer"
               >
                 Dismiss
               </button>
@@ -206,6 +298,7 @@ export default function ShippingPage() {
             <span>4 connected channels · 2 shipping methods active · {exceptionsList.length || 7} orders need attention</span>
           </div>
         )}
+
 
         {/* Workspace Navigation Tabs */}
         <div className="mt-2 flex items-center justify-between border-b border-[#EAEAEA]">
@@ -570,18 +663,244 @@ export default function ShippingPage() {
             <div className="text-[11px] text-[#666666]">
               2 undecided · 1 label · 1 tracking · 1 sync · 1 SLA risk · 1 capability
             </div>
-            <button
-              onClick={() => {
-                const el = document.getElementById("exception-matrix-section");
-                el?.scrollIntoView({ behavior: "smooth" });
-              }}
-              className="text-[11px] font-semibold text-[#D97706] hover:underline text-left sm:text-right"
-            >
-              View exceptions →
-            </button>
+            {exceptionsList.length > 0 && (
+              <button
+                onClick={() => setShowExceptions((prev) => !prev)}
+                className="text-[11px] font-semibold text-[#D97706] hover:underline text-left sm:text-right flex items-center gap-1 cursor-pointer"
+              >
+                <span>{showExceptions ? "Hide exceptions" : "View exceptions"}</span>
+                <span>{showExceptions ? "↑" : "→"}</span>
+              </button>
+            )}
           </div>
+
+          {/* Contextual Exception Matrix - shown at bottom of section ONLY when user clicks 'View exceptions' and exceptions exist */}
+          {showExceptions && exceptionsList.length > 0 && (
+            <div
+              id="exception-matrix-section"
+              className="space-y-4 pt-4 border-t border-[#EAEAEA] animate-in fade-in duration-200"
+            >
+              {/* Eyebrow / State Label */}
+              <div className="flex items-center gap-2 text-[10px]">
+                <span className="font-semibold uppercase tracking-wider text-[#666666]">CONTEXTUAL STATE</span>
+                <span className="h-2.5 w-[1px] bg-[#BDBDBD]" />
+                <span className="font-semibold text-black text-[11px]">Shipping exception</span>
+              </div>
+
+              {/* Section Heading & Export Button */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-[16px] font-semibold text-black">7 orders need shipping attention</h2>
+                  <p className="text-[11px] text-[#666666] mt-0.5">
+                    Illustrative unresolved state · 6 categories, 7 distinct orders
+                  </p>
+                </div>
+                <button
+                  onClick={() => alert("Exporting all exceptions...")}
+                  className="inline-flex h-8 items-center rounded-lg border border-[#EAEAEA] bg-white px-3.5 text-[12px] font-medium text-black hover:bg-neutral-50 transition-colors shadow-sm"
+                >
+                  Export exceptions
+                </button>
+              </div>
+
+              {/* Exceptions Table Container */}
+              <div className="w-full text-[11px]">
+                {/* Header Row with light beige background */}
+                <div className="grid grid-cols-12 items-center bg-[#FAF9F7] px-4 py-2 text-[10px] font-medium text-[#666666]">
+                  <div className="col-span-4 pl-6 uppercase tracking-wider">EXCEPTION</div>
+                  <div className="col-span-1 text-center uppercase tracking-wider">COUNT</div>
+                  <div className="col-span-4 uppercase tracking-wider">AFFECTED ORDERS</div>
+                  <div className="col-span-3 text-right uppercase tracking-wider">NEXT ACTION</div>
+                </div>
+
+                {/* Exception 1: No shipping method selected (Accordion item) */}
+                <div className="border-b border-[#EAEAEA]/80">
+                  <div
+                    onClick={() => setExpandedException(expandedException === "no-method" ? null : "no-method")}
+                    className="grid grid-cols-12 items-center px-4 py-3 hover:bg-neutral-50/50 cursor-pointer select-none"
+                  >
+                    <div className="col-span-4 flex items-center gap-2 text-black font-semibold">
+                      <ChevronDown
+                        className={cn(
+                          "h-3.5 w-3.5 text-[#666666] transition-transform",
+                          expandedException !== "no-method" && "-rotate-90"
+                        )}
+                      />
+                      <AlertTriangle className="h-3.5 w-3.5 text-[#D97706] stroke-[2]" />
+                      <span>No shipping method selected</span>
+                    </div>
+                    <div className="col-span-1 text-center font-semibold text-[#D97706]">2</div>
+                    <div className="col-span-4 text-[#666666]">ORD-10482 · ORD-10484</div>
+                    <div className="col-span-3 text-right">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedOrderForDrawer({
+                            id: "ORD-10482",
+                            marketplace: "Flipkart",
+                            destination: "Pune, Maharashtra",
+                            warehouse: "Mumbai",
+                            product: "Cotton cushion",
+                            sku: "CUS-014",
+                            weight: "0.65 kg",
+                            orderValue: "₹1,899 · illustrative",
+                            chosenMethod: "flipkart",
+                          });
+                          setActiveDrawer("choose-shipping");
+                        }}
+                        className="font-medium text-black hover:underline"
+                      >
+                        Choose shipping →
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Sub-accordion explanation card with warm beige tint */}
+                  {expandedException === "no-method" && (
+                    <div className="bg-[#FAF9F7] px-10 py-5 space-y-3">
+                      <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+                        {/* Column 1: What happened? */}
+                        <div className="md:col-span-3 space-y-1">
+                          <span className="text-[11px] font-semibold text-black">What happened?</span>
+                          <p className="text-[11px] text-[#666666] leading-relaxed">
+                            No shipping method has been confirmed.
+                          </p>
+                          <p className="text-[11px] font-semibold text-black mt-1">
+                            Which order? ORD-10482
+                          </p>
+                        </div>
+
+                        {/* Column 2: Why? */}
+                        <div className="md:col-span-4 space-y-1">
+                          <span className="text-[11px] font-semibold text-black">Why?</span>
+                          <p className="text-[11px] text-[#666666] leading-relaxed">
+                            A default preference exists, but the shipping selection still needs merchant confirmation.
+                          </p>
+                        </div>
+
+                        {/* Column 3: What can I do now? */}
+                        <div className="md:col-span-5 space-y-2">
+                          <span className="text-[11px] font-semibold text-black">What can I do now?</span>
+                          <p className="text-[11px] text-[#666666] leading-relaxed">
+                            Compare available methods and confirm a selection. Manual override is available where supported.
+                          </p>
+                          <div className="pt-1">
+                            <button
+                              onClick={() => {
+                                setSelectedOrderForDrawer({
+                                  id: "ORD-10482",
+                                  marketplace: "Flipkart",
+                                  destination: "Pune, Maharashtra",
+                                  warehouse: "Mumbai",
+                                  product: "Cotton cushion",
+                                  sku: "CUS-014",
+                                  weight: "0.65 kg",
+                                  orderValue: "₹1,899 · illustrative",
+                                  chosenMethod: "flipkart",
+                                });
+                                setActiveDrawer("choose-shipping");
+                              }}
+                              className="inline-flex h-8 items-center rounded-lg bg-black px-4 text-[11px] font-medium text-white hover:bg-neutral-800 transition-colors shadow-sm"
+                            >
+                              Choose Shipping
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Exception 2: Label unavailable */}
+                <div className="grid grid-cols-12 items-center px-4 py-3 border-b border-[#EAEAEA]/80 hover:bg-neutral-50/50">
+                  <div className="col-span-4 flex items-center gap-2 text-black">
+                    <ChevronRight className="h-3.5 w-3.5 text-[#666666]" />
+                    <AlertTriangle className="h-3.5 w-3.5 text-[#D97706] stroke-[2]" />
+                    <span className="font-normal text-black">Label unavailable</span>
+                  </div>
+                  <div className="col-span-1 text-center font-semibold text-[#D97706]">1</div>
+                  <div className="col-span-4 text-[#666666]">ORD-10495</div>
+                  <div className="col-span-3 text-right">
+                    <button className="text-black font-medium hover:underline">
+                      Verify label capability →
+                    </button>
+                  </div>
+                </div>
+
+                {/* Exception 3: Tracking not received */}
+                <div className="grid grid-cols-12 items-center px-4 py-3 border-b border-[#EAEAEA]/80 hover:bg-neutral-50/50">
+                  <div className="col-span-4 flex items-center gap-2 text-black">
+                    <ChevronRight className="h-3.5 w-3.5 text-[#666666]" />
+                    <AlertTriangle className="h-3.5 w-3.5 text-[#D97706] stroke-[2]" />
+                    <span className="font-normal text-black">Tracking not received</span>
+                  </div>
+                  <div className="col-span-1 text-center font-semibold text-[#D97706]">1</div>
+                  <div className="col-span-4 text-[#666666]">ORD-10471</div>
+                  <div className="col-span-3 text-right">
+                    <button className="text-black font-medium hover:underline">
+                      Review tracking →
+                    </button>
+                  </div>
+                </div>
+
+                {/* Exception 4: Shipping sync failed */}
+                <div className="grid grid-cols-12 items-center px-4 py-3 border-b border-[#EAEAEA]/80 hover:bg-neutral-50/50">
+                  <div className="col-span-4 flex items-center gap-2 text-black">
+                    <ChevronRight className="h-3.5 w-3.5 text-[#666666]" />
+                    <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full border border-[#DC2626] text-[#DC2626] text-[8px] font-bold">
+                      ✕
+                    </span>
+                    <span className="font-normal text-black">Shipping sync failed</span>
+                  </div>
+                  <div className="col-span-1 text-center font-semibold text-[#DC2626]">1</div>
+                  <div className="col-span-4 text-[#666666]">ORD-10474</div>
+                  <div className="col-span-3 text-right">
+                    <button className="text-black font-medium hover:underline">
+                      Retry sync →
+                    </button>
+                  </div>
+                </div>
+
+                {/* Exception 5: SLA risk */}
+                <div className="grid grid-cols-12 items-center px-4 py-3 border-b border-[#EAEAEA]/80 hover:bg-neutral-50/50">
+                  <div className="col-span-4 flex items-center gap-2 text-black">
+                    <ChevronRight className="h-3.5 w-3.5 text-[#666666]" />
+                    <AlertTriangle className="h-3.5 w-3.5 text-[#D97706] stroke-[2]" />
+                    <span className="font-normal text-black">SLA risk</span>
+                  </div>
+                  <div className="col-span-1 text-center font-semibold text-[#D97706]">1</div>
+                  <div className="col-span-4 text-[#666666]">ORD-10488</div>
+                  <div className="col-span-3 text-right">
+                    <button className="text-black font-medium hover:underline">
+                      Review order deadline →
+                    </button>
+                  </div>
+                </div>
+
+                {/* Exception 6: Connector capability limitation */}
+                <div className="grid grid-cols-12 items-center px-4 py-3 hover:bg-neutral-50/50">
+                  <div className="col-span-4 flex items-center gap-2 text-black">
+                    <ChevronRight className="h-3.5 w-3.5 text-[#666666]" />
+                    <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full border border-[#DC2626] text-[#DC2626] text-[8px] font-bold">
+                      ✕
+                    </span>
+                    <span className="font-normal text-black">Connector capability limitation</span>
+                  </div>
+                  <div className="col-span-1 text-center font-semibold text-[#DC2626]">1</div>
+                  <div className="col-span-4 text-[#666666]">ORD-10503</div>
+                  <div className="col-span-3 text-right">
+                    <button className="text-black font-medium hover:underline">
+                      View capability →
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </section>
       )}
+
+
 
       {/* =========================================================================
           SECTION 2: ORDERS TO SHIP
@@ -1243,8 +1562,8 @@ export default function ShippingPage() {
                     <td className="py-2.5 pr-3 text-right text-black font-normal">
                       {trk.status === "Sync Failed" ? (
                         <button
-                          onClick={() => triggerSync()}
-                          className="text-[#DC2626] font-medium hover:underline"
+                          onClick={() => handleRetryTracking(trk.orderNumber)}
+                          className="text-[#DC2626] font-medium hover:underline cursor-pointer"
                         >
                           Retry required
                         </button>
@@ -1258,388 +1577,106 @@ export default function ShippingPage() {
             </table>
           </div>
 
-          {/* Tracking Attention Card */}
-          <div className="relative rounded-lg border-l-4 border-l-[#DC2626] bg-[#FFF8F8] p-3.5 text-[11px] space-y-2.5 shadow-sm border border-neutral-200/40">
-            {/* Header row */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full border border-[#DC2626] text-[#DC2626] text-[9px] font-bold">
-                  !
-                </span>
-                <span className="font-semibold text-black text-[12px]">
-                  Tracking sync needs attention
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5 text-[11px] font-medium text-[#DC2626]">
-                <span className="flex h-3 w-3 items-center justify-center rounded-full border border-[#DC2626] text-[8px]">
-                  ✕
-                </span>
-                <span>ORD-10474 · Sync failed</span>
-              </div>
-            </div>
-
-            {/* Three columns breakdown */}
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 pt-0.5">
-              {/* Col 1: What failed? */}
-              <div className="md:col-span-4 space-y-0.5">
-                <span className="font-semibold text-black text-[11px]">What failed?</span>
-                <p className="text-[#666666] text-[11px] leading-relaxed">
-                  The latest tracking status was not received.
-                </p>
-                <p className="text-[#666666] text-[10px]">
-                  Failed 08 Oct at 12:32 · ORD-10474
-                </p>
-              </div>
-
-              {/* Col 2: Possible reason */}
-              <div className="md:col-span-4 space-y-0.5">
-                <span className="font-semibold text-black text-[11px]">Possible reason</span>
-                <p className="text-[#666666] text-[11px] leading-relaxed">
-                  The connector may have timed out or may need its tracking capability verified.
-                </p>
-              </div>
-
-              {/* Col 3: Action */}
-              <div className="md:col-span-4 space-y-1.5">
-                <p className="text-[#666666] text-[11px] leading-relaxed">
-                  Verify the connector configuration, then retry the tracking update.
-                </p>
-                <div>
-                  <button
-                    onClick={() => alert("Retrying tracking update for ORD-10474...")}
-                    className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-[#EAEAEA] bg-white px-3 text-[11px] font-medium text-black hover:bg-neutral-50 transition-colors shadow-sm"
-                  >
-                    <RefreshCw className="h-3 w-3 text-[#666666] stroke-[1.75]" />
-                    <span>Retry</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* =========================================================================
-          SECTION 6: CONTEXTUAL STATE — SHIPPING EXCEPTION MATRIX
-          ========================================================================= */}
-      {activeTab === "overview" && (
-        <section id="exception-matrix-section" className="space-y-4 pt-6 border-t border-[#EAEAEA]">
-          {/* Eyebrow / State Label */}
-          <div className="flex items-center gap-2 text-[10px]">
-            <span className="font-semibold uppercase tracking-wider text-[#666666]">CONTEXTUAL STATE</span>
-            <span className="h-2.5 w-[1px] bg-[#BDBDBD]" />
-            <span className="font-semibold text-black text-[11px]">Shipping exception</span>
-          </div>
-
-          {/* Section Heading & Export Button */}
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-[16px] font-semibold text-black">7 orders need shipping attention</h2>
-              <p className="text-[11px] text-[#666666] mt-0.5">
-                Illustrative unresolved state · 6 categories, 7 distinct orders
-              </p>
-            </div>
-            <button
-              onClick={() => alert("Exporting all exceptions...")}
-              className="inline-flex h-8 items-center rounded-lg border border-[#EAEAEA] bg-white px-3.5 text-[12px] font-medium text-black hover:bg-neutral-50 transition-colors shadow-sm"
-            >
-              Export exceptions
-            </button>
-          </div>
-
-          {/* Exceptions Table Container */}
-          <div className="w-full text-[11px]">
-            {/* Header Row with light beige background */}
-            <div className="grid grid-cols-12 items-center bg-[#FAF9F7] px-4 py-2 text-[10px] font-medium text-[#666666]">
-              <div className="col-span-4 pl-6 uppercase tracking-wider">EXCEPTION</div>
-              <div className="col-span-1 text-center uppercase tracking-wider">COUNT</div>
-              <div className="col-span-4 uppercase tracking-wider">AFFECTED ORDERS</div>
-              <div className="col-span-3 text-right uppercase tracking-wider">NEXT ACTION</div>
-            </div>
-
-            {/* Exception 1: No shipping method selected (Accordion item) */}
-            <div className="border-b border-[#EAEAEA]/80">
-              <div
-                onClick={() => setExpandedException(expandedException === "no-method" ? null : "no-method")}
-                className="grid grid-cols-12 items-center px-4 py-3 hover:bg-neutral-50/50 cursor-pointer select-none"
-              >
-                <div className="col-span-4 flex items-center gap-2 text-black font-semibold">
-                  <ChevronDown
-                    className={cn(
-                      "h-3.5 w-3.5 text-[#666666] transition-transform",
-                      expandedException !== "no-method" && "-rotate-90"
+          {/* Tracking Attention Card - Rendered conditionally below the table ONLY when there are active tracking issues */}
+          {activeFailedTracking && (
+            <div className="relative rounded-lg border-l-4 border-l-[#DC2626] bg-[#FFF8F8] p-3.5 text-[11px] space-y-2.5 shadow-sm border border-neutral-200/40 animate-in fade-in duration-200">
+              {/* Header row */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full border border-[#DC2626] text-[#DC2626] text-[9px] font-bold">
+                    !
+                  </span>
+                  <span className="font-semibold text-black text-[12px]">
+                    Tracking sync needs attention
+                    {failedTrackingItems.length > 1 && (
+                      <span className="ml-2 text-[10px] font-medium text-[#DC2626] bg-red-100/70 px-1.5 py-0.5 rounded">
+                        +{failedTrackingItems.length - 1} more
+                      </span>
                     )}
-                  />
-                  <AlertTriangle className="h-3.5 w-3.5 text-[#D97706] stroke-[2]" />
-                  <span>No shipping method selected</span>
+                  </span>
                 </div>
-                <div className="col-span-1 text-center font-semibold text-[#D97706]">2</div>
-                <div className="col-span-4 text-[#666666]">ORD-10482 · ORD-10484</div>
-                <div className="col-span-3 text-right">
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 text-[11px] font-medium text-[#DC2626]">
+                    <span className="flex h-3 w-3 items-center justify-center rounded-full border border-[#DC2626] text-[8px]">
+                      ✕
+                    </span>
+                    <span>{activeFailedTracking.orderNumber} · Sync failed</span>
+                  </div>
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedOrderForDrawer({
-                        id: "ORD-10482",
-                        marketplace: "Flipkart",
-                        destination: "Pune, Maharashtra",
-                        warehouse: "Mumbai",
-                        product: "Cotton cushion",
-                        sku: "CUS-014",
-                        weight: "0.65 kg",
-                        orderValue: "₹1,899 · illustrative",
-                        chosenMethod: "flipkart",
-                      });
-                      setActiveDrawer("choose-shipping");
-                    }}
-                    className="font-medium text-black hover:underline"
+                    onClick={() =>
+                      setDismissedTrackingAlerts((prev) => [...prev, activeFailedTracking.orderNumber])
+                    }
+                    className="p-1 rounded text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100/50 transition-colors cursor-pointer"
+                    title="Dismiss alert"
                   >
-                    Choose shipping →
+                    <X className="h-3.5 w-3.5" />
                   </button>
                 </div>
               </div>
 
-              {/* Sub-accordion explanation card with warm beige tint */}
-              {expandedException === "no-method" && (
-                <div className="bg-[#FAF9F7] px-10 py-5 space-y-3">
-                  <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-                    {/* Column 1: What happened? */}
-                    <div className="md:col-span-3 space-y-1">
-                      <span className="text-[11px] font-semibold text-black">What happened?</span>
-                      <p className="text-[11px] text-[#666666] leading-relaxed">
-                        No shipping method has been confirmed.
-                      </p>
-                      <p className="text-[11px] font-semibold text-black mt-1">
-                        Which order? ORD-10482
-                      </p>
-                    </div>
+              {/* Three columns breakdown */}
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-6 pt-0.5">
+                {/* Col 1: What failed? */}
+                <div className="md:col-span-4 space-y-0.5">
+                  <span className="font-semibold text-black text-[11px]">What failed?</span>
+                  <p className="text-[#666666] text-[11px] leading-relaxed">
+                    The latest tracking status was not received.
+                  </p>
+                  <p className="text-[#666666] text-[10px]">
+                    Failed {activeFailedTracking.lastUpdated} · {activeFailedTracking.orderNumber}
+                  </p>
+                </div>
 
-                    {/* Column 2: Why? */}
-                    <div className="md:col-span-4 space-y-1">
-                      <span className="text-[11px] font-semibold text-black">Why?</span>
-                      <p className="text-[11px] text-[#666666] leading-relaxed">
-                        A default preference exists, but the shipping selection still needs merchant confirmation.
-                      </p>
-                    </div>
+                {/* Col 2: Possible reason */}
+                <div className="md:col-span-4 space-y-0.5">
+                  <span className="font-semibold text-black text-[11px]">Possible reason</span>
+                  <p className="text-[#666666] text-[11px] leading-relaxed">
+                    {activeFailedTracking.exceptionNote ||
+                      `${activeFailedTracking.carrier || "The connector"} may have timed out or may need its tracking capability verified.`}
+                  </p>
+                </div>
 
-                    {/* Column 3: What can I do now? */}
-                    <div className="md:col-span-5 space-y-2">
-                      <span className="text-[11px] font-semibold text-black">What can I do now?</span>
-                      <p className="text-[11px] text-[#666666] leading-relaxed">
-                        Compare available methods and confirm a selection. Manual override is available where supported.
-                      </p>
-                      <div className="pt-1">
-                        <button
-                          onClick={() => {
-                            setSelectedOrderForDrawer({
-                              id: "ORD-10482",
-                              marketplace: "Flipkart",
-                              destination: "Pune, Maharashtra",
-                              warehouse: "Mumbai",
-                              product: "Cotton cushion",
-                              sku: "CUS-014",
-                              weight: "0.65 kg",
-                              orderValue: "₹1,899 · illustrative",
-                              chosenMethod: "flipkart",
-                            });
-                            setActiveDrawer("choose-shipping");
-                          }}
-                          className="inline-flex h-8 items-center rounded-lg bg-black px-4 text-[11px] font-medium text-white hover:bg-neutral-800 transition-colors shadow-sm"
-                        >
-                          Choose Shipping
-                        </button>
-                      </div>
-                    </div>
+                {/* Col 3: Action */}
+                <div className="md:col-span-4 space-y-1.5">
+                  <p className="text-[#666666] text-[11px] leading-relaxed">
+                    Verify the connector configuration, then retry the tracking update.
+                  </p>
+                  <div>
+                    <button
+                      onClick={() => handleRetryTracking(activeFailedTracking.orderNumber)}
+                      disabled={
+                        retryingTrackingOrder === activeFailedTracking.orderNumber ||
+                        syncMutation.isPending
+                      }
+                      className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-[#EAEAEA] bg-white px-3 text-[11px] font-medium text-black hover:bg-neutral-50 transition-colors shadow-sm disabled:opacity-60 cursor-pointer"
+                    >
+                      <RefreshCw
+                        className={cn(
+                          "h-3 w-3 text-[#666666] stroke-[1.75]",
+                          (retryingTrackingOrder === activeFailedTracking.orderNumber ||
+                            syncMutation.isPending) &&
+                            "animate-spin"
+                        )}
+                      />
+                      <span>
+                        {retryingTrackingOrder === activeFailedTracking.orderNumber ||
+                        syncMutation.isPending
+                          ? "Retrying..."
+                          : "Retry"}
+                      </span>
+                    </button>
                   </div>
                 </div>
-              )}
-            </div>
-
-            {/* Exception 2: Label unavailable */}
-            <div className="grid grid-cols-12 items-center px-4 py-3 border-b border-[#EAEAEA]/80 hover:bg-neutral-50/50">
-              <div className="col-span-4 flex items-center gap-2 text-black">
-                <ChevronRight className="h-3.5 w-3.5 text-[#666666]" />
-                <AlertTriangle className="h-3.5 w-3.5 text-[#D97706] stroke-[2]" />
-                <span className="font-normal text-black">Label unavailable</span>
-              </div>
-              <div className="col-span-1 text-center font-semibold text-[#D97706]">1</div>
-              <div className="col-span-4 text-[#666666]">ORD-10495</div>
-              <div className="col-span-3 text-right">
-                <button className="text-black font-medium hover:underline">
-                  Verify label capability →
-                </button>
               </div>
             </div>
-
-            {/* Exception 3: Tracking not received */}
-            <div className="grid grid-cols-12 items-center px-4 py-3 border-b border-[#EAEAEA]/80 hover:bg-neutral-50/50">
-              <div className="col-span-4 flex items-center gap-2 text-black">
-                <ChevronRight className="h-3.5 w-3.5 text-[#666666]" />
-                <AlertTriangle className="h-3.5 w-3.5 text-[#D97706] stroke-[2]" />
-                <span className="font-normal text-black">Tracking not received</span>
-              </div>
-              <div className="col-span-1 text-center font-semibold text-[#D97706]">1</div>
-              <div className="col-span-4 text-[#666666]">ORD-10471</div>
-              <div className="col-span-3 text-right">
-                <button className="text-black font-medium hover:underline">
-                  Review tracking →
-                </button>
-              </div>
-            </div>
-
-            {/* Exception 4: Shipping sync failed */}
-            <div className="grid grid-cols-12 items-center px-4 py-3 border-b border-[#EAEAEA]/80 hover:bg-neutral-50/50">
-              <div className="col-span-4 flex items-center gap-2 text-black">
-                <ChevronRight className="h-3.5 w-3.5 text-[#666666]" />
-                <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full border border-[#DC2626] text-[#DC2626] text-[8px] font-bold">
-                  ✕
-                </span>
-                <span className="font-normal text-black">Shipping sync failed</span>
-              </div>
-              <div className="col-span-1 text-center font-semibold text-[#DC2626]">1</div>
-              <div className="col-span-4 text-[#666666]">ORD-10474</div>
-              <div className="col-span-3 text-right">
-                <button className="text-black font-medium hover:underline">
-                  Retry sync →
-                </button>
-              </div>
-            </div>
-
-            {/* Exception 5: SLA risk */}
-            <div className="grid grid-cols-12 items-center px-4 py-3 border-b border-[#EAEAEA]/80 hover:bg-neutral-50/50">
-              <div className="col-span-4 flex items-center gap-2 text-black">
-                <ChevronRight className="h-3.5 w-3.5 text-[#666666]" />
-                <AlertTriangle className="h-3.5 w-3.5 text-[#D97706] stroke-[2]" />
-                <span className="font-normal text-black">SLA risk</span>
-              </div>
-              <div className="col-span-1 text-center font-semibold text-[#D97706]">1</div>
-              <div className="col-span-4 text-[#666666]">ORD-10488</div>
-              <div className="col-span-3 text-right">
-                <button className="text-black font-medium hover:underline">
-                  Review order deadline →
-                </button>
-              </div>
-            </div>
-
-            {/* Exception 6: Connector capability limitation */}
-            <div className="grid grid-cols-12 items-center px-4 py-3 hover:bg-neutral-50/50">
-              <div className="col-span-4 flex items-center gap-2 text-black">
-                <ChevronRight className="h-3.5 w-3.5 text-[#666666]" />
-                <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full border border-[#DC2626] text-[#DC2626] text-[8px] font-bold">
-                  ✕
-                </span>
-                <span className="font-normal text-black">Connector capability limitation</span>
-              </div>
-              <div className="col-span-1 text-center font-semibold text-[#DC2626]">1</div>
-              <div className="col-span-4 text-[#666666]">ORD-10503</div>
-              <div className="col-span-3 text-right">
-                <button className="text-black font-medium hover:underline">
-                  View capability →
-                </button>
-              </div>
-            </div>
-          </div>
+          )}
         </section>
       )}
 
-      {/* =========================================================================
-          SECTION 7: SYNCHRONIZATION & FIRST-USE / EMPTY STATES
-          ========================================================================= */}
-      {activeTab === "overview" && (
-        <section className="space-y-4 pt-4 border-t border-[#EAEAEA]">
-          <div>
-            <h2 className="text-[16px] font-semibold text-black">Synchronization &amp; first-use states</h2>
-            <p className="text-[11px] text-[#666666]">
-              Compact status area replacements and a guided setup state · nonblocking
-            </p>
-          </div>
 
-          {/* State replacements showcase cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Card A: Syncing (Light blue tinted box with progress bar) */}
-            <div className="rounded-xl border border-[#DCEBFE] bg-[#F7FAFF] p-5 space-y-3 shadow-sm">
-              {/* Header / Eyebrow */}
-              <div className="flex items-center gap-2 text-[10px]">
-                <span className="font-semibold uppercase tracking-wider text-[#666666]">STATUS REPLACEMENT</span>
-                <span className="h-2.5 w-[1px] bg-[#BDBDBD]" />
-                <span className="font-semibold text-black text-[11px]">Syncing</span>
-              </div>
 
-              {/* Title with blue rotating refresh icon */}
-              <div className="flex items-center gap-2 text-[13px] font-semibold text-black">
-                <RefreshCw className="h-4 w-4 text-[#2563EB] animate-spin stroke-[2]" />
-                <span>Synchronizing shipping data…</span>
-              </div>
 
-              {/* Orders and Shipping statuses count */}
-              <div className="flex items-center justify-between text-[11px] text-black">
-                <span>Orders: 184</span>
-                <span>Shipping statuses: 176 / 184</span>
-              </div>
 
-              {/* Progress bar */}
-              <div className="h-1.5 w-full rounded-full bg-[#EAEAEA] overflow-hidden">
-                <div className="h-full w-[95%] rounded-full bg-[#2563EB]" />
-              </div>
-
-              {/* Tracking updates indicator */}
-              <div className="flex items-center gap-2 text-[11px] font-medium text-[#2563EB] pt-0.5">
-                <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full border border-[#2563EB]">
-                  <span className="h-1 w-1 rounded-full bg-[#2563EB]" />
-                </span>
-                <span>Tracking updates: processing</span>
-              </div>
-
-              {/* Sub-note */}
-              <p className="text-[11px] text-[#666666]">
-                Keep working while shipping data synchronizes.
-              </p>
-            </div>
-
-            {/* Card B: Completion (Light green tinted box with View Exceptions button) */}
-            <div className="rounded-xl border border-[#DCFCE7] bg-[#F9FEFA] p-5 space-y-3 shadow-sm">
-              {/* Header / Eyebrow */}
-              <div className="flex items-center gap-2 text-[10px]">
-                <span className="font-semibold uppercase tracking-wider text-[#666666]">STATUS REPLACEMENT</span>
-                <span className="h-2.5 w-[1px] bg-[#BDBDBD]" />
-                <span className="font-semibold text-black text-[11px]">Completion</span>
-              </div>
-
-              {/* Title with green checkmark circle */}
-              <div className="flex items-center gap-2 text-[13px] font-semibold text-black">
-                <CheckCircle2 className="h-4 w-4 text-[#16A34A] stroke-[2]" />
-                <span>Shipping sync complete</span>
-              </div>
-
-              {/* Stat counts row */}
-              <div className="flex flex-wrap items-center gap-3 text-[11px]">
-                <span className="font-bold text-black">184 processed</span>
-                <span className="font-medium text-[#16A34A]">181 updated</span>
-                <span className="font-medium text-[#D97706]">3 require attention</span>
-              </div>
-
-              {/* Explanation text */}
-              <p className="text-[11px] text-[#666666] leading-relaxed">
-                3 exceptions from this sync only; Overview's 7 represent overall shipping attention.
-              </p>
-
-              {/* Action button: View Exceptions */}
-              <div className="pt-1">
-                <button
-                  onClick={() => {
-                    const el = document.getElementById("exception-matrix-section");
-                    el?.scrollIntoView({ behavior: "smooth" });
-                  }}
-                  className="inline-flex h-8 items-center gap-2 rounded-lg border border-[#EAEAEA] bg-white px-3.5 text-[12px] font-medium text-black hover:bg-neutral-50 transition-colors shadow-sm"
-                >
-                  <ArrowRight className="h-3.5 w-3.5 text-black stroke-[1.75]" />
-                  <span>View Exceptions</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
         </>
       )}
 

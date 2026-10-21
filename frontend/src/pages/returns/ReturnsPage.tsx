@@ -65,7 +65,13 @@ export default function ReturnsPage() {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(5);
-  const [focusedReturnId, setFocusedReturnId] = useState<string>("RTN-10482");
+  const [returnsTabCurrentPage, setReturnsTabCurrentPage] = useState<number>(1);
+  const [returnsTabPageSize, setReturnsTabPageSize] = useState<number>(5);
+  const [inspectionCurrentPage, setInspectionCurrentPage] = useState<number>(1);
+  const [inspectionPageSize, setInspectionPageSize] = useState<number>(5);
+  const [refundsCurrentPage, setRefundsCurrentPage] = useState<number>(1);
+  const [refundsPageSize, setRefundsPageSize] = useState<number>(5);
+  const [focusedReturnId, setFocusedReturnId] = useState<string | null>(null);
   const [drawerReturn, setDrawerReturn] = useState<DrawerReturnData | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
 
@@ -134,7 +140,7 @@ export default function ReturnsPage() {
   };
 
   // Inspection Tab State & Data
-  const [selectedInspectionId, setSelectedInspectionId] = useState<string>("RTN-10491");
+  const [selectedInspectionId, setSelectedInspectionId] = useState<string | null>(null);
   const [selectedDisposition, setSelectedDisposition] = useState<string | null>(null);
   const [inspectionDrawerData, setInspectionDrawerData] = useState<InspectionData | null>(null);
   const [isInspectionDrawerOpen, setIsInspectionDrawerOpen] = useState<boolean>(false);
@@ -252,6 +258,14 @@ export default function ReturnsPage() {
     });
   }, [returnsData]);
 
+  // Dedicated pagination calculations for Refunds tab
+  const refundsTotalPages = Math.max(1, Math.ceil(refundRows.length / refundsPageSize));
+  const safeRefundsPage = Math.min(refundsCurrentPage, refundsTotalPages);
+  const paginatedRefundRows = useMemo(() => {
+    const startIndex = (safeRefundsPage - 1) * refundsPageSize;
+    return refundRows.slice(startIndex, startIndex + refundsPageSize);
+  }, [refundRows, safeRefundsPage, refundsPageSize]);
+
   // Dynamic Inspection Display Rows for Inspection tab table
   const inspectionDisplayRows = useMemo(() => {
     return returnsData
@@ -312,6 +326,20 @@ export default function ReturnsPage() {
         };
       });
   }, [returnsData]);
+
+  // Dedicated pagination calculations for Inspection tab
+  const inspectionTotalPages = Math.max(1, Math.ceil(inspectionDisplayRows.length / inspectionPageSize));
+  const safeInspectionPage = Math.min(inspectionCurrentPage, inspectionTotalPages);
+  const paginatedInspectionRows = useMemo(() => {
+    const startIndex = (safeInspectionPage - 1) * inspectionPageSize;
+    return inspectionDisplayRows.slice(startIndex, startIndex + inspectionPageSize);
+  }, [inspectionDisplayRows, safeInspectionPage, inspectionPageSize]);
+
+  const selectedInspectionItem = useMemo(() => {
+    return selectedInspectionId
+      ? inspectionDisplayRows.find((r) => r.id === selectedInspectionId) || null
+      : null;
+  }, [selectedInspectionId, inspectionDisplayRows]);
 
   const handleOpenRefundDrawer = (returnId: string) => {
     setIsDrawerOpen(false);
@@ -409,10 +437,15 @@ export default function ReturnsPage() {
     });
   }, [returnsData]);
 
-  // Top returns for the dedicated Returns tab view (matching design)
-  const returnsTabRows = useMemo(() => allRows.slice(0, 6), [allRows]);
+  // Paginated returns for the dedicated Returns tab view
+  const returnsTabTotalPages = Math.max(1, Math.ceil(allRows.length / returnsTabPageSize));
+  const safeReturnsTabPage = Math.min(returnsTabCurrentPage, returnsTabTotalPages);
+  const returnsTabRows = useMemo(() => {
+    const startIndex = (safeReturnsTabPage - 1) * returnsTabPageSize;
+    return allRows.slice(startIndex, startIndex + returnsTabPageSize);
+  }, [allRows, safeReturnsTabPage, returnsTabPageSize]);
   const selectedReturn = useMemo(
-    () => allRows.find((r) => r.id === focusedReturnId) || allRows[0],
+    () => (focusedReturnId ? allRows.find((r) => r.id === focusedReturnId) || null : null),
     [allRows, focusedReturnId]
   );
 
@@ -584,6 +617,9 @@ export default function ReturnsPage() {
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
+    setReturnsTabCurrentPage(1);
+    setInspectionCurrentPage(1);
+    setRefundsCurrentPage(1);
   }, [activeTab, selectedLedgerFilter, activeSignalFilter, searchQuery, pageSize]);
 
   const isAllVisibleSelected =
@@ -716,7 +752,9 @@ export default function ReturnsPage() {
                 Returns
               </h2>
               <p className="text-[12px] text-[#666666] leading-[17px]">
-                {selectedReturn?.id || "RTN-10482"} selected · Your place in the ledger is preserved.
+                {selectedReturn
+                  ? `${selectedReturn.id} selected · Your place in the ledger is preserved.`
+                  : "Click on any product above to view resolution workflow · Your place in the ledger is preserved."}
               </p>
             </div>
 
@@ -732,11 +770,11 @@ export default function ReturnsPage() {
                 </thead>
                 <tbody className="divide-y divide-[#EAEAEA]/80">
                   {returnsTabRows.map((ret) => {
-                    const isSelected = ret.id === (selectedReturn?.id || "RTN-10482");
+                    const isSelected = ret.id === focusedReturnId;
                     return (
                       <tr
                         key={ret.id}
-                        onClick={() => setFocusedReturnId(ret.id)}
+                        onClick={() => setFocusedReturnId((prev) => (prev === ret.id ? null : ret.id))}
                         className={cn(
                           "cursor-pointer transition-colors",
                           isSelected ? "bg-[#F5F8FE]" : "hover:bg-neutral-50/50"
@@ -770,6 +808,7 @@ export default function ReturnsPage() {
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
+                              setFocusedReturnId(ret.id);
                               if (ret.actionText.toLowerCase().includes("inspect")) {
                                 handleOpenInspectionDrawer(ret.id);
                               } else {
@@ -787,201 +826,273 @@ export default function ReturnsPage() {
                 </tbody>
               </table>
             </div>
-          </section>
 
-          {/* Section 2: Received is not resolved */}
-          <section className="space-y-3 pt-2">
-            <div>
-              <h3 className="text-[16px] font-semibold text-black leading-[24px]">
-                Received is not resolved.
-              </h3>
-              <p className="text-[12px] text-[#666666] leading-[18px]">
-                Confirm what came back before committing a refund or moving stock into inventory.
-              </p>
-            </div>
+            {/* Returns Tab Table Pagination */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-[11px] pt-1">
+              <span className="text-[11px] text-[#666666]">
+                Showing{" "}
+                <span className="font-semibold text-black">
+                  {allRows.length === 0 ? 0 : (safeReturnsTabPage - 1) * returnsTabPageSize + 1}–
+                  {Math.min(safeReturnsTabPage * returnsTabPageSize, allRows.length)}
+                </span>{" "}
+                of <span className="font-semibold text-black">{allRows.length}</span> returns
+              </span>
 
-            <div className="space-y-1 pt-1 max-w-3xl">
-              {/* Step 1: Verify */}
-              <button
-                type="button"
-                onClick={() => handleOpenInspectionDrawer(selectedReturn?.id || "RTN-10482")}
-                className="w-full flex items-center justify-between p-2.5 -mx-2.5 rounded-lg border border-transparent hover:border-[#EAEAEA] hover:bg-neutral-50/80 transition-all text-left cursor-pointer group"
-              >
-                <div className="flex items-start gap-3">
-                  <div
-                    className={cn(
-                      "mt-0.5 h-4 w-4 rounded-full border flex items-center justify-center shrink-0 transition-colors",
-                      selectedReturn?.inspection === "Passed" || selectedReturn?.inspection === "Failed"
-                        ? "border-[#16A34A] bg-[#16A34A] text-white"
-                        : "border-[#BDBDBD] bg-white group-hover:border-black"
-                    )}
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-1.5 text-[11px] text-[#666666]">
+                  <span>Rows per page:</span>
+                  <select
+                    value={returnsTabPageSize}
+                    onChange={(e) => {
+                      setReturnsTabPageSize(Number(e.target.value));
+                      setReturnsTabCurrentPage(1);
+                    }}
+                    className="h-[28px] rounded-md border border-[#EAEAEA] bg-white px-2 text-[11px] font-medium text-black outline-none hover:border-[#CCCCCC] focus:border-black cursor-pointer transition-colors"
                   >
-                    {(selectedReturn?.inspection === "Passed" || selectedReturn?.inspection === "Failed") && (
-                      <div className="h-1.5 w-1.5 rounded-full bg-white" />
-                    )}
-                  </div>
-                  <div>
-                    <span className="text-[13px] font-semibold text-black block leading-tight group-hover:text-black">
-                      Verify
-                    </span>
-                    <span className="text-[12px] text-[#666666] leading-[17px]">
-                      Inspect the returned product and check quantity.
-                    </span>
-                  </div>
+                    <option value={5}>5</option>
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                  </select>
                 </div>
-                <div className="flex items-center gap-2 pl-3 shrink-0">
-                  <span className="text-[11px] font-medium text-[#666666] group-hover:text-black group-hover:underline flex items-center gap-1">
-                    {selectedReturn?.inspection === "Passed" || selectedReturn?.inspection === "Failed"
-                      ? "View inspection →"
-                      : "Start inspection →"}
-                  </span>
-                </div>
-              </button>
 
-              {/* Step 2: Decide */}
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedInspectionId(selectedReturn?.id || "RTN-10482");
-                  setActiveTab("inspection");
-                }}
-                className="w-full flex items-center justify-between p-2.5 -mx-2.5 rounded-lg border border-transparent hover:border-[#EAEAEA] hover:bg-neutral-50/80 transition-all text-left cursor-pointer group"
-              >
-                <div className="flex items-start gap-3">
-                  <div
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setReturnsTabCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={safeReturnsTabPage <= 1}
                     className={cn(
-                      "mt-0.5 h-4 w-4 rounded-full border flex items-center justify-center shrink-0 transition-colors",
-                      selectedReturn?.inventoryDisposition && selectedReturn.inventoryDisposition !== "Pending"
-                        ? "border-[#16A34A] bg-[#16A34A] text-white"
-                        : "border-[#BDBDBD] bg-white group-hover:border-black"
+                      "flex h-7 w-7 items-center justify-center rounded-md border border-[#EAEAEA] transition-colors",
+                      safeReturnsTabPage <= 1
+                        ? "cursor-not-allowed text-[#BDBDBD] bg-[#FAFAFA]"
+                        : "text-[#666666] hover:text-black hover:bg-neutral-100 cursor-pointer"
                     )}
+                    aria-label="Previous page"
                   >
-                    {selectedReturn?.inventoryDisposition && selectedReturn.inventoryDisposition !== "Pending" && (
-                      <div className="h-1.5 w-1.5 rounded-full bg-white" />
-                    )}
-                  </div>
-                  <div>
-                    <span className="text-[13px] font-semibold text-black block leading-tight group-hover:text-black">
-                      Decide
-                    </span>
-                    <span className="text-[12px] text-[#666666] leading-[17px]">
-                      Explicitly confirm its next inventory disposition.
-                    </span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 pl-3 shrink-0">
-                  <span className="text-[11px] font-medium text-[#666666] group-hover:text-black group-hover:underline flex items-center gap-1">
-                    {selectedReturn?.inventoryDisposition && selectedReturn.inventoryDisposition !== "Pending"
-                      ? "Change disposition →"
-                      : "Confirm disposition →"}
-                  </span>
-                </div>
-              </button>
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                  </button>
 
-              {/* Step 3: Resolve */}
-              <button
-                type="button"
-                onClick={() => handleOpenRefundDrawer(selectedReturn?.id || "RTN-10482")}
-                className="w-full flex items-center justify-between p-2.5 -mx-2.5 rounded-lg border border-transparent hover:border-[#EAEAEA] hover:bg-neutral-50/80 transition-all text-left cursor-pointer group"
-              >
-                <div className="flex items-start gap-3">
-                  <div
+                  {Array.from({ length: returnsTabTotalPages }, (_, i) => i + 1).map((pageNum) => (
+                    <button
+                      key={pageNum}
+                      type="button"
+                      onClick={() => setReturnsTabCurrentPage(pageNum)}
+                      className={cn(
+                        "flex h-7 min-w-[28px] px-2 items-center justify-center rounded-md text-[11px] transition-colors cursor-pointer",
+                        safeReturnsTabPage === pageNum
+                          ? "bg-[#111111] font-semibold text-white shadow-xs"
+                          : "border border-[#EAEAEA] text-[#666666] hover:text-black hover:bg-neutral-50"
+                      )}
+                    >
+                      {pageNum}
+                    </button>
+                  ))}
+
+                  <button
+                    type="button"
+                    onClick={() => setReturnsTabCurrentPage((p) => Math.min(returnsTabTotalPages, p + 1))}
+                    disabled={safeReturnsTabPage >= returnsTabTotalPages}
                     className={cn(
-                      "mt-0.5 h-4 w-4 rounded-full border flex items-center justify-center shrink-0 transition-colors",
-                      selectedReturn?.refund === "Refunded" || selectedReturn?.returnStatus === "Resolved"
-                        ? "border-[#16A34A] bg-[#16A34A] text-white"
-                        : "border-[#BDBDBD] bg-white group-hover:border-black"
+                      "flex h-7 w-7 items-center justify-center rounded-md border border-[#EAEAEA] transition-colors",
+                      safeReturnsTabPage >= returnsTabTotalPages
+                        ? "cursor-not-allowed text-[#BDBDBD] bg-[#FAFAFA]"
+                        : "text-[#666666] hover:text-black hover:bg-neutral-100 cursor-pointer"
                     )}
+                    aria-label="Next page"
                   >
-                    {(selectedReturn?.refund === "Refunded" || selectedReturn?.returnStatus === "Resolved") && (
-                      <div className="h-1.5 w-1.5 rounded-full bg-white" />
-                    )}
-                  </div>
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Below section: Appears after clicking any product above */}
+          {selectedReturn && (
+            <div className="space-y-8 animate-in fade-in duration-200">
+              {/* Section 2: Received is not resolved */}
+              <section className="space-y-3 pt-2">
+                <div className="flex items-center justify-between">
                   <div>
-                    <span className="text-[13px] font-semibold text-black block leading-tight group-hover:text-black">
-                      Resolve
-                    </span>
-                    <span className="text-[12px] text-[#666666] leading-[17px]">
-                      Process the connector-supported refund, then close.
-                    </span>
+                    <h3 className="text-[16px] font-semibold text-black leading-[24px]">
+                      Received is not resolved.
+                    </h3>
+                    <p className="text-[12px] text-[#666666] leading-[18px]">
+                      Confirm what came back before committing a refund or moving stock into inventory.
+                    </p>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => setFocusedReturnId(null)}
+                    className="text-[11px] text-[#666666] hover:text-black font-medium transition-colors px-2 py-1 rounded hover:bg-neutral-100"
+                    title="Close resolution section"
+                  >
+                    Close ✕
+                  </button>
                 </div>
-                <div className="flex items-center gap-2 pl-3 shrink-0">
-                  <span className="text-[11px] font-medium text-[#666666] group-hover:text-black group-hover:underline flex items-center gap-1">
-                    {selectedReturn?.refund === "Refunded"
-                      ? "View refund →"
-                      : "Review refund →"}
-                  </span>
+
+                <div className="space-y-1 pt-1 max-w-3xl">
+                  {/* Step 1: Verify */}
+                  <button
+                    type="button"
+                    onClick={() => handleOpenInspectionDrawer(selectedReturn.id)}
+                    className="w-full flex items-center justify-between p-2.5 -mx-2.5 rounded-lg border border-transparent hover:border-[#EAEAEA] hover:bg-neutral-50/80 transition-all text-left cursor-pointer group"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div
+                        className={cn(
+                          "mt-0.5 h-4 w-4 rounded-full border flex items-center justify-center shrink-0 transition-colors",
+                          selectedReturn.inspection === "Passed" || selectedReturn.inspection === "Failed"
+                            ? "border-[#16A34A] bg-[#16A34A] text-white"
+                            : "border-[#BDBDBD] bg-white group-hover:border-black"
+                        )}
+                      >
+                        {(selectedReturn.inspection === "Passed" || selectedReturn.inspection === "Failed") && (
+                          <div className="h-1.5 w-1.5 rounded-full bg-white" />
+                        )}
+                      </div>
+                      <div>
+                        <span className="text-[13px] font-semibold text-black block leading-tight group-hover:text-black">
+                          Verify
+                        </span>
+                        <span className="text-[12px] text-[#666666] leading-[17px]">
+                          Inspect the returned product and check quantity.
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 pl-3 shrink-0">
+                      <span className="text-[11px] font-medium text-[#666666] group-hover:text-black group-hover:underline flex items-center gap-1">
+                        {selectedReturn.inspection === "Passed" || selectedReturn.inspection === "Failed"
+                          ? "View inspection →"
+                          : "Start inspection →"}
+                      </span>
+                    </div>
+                  </button>
+
+                  {/* Step 2: Decide */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedInspectionId(selectedReturn.id);
+                      setActiveTab("inspection");
+                    }}
+                    className="w-full flex items-center justify-between p-2.5 -mx-2.5 rounded-lg border border-transparent hover:border-[#EAEAEA] hover:bg-neutral-50/80 transition-all text-left cursor-pointer group"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div
+                        className={cn(
+                          "mt-0.5 h-4 w-4 rounded-full border flex items-center justify-center shrink-0 transition-colors",
+                          selectedReturn.inventoryDisposition && selectedReturn.inventoryDisposition !== "Pending"
+                            ? "border-[#16A34A] bg-[#16A34A] text-white"
+                            : "border-[#BDBDBD] bg-white group-hover:border-black"
+                        )}
+                      >
+                        {selectedReturn.inventoryDisposition && selectedReturn.inventoryDisposition !== "Pending" && (
+                          <div className="h-1.5 w-1.5 rounded-full bg-white" />
+                        )}
+                      </div>
+                      <div>
+                        <span className="text-[13px] font-semibold text-black block leading-tight group-hover:text-black">
+                          Decide
+                        </span>
+                        <span className="text-[12px] text-[#666666] leading-[17px]">
+                          Explicitly confirm its next inventory disposition.
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 pl-3 shrink-0">
+                      <span className="text-[11px] font-medium text-[#666666] group-hover:text-black group-hover:underline flex items-center gap-1">
+                        {selectedReturn.inventoryDisposition && selectedReturn.inventoryDisposition !== "Pending"
+                          ? "Change disposition →"
+                          : "Confirm disposition →"}
+                      </span>
+                    </div>
+                  </button>
+
+                  {/* Step 3: Resolve */}
+                  <button
+                    type="button"
+                    onClick={() => handleOpenRefundDrawer(selectedReturn.id)}
+                    className="w-full flex items-center justify-between p-2.5 -mx-2.5 rounded-lg border border-transparent hover:border-[#EAEAEA] hover:bg-neutral-50/80 transition-all text-left cursor-pointer group"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div
+                        className={cn(
+                          "mt-0.5 h-4 w-4 rounded-full border flex items-center justify-center shrink-0 transition-colors",
+                          selectedReturn.refund === "Refunded" || selectedReturn.returnStatus === "Resolved"
+                            ? "border-[#16A34A] bg-[#16A34A] text-white"
+                            : "border-[#BDBDBD] bg-white group-hover:border-black"
+                        )}
+                      >
+                        {(selectedReturn.refund === "Refunded" || selectedReturn.returnStatus === "Resolved") && (
+                          <div className="h-1.5 w-1.5 rounded-full bg-white" />
+                        )}
+                      </div>
+                      <div>
+                        <span className="text-[13px] font-semibold text-black block leading-tight group-hover:text-black">
+                          Resolve
+                        </span>
+                        <span className="text-[12px] text-[#666666] leading-[17px]">
+                          Process the connector-supported refund, then close.
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 pl-3 shrink-0">
+                      <span className="text-[11px] font-medium text-[#666666] group-hover:text-black group-hover:underline flex items-center gap-1">
+                        {selectedReturn.refund === "Refunded"
+                          ? "View refund →"
+                          : "Review refund →"}
+                      </span>
+                    </div>
+                  </button>
                 </div>
-              </button>
-            </div>
-          </section>
+              </section>
 
-          {/* Section 3: Receipt reconciliation */}
-          <section className="space-y-3 pt-2">
-            <div>
-              <h3 className="text-[16px] font-semibold text-black leading-[24px]">
-                Receipt reconciliation
-              </h3>
-              <p className="text-[12px] text-[#666666] leading-[17px]">
-                {selectedReturn?.id || "RTN-10482"} · Received by Abhishek · 07 Oct, 14:20
-              </p>
-            </div>
+              {/* Section 3: Receipt reconciliation */}
+              <section className="space-y-3 pt-2">
+                <div>
+                  <h3 className="text-[16px] font-semibold text-black leading-[24px]">
+                    Receipt reconciliation
+                  </h3>
+                  <p className="text-[12px] text-[#666666] leading-[17px]">
+                    {selectedReturn.id} · Received by Abhishek · 07 Oct, 14:20
+                  </p>
+                </div>
 
-            <div className="w-full overflow-hidden rounded-lg border border-[#EAEAEA] bg-white">
-              <table className="w-full text-left text-[12px]">
-                <thead>
-                  <tr className="bg-[#F5F5F5] border-b border-[#EAEAEA] text-[11px] text-[#666666]">
-                    <th className="py-2.5 px-4 font-normal w-1/2">Product / SKU</th>
-                    <th className="py-2.5 px-4 font-normal">Expected</th>
-                    <th className="py-2.5 px-4 font-normal">Received</th>
-                    <th className="py-2.5 px-4 font-normal">Match</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#EAEAEA]/80">
-                  <tr>
-                    <td className="py-3 px-4 text-black font-medium">
-                      {selectedReturn?.productName || "Cotton shirt"} · {selectedReturn?.sku || "CS-WHT-M"}
-                    </td>
-                    <td className="py-3 px-4 text-[#666666]">
-                      {selectedReturn?.quantity || 1}
-                    </td>
-                    <td className="py-3 px-4 text-[#666666]">
-                      {selectedReturn?.quantity || 1}
-                    </td>
-                    <td className="py-3 px-4 text-[#16A34A] font-medium">
-                      Matched
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+                <div className="w-full overflow-hidden rounded-lg border border-[#EAEAEA] bg-white">
+                  <table className="w-full text-left text-[12px]">
+                    <thead>
+                      <tr className="bg-[#F5F5F5] border-b border-[#EAEAEA] text-[11px] text-[#666666]">
+                        <th className="py-2.5 px-4 font-normal w-1/2">Product / SKU</th>
+                        <th className="py-2.5 px-4 font-normal">Expected</th>
+                        <th className="py-2.5 px-4 font-normal">Received</th>
+                        <th className="py-2.5 px-4 font-normal">Match</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#EAEAEA]/80">
+                      <tr>
+                        <td className="py-3 px-4 text-black font-medium">
+                          {selectedReturn.productName || "Cotton shirt"} · {selectedReturn.sku || "CS-WHT-M"}
+                        </td>
+                        <td className="py-3 px-4 text-[#666666]">
+                          {selectedReturn.quantity || 1}
+                        </td>
+                        <td className="py-3 px-4 text-[#666666]">
+                          {selectedReturn.quantity || 1}
+                        </td>
+                        <td className="py-3 px-4 text-[#16A34A] font-medium">
+                          Matched
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
 
-            <p className="text-[12px] text-[#666666] leading-[17px]">
-              Quantity matches the request. Physical condition still needs verification; the received unit has not been added to sellable stock.
-            </p>
-          </section>
-
-          {/* Section 4: Compact State */}
-          <section className="rounded-xl border border-[#EAEAEA] bg-[#F9FAFB] p-4 space-y-1.5 text-[12px]">
-            <div className="flex items-center gap-2 text-[11px]">
-              <span className="font-semibold uppercase tracking-wider text-[#666666]">COMPACT STATE</span>
-              <span className="text-[#BDBDBD]">|</span>
-              <span className="font-semibold text-black">RTN-10488 / Resolved</span>
+                <p className="text-[12px] text-[#666666] leading-[17px]">
+                  Quantity matches the request. Physical condition still needs verification; the received unit has not been added to sellable stock.
+                </p>
+              </section>
             </div>
-            <div className="font-semibold text-black text-[13px] pt-0.5">
-              Cotton shirt · 1 unit · Shopify
-            </div>
-            <div className="font-medium text-[#16A34A]">
-              Inspection Complete · Refund Processed
-            </div>
-            <div className="text-[#666666]">
-              Disposition Sellable · Closed 05 Oct, 16:32
-            </div>
-            <p className="text-[12px] text-[#666666] leading-relaxed pt-1">
-              Operator confirmed sellable stock after a passed inspection. Connector confirmed the $49.00 refund.
-            </p>
-          </section>
+          )}
 
           {/* Section 5: Bottom Note */}
           <div className="pt-2 text-[11px] text-[#666666]">
@@ -1003,7 +1114,9 @@ export default function ReturnsPage() {
                   Return Inspection
                 </h2>
                 <p className="text-[12px] text-[#666666] leading-[17px]">
-                  Verify returned products before deciding refund and inventory disposition.
+                  {selectedInspectionItem
+                    ? `${selectedInspectionItem.id} selected · Decide inventory disposition below.`
+                    : "Select any order above to decide inventory disposition."}
                 </p>
               </div>
 
@@ -1034,12 +1147,12 @@ export default function ReturnsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#EAEAEA]/80">
-                  {inspectionDisplayRows.map((row) => {
+                  {paginatedInspectionRows.map((row) => {
                     const isSelected = row.id === selectedInspectionId;
                     return (
                       <tr
                         key={row.id}
-                        onClick={() => setSelectedInspectionId(row.id)}
+                        onClick={() => setSelectedInspectionId((prev) => (prev === row.id ? null : row.id))}
                         className={cn(
                           "cursor-pointer transition-colors",
                           isSelected ? "bg-[#F5F8FE]" : "hover:bg-neutral-50/50"
@@ -1050,6 +1163,7 @@ export default function ReturnsPage() {
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
+                              setSelectedInspectionId(row.id);
                               handleOpenInspectionDrawer(row.id);
                             }}
                             className="hover:underline font-semibold text-black"
@@ -1080,6 +1194,7 @@ export default function ReturnsPage() {
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
+                              setSelectedInspectionId(row.id);
                               handleOpenInspectionDrawer(row.id);
                             }}
                             className="font-medium text-black hover:underline cursor-pointer"
@@ -1093,166 +1208,268 @@ export default function ReturnsPage() {
                 </tbody>
               </table>
             </div>
-          </section>
 
-          {/* Section 2: Contextual Decision Card */}
-          <section className="space-y-4 pt-2">
-            <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-[#666666]">
-              <span>CONTEXTUAL DRAWER</span>
-              <span>|</span>
-              <span className="text-black font-semibold">
-                {selectedInspectionId} / Inspection and inventory decision
+            {/* Inspection Table Pagination */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-[11px] pt-1">
+              <span className="text-[11px] text-[#666666]">
+                Showing{" "}
+                <span className="font-semibold text-black">
+                  {inspectionDisplayRows.length === 0 ? 0 : (safeInspectionPage - 1) * inspectionPageSize + 1}–
+                  {Math.min(safeInspectionPage * inspectionPageSize, inspectionDisplayRows.length)}
+                </span>{" "}
+                of <span className="font-semibold text-black">{inspectionDisplayRows.length}</span> items
               </span>
-            </div>
 
-            <div>
-              <h3 className="text-[16px] font-semibold text-black leading-[24px]">
-                What should happen to this returned stock?
-              </h3>
-              <p className="text-[12px] text-[#666666] leading-[17px]">
-                {selectedInspectionId} · {inspectionDisplayRows.find((r) => r.id === selectedInspectionId)?.product || "Linen cushion"} · 1 received unit. Select one disposition, then confirm.
-              </p>
-            </div>
-
-            {/* Recommendation Box */}
-            <div className="rounded-xl border border-[#BAE6FD] bg-[#F0F7FF] p-4 space-y-1">
-              <div className="text-[12px] font-semibold text-[#0284C7]">
-                Recommendation: Quarantine
-              </div>
-              <p className="text-[12px] text-[#334155]">
-                Expected 2 · Received 1. Hold the received unit while the missing quantity is reviewed.
-              </p>
-              <p className="text-[11px] text-[#0284C7] font-medium pt-0.5">
-                Suggested only · No decision selected or inventory change made
-              </p>
-            </div>
-
-            {/* Disposition Options List */}
-            <div className="space-y-2.5">
-              {[
-                {
-                  id: "sellable",
-                  title: "Return to sellable stock",
-                  description: "Suitable for resale.",
-                  icon: Package,
-                },
-                {
-                  id: "damaged",
-                  title: "Damaged",
-                  description: "Keep out of sellable stock.",
-                  icon: PackageX,
-                },
-                {
-                  id: "rejected",
-                  title: "Rejected",
-                  description: "Do not accept into stock.",
-                  icon: XCircle,
-                },
-                {
-                  id: "quarantine",
-                  title: "Quarantine",
-                  description: "Hold until further review.",
-                  icon: ShieldAlert,
-                },
-                {
-                  id: "repair",
-                  title: "Repair",
-                  description: "Repair before resale.",
-                  icon: Wrench,
-                },
-                {
-                  id: "write-off",
-                  title: "Write-off",
-                  description: "Should not return to inventory.",
-                  icon: Ban,
-                },
-              ].map((opt) => {
-                const IconComponent = opt.icon;
-                const isSelected = selectedDisposition === opt.id;
-                return (
-                  <div
-                    key={opt.id}
-                    onClick={() => setSelectedDisposition(opt.id)}
-                    className={cn(
-                      "flex items-start gap-3 rounded-lg border p-3.5 transition-colors cursor-pointer",
-                      isSelected
-                        ? "border-black bg-[#F5F8FE]"
-                        : "border-[#EAEAEA] bg-white hover:bg-neutral-50/50"
-                    )}
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-1.5 text-[11px] text-[#666666]">
+                  <span>Rows per page:</span>
+                  <select
+                    value={inspectionPageSize}
+                    onChange={(e) => {
+                      setInspectionPageSize(Number(e.target.value));
+                      setInspectionCurrentPage(1);
+                    }}
+                    className="h-[28px] rounded-md border border-[#EAEAEA] bg-white px-2 text-[11px] font-medium text-black outline-none hover:border-[#CCCCCC] focus:border-black cursor-pointer transition-colors"
                   >
-                    <div className="mt-0.5">
-                      <div
-                        className={cn(
-                          "h-4 w-4 rounded-full border flex items-center justify-center transition-colors",
-                          isSelected ? "border-black bg-black" : "border-[#BDBDBD] bg-white"
-                        )}
-                      >
-                        {isSelected && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
-                      </div>
-                    </div>
+                    <option value={5}>5</option>
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                  </select>
+                </div>
 
-                    <IconComponent className="h-4 w-4 text-[#666666] shrink-0 mt-0.5" />
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setInspectionCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={safeInspectionPage <= 1}
+                    className={cn(
+                      "flex h-7 w-7 items-center justify-center rounded-md border border-[#EAEAEA] transition-colors",
+                      safeInspectionPage <= 1
+                        ? "cursor-not-allowed text-[#BDBDBD] bg-[#FAFAFA]"
+                        : "text-[#666666] hover:text-black hover:bg-neutral-100 cursor-pointer"
+                    )}
+                    aria-label="Previous page"
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                  </button>
 
-                    <div className="flex-1">
-                      <div className="text-[13px] font-semibold text-black leading-tight">
-                        {opt.title}
-                      </div>
-                      <div className="text-[12px] text-[#666666] leading-relaxed">
-                        {opt.description}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                  {Array.from({ length: inspectionTotalPages }, (_, i) => i + 1).map((pageNum) => (
+                    <button
+                      key={pageNum}
+                      type="button"
+                      onClick={() => setInspectionCurrentPage(pageNum)}
+                      className={cn(
+                        "flex h-7 min-w-[28px] px-2 items-center justify-center rounded-md text-[11px] transition-colors cursor-pointer",
+                        safeInspectionPage === pageNum
+                          ? "bg-[#111111] font-semibold text-white shadow-xs"
+                          : "border border-[#EAEAEA] text-[#666666] hover:text-black hover:bg-neutral-50"
+                      )}
+                    >
+                      {pageNum}
+                    </button>
+                  ))}
 
-            {/* Footer action confirmation */}
-            <p className="text-[12px] text-[#666666] pt-1">
-              {selectedDisposition
-                ? "Option selected. Click confirm to apply the disposition."
-                : "No option is selected. The operator must explicitly confirm the disposition before stock can move."}
-            </p>
-
-            <div className="flex items-center gap-2 pt-1">
-              <button
-                type="button"
-                disabled={!selectedDisposition || confirmDispositionMutation.isPending}
-                onClick={() => {
-                  if (selectedDisposition) {
-                    confirmDispositionMutation.mutate({
-                      id: selectedInspectionId,
-                      input: { disposition: selectedDisposition as any },
-                    });
-                    setSelectedDisposition(null);
-                  }
-                }}
-                className={cn(
-                  "h-[34px] px-3.5 rounded-lg text-[12px] font-semibold transition-colors",
-                  selectedDisposition
-                    ? "bg-[#111111] text-white hover:bg-black cursor-pointer"
-                    : "bg-[#BDBDBD] text-white cursor-not-allowed"
-                )}
-              >
-                {confirmDispositionMutation.isPending ? "Confirming..." : "Confirm disposition"}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setSelectedDisposition(null)}
-                className="h-[34px] px-3.5 bg-white border border-[#EAEAEA] rounded-lg text-[12px] font-semibold text-black hover:bg-neutral-50 transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-
-            {/* Bottom Resolution Labels Legend */}
-            <div className="pt-6 border-t border-[#EAEAEA] text-[11px] text-[#666666] space-y-1">
-              <div className="font-semibold text-black">Resolution labels across return details</div>
-              <div>Inspection: Pending / In Progress / Complete</div>
-              <div>Refund: Pending / Processed / Not applicable</div>
-              <div>Disposition: Pending / Sellable / Damaged / Rejected / Quarantine / Repair / Write-off</div>
+                  <button
+                    type="button"
+                    onClick={() => setInspectionCurrentPage((p) => Math.min(inspectionTotalPages, p + 1))}
+                    disabled={safeInspectionPage >= inspectionTotalPages}
+                    className={cn(
+                      "flex h-7 w-7 items-center justify-center rounded-md border border-[#EAEAEA] transition-colors",
+                      safeInspectionPage >= inspectionTotalPages
+                        ? "cursor-not-allowed text-[#BDBDBD] bg-[#FAFAFA]"
+                        : "text-[#666666] hover:text-black hover:bg-neutral-100 cursor-pointer"
+                    )}
+                    aria-label="Next page"
+                  >
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
             </div>
           </section>
+
+          {/* Section 2: Contextual Decision Card (Revealed after selecting any order above) */}
+          {selectedInspectionItem && (
+            <section className="space-y-4 pt-2 animate-in fade-in duration-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-[#666666]">
+                  <span>CONTEXTUAL DRAWER</span>
+                  <span>|</span>
+                  <span className="text-black font-semibold">
+                    {selectedInspectionItem.id} / Inspection and inventory decision
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedInspectionId(null);
+                    setSelectedDisposition(null);
+                  }}
+                  className="text-[11px] text-[#666666] hover:text-black font-medium transition-colors px-2 py-1 rounded hover:bg-neutral-100"
+                  title="Close decision section"
+                >
+                  Close ✕
+                </button>
+              </div>
+
+              <div>
+                <h3 className="text-[16px] font-semibold text-black leading-[24px]">
+                  What should happen to this returned stock?
+                </h3>
+                <p className="text-[12px] text-[#666666] leading-[17px]">
+                  {selectedInspectionItem.id} · {selectedInspectionItem.product} ({selectedInspectionItem.sku}) · {selectedInspectionItem.quantity} received unit. Select one disposition, then confirm.
+                </p>
+              </div>
+
+              {/* Recommendation Box */}
+              <div className="rounded-xl border border-[#BAE6FD] bg-[#F0F7FF] p-4 space-y-1">
+                <div className="text-[12px] font-semibold text-[#0284C7]">
+                  Recommendation: {selectedInspectionItem.recommendedDisposition}
+                </div>
+                <p className="text-[12px] text-[#334155]">
+                  {selectedInspectionItem.systemCondition === "Quantity mismatch"
+                    ? "Expected mismatch detected. Hold the received unit while the missing quantity is reviewed."
+                    : selectedInspectionItem.recommendedDisposition === "Sellable"
+                    ? "Physical condition intact and receipt matched. Suitable for resale into active inventory."
+                    : selectedInspectionItem.recommendedDisposition === "Damaged"
+                    ? "Physical defect/damage verified. Keep out of sellable stock."
+                    : "Expected receipt verified. Hold the received unit while final disposition is confirmed."}
+                </p>
+                <p className="text-[11px] text-[#0284C7] font-medium pt-0.5">
+                  Suggested only · No decision selected or inventory change made
+                </p>
+              </div>
+
+              {/* Disposition Options List */}
+              <div className="space-y-2.5">
+                {[
+                  {
+                    id: "sellable",
+                    title: "Return to sellable stock",
+                    description: "Suitable for resale.",
+                    icon: Package,
+                  },
+                  {
+                    id: "damaged",
+                    title: "Damaged",
+                    description: "Keep out of sellable stock.",
+                    icon: PackageX,
+                  },
+                  {
+                    id: "rejected",
+                    title: "Rejected",
+                    description: "Do not accept into stock.",
+                    icon: XCircle,
+                  },
+                  {
+                    id: "quarantine",
+                    title: "Quarantine",
+                    description: "Hold until further review.",
+                    icon: ShieldAlert,
+                  },
+                  {
+                    id: "repair",
+                    title: "Repair",
+                    description: "Repair before resale.",
+                    icon: Wrench,
+                  },
+                  {
+                    id: "write-off",
+                    title: "Write-off",
+                    description: "Should not return to inventory.",
+                    icon: Ban,
+                  },
+                ].map((opt) => {
+                  const IconComponent = opt.icon;
+                  const isSelected = selectedDisposition === opt.id;
+                  return (
+                    <div
+                      key={opt.id}
+                      onClick={() => setSelectedDisposition(opt.id)}
+                      className={cn(
+                        "flex items-start gap-3 rounded-lg border p-3.5 transition-colors cursor-pointer",
+                        isSelected
+                          ? "border-black bg-[#F5F8FE]"
+                          : "border-[#EAEAEA] bg-white hover:bg-neutral-50/50"
+                      )}
+                    >
+                      <div className="mt-0.5">
+                        <div
+                          className={cn(
+                            "h-4 w-4 rounded-full border flex items-center justify-center transition-colors",
+                            isSelected ? "border-black bg-black" : "border-[#BDBDBD] bg-white"
+                          )}
+                        >
+                          {isSelected && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
+                        </div>
+                      </div>
+
+                      <IconComponent className="h-4 w-4 text-[#666666] shrink-0 mt-0.5" />
+
+                      <div className="flex-1">
+                        <div className="text-[13px] font-semibold text-black leading-tight">
+                          {opt.title}
+                        </div>
+                        <div className="text-[12px] text-[#666666] leading-relaxed">
+                          {opt.description}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Footer action confirmation */}
+              <p className="text-[12px] text-[#666666] pt-1">
+                {selectedDisposition
+                  ? "Option selected. Click confirm to apply the disposition."
+                  : "No option is selected. The operator must explicitly confirm the disposition before stock can move."}
+              </p>
+
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  disabled={!selectedDisposition || confirmDispositionMutation.isPending}
+                  onClick={() => {
+                    if (selectedDisposition && selectedInspectionItem) {
+                      confirmDispositionMutation.mutate({
+                        id: selectedInspectionItem.id,
+                        input: { disposition: selectedDisposition as any },
+                      });
+                      setSelectedDisposition(null);
+                    }
+                  }}
+                  className={cn(
+                    "h-[34px] px-3.5 rounded-lg text-[12px] font-semibold transition-colors",
+                    selectedDisposition
+                      ? "bg-[#111111] text-white hover:bg-black cursor-pointer"
+                      : "bg-[#BDBDBD] text-white cursor-not-allowed"
+                  )}
+                >
+                  {confirmDispositionMutation.isPending ? "Confirming..." : "Confirm disposition"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedDisposition(null);
+                    setSelectedInspectionId(null);
+                  }}
+                  className="h-[34px] px-3.5 bg-white border border-[#EAEAEA] rounded-lg text-[12px] font-semibold text-black hover:bg-neutral-50 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+
+              {/* Bottom Resolution Labels Legend */}
+              <div className="pt-6 border-t border-[#EAEAEA] text-[11px] text-[#666666] space-y-1">
+                <div className="font-semibold text-black">Resolution labels across return details</div>
+                <div>Inspection: Pending / In Progress / Complete</div>
+                <div>Refund: Pending / Processed / Not applicable</div>
+                <div>Disposition: Pending / Sellable / Damaged / Rejected / Quarantine / Repair / Write-off</div>
+              </div>
+            </section>
+          )}
         </div>
       )}
 
@@ -1287,7 +1504,7 @@ export default function ReturnsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#EAEAEA]">
-                  {refundRows.map((row) => {
+                  {paginatedRefundRows.map((row) => {
                     const actionLabel =
                       row.refundStatus === "Ready for Refund"
                         ? "Review refund →"
@@ -1379,6 +1596,84 @@ export default function ReturnsPage() {
                   })}
                 </tbody>
               </table>
+            </div>
+
+            {/* Refunds Table Pagination */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-[11px] pt-1">
+              <span className="text-[11px] text-[#666666]">
+                Showing{" "}
+                <span className="font-semibold text-black">
+                  {refundRows.length === 0 ? 0 : (safeRefundsPage - 1) * refundsPageSize + 1}–
+                  {Math.min(safeRefundsPage * refundsPageSize, refundRows.length)}
+                </span>{" "}
+                of <span className="font-semibold text-black">{refundRows.length}</span> refunds
+              </span>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-1.5 text-[11px] text-[#666666]">
+                  <span>Rows per page:</span>
+                  <select
+                    value={refundsPageSize}
+                    onChange={(e) => {
+                      setRefundsPageSize(Number(e.target.value));
+                      setRefundsCurrentPage(1);
+                    }}
+                    className="h-[28px] rounded-md border border-[#EAEAEA] bg-white px-2 text-[11px] font-medium text-black outline-none hover:border-[#CCCCCC] focus:border-black cursor-pointer transition-colors"
+                  >
+                    <option value={5}>5</option>
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setRefundsCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={safeRefundsPage <= 1}
+                    className={cn(
+                      "flex h-7 w-7 items-center justify-center rounded-md border border-[#EAEAEA] transition-colors",
+                      safeRefundsPage <= 1
+                        ? "cursor-not-allowed text-[#BDBDBD] bg-[#FAFAFA]"
+                        : "text-[#666666] hover:text-black hover:bg-neutral-100 cursor-pointer"
+                    )}
+                    aria-label="Previous page"
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                  </button>
+
+                  {Array.from({ length: refundsTotalPages }, (_, i) => i + 1).map((pageNum) => (
+                    <button
+                      key={pageNum}
+                      type="button"
+                      onClick={() => setRefundsCurrentPage(pageNum)}
+                      className={cn(
+                        "flex h-7 min-w-[28px] px-2 items-center justify-center rounded-md text-[11px] transition-colors cursor-pointer",
+                        safeRefundsPage === pageNum
+                          ? "bg-[#111111] font-semibold text-white shadow-xs"
+                          : "border border-[#EAEAEA] text-[#666666] hover:text-black hover:bg-neutral-50"
+                      )}
+                    >
+                      {pageNum}
+                    </button>
+                  ))}
+
+                  <button
+                    type="button"
+                    onClick={() => setRefundsCurrentPage((p) => Math.min(refundsTotalPages, p + 1))}
+                    disabled={safeRefundsPage >= refundsTotalPages}
+                    className={cn(
+                      "flex h-7 w-7 items-center justify-center rounded-md border border-[#EAEAEA] transition-colors",
+                      safeRefundsPage >= refundsTotalPages
+                        ? "cursor-not-allowed text-[#BDBDBD] bg-[#FAFAFA]"
+                        : "text-[#666666] hover:text-black hover:bg-neutral-100 cursor-pointer"
+                    )}
+                    aria-label="Next page"
+                  >
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
             </div>
 
             {/* Subtext and Contextual states note matching Figma */}
