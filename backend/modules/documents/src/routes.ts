@@ -1,21 +1,35 @@
-import type { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
+import type { Tx } from '@oms/database';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { audit, created, emit, ok, vendorTx } from '@oms/module-kit';
 import { IdParamSchema, IsoDate, successEnvelope } from '@oms/contracts';
 import { AppError } from '@oms/shared';
 import * as svc from './service';
+import { PLACEHOLDER_CSP, PLACEHOLDER_MIME } from './placeholder';
 
 const DocumentSchema = z
   .object({
     id: z.string(), productId: z.string(), variantId: z.string().nullable(), listingId: z.string().nullable(),
     kind: z.enum(['image', 'document', 'video']), purpose: z.enum(['product_image', 'product_document', 'listing_document']),
     fileName: z.string(), mimeType: z.string(), sizeBytes: z.number().nullable(), checksumSha256: z.string().nullable(),
-    sortOrder: z.number().int(), isPrimary: z.boolean(), status: z.enum(['pending_upload', 'uploaded', 'processed', 'rejected']),
+    sortOrder: z.number().int(), isPrimary: z.boolean(),
+    isPlaceholder: z.boolean().describe('A generated stand-in image: counts while drafting but always blocks publishing'),
+    width: z.number().int().nullable().describe('Pixels, read from the image header (null for non-images)'),
+    height: z.number().int().nullable(),
+    warnings: z.array(z.enum(['low_resolution'])).describe('`low_resolution`: the longer side is below 1000 px (accepted, but marketplaces prefer larger images)'),
+    status: z.enum(['pending_upload', 'uploaded', 'processed', 'rejected']),
     downloadUrl: z.string().nullable().describe('Short-lived pre-signed URL (or the API content endpoint when the storage provider cannot presign)'),
     createdAt: IsoDate,
   })
   .meta({ id: 'Document' });
+
+const PrimaryImageSchema = z
+  .object({ state: z.enum(['none', 'uploading', 'placeholder', 'ready']), document: DocumentSchema.nullable() })
+  .meta({ id: 'ProductPrimaryImage' });
+
+/** Hardening for generated SVG: never executable, never framed, never sniffed. */
+const SVG_CSP = PLACEHOLDER_CSP;
 
 const UploadInstructionSchema = z
   .object({ strategy: z.enum(['presigned', 'api']), method: z.string(), url: z.string(), headers: z.record(z.string(), z.string()) })
@@ -70,14 +84,17 @@ export const documentRoutes: FastifyPluginAsync = async (app) => {
     if (!Buffer.isBuffer(req.body)) throw new AppError('UNSUPPORTED_MEDIA_TYPE', 'Send the file as the raw request body');
     const body = req.body;
     const outcome = await vendorTx(req, async (tx, vendorId) => {
-      const d = await svc.uploadContent(tx, c, vendorId, req.params.id, body, req.headers['content-type'] ?? '', req.query.primary === 'true');
-      if (svc.isRejection(d)) return d;
-      await audit(tx, req, { action: 'document.upload', resourceType: 'document', resourceId: d.id, after: { productId: d.productId, fileName: d.fileName, sizeBytes: d.sizeBytes } });
+      const f = await svc.uploadContent(tx, c, vendorId, req.params.id, body, req.headers['content-type'] ?? '', req.query.primary === 'true');
+      if (svc.isRejection(f)) return f;
+      const d = f.doc;
+      await audit(tx, req, { action: 'document.upload', resourceType: 'document', resourceId: d.id, after: { productId: d.productId, fileName: d.fileName, sizeBytes: d.sizeBytes, width: d.width, height: d.height } });
       await emit(tx, req, { type: 'document.uploaded', aggregateType: 'document', aggregateId: d.id, payload: { productId: d.productId, kind: d.kind, purpose: d.purpose } });
-      return d;
+      await recordReplaced(tx, req, f);
+      return f;
     });
-    if (svc.isRejection(outcome)) { throw outcome.rejected; }
-    return ok(req, await svc.toDocumentDto(c, outcome));
+    if (svc.isRejection(outcome)) throw outcome.rejected;
+    await dropObjects(req, outcome);
+    return ok(req, await svc.toDocumentDto(c, outcome.doc));
   });
 
   r.post('/documents/:id/confirm', {
@@ -85,14 +102,75 @@ export const documentRoutes: FastifyPluginAsync = async (app) => {
     schema: { tags: TAGS, summary: 'Confirm a direct (presigned) upload (step 2, "presigned" strategy)', description: 'Verifies what actually landed in object storage: size limit and content sniffing. Rejected files are deleted.', params: IdParamSchema, response: { 200: successEnvelope(DocumentSchema) } },
   }, async (req) => {
     const outcome = await vendorTx(req, async (tx, vendorId) => {
-      const d = await svc.confirmUpload(tx, c, vendorId, req.params.id);
-      if (svc.isRejection(d)) return d;
-      if (d.status === 'uploaded') await emit(tx, req, { type: 'document.uploaded', aggregateType: 'document', aggregateId: d.id, payload: { productId: d.productId, kind: d.kind, purpose: d.purpose } });
-      return d;
+      const f = await svc.confirmUpload(tx, c, vendorId, req.params.id);
+      if (svc.isRejection(f)) return f;
+      const d = f.doc;
+      if (!f.already && d.status === 'uploaded') {
+        await audit(tx, req, { action: 'document.upload', resourceType: 'document', resourceId: d.id, after: { productId: d.productId, fileName: d.fileName, sizeBytes: d.sizeBytes, width: d.width, height: d.height, via: 'confirm' } });
+        await emit(tx, req, { type: 'document.uploaded', aggregateType: 'document', aggregateId: d.id, payload: { productId: d.productId, kind: d.kind, purpose: d.purpose } });
+        await recordReplaced(tx, req, f);
+      }
+      return f;
     });
     if (svc.isRejection(outcome)) throw outcome.rejected;
-    return ok(req, await svc.toDocumentDto(c, outcome));
+    await dropObjects(req, outcome);
+    return ok(req, await svc.toDocumentDto(c, outcome.doc));
   });
+
+  r.post('/products/:id/documents/placeholder', {
+    config: { access: { permission: 'documents:write' } },
+    schema: {
+      tags: TAGS,
+      summary: 'Generate a placeholder product image',
+      description: 'Creates a server-generated SVG stand-in (product code initials + "Image required"), deterministic per product, at most one per product (idempotent: 200 with the existing one). It becomes the primary image only when the product has none, and is replaced automatically by the first real image. A placeholder always blocks publishing. 409 `has_primary_image` when a real primary image exists.',
+      params: IdParamSchema,
+      response: { 201: successEnvelope(DocumentSchema), 200: successEnvelope(DocumentSchema) },
+    },
+  }, async (req, reply) => {
+    const storedKeys: string[] = [];
+    let out: Awaited<ReturnType<typeof svc.createPlaceholder>>;
+    try {
+      out = await vendorTx(req, async (tx, vendorId) => {
+        const res = await svc.createPlaceholder(tx, c, vendorId, req.params.id, storedKeys);
+        if (res.created) {
+          await audit(tx, req, { action: 'document.placeholder_created', resourceType: 'document', resourceId: res.doc.id, after: { productId: res.doc.productId, primary: res.doc.isPrimary } });
+        }
+        return res;
+      });
+    } catch (err) {
+      await Promise.all(storedKeys.map((k) => c.storage.delete(k).catch(() => undefined)));
+      throw err;
+    }
+    const dto = await svc.toDocumentDto(c, out.doc);
+    if (out.created) return created(req, reply, dto, `/api/v1/documents/${out.doc.id}`);
+    return ok(req, dto);
+  });
+
+  r.get('/products/:id/primary-image', {
+    config: { access: { permission: 'documents:read' } },
+    schema: {
+      tags: TAGS,
+      summary: 'State of the product\'s primary image',
+      description: '`ready`: a real uploaded image is primary. `uploading`: no ready primary and an upload started less than 30 minutes ago (document = that upload). `placeholder`: the generated placeholder is primary (blocks publishing). `none`: nothing.',
+      params: IdParamSchema,
+      response: { 200: successEnvelope(PrimaryImageSchema) },
+    },
+  }, async (req) => {
+    const s = await vendorTx(req, (tx, vendorId) => svc.primaryImageState(tx, vendorId, req.params.id));
+    return ok(req, { state: s.state, document: s.doc ? await svc.toDocumentDto(c, s.doc) : null });
+  });
+
+  /** audit + event for placeholders replaced by a real upload (inside the transaction) */
+  async function recordReplaced(tx: Tx, req: FastifyRequest, f: svc.Finalized): Promise<void> {
+    for (const p of f.replaced) {
+      await audit(tx, req, { action: 'document.placeholder_replaced', resourceType: 'document', resourceId: p.id, after: { productId: f.doc.productId, replacedBy: f.doc.id } });
+      await emit(tx, req, { type: 'document.deleted', aggregateType: 'document', aggregateId: p.id, payload: { productId: f.doc.productId, reason: 'placeholder_replaced' } });
+    }
+  }
+  /** storage cleanup after commit: replaced placeholders, and the object of a rejected upload (best effort, swept later) */
+  async function dropObjects(req: FastifyRequest, x: svc.Finalized): Promise<void> {
+    for (const p of x.replaced) await c.storage.delete(p.storageKey).catch((err) => req.log.warn({ err, key: p.storageKey }, 'placeholder object delete failed (orphaned, will be swept)'));
+  }
 
   r.get('/products/:id/documents', {
     config: { access: { permission: 'documents:read' } },
@@ -112,13 +190,16 @@ export const documentRoutes: FastifyPluginAsync = async (app) => {
     schema: { tags: TAGS, summary: 'Download the file content', description: 'Streams the stored bytes through the API (any storage provider). Images are served inline, everything else as an attachment, always with nosniff.', params: IdParamSchema, response: { 200: z.any().describe('file bytes') } },
   }, async (req, reply) => {
     const { doc, body } = await vendorTx(req, (tx, vendorId) => svc.readContent(tx, c.storage, vendorId, req.params.id));
-    const inline = svc.isImage(doc.mimeType);
-    return reply
+    // only the server-generated placeholder may be an SVG (user-supplied SVG is not in the MIME allow-list)
+    const generatedSvg = doc.isPlaceholder && doc.mimeType === PLACEHOLDER_MIME;
+    const inline = svc.isImage(doc.mimeType) || generatedSvg;
+    reply
       .header('Content-Type', doc.mimeType)
       .header('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="${doc.fileName}"`)
       .header('X-Content-Type-Options', 'nosniff')
-      .header('Cache-Control', 'private, max-age=300')
-      .send(body);
+      .header('Cache-Control', 'private, max-age=300');
+    if (generatedSvg) reply.header('Content-Security-Policy', SVG_CSP);
+    return reply.send(body);
   });
 
   r.patch('/documents/:id', {
@@ -135,15 +216,35 @@ export const documentRoutes: FastifyPluginAsync = async (app) => {
 
   r.delete('/documents/:id', {
     config: { access: { permission: 'documents:write' } },
-    schema: { tags: TAGS, summary: 'Delete a document', description: 'Soft-deletes the record and removes the stored object.', params: IdParamSchema, response: { 200: successEnvelope(z.object({ message: z.string() })) } },
+    schema: { tags: TAGS, summary: 'Delete a document (or cancel an upload in progress)', description: 'Soft-deletes the record and removes the stored object. On a `pending_upload` document this cancels the upload (idempotent): the record disappears and any partial object is removed.', params: IdParamSchema, response: { 200: successEnvelope(z.object({ message: z.string(), cancelled: z.boolean().optional() })) } },
   }, async (req) => {
-    const d = await vendorTx(req, async (tx, vendorId) => {
-      const out = await svc.deleteDocument(tx, vendorId, req.params.id);
-      await audit(tx, req, { action: 'document.delete', resourceType: 'document', resourceId: out.id, before: { fileName: out.fileName } });
-      await emit(tx, req, { type: 'document.deleted', aggregateType: 'document', aggregateId: out.id, payload: { productId: out.productId } });
+    const res = await removeDocument(req, req.params.id, 'delete');
+    return ok(req, res.cancelled ? { message: 'Upload cancelled', cancelled: true } : { message: 'Document deleted' });
+  });
+
+  r.post('/documents/:id/cancel', {
+    config: { access: { permission: 'documents:write' } },
+    schema: { tags: TAGS, summary: 'Cancel an upload in progress', description: 'Alias of DELETE for documents in `pending_upload`. Idempotent. 409 `not_pending_upload` when the document is already uploaded (delete it instead).', params: IdParamSchema, response: { 200: successEnvelope(z.object({ cancelled: z.literal(true) })) } },
+  }, async (req) => {
+    await removeDocument(req, req.params.id, 'cancel');
+    return ok(req, { cancelled: true as const });
+  });
+
+  async function removeDocument(req: FastifyRequest, id: string, mode: 'delete' | 'cancel') {
+    const res = await vendorTx(req, async (tx, vendorId) => {
+      const out = await svc.deleteDocument(tx, vendorId, id, mode);
+      if (out.already) return out;
+      const d = out.doc;
+      if (out.cancelled) {
+        await audit(tx, req, { action: 'document.upload_cancelled', resourceType: 'document', resourceId: d.id, before: { fileName: d.fileName, productId: d.productId } });
+      } else {
+        await audit(tx, req, { action: 'document.delete', resourceType: 'document', resourceId: d.id, before: { fileName: d.fileName } });
+        await emit(tx, req, { type: 'document.deleted', aggregateType: 'document', aggregateId: d.id, payload: { productId: d.productId } });
+      }
       return out;
     });
-    await c.storage.delete(d.storageKey).catch((err) => req.log.warn({ err, key: d.storageKey }, 'storage delete failed (object orphaned, will be swept)'));
-    return ok(req, { message: 'Document deleted' });
-  });
+    // also on a repeated cancel: removes a partial object that landed after the first attempt
+    await c.storage.delete(res.doc.storageKey).catch((err) => req.log.warn({ err, key: res.doc.storageKey }, 'storage delete failed (object orphaned, will be swept)'));
+    return res;
+  }
 };

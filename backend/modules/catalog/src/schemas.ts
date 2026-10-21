@@ -37,6 +37,8 @@ export const VariantSchema = z
     id: z.string(), productId: z.string(), sku: z.string(), barcode: z.string().nullable(), optionValues: z.record(z.string(), z.string()),
     currency: z.string(), mrpMinor: z.number().nullable(), sellingPriceMinor: z.number().nullable(), costPriceMinor: z.number().nullable(),
     taxRateBps: z.number().int().nullable(), weightGrams: z.number().int().nullable(), dimensionsMm: DimensionsSchema.nullable(),
+    effectiveDimensionsMm: DimensionsSchema.nullable().describe('The variant\'s own dimensions, or the product\'s when the variant has none'),
+    effectiveWeightGrams: z.number().int().nullable().describe('The variant\'s own weight, or the product\'s when the variant has none'),
     status: z.enum(['active', 'inactive']), version: z.number().int(), createdAt: IsoDate, updatedAt: IsoDate,
   })
   .meta({ id: 'Variant' });
@@ -58,17 +60,43 @@ export const ProductAttributeInputSchema = z.object({
   value: z.union([z.string(), z.number(), z.boolean(), z.null()]),
 });
 
-const ProductBase = z.object({
-  productCode: CodeSchema.meta({ example: 'ACME-TEE', description: 'Your stable style/parent code; unique per vendor' }),
+// ---- product-level physical data, rich description, custom attributes (display units in, canonical mm / g out) ----
+export const DimensionsInputSchema = z
+  .object({
+    length: z.number(), width: z.number(), height: z.number(),
+    unit: z.enum(['cm', 'mm', 'in']).optional().describe('Default cm'),
+  })
+  .meta({ id: 'DimensionsEntry', description: 'Product (not package) dimensions: all three sides or none. Stored as integer millimetres (round half up), each side 1 mm - 100,000 mm.' });
+export const WeightInputSchema = z
+  .object({ value: z.number(), unit: z.enum(['kg', 'g', 'lb']).optional().describe('Default kg') })
+  .meta({ id: 'WeightEntry', description: 'Product weight. Stored as integer grams (round half up), 1 g - 10,000,000 g.' });
+export const CustomAttributeInputSchema = z
+  .object({ name: z.string().max(200), value: z.string().max(1000), confirmed: z.boolean().optional() })
+  .meta({ id: 'CustomAttributeEntry', description: 'Free-form name/value pair. Names 1-60 chars (unique ignoring case), values 1-250 chars. `confirmed` defaults to the existing flag when the fact is unchanged, else false: unconfirmed values are never sent to listings.' });
+export const CustomAttributeSchema = z.object({ name: z.string(), value: z.string(), confirmed: z.boolean() }).meta({ id: 'CustomAttribute' });
+export const DisplayDimensionsSchema = z.object({ length: z.number(), width: z.number(), height: z.number(), unit: z.literal('cm') }).meta({ id: 'DisplayDimensions' });
+export const DisplayWeightSchema = z.object({ value: z.number(), unit: z.literal('kg') }).meta({ id: 'DisplayWeight' });
+/** GST rate of a product: 0-28 % in basis points (variants keep their wider override range) */
+export const ProductGstRateSchema = z.number().int().min(0).max(2800).describe('GST rate in basis points (1800 = 18%), 0-2800');
+
+export const ProductBase = z.object({
+  productCode: CodeSchema.meta({ example: 'ACME-TEE', description: 'Your stable style/parent code (Master SKU); unique per vendor, ignoring case' }),
   title: z.string().trim().min(3).max(200),
-  description: z.string().trim().max(10_000).nullish(),
-  brand: z.string().trim().min(1).max(100).nullish(),
+  description: z.string().trim().max(40_000).nullish().describe('Plain or simple-HTML text; sanitised. The plain-text form is limited to 2,000 characters (400 `description_too_long`).'),
+  descriptionHtml: z.string().max(40_000).nullish().describe('Rich description (p, br, strong/b, em/i, ul, ol, li, a[href=http(s)/mailto]); sanitised, wins over `description` when both are sent. The plain-text form is always kept in `description`.'),
+  brand: z.string().trim().min(1).max(80).nullish().describe('Saved to the business brand list (unconfirmed until confirmed)'),
   manufacturer: z.string().trim().min(1).max(150).nullish(),
   countryOfOrigin: CountrySchema.nullish(),
   categoryId: z.uuid().nullish(),
-  hsnCode: HsnSchema.nullish().describe('HSN (goods) / SAC (services) code'),
-  gstRateBps: GstRateSchema.nullish(),
+  hsnCode: HsnSchema.nullish().describe('HSN (goods) / SAC (services) code: digits only, 4, 6 or 8 digits'),
+  gstRateBps: ProductGstRateSchema.nullish(),
   tags: z.array(z.string().trim().min(1).max(40)).max(50),
+  productType: z.enum(['physical', 'digital', 'service']).optional().describe('Stored in products.attributes.productType (default physical)'),
+  material: z.string().trim().min(1).max(80).nullish(),
+  standardCategory: z.string().trim().min(1).max(120).nullish().describe('The seller\'s "standard product category" (free text with suggestions), separate from the category tree'),
+  dimensions: DimensionsInputSchema.nullish(),
+  weight: WeightInputSchema.nullish(),
+  customAttributes: z.array(CustomAttributeInputSchema).max(50).nullish().describe('Replaces the whole list. At most 20 entries.'),
 });
 export const ProductInputSchema = ProductBase.extend({
   tags: ProductBase.shape.tags.default([]),
@@ -86,7 +114,12 @@ export const ProductSchema = z
     id: z.string(), productCode: z.string(), title: z.string(), description: z.string().nullable(), brand: z.string().nullable(),
     manufacturer: z.string().nullable(), countryOfOrigin: z.string().nullable(), categoryId: z.string().nullable(),
     hsnCode: z.string().nullable(), gstRateBps: z.number().int().nullable(), tags: z.array(z.string()),
-    status: z.enum(['draft', 'active', 'archived']), variantCount: z.number().int(), version: z.number().int(), createdAt: IsoDate, updatedAt: IsoDate,
+    descriptionHtml: z.string().nullable(), dimensions: DisplayDimensionsSchema.nullable(), dimensionsMm: DimensionsSchema.nullable(),
+    weight: DisplayWeightSchema.nullable(), weightGrams: z.number().int().nullable(), material: z.string().nullable(), standardCategory: z.string().nullable(),
+    customAttributes: z.array(CustomAttributeSchema),
+    productType: z.enum(['physical', 'digital', 'service']), status: z.enum(['draft', 'active', 'archived']),
+    productCodeLocked: z.boolean().describe('true once the product is no longer a draft: the master code cannot change (409 code_locked)'),
+    variantCount: z.number().int(), version: z.number().int(), createdAt: IsoDate, updatedAt: IsoDate,
   })
   .meta({ id: 'Product' });
 

@@ -1,5 +1,6 @@
 import { and, eq, escapeLike, ilike, isNull, keyset, or, schema, sql, tenantWhere, type SQL, type Tx } from '@oms/database';
 import { AppError, Errors, type TenantScope } from '@oms/shared';
+import { adoptProfileGstin, assertPanFitsRegistrations, validateForVendor } from './gst-service';
 
 export type VendorRow = typeof schema.vendors.$inferSelect;
 
@@ -16,6 +17,7 @@ export function toVendorDto(v: VendorRow) {
     phone: v.phone,
     gstin: v.gstin,
     pan: v.pan,
+    cin: v.cin,
     address: v.address as Record<string, string>,
     businessType: v.businessType as (typeof schema.BUSINESS_TYPES)[number] | null,
     teamSize: v.teamSize as (typeof schema.TEAM_SIZES)[number] | null,
@@ -36,7 +38,7 @@ export async function getVendor(tx: Tx, id: string): Promise<VendorRow> {
 }
 
 export type VendorUpdate = Partial<{
-  displayName: string; legalName: string; businessEmail: string; phone: string; gstin: string | null; pan: string | null;
+  displayName: string; legalName: string; businessEmail: string | null; phone: string | null; gstin: string | null; pan: string | null; cin: string | null;
   address: Record<string, unknown>; businessType: string; teamSize: string; operatingLocation: string; timezone: string; currency: string; version: number;
 }>;
 
@@ -44,22 +46,32 @@ export async function updateVendor(tx: Tx, id: string, input: VendorUpdate): Pro
   const before = await getVendor(tx, id);
   if (input.version !== undefined && input.version !== before.version) throw new AppError('VERSION_CONFLICT', undefined, { details: { currentVersion: before.version } });
   const { version: _v, ...fields } = input;
+  const nextPan = input.pan === undefined ? before.pan : input.pan;
+  if (input.pan) await assertPanFitsRegistrations(tx, id, input.pan);
+  if (input.gstin) await validateForVendor(tx, id, input.gstin, nextPan);
   const [after] = await tx
     .update(schema.vendors)
     .set({ ...fields, version: sql`${schema.vendors.version} + 1` })
     .where(eq(schema.vendors.id, id))
     .returning();
+  if (input.gstin !== undefined && input.gstin !== before.gstin) await adoptProfileGstin(tx, id, input.gstin);
   return { before, after: after! };
 }
 
-/** Shallow-merge per top-level section so PATCH {notifications:{lowStock:true}} keeps the other notification flags. */
+const isPlain = (v: unknown): v is Record<string, unknown> => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
+
+/** Merges objects recursively, so `{alerts:{dispatchSlaBreach:{enabled:false}}}` keeps the threshold and the other alert flags. */
+export function mergeSettings(current: Record<string, unknown>, patch: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...current };
+  for (const [k, v] of Object.entries(patch)) out[k] = isPlain(v) && isPlain(current[k]) ? mergeSettings(current[k] as Record<string, unknown>, v) : v;
+  return out;
+}
+
+/** Merge per section (recursively) so PATCH {notifications:{lowStock:true}} keeps the other notification flags. */
 export async function updateSettings(tx: Tx, id: string, patch: Record<string, unknown>): Promise<{ before: VendorRow; after: VendorRow }> {
   const before = await getVendor(tx, id);
   const current = before.settings as Record<string, unknown>;
-  const merged: Record<string, unknown> = { ...current };
-  for (const [k, v] of Object.entries(patch)) {
-    merged[k] = v && typeof v === 'object' && !Array.isArray(v) ? { ...((current[k] as object | undefined) ?? {}), ...v } : v;
-  }
+  const merged = mergeSettings(current, patch);
   const [after] = await tx.update(schema.vendors).set({ settings: merged, version: sql`${schema.vendors.version} + 1` }).where(eq(schema.vendors.id, id)).returning();
   return { before, after: after! };
 }

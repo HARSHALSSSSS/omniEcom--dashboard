@@ -176,6 +176,15 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
     return ok(req, await systemTx(req, (tx) => svc.listSessions(tx, p.actorId, p.sessionId)));
   });
 
+  r.delete('/me/sessions', {
+    config: { access: 'authenticated' },
+    schema: { ...PROFILE, summary: 'Sign out every other device', description: 'Revokes all my sessions except the one making this call.', response: { 200: successEnvelope(z.object({ revoked: z.number().int() })) } },
+  }, async (req) => {
+    const p = req.ctx.principal!;
+    const revoked = await systemTx(req, (tx) => svc.endAllSessions(tx, p.actorId, p.sessionId));
+    return ok(req, { revoked });
+  });
+
   r.delete('/me/sessions/:id', {
     config: { access: 'authenticated' },
     schema: { ...PROFILE, summary: 'Revoke one of my sessions', params: z.object({ id: z.uuid() }), response: { 200: successEnvelope(MessageSchema) } },

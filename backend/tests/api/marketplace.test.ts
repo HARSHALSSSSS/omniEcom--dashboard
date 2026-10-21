@@ -30,7 +30,7 @@ describe('connector catalogue and capability matrix', () => {
     const r = await c.get('/api/v1/marketplaces', admin);
     expect(r.status).toBe(200);
     const byCode = Object.fromEntries(r.body.data.map((m: any) => [m.code, m]));
-    expect(Object.keys(byCode).sort()).toEqual(['amazon_in', 'flipkart', 'mock', 'myntra', 'snapdeal']);
+    expect(Object.keys(byCode).sort()).toEqual(['amazon_in', 'flipkart', 'meesho', 'mock', 'myntra', 'shopify', 'snapdeal']);
     expect(byCode.mock).toMatchObject({ implementation: 'beta', redirectFlow: true });
     expect(byCode.mock.enabledCapabilities).toEqual(expect.arrayContaining(['orders.fetch', 'inventory.push', 'listings.create', 'shipping.createShipment', 'catalog.import']));
     // every launch connector is implemented against its sandbox/simulator; none is verified for LIVE use yet

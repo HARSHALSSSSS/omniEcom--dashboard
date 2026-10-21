@@ -1,13 +1,20 @@
+import type { FastifyPluginAsync } from 'fastify';
 import type { JobHandler } from '@oms/module-kit';
 import { manifest } from './manifest';
+import { profitRoutes } from './profit-routes';
 import { analyticsRoutes } from './routes';
 import { rollupRecent } from './rollup';
+import { spendRoutes } from './spend-routes';
 
 export { manifest };
 export { analyticsRoutes } from './routes';
+export { profitRoutes } from './profit-routes';
+export { spendRoutes } from './spend-routes';
 export { overview, productPerformance, marketplacePerformance, dailyUnits, dailyRevenueSeries } from './queries';
 export { inventoryHealth, productHealth, businessHealth, classifyStock, healthScore, stockLines, DEFAULT_THRESHOLDS, type InventoryFinding, type InventoryThresholds, type HealthIssue } from './health';
-export { profitability, computeProfit, type Profit } from './profit';
+export { profitability, collectProfit, computeProfit, splitWindows, type Profit } from './profit';
+export { profitWaterfall, buildSteps } from './waterfall';
+export { advertisingSpend, parseAmountMinor, parseSpendDate } from './spend';
 export { rollupRecent, rollupVendor } from './rollup';
 
 export const JOB_ROLLUP = 'analytics.rollup';
@@ -19,8 +26,14 @@ const jobs: JobHandler[] = [{
   async handle(_env, c) { const w = await rollupRecent(c, 2); c.logger.debug({ window: w }, 'analytics roll-up'); },
 }];
 
+const routes: FastifyPluginAsync = async (app) => {
+  await app.register(analyticsRoutes);
+  await app.register(profitRoutes);
+  await app.register(spendRoutes);
+};
+
 /**
  * Analytics: the reporting / aggregation layer. Dashboards read small daily roll-ups instead of scanning orders; profitability keeps
- * actual, estimated and missing data apart; product, inventory and business health find problems in the real data.
+ * actual, estimated and missing data apart (with the P&L bridge and advertising spend); product, inventory and business health find problems in the real data.
  */
-export const analyticsModule = { manifest, routes: analyticsRoutes, jobs };
+export const analyticsModule = { manifest, routes, jobs };

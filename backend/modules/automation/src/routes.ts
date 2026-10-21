@@ -4,16 +4,24 @@ import { z } from 'zod';
 import { and, eq, isFeatureEnabled, schema, sql, type Tx } from '@oms/database';
 import { AppError } from '@oms/shared';
 import { IdParamSchema, IsoDate, successEnvelope } from '@oms/contracts';
-import { audit, created, ok, vendorTx } from '@oms/module-kit';
+import { audit, created, ok, pageWindow, paged, vendorTx } from '@oms/module-kit';
 import { OPS } from '@oms/mod-rules';
-import { ACTIONS, TRIGGERS, dryRun, executeExecution, getExecution, getRule, listExecutions, rejectExecution, rollbackExecution, toExecutionDto, toRuleDto, validateRule } from './engine';
+import { ACTIONS, TRIGGERS, dryRun, executeExecution, getExecution, getRule, listExecutions, rejectExecution, rollbackExecution, ruleDto, ruleStats, toExecutionDto, toRuleDto, validateRule } from './engine';
+import { listApprovals, listRuns, overview } from './views';
 
 const TAGS = ['Automation'];
 const Conditions = z.object({ combinator: z.enum(['all', 'any']).default('all'), conditions: z.array(z.object({ field: z.string().min(1).max(61), op: z.enum(OPS), value: z.unknown().optional() })).max(20) });
 const ConditionsOut = z.object({ combinator: z.enum(['all', 'any']), conditions: z.array(z.object({ field: z.string(), op: z.string(), value: z.unknown().optional() })) });
 const Action = z.object({ type: z.string().min(2).max(40), params: z.record(z.string(), z.unknown()).default({}) });
-const Rule = z.object({ id: z.string(), name: z.string(), description: z.string().nullable(), triggerEvent: z.string(), conditions: ConditionsOut, action: Action, mode: z.enum(schema.AUTOMATION_MODES), status: z.enum(schema.AUTOMATION_RULE_STATUSES), version: z.number().int(), createdAt: IsoDate, updatedAt: IsoDate }).meta({ id: 'AutomationRule' });
+const Rule = z.object({ id: z.string(), name: z.string(), description: z.string().nullable(), triggerEvent: z.string(), conditions: ConditionsOut, action: Action, mode: z.enum(schema.AUTOMATION_MODES), status: z.enum(schema.AUTOMATION_RULE_STATUSES), version: z.number().int(), createdAt: IsoDate, updatedAt: IsoDate,
+  /** the Automation screen's vocabulary (additive) */
+  triggerType: z.string(), actionType: z.string(), requiresExplicitApproval: z.boolean(), runsCount: z.number().int(), lastRunAt: IsoDate.nullable(), channelFilter: z.string().nullable(), schedule: z.object({ cadence: z.enum(['daily', 'weekly']), hour: z.number().int(), weekday: z.number().int().nullable() }).nullable(),
+}).meta({ id: 'AutomationRule' });
 const Execution = z.object({ id: z.string(), ruleId: z.string(), eventId: z.string(), eventType: z.string(), status: z.enum(schema.AUTOMATION_EXECUTION_STATUSES), actionType: z.string(), actionParams: z.record(z.string(), z.unknown()), facts: z.record(z.string(), z.unknown()), result: z.record(z.string(), z.unknown()).nullable(), error: z.string().nullable(), canRollback: z.boolean(), decidedBy: z.string().nullable(), decidedAt: IsoDate.nullable(), executedAt: IsoDate.nullable(), createdAt: IsoDate }).meta({ id: 'AutomationExecution' });
+const PageQuery = z.object({ page: z.coerce.number().int().min(1).default(1), pageSize: z.coerce.number().int().min(1).max(100).default(20) });
+const PagedOf = <T extends z.ZodType>(item: T, id: string) => z.object({ items: z.array(item), page: z.number().int(), pageSize: z.number().int(), total: z.number().int(), pages: z.number().int() }).meta({ id });
+const Approval = z.object({ id: z.string(), ruleId: z.string(), ruleName: z.string(), triggerEvent: z.string(), triggerType: z.string(), actionType: z.string(), entityName: z.string(), skuOrOrder: z.string(), proposedAction: z.string(), recommendedAction: z.string(), financialImpact: z.number().int().nullable(), currency: z.string(), timestamp: IsoDate, status: z.literal('pending'), facts: z.record(z.string(), z.unknown()) }).meta({ id: 'AutomationApproval' });
+const Run = z.object({ id: z.string(), ruleId: z.string(), ruleName: z.string(), executionStatus: z.enum(['success', 'awaiting_approval', 'failed']), status: z.enum(schema.AUTOMATION_EXECUTION_STATUSES), triggeredAt: IsoDate, timestamp: IsoDate, summary: z.string(), durationMs: z.number().int(), entityName: z.string(), skuOrOrder: z.string() }).meta({ id: 'AutomationRun' });
 const CreateBody = z.object({ name: z.string().trim().min(2).max(120), description: z.string().max(500).nullish(), triggerEvent: z.string().min(3).max(80), conditions: Conditions.default({ combinator: 'all', conditions: [] }), action: Action, mode: z.enum(schema.AUTOMATION_MODES).default('approval'), status: z.enum(schema.AUTOMATION_RULE_STATUSES).default('draft') });
 
 /**
@@ -49,12 +57,16 @@ export const automationRoutes: FastifyPluginAsync = async (app) => {
   r.get('/automation/rules', {
     config: { access: { permission: 'automation:read' } },
     schema: { tags: TAGS, summary: 'List rules', querystring: z.object({ 'filter[status]': z.enum(schema.AUTOMATION_RULE_STATUSES).optional(), 'filter[trigger]': z.string().max(80).optional() }), response: { 200: successEnvelope(z.array(Rule)) } },
-  }, async (req) => ok(req, (await vendorTx(req, (tx, vendorId) => tx.select().from(schema.automationRules).where(and(eq(schema.automationRules.vendorId, vendorId), req.query['filter[status]'] ? eq(schema.automationRules.status, req.query['filter[status]']) : undefined, req.query['filter[trigger]'] ? eq(schema.automationRules.triggerEvent, req.query['filter[trigger]']) : undefined)).orderBy(schema.automationRules.createdAt).limit(200))).map(toRuleDto)));
+  }, async (req) => ok(req, await vendorTx(req, async (tx, vendorId) => {
+    const rows = await tx.select().from(schema.automationRules).where(and(eq(schema.automationRules.vendorId, vendorId), req.query['filter[status]'] ? eq(schema.automationRules.status, req.query['filter[status]']) : undefined, req.query['filter[trigger]'] ? eq(schema.automationRules.triggerEvent, req.query['filter[trigger]']) : undefined)).orderBy(schema.automationRules.createdAt).limit(200);
+    const stats = await ruleStats(tx, vendorId, rows.map((x) => x.id));
+    return rows.map((x) => toRuleDto(x, stats.get(x.id)));
+  })));
 
   r.get('/automation/rules/:id', {
     config: { access: { permission: 'automation:read' } },
     schema: { tags: TAGS, summary: 'Get a rule', params: IdParamSchema, response: { 200: successEnvelope(Rule) } },
-  }, async (req) => ok(req, toRuleDto(await vendorTx(req, (tx, vendorId) => getRule(tx, vendorId, req.params.id)))));
+  }, async (req) => ok(req, await vendorTx(req, async (tx, vendorId) => ruleDto(tx, vendorId, await getRule(tx, vendorId, req.params.id)))));
 
   r.patch('/automation/rules/:id', {
     config: { access: { permission: 'automation:write' } },
@@ -67,7 +79,7 @@ export const automationRoutes: FastifyPluginAsync = async (app) => {
     const params = validateRule(next);
     const [row] = await tx.update(schema.automationRules).set({ name: req.body.name ?? cur.name, description: req.body.description === undefined ? cur.description : req.body.description, triggerEvent: next.triggerEvent, conditions: next.conditions, action: { type: next.action.type, params }, mode: req.body.mode ?? cur.mode, status: req.body.status ?? cur.status, version: sql`${schema.automationRules.version} + 1` }).where(eq(schema.automationRules.id, cur.id)).returning();
     await audit(tx, req, { action: 'automation.rule_updated', resourceType: 'automation_rule', resourceId: cur.id, before: { mode: cur.mode, status: cur.status, action: cur.action.type }, after: { mode: row!.mode, status: row!.status, action: row!.action.type } });
-    return toRuleDto(row!);
+    return ruleDto(tx, vendorId, row!);
   })));
 
   for (const [path, status] of [['activate', 'active'], ['disable', 'disabled']] as const) {
@@ -79,7 +91,7 @@ export const automationRoutes: FastifyPluginAsync = async (app) => {
       const cur = await getRule(tx, vendorId, req.params.id);
       const [row] = await tx.update(schema.automationRules).set({ status, version: sql`${schema.automationRules.version} + 1` }).where(eq(schema.automationRules.id, cur.id)).returning();
       await audit(tx, req, { action: `automation.rule_${path}d`, resourceType: 'automation_rule', resourceId: cur.id, before: { status: cur.status }, after: { status } });
-      return toRuleDto(row!);
+      return ruleDto(tx, vendorId, row!);
     })));
   }
 
@@ -99,6 +111,33 @@ export const automationRoutes: FastifyPluginAsync = async (app) => {
     config: { access: { permission: 'automation:read' } },
     schema: { tags: TAGS, summary: 'Dry run: would this rule fire for this event payload?', description: 'Changes nothing. Shows the facts the conditions see and what the action would do.', params: IdParamSchema, body: z.object({ payload: z.record(z.string(), z.unknown()) }), response: { 200: successEnvelope(z.object({ matched: z.boolean(), facts: z.record(z.string(), z.unknown()), wouldDo: z.object({ action: z.string(), params: z.record(z.string(), z.unknown()), needsApproval: z.boolean() }).nullable() })) } },
   }, async (req) => ok(req, dryRun(await vendorTx(req, (tx, vendorId) => getRule(tx, vendorId, req.params.id)), req.body.payload)));
+
+  // ---------------------------------------------------------------- screen read models: overview, approvals queue, run log
+  r.get('/automation/overview', {
+    config: { access: { permission: 'automation:read' } },
+    schema: { tags: TAGS, summary: 'Metrics strip of the Automation screen', description: 'Active rules, approvals waiting, runs in the last 24 hours, their success rate (percent of attempted runs; null while nothing ran) and the last run.', response: { 200: successEnvelope(z.object({ activeRules: z.number().int(), totalRules: z.number().int(), pendingApprovals: z.number().int(), runs24h: z.number().int(), successRate: z.number().nullable(), lastRunAt: IsoDate.nullable(), lastRunRule: z.string().nullable() }).meta({ id: 'AutomationOverview' })) } },
+  }, async (req) => ok(req, await vendorTx(req, (tx, vendorId) => overview(tx, vendorId))));
+
+  r.get('/automation/approvals', {
+    config: { access: { permission: 'automation:read' } },
+    schema: { tags: TAGS, summary: 'Approvals queue: runs waiting for a person', description: 'Each item says what it is about (`entityName`, `skuOrOrder`), what it would do (`recommendedAction`, built from the structured facts) and the money at stake in minor units (`financialImpact`; a purchase order total, or the unit price change of a price proposal; null when it cannot be known). Approve with `POST /automation/executions/{id}/approve`.', querystring: PageQuery, response: { 200: successEnvelope(PagedOf(Approval, 'AutomationApprovalPage')) } },
+  }, async (req) => {
+    const out = await vendorTx(req, (tx, vendorId) => listApprovals(tx, vendorId, pageWindow(req.query)));
+    return paged(req, out.items, req.query, out.total);
+  });
+
+  r.post('/automation/approvals/:id/dismiss', {
+    config: { access: { permission: 'automation:write' } },
+    schema: { tags: TAGS, summary: 'Dismiss a waiting approval', description: 'Like reject: nothing runs, the decision and the optional note are recorded. A decided execution answers 409.', params: IdParamSchema, body: z.object({ note: z.string().max(300).nullish() }).default({}), response: { 200: successEnvelope(Execution) } },
+  }, async (req) => ok(req, await vendorTx(req, (tx, vendorId) => rejectExecution(tx, vendorId, req.params.id, actor(req), req.body.note, 'dismiss'))));
+
+  r.get('/automation/runs', {
+    config: { access: { permission: 'automation:read' } },
+    schema: { tags: TAGS, summary: 'Run log of the Automation screen', description: '`executionStatus` is success (executed, rolled back), awaiting_approval, or failed (failed, skipped, dismissed); `status` keeps the exact status. `durationMs` is how long the action took (0 when it did not run).', querystring: PageQuery.extend({ 'filter[status]': z.enum(['success', 'awaiting_approval', 'failed']).optional(), 'filter[ruleId]': z.uuid().optional() }), response: { 200: successEnvelope(PagedOf(Run, 'AutomationRunPage')) } },
+  }, async (req) => {
+    const out = await vendorTx(req, (tx, vendorId) => listRuns(tx, vendorId, { status: req.query['filter[status]'], ruleId: req.query['filter[ruleId]'], ...pageWindow(req.query) }));
+    return paged(req, out.items, req.query, out.total);
+  });
 
   // ---------------------------------------------------------------- executions: history, approval, rollback
   r.get('/automation/executions', {

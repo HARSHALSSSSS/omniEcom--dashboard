@@ -85,6 +85,62 @@
       "when": 1792049026781,
       "tag": "0011_onboarding_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1792057785446,
+      "tag": "0012_dashboard_workspace",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1792057786946,
+      "tag": "0013_dashboard_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1792142977262,
+      "tag": "0014_product_creation",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1792142978762,
+      "tag": "0015_product_creation_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1792152974357,
+      "tag": "0016_product_edit",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1792152975857,
+      "tag": "0017_product_edit_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1792171927235,
+      "tag": "0018_backend_readiness",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1792171928735,
+      "tag": "0019_backend_readiness_rls",
+      "breakpoints": true
     }
   ]
 }

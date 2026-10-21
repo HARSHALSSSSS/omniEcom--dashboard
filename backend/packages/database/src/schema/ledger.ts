@@ -12,7 +12,7 @@ import { orderItems, orders, warehouses } from './operations';
  */
 export const MOVEMENT_TYPES = [
   'receive', 'adjust', 'reserve', 'release', 'commit', 'return_in', 'return_restock', 'damage', 'undamage',
-  'incoming_add', 'incoming_receive', 'transfer_out', 'transfer_in', 'count',
+  'incoming_add', 'incoming_receive', 'transfer_out', 'transfer_in', 'count', 'quarantine', 'quarantine_release',
 ] as const;
 export const RESERVATION_STATUSES = ['active', 'committed', 'released'] as const;
 export const TRANSFER_STATUSES = ['draft', 'in_transit', 'received', 'cancelled'] as const;
@@ -29,6 +29,7 @@ export const inventoryMovements = pgTable('inventory_movements', {
   deltaIncoming: integer('delta_incoming').notNull().default(0),
   deltaDamaged: integer('delta_damaged').notNull().default(0),
   deltaReturned: integer('delta_returned').notNull().default(0),
+  deltaQuarantined: integer('delta_quarantined').notNull().default(0),
   /** balances AFTER this movement (auditable running totals) */
   onHandAfter: integer('on_hand_after').notNull(),
   reservedAfter: integer('reserved_after').notNull(),
@@ -49,7 +50,7 @@ export const inventoryMovements = pgTable('inventory_movements', {
   foreignKey({ columns: [t.vendorId, t.variantId], foreignColumns: [productVariants.vendorId, productVariants.id], name: 'inventory_movements_variant_fk' }),
   foreignKey({ columns: [t.vendorId, t.warehouseId], foreignColumns: [warehouses.vendorId, warehouses.id], name: 'inventory_movements_warehouse_fk' }),
   check('inventory_movements_type_chk', inList('type', MOVEMENT_TYPES)),
-  check('inventory_movements_nonzero_chk', sql`delta_on_hand <> 0 OR delta_reserved <> 0 OR delta_incoming <> 0 OR delta_damaged <> 0 OR delta_returned <> 0`),
+  check('inventory_movements_nonzero_chk', sql`delta_on_hand <> 0 OR delta_reserved <> 0 OR delta_incoming <> 0 OR delta_damaged <> 0 OR delta_returned <> 0 OR delta_quarantined <> 0`),
 ]);
 
 /** Stock held for an order line in one warehouse. One active row per (order item, warehouse). */

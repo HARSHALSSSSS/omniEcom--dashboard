@@ -8,7 +8,7 @@ import { marketplaceAccounts } from './marketplace';
 // ------------------------------------------------------------------------------------------------
 // business rules (controlled, data-driven: a typed condition language + a registry of whitelisted actions, no code)
 // ------------------------------------------------------------------------------------------------
-export const RULE_TYPES = ['pricing', 'stock', 'marketplace', 'fulfillment', 'notification'] as const;
+export const RULE_TYPES = ['pricing', 'stock', 'marketplace', 'fulfillment', 'notification', 'shipping'] as const;
 export const RULE_STATUSES = ['draft', 'active', 'disabled'] as const;
 
 export const businessRules = pgTable('business_rules', {

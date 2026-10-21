@@ -32,7 +32,10 @@ const md: string[] = [
   'Access: **public** = no token · **any signed-in user** = bearer token only · `resource:action` = RBAC permission required (vendor tenant comes from the token).',
   '',
 ];
-for (const tag of spec.tags) {
+// tags that routes use but the Swagger config never declared still get a section (no route may go undocumented)
+const declared = new Set(spec.tags.map((x) => x.name));
+const allTags = [...spec.tags, ...[...rows.keys()].filter((n) => !declared.has(n)).sort().map((name) => ({ name, description: '' }))];
+for (const tag of allTags) {
   const list = rows.get(tag.name);
   if (!list?.length) continue;
   md.push(`## ${tag.name}`, '', tag.description, '', '| Method | Path | Access | Summary |', '|---|---|---|---|');

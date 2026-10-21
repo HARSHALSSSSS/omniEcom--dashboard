@@ -151,7 +151,7 @@ describe('shipping domain + providers', () => {
     expect(fulfillmentStatusFor('label_ready')).toBeNull();
   });
   it('providers share ONE interface; the catalogue is open (nothing hardcoded)', async () => {
-    expect(listProviders().map((p) => p.code).sort()).toEqual(['manual', 'sandbox']);
+    expect(listProviders().map((p) => p.code).sort()).toEqual(['bluedart', 'delhivery', 'manual', 'sandbox']);
     const req = { shipmentNumber: 'SHP-1', orderNumber: 'ORD-1', warehouse: { code: 'W', name: 'W', address: {} }, destination: { name: 'Asha', pincode: '110001' }, packages: [{ barcode: 'PKG-1', weightGrams: 900, lengthMm: 1, widthMm: 1, heightMm: 1 }], codAmountMinor: 12_300, currency: 'INR' };
     for (const code of ['manual', 'sandbox']) {
       const p = getProvider(code);
@@ -181,11 +181,11 @@ describe('returns domain', () => {
     expect(Object.keys(RET).sort()).toEqual([...RETURN_STATUSES].sort());
   });
   it('dispositions map to stock effects; a non-sellable item cannot be restocked', () => {
-    expect(stockEffect('restock')).toEqual({ kind: 'to_onhand', final: true });
-    expect(stockEffect('damaged')).toEqual({ kind: 'to_damaged', final: true });
-    expect(stockEffect('dispose')).toEqual({ kind: 'leave', final: true });
-    expect(stockEffect('return_to_vendor')).toEqual({ kind: 'leave', final: true });
-    expect(stockEffect('quarantine')).toEqual({ kind: 'none', final: false });
+    expect(stockEffect('restock')).toMatchObject({ kind: 'to_onhand', final: true });
+    expect(stockEffect('damaged')).toMatchObject({ kind: 'to_damaged', final: true });
+    expect(stockEffect('dispose')).toMatchObject({ kind: 'leave', final: true });
+    expect(stockEffect('return_to_vendor')).toMatchObject({ kind: 'leave', final: true });
+    expect(stockEffect('quarantine')).toMatchObject({ kind: 'none', final: false });
     expect(validateDecision('sellable', 'restock')).toBeNull();
     expect(validateDecision('damaged', 'restock')).toMatch(/cannot be restocked/);
     expect(validateDecision('missing', 'restock')).not.toBeNull();

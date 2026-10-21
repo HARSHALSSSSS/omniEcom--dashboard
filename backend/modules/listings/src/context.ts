@@ -2,6 +2,7 @@ import { and, asc, eq, inArray, isNull, schema, type Tx } from '@oms/database';
 import type { ListingInput } from '@oms/marketplace-core';
 import { Errors } from '@oms/shared';
 import type { Container } from '@oms/module-kit';
+import { channelOverrides, inheritedContentHash, masterContentOf, overriddenFields, type ChannelOverrides, type ContentField } from './content-domain';
 import { contentHash } from './domain';
 
 const L = schema.marketplaceListings;
@@ -10,7 +11,7 @@ const P = schema.products;
 
 export type ListingRow = typeof L.$inferSelect;
 
-export const CORE_FIELDS = ['title', 'description', 'brand', 'barcode', 'sku', 'price', 'mrp', 'hsn_code', 'country_of_origin', 'weight_grams', 'manufacturer'] as const;
+export const CORE_FIELDS = ['title', 'description', 'brand', 'barcode', 'sku', 'price', 'mrp', 'hsn_code', 'country_of_origin', 'weight_grams', 'manufacturer', 'material', 'length_mm', 'width_mm', 'height_mm'] as const;
 export type CoreField = (typeof CORE_FIELDS)[number];
 
 export async function getListingRow(tx: Tx, vendorId: string, id: string): Promise<ListingRow> {
@@ -31,6 +32,10 @@ export interface ListingContext {
   imageKeys: string[];
   /** requirement names that were filled from a mapping / suggestion / option (for the preview) */
   attributeSources: Record<string, string>;
+  /** master fields this channel manages itself (product_marketplace_data); they win over the master content in `input` */
+  independentFields: ContentField[];
+  /** hash of the inherited master content (every field except the overridden ones): what `marketplace_listings.content_hash` tracks */
+  inheritedHash: string;
 }
 
 /** value of a core field for a variant/product, as text/number (null when unset) */
@@ -47,6 +52,10 @@ export function coreValue(field: string, p: ListingContext['product'], v: Listin
     case 'hsn_code': return p.hsnCode;
     case 'country_of_origin': return p.countryOfOrigin;
     case 'weight_grams': return v.weightGrams;
+    case 'material': return p.material;
+    case 'length_mm': return p.lengthMm;
+    case 'width_mm': return p.widthMm;
+    case 'height_mm': return p.heightMm;
     default: return null;
   }
 }
@@ -83,6 +92,13 @@ export async function loadListingContext(
   const imageKeys = docs.map((d) => d.storageKey);
   const imageUrls = opts.signImages === false ? [] : await Promise.all(imageKeys.map((k) => c.storage.presignDownload(k, 3600)));
 
+  // channel-specific content (product_marketplace_data) wins over the master content for the fields it overrides
+  const [mdRow] = await tx.select({ data: schema.productMarketplaceData.data }).from(schema.productMarketplaceData).where(and(eq(schema.productMarketplaceData.vendorId, vendorId), eq(schema.productMarketplaceData.productId, product.id), eq(schema.productMarketplaceData.marketplace, account.marketplace)));
+  const channelData = mdRow?.data ?? null;
+  const ov: ChannelOverrides = channelOverrides(channelData);
+  const independentFields = overriddenFields(channelData);
+  const effective = { ...product, title: ov.title ?? product.title, description: ov.description ?? product.description, brand: ov.brand ?? product.brand };
+
   const marketplaceCategoryId = listing.marketplaceCategoryId ?? (await mappedCategory(tx, vendorId, account.marketplace, product.categoryId)) ?? undefined;
 
   // attribute resolution
@@ -100,24 +116,25 @@ export async function loadListingContext(
   };
   for (const m of mappings) {
     const map = m.valueMap as Record<string, string>;
-    if (m.sourceType === 'core_field') put(m.marketplaceAttribute, coreValue(m.coreField!, product, variant, priceMinor, mrpMinor), `core:${m.coreField}`, map);
+    if (m.sourceType === 'core_field') put(m.marketplaceAttribute, coreValue(m.coreField!, effective, variant, priceMinor, mrpMinor), `core:${m.coreField}`, map);
     else if (m.sourceType === 'attribute') put(m.marketplaceAttribute, attrValues.get(m.attributeId!), 'attribute', map);
     else put(m.marketplaceAttribute, m.staticValue, 'static', map);
   }
+  for (const [k, val] of Object.entries(ov.attributes)) put(k, val, 'channel');
   const options = Object.fromEntries(Object.entries(variant.optionValues ?? {}).map(([k, val]) => [k.toLowerCase(), val]));
   for (const req of opts.requirements ?? []) {
     if (attributes[req.name] !== undefined) continue;
-    if (req.coreField && (CORE_FIELDS as readonly string[]).includes(req.coreField)) put(req.name, coreValue(req.coreField, product, variant, priceMinor, mrpMinor), `core:${req.coreField}`);
+    if (req.coreField && (CORE_FIELDS as readonly string[]).includes(req.coreField)) put(req.name, coreValue(req.coreField, effective, variant, priceMinor, mrpMinor), `core:${req.coreField}`);
     if (attributes[req.name] === undefined && options[req.name.toLowerCase()] !== undefined) put(req.name, options[req.name.toLowerCase()], 'option');
   }
   for (const [k, val] of Object.entries(listing.attributeValues)) put(k, val, 'listing');
 
   const input: ListingInput = {
-    externalSku: listing.externalSku, title: product.title, description: product.description ?? undefined, brand: product.brand ?? undefined, barcode: variant.barcode ?? undefined,
+    externalSku: listing.externalSku, title: effective.title, description: effective.description ?? undefined, brand: effective.brand ?? undefined, barcode: variant.barcode ?? undefined,
     priceMinor, mrpMinor: mrpMinor ?? undefined, currency: (listing.currency ?? variant.currency).trim(), attributes,
     ...(marketplaceCategoryId ? { marketplaceCategoryId } : {}), imageUrls,
   };
-  return { listing, variant, product, account, input, hash: contentHash(input, imageKeys), imageKeys, attributeSources: sources };
+  return { listing, variant, product, account, input, hash: contentHash(input, imageKeys), imageKeys, attributeSources: sources, independentFields, inheritedHash: inheritedContentHash(masterContentOf(product as never), independentFields) };
 }
 
 async function mappedCategory(tx: Tx, vendorId: string, marketplace: string, categoryId: string | null): Promise<string | null> {

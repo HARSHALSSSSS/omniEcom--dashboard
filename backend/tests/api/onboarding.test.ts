@@ -72,22 +72,22 @@ describe('02 business', () => {
 });
 
 describe('03 sales channels', () => {
-  it('lists real channels as available and Meesho / Shopify / Social Commerce as coming soon', async () => {
+  it('lists real channels as available and only Social Commerce as coming soon', async () => {
     const r = await c.get('/api/v1/onboarding/channels', admin);
     const by = Object.fromEntries(r.body.data.items.map((i: any) => [i.code, i]));
-    for (const code of ['amazon_in', 'flipkart', 'snapdeal', 'myntra']) expect(by[code]).toMatchObject({ availability: 'available', connection: 'not_connected', actions: ['connect'] });
-    for (const code of ['meesho', 'shopify', 'social_commerce']) expect(by[code]).toMatchObject({ availability: 'coming_soon', actions: [] });
+    for (const code of ['amazon_in', 'flipkart', 'snapdeal', 'myntra', 'meesho', 'shopify']) expect(by[code]).toMatchObject({ availability: 'available', connection: 'not_connected', actions: ['connect'] });
+    for (const code of ['social_commerce']) expect(by[code]).toMatchObject({ availability: 'coming_soon', actions: [] });
     expect(r.body.data.summary).toMatchObject({ connected: 0 });
   });
 
   it('refuses to connect a coming-soon channel but lets the seller register interest', async () => {
-    const no = await c.post('/api/v1/onboarding/channels/shopify/connect', {}, admin);
+    const no = await c.post('/api/v1/onboarding/channels/social_commerce/connect', {}, admin);
     expect(no.status).toBe(409);
-    expect(no.body.error.details).toMatchObject({ rule: 'channel_coming_soon', channel: 'shopify' });
+    expect(no.body.error.details).toMatchObject({ rule: 'channel_coming_soon', channel: 'social_commerce' });
     expect((await c.put('/api/v1/onboarding/channels', { selected: ['nope'] }, admin)).status).toBe(400);
-    const r = await c.put('/api/v1/onboarding/channels', { selected: ['shopify', 'flipkart'] }, admin);
+    const r = await c.put('/api/v1/onboarding/channels', { selected: ['social_commerce', 'flipkart'] }, admin);
     expect(r.status).toBe(200);
-    expect(r.body.data.selected).toEqual(['shopify', 'flipkart']);
+    expect(r.body.data.selected).toEqual(['social_commerce', 'flipkart']);
     const list = await c.get('/api/v1/onboarding/channels', admin);
     expect(list.body.data.summary).toMatchObject({ selectedToConnect: 1, interestedInComingSoon: 1 });
   });

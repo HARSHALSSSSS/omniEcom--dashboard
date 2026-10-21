@@ -23,6 +23,8 @@ export interface MovementInput {
   incoming?: number;
   damaged?: number;
   returned?: number;
+  /** units held back for repair / investigation: not sellable, not on hand, not available */
+  quarantined?: number;
   reason?: string | null;
   referenceType?: 'order' | 'adjustment' | 'transfer' | 'reservation' | 'return' | 'manual' | 'import' | 'count';
   referenceId?: string | null;
@@ -56,8 +58,8 @@ export async function assertStockTargets(tx: Tx, vendorId: string, variantId: st
 }
 
 export async function applyMovement(tx: Tx, m: MovementInput): Promise<MovementResult> {
-  const d = { onHand: m.onHand ?? 0, reserved: m.reserved ?? 0, incoming: m.incoming ?? 0, damaged: m.damaged ?? 0, returned: m.returned ?? 0 };
-  if (!d.onHand && !d.reserved && !d.incoming && !d.damaged && !d.returned) throw new AppError('BAD_REQUEST', 'A stock movement must change at least one quantity');
+  const d = { onHand: m.onHand ?? 0, reserved: m.reserved ?? 0, incoming: m.incoming ?? 0, damaged: m.damaged ?? 0, returned: m.returned ?? 0, quarantined: m.quarantined ?? 0 };
+  if (!d.onHand && !d.reserved && !d.incoming && !d.damaged && !d.returned && !d.quarantined) throw new AppError('BAD_REQUEST', 'A stock movement must change at least one quantity');
 
   const before = await lockStock(tx, m.vendorId, m.variantId, m.warehouseId);
   const availableBefore = availableOf(before);
@@ -73,13 +75,14 @@ export async function applyMovement(tx: Tx, m: MovementInput): Promise<MovementR
     quantityIncoming: before.quantityIncoming + d.incoming,
     quantityDamaged: before.quantityDamaged + d.damaged,
     quantityReturned: before.quantityReturned + d.returned,
+    quantityQuarantined: before.quantityQuarantined + d.quarantined,
   };
   if (next.quantityOnHand < 0 || next.quantityReserved > next.quantityOnHand || next.quantityReserved < 0) {
     throw new AppError('INSUFFICIENT_STOCK', next.quantityReserved > next.quantityOnHand && d.reserved > 0 ? 'Not enough available stock to reserve' : 'The change would make stock negative', {
       details: { variantId: m.variantId, warehouseId: m.warehouseId, onHand: before.quantityOnHand, reserved: before.quantityReserved, available: availableBefore, requested: d },
     });
   }
-  if (next.quantityIncoming < 0 || next.quantityDamaged < 0 || next.quantityReturned < 0) {
+  if (next.quantityIncoming < 0 || next.quantityDamaged < 0 || next.quantityReturned < 0 || next.quantityQuarantined < 0) {
     throw new AppError('INSUFFICIENT_STOCK', 'The change would make a stock bucket negative', { details: { variantId: m.variantId, warehouseId: m.warehouseId, requested: d } });
   }
 
@@ -87,7 +90,7 @@ export async function applyMovement(tx: Tx, m: MovementInput): Promise<MovementR
     .insert(M)
     .values({
       vendorId: m.vendorId, variantId: m.variantId, warehouseId: m.warehouseId, type: m.type,
-      deltaOnHand: d.onHand, deltaReserved: d.reserved, deltaIncoming: d.incoming, deltaDamaged: d.damaged, deltaReturned: d.returned,
+      deltaOnHand: d.onHand, deltaReserved: d.reserved, deltaIncoming: d.incoming, deltaDamaged: d.damaged, deltaReturned: d.returned, deltaQuarantined: d.quarantined,
       onHandAfter: next.quantityOnHand, reservedAfter: next.quantityReserved, reason: m.reason ?? null, referenceType: m.referenceType ?? null, referenceId: m.referenceId ?? null,
       idempotencyKey: m.idempotencyKey ?? null, actorType: m.actor?.type ?? 'system', actorId: m.actor?.id ?? null,
     })

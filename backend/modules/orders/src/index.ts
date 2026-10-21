@@ -10,6 +10,7 @@ export { requestOrderSync } from './runners';
 export { transitionWithin, transitionOrder, recordShortage, clearAttention } from './service';
 export { performTransition, requestMarketplaceStatus, getOrderRow, type OrderRow } from './status';
 export { CANCELLATION_REASONS } from './cancellations';
+export { computeDispatchDue, zonedTimeToUtc, slaBand, resolvePolicy, recomputeDispatchDue, loadSlaConfig, type SlaState } from './sla';
 export { inventoryStatusFor, itemStatusFor, orderNumber } from './domain';
 
 /**

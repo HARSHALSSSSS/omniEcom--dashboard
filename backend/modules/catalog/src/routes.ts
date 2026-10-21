@@ -26,12 +26,12 @@ export const catalogRoutes: FastifyPluginAsync = async (app) => {
     schema: {
       tags: PRODUCTS,
       summary: 'Create a product (optionally with variants/SKUs)',
-      description: 'Creates the canonical, marketplace-neutral product. `productCode` and every variant `sku` are unique per vendor (409 otherwise). Activating (`status: "active"`) needs at least one active variant.',
+      description: 'Creates the canonical, marketplace-neutral product. `productCode` (Master SKU, unique per vendor ignoring case) and every variant `sku` are unique (409 otherwise, with `details.rule = duplicate_product_code` and the conflicting product for the master code). Accepts the rich description, product dimensions/weight (display units, stored as mm/g), material, standard category and custom attributes; the brand is added to the brand list (unconfirmed). Use POST /products/drafts for work in progress. Activating (`status: "active"`) needs at least one active variant.',
       body: ProductInputSchema,
       response: { 201: successEnvelope(ProductDetailSchema) },
     },
   }, async (req, reply) => {
-    const dto = await vendorTx(req, (tx, vendorId) => svc.createProduct(tx, vendorId, req.body, requestEffects(tx, req)));
+    const dto = await vendorTx(req, (tx, vendorId) => svc.createProduct(tx, vendorId, req.body, requestEffects(tx, req), { strict: true }));
     return created(req, reply, dto, `/api/v1/products/${dto.id}`);
   });
 
@@ -62,12 +62,12 @@ export const catalogRoutes: FastifyPluginAsync = async (app) => {
     schema: {
       tags: PRODUCTS,
       summary: 'Update a product (partial) or change its status',
-      description: 'Only the fields you send change. Send `version` for optimistic locking (409 `VERSION_CONFLICT` if someone else edited). `status: "archived"` archives; `"active"` needs an active variant.',
+      description: 'Only the fields you send change. Send `version` for optimistic locking (409 `VERSION_CONFLICT` if someone else edited, checked atomically with the write). Same fields and rules as create; `dimensions`/`weight`/`brand`/`description` accept null to clear. `status: "archived"` archives; `"active"` needs an active variant. The master code (`productCode`) can only change while the product is a draft: otherwise 409 `CONFLICT` with `details.rule = code_locked` (see `productCodeLocked`).',
       params: IdParamSchema,
       body: ProductUpdateSchema,
       response: { 200: successEnvelope(ProductDetailSchema) },
     },
-  }, async (req) => ok(req, await vendorTx(req, (tx, vendorId) => svc.updateProduct(tx, vendorId, req.params.id, req.body, requestEffects(tx, req)))));
+  }, async (req) => ok(req, await vendorTx(req, (tx, vendorId) => svc.updateProduct(tx, vendorId, req.params.id, req.body, requestEffects(tx, req), { strict: true }))));
 
   r.delete('/products/:id', {
     config: { access: { permission: 'products:delete' } },
@@ -94,9 +94,9 @@ export const catalogRoutes: FastifyPluginAsync = async (app) => {
       const fx = requestEffects(tx, req);
       let res: svc.BulkItemResult[];
       if (body.action === 'create') {
-        res = await svc.runBulk(tx, body.items, async (inner, item) => (await svc.createProduct(inner, vendorId, item, requestEffects(inner, req))).id);
+        res = await svc.runBulk(tx, body.items, async (inner, item) => (await svc.createProduct(inner, vendorId, item, requestEffects(inner, req), { strict: true })).id);
       } else if (body.action === 'update_status') {
-        res = await svc.runBulk(tx, body.ids, async (inner, id) => (await svc.updateProduct(inner, vendorId, id, { status: body.status }, requestEffects(inner, req))).id);
+        res = await svc.runBulk(tx, body.ids, async (inner, id) => (await svc.updateProduct(inner, vendorId, id, { status: body.status }, requestEffects(inner, req), { strict: true })).id);
       } else {
         res = await svc.runBulk(tx, body.ids, async (inner, id) => (await svc.deleteProduct(inner, vendorId, id, requestEffects(inner, req))).id);
       }
@@ -205,7 +205,7 @@ export const catalogRoutes: FastifyPluginAsync = async (app) => {
   r.get('/variants/:id', {
     config: { access: { permission: 'products:read' } },
     schema: { tags: VARIANTS, summary: 'Get a variant', params: IdParamSchema, response: { 200: successEnvelope(VariantSchema) } },
-  }, async (req) => ok(req, svc.toVariantDto(await vendorTx(req, (tx, vendorId) => svc.getVariantRow(tx, vendorId, req.params.id)))));
+  }, async (req) => ok(req, await vendorTx(req, (tx, vendorId) => svc.getVariantDto(tx, vendorId, req.params.id))));
 
   r.patch('/variants/:id', {
     config: { access: { permission: 'products:write' } },

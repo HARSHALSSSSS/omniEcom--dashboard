@@ -124,7 +124,7 @@ export async function manualTransition(tx: Tx, ctx: OpCtx, id: string, to: Inter
   return performTransition(tx, ctx, order, to, { ...opts, source: ctx.actor.type === 'user' || ctx.actor.type === 'api_key' ? 'user' : 'system' });
 }
 /** statuses the warehouse / shipping flow drives once an order has a fulfillment */
-const FULFILLMENT_OWNED: InternalOrderStatus[] = ['picking', 'packed', 'ready_to_dispatch', 'dispatched', 'in_transit', 'delivered'];
+export const FULFILLMENT_OWNED: InternalOrderStatus[] = ['picking', 'packed', 'ready_to_dispatch', 'dispatched', 'in_transit', 'delivered'];
 const ALLOWED: Record<InternalOrderStatus, InternalOrderStatus[]> = {
   new: ['confirmed', 'cancelled'], confirmed: ['picking', 'cancelled'], picking: ['packed', 'cancelled'], packed: ['ready_to_dispatch', 'cancelled'], ready_to_dispatch: ['dispatched', 'cancelled'],
   dispatched: ['in_transit', 'delivered', 'returned'], in_transit: ['delivered', 'returned'], delivered: ['returned'], cancelled: [], returned: [],

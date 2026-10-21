@@ -1,0 +1,29 @@
+{
+  "name": "@oms/mod-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@oms/module-kit": "workspace:*",
+    "@oms/shared": "workspace:*",
+    "@oms/database": "workspace:*",
+    "@oms/contracts": "workspace:*",
+    "zod": "^4.6.5",
+    "fastify": "^5.12.5",
+    "fastify-type-provider-zod": "^7.0.0",
+    "@oms/marketplace-core": "workspace:*",
+    "@oms/mod-vendors": "workspace:*",
+    "@oms/mod-issues": "workspace:*",
+    "@oms/mod-analytics": "workspace:*",
+    "@oms/mod-marketplace-accounts": "workspace:*",
+    "@oms/mod-inventory": "workspace:*",
+    "@oms/mod-listings": "workspace:*",
+    "@oms/mod-notifications": "workspace:*"
+  }
+}

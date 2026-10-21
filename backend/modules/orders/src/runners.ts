@@ -5,6 +5,7 @@ import { classifyFailure, executeSyncJob, enqueueSyncJob, type SyncRunner } from
 import { systemOpCtx, type EventConsumer, type JobHandler, type OpCtx } from '@oms/module-kit';
 import { importNormalizedOrder } from './ingest';
 import { allocateOrder } from './service';
+import { recomputeDispatchDue } from './sla';
 
 const A = schema.marketplaceAccounts;
 const O = schema.orders;
@@ -143,4 +144,21 @@ const reallocate = (event: string, name: string): EventConsumer => ({
     }
   },
 });
-export const orderConsumers: EventConsumer[] = [reallocate('inventory.adjusted', 'orders.backorder-adjusted'), reallocate('inventory.released', 'orders.backorder-released')];
+/** a warehouse was chosen for the order: a (marketplace + warehouse) SLA policy may give it another deadline */
+const slaOnFulfillment: EventConsumer = {
+  event: 'fulfillment.created',
+  name: 'orders.sla-warehouse',
+  async handle(e, c) {
+    const p = (e.payload as { orderId?: string; warehouseId?: string } | null) ?? {};
+    if (!e.vendorId || !p.orderId || !p.warehouseId) return;
+    const vendorId = e.vendorId;
+    await withVendor(c.database.db, vendorId, async (tx) => {
+      const [o] = await tx.select({ marketplace: O.marketplace }).from(O).where(and(eq(O.vendorId, vendorId), eq(O.id, p.orderId!)));
+      if (!o) return;
+      const S = schema.marketplaceSla;
+      const [policy] = await tx.select({ id: S.id }).from(S).where(and(eq(S.vendorId, vendorId), eq(S.marketplace, o.marketplace), eq(S.warehouseId, p.warehouseId!)));
+      if (policy) await recomputeDispatchDue(tx, vendorId, p.orderId!, p.warehouseId);
+    });
+  },
+};
+export const orderConsumers: EventConsumer[] = [reallocate('inventory.adjusted', 'orders.backorder-adjusted'), reallocate('inventory.released', 'orders.backorder-released'), slaOnFulfillment];

@@ -38,7 +38,7 @@ describe('capability matrix', () => {
     expect(caps.myntra!.has('orders.cancel')).toBe(false);
     expect(caps.amazon_in!.has('orders.cancel')).toBe(false);
     expect(caps.myntra!.has('orders.webhook')).toBe(false);
-    expect(r.supporting((c) => hasCapability(c, 'orders.webhook')).map((c) => c.code).sort()).toEqual(['amazon_in', 'flipkart', 'mock']);
+    expect(r.supporting((c) => hasCapability(c, 'orders.webhook')).map((c) => c.code).sort()).toEqual(['amazon_in', 'flipkart', 'mock', 'shopify']);
   });
 
   it('registry: rejects duplicates, reports membership, optional sandbox', () => {

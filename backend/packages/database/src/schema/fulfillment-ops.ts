@@ -36,6 +36,13 @@ export const fulfillments = pgTable('fulfillments', {
   pickedAt: tz('picked_at'),
   packedAt: tz('packed_at'),
   readyAt: tz('ready_at'),
+  /** the shipping decision: which kind of method moves this parcel, who chose it and when it was confirmed */
+  shipMethodKind: text('ship_method_kind'),
+  shipProviderId: uuid('ship_provider_id'),
+  shipSelectedBy: text('ship_selected_by'),
+  shipConfirmedAt: tz('ship_confirmed_at'),
+  /** { kind, why, ruleId } computed when the order became ready to ship */
+  shipRecommendation: jsonb('ship_recommendation').$type<Record<string, unknown>>().notNull().default({}),
   shippedAt: tz('shipped_at'),
   deliveredAt: tz('delivered_at'),
   cancelledAt: tz('cancelled_at'),
@@ -53,6 +60,8 @@ export const fulfillments = pgTable('fulfillments', {
   foreignKey({ columns: [t.vendorId, t.warehouseId], foreignColumns: [warehouses.vendorId, warehouses.id], name: 'fulfillments_warehouse_fk' }),
   check('fulfillments_status_chk', inList('status', FULFILLMENT_STATUSES)),
   check('fulfillments_priority_chk', inList('priority', FULFILLMENT_PRIORITIES)),
+  check('fulfillments_ship_kind_chk', sql`ship_method_kind IS NULL OR ship_method_kind IN ('marketplace', 'seller', 'third_party')`),
+  check('fulfillments_ship_by_chk', sql`ship_selected_by IS NULL OR ship_selected_by IN ('rule', 'preference', 'manual')`),
 ]);
 
 export const fulfillmentItems = pgTable('fulfillment_items', {

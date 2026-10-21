@@ -1,10 +1,10 @@
 import { and, eq, inArray, keyset, schema, sql, type Tx } from '@oms/database';
 import { AppError, Errors } from '@oms/shared';
-import { addToBin, disposeReturned, nextCounter, receiveReturn, resolveReturned } from '@oms/mod-inventory';
+import { addToBin, disposeReturned, nextCounter, quarantineStock, receiveReturn, resolveReturned } from '@oms/mod-inventory';
 import { getOrderRow } from '@oms/mod-orders';
 import { getWarehouseRow } from '@oms/mod-warehouses';
 import { effects, type OpCtx } from '@oms/module-kit';
-import { ACTIVE, RECEIVABLE, canMove, refundFor, stockEffect, validateDecision, type Disposition, type ReturnStatus } from './domain';
+import { ACTIVE, RECEIVABLE, STAGE_LABELS, canMove, refundFor, returnStage, stockEffect, validateDecision, type Disposition, type ReturnStatus } from './domain';
 
 const R = schema.returnOrders;
 const RI = schema.returnItems;
@@ -18,10 +18,11 @@ export const toItemDto = (i: ReturnItemRow, sku: string | null) => ({
   inspectedAt: i.inspectedAt ? i.inspectedAt.toISOString() : null,
 });
 export const toReturnDto = (r: ReturnRow, items: Array<{ i: ReturnItemRow; sku: string | null }> = []) => ({
-  id: r.id, number: r.number, orderId: r.orderId, warehouseId: r.warehouseId, source: r.source as (typeof schema.RETURN_SOURCES)[number], status: r.status as ReturnStatus, reasonCode: r.reasonCode, reasonText: r.reasonText,
+  id: r.id, number: r.number, orderId: r.orderId, warehouseId: r.warehouseId, source: r.source as (typeof schema.RETURN_SOURCES)[number], status: r.status as ReturnStatus, stage: returnStage(r), stageLabel: STAGE_LABELS[returnStage(r)], reasonCode: r.reasonCode, reasonText: r.reasonText,
   marketplaceReturnId: r.marketplaceReturnId, shipmentId: r.shipmentId,
   pickup: { status: r.pickupStatus as (typeof schema.PICKUP_STATUSES)[number], awb: r.pickupAwb, scheduledAt: r.pickupScheduledAt ? r.pickupScheduledAt.toISOString() : null },
-  refund: { status: r.refundStatus as (typeof schema.REFUND_STATUSES)[number], amountMinor: r.refundAmountMinor, reference: r.refundReference, refundedAt: r.refundedAt ? r.refundedAt.toISOString() : null },
+  refund: { status: r.refundStatus as (typeof schema.REFUND_STATUSES)[number], amountMinor: r.refundAmountMinor, currency: r.refundCurrency, source: r.refundSource as 'connector' | 'manual' | null, error: r.refundError, reference: r.refundReference, refundedAt: r.refundedAt ? r.refundedAt.toISOString() : null },
+  inspection: { status: r.inspectionStatus as (typeof schema.INSPECTION_STATUSES)[number], inspectorId: r.inspectorId, startedAt: r.inspectionStartedAt ? r.inspectionStartedAt.toISOString() : null },
   receivedAt: r.receivedAt ? r.receivedAt.toISOString() : null, inspectedAt: r.inspectedAt ? r.inspectedAt.toISOString() : null, completedAt: r.completedAt ? r.completedAt.toISOString() : null, notes: r.notes,
   items: items.map(({ i, sku }) => toItemDto(i, sku)), version: r.version, createdAt: r.createdAt.toISOString(), updatedAt: r.updatedAt.toISOString(),
 });
@@ -41,7 +42,7 @@ export async function returnDetail(tx: Tx, vendorId: string, id: string) {
 }
 export async function returnTimeline(tx: Tx, vendorId: string, id: string) {
   await getReturnRow(tx, vendorId, id);
-  return (await tx.select().from(RE).where(and(eq(RE.vendorId, vendorId), eq(RE.returnOrderId, id))).orderBy(RE.id)).map((e) => ({ id: e.id, fromStatus: e.fromStatus, toStatus: e.toStatus, actorId: e.actorId, note: e.note, metadata: e.metadata, createdAt: e.createdAt.toISOString() }));
+  return (await tx.select().from(RE).where(and(eq(RE.vendorId, vendorId), eq(RE.returnOrderId, id), sql`${RE.metadata}->>'kind' is null`)).orderBy(RE.id)).map((e) => ({ id: e.id, fromStatus: e.fromStatus, toStatus: e.toStatus, actorId: e.actorId, note: e.note, metadata: e.metadata, createdAt: e.createdAt.toISOString() }));
 }
 
 export async function listReturns(tx: Tx, vendorId: string, q: { limit: number; cursor?: string; status?: string; orderId?: string; source?: string; refundStatus?: string; warehouseId?: string }) {
@@ -91,6 +92,7 @@ export async function createReturn(tx: Tx, ctx: OpCtx, input: CreateReturnInput)
   if (input.warehouseId) await getWarehouseRow(tx, ctx.vendorId, input.warehouseId);
   const orderItems = await tx.select().from(schema.orderItems).where(and(eq(schema.orderItems.vendorId, ctx.vendorId), eq(schema.orderItems.orderId, input.orderId)));
   const lines: Array<{ item: typeof orderItems[number]; quantity: number }> = [];
+  if (new Set(input.items.map((l) => l.orderItemId)).size !== input.items.length) throw new AppError('BAD_REQUEST', 'List each order item once', { details: { rule: 'duplicate_items' } });
   for (const l of input.items) {
     const item = orderItems.find((o) => o.id === l.orderItemId);
     if (!item) throw new AppError('BAD_REQUEST', 'The item does not belong to this order', { details: { orderItemId: l.orderItemId } });
@@ -180,9 +182,12 @@ export interface InspectLine { returnItemId: string; quantity: number; condition
 /**
  * Inspect received units and decide their fate. The stock effect goes through the inventory engine:
  *   restock -> returned -> on_hand (sellable again, optionally into a bin)      damaged -> returned -> damaged
- *   dispose / return_to_vendor -> leaves the books (returned -)                  quarantine -> stays in `returned`, decide later
+ *   dispose / return_to_vendor / rejected -> leaves the books (returned -), never sellable
+ *   repair -> returned -> quarantined (reason 'repair')
+ *   quarantine -> stays in `returned`, decide later (legacy); with `opts.strictQuarantine` (dashboard disposition) -> returned -> quarantined
  */
-export async function inspectReturn(tx: Tx, ctx: OpCtx, id: string, lines: InspectLine[]): Promise<ReturnRow> {
+export async function inspectReturn(tx: Tx, ctx: OpCtx, id: string, lines: InspectLine[], opts: { strictQuarantine?: boolean; touchInspection?: boolean } = {}): Promise<ReturnRow> {
+  const touchInspection = opts.touchInspection ?? true;
   const r = await getReturnRow(tx, ctx.vendorId, id, true);
   if (!['received', 'inspecting'].includes(r.status)) throw new AppError('INVALID_STATE', `A ${r.status} return cannot be inspected`, { details: { status: r.status } });
   if (!r.warehouseId) throw new AppError('INVALID_STATE', 'The return has no warehouse yet');
@@ -195,14 +200,15 @@ export async function inspectReturn(tx: Tx, ctx: OpCtx, id: string, lines: Inspe
     if (problem) throw new AppError('BAD_REQUEST', problem, { details: { condition: l.condition, disposition: l.disposition } });
     const undecided = it.receivedQuantity - it.dispositionedQuantity;
     if (l.quantity > undecided) throw new AppError('BAD_REQUEST', 'More units than were received and not yet decided', { details: { received: it.receivedQuantity, decided: it.dispositionedQuantity, requested: l.quantity } });
-    const eff = stockEffect(l.disposition);
+    const eff = stockEffect(l.disposition, opts.strictQuarantine);
     const base = { vendorId: ctx.vendorId, variantId: it.variantId, warehouseId: r.warehouseId, quantity: l.quantity, referenceType: 'return' as const, referenceId: id, actor: ctx.actor };
     if (eff.kind === 'to_onhand') {
       await resolveReturned(tx, { ...base, to: 'restock', reason: `return ${r.number}: restocked (${l.condition})` });
       if (l.binId) await addToBin(tx, { vendorId: ctx.vendorId, variantId: it.variantId, warehouseId: r.warehouseId, binId: l.binId, quantity: l.quantity });
       restocked += l.quantity;
     } else if (eff.kind === 'to_damaged') await resolveReturned(tx, { ...base, to: 'damaged', reason: `return ${r.number}: ${l.condition}` });
-    else if (eff.kind === 'leave') await disposeReturned(tx, { ...base, reason: `return ${r.number}: ${l.disposition}` });
+    else if (eff.kind === 'leave') await disposeReturned(tx, { ...base, reason: `return ${r.number}: ${eff.reason}` });
+    else if (eff.kind === 'to_quarantine') await quarantineStock(tx, { ...base, source: 'returned', reason: eff.reason === 'repair' ? 'repair' : `return ${r.number}: quarantine` });
     await tx.update(RI).set({
       dispositionedQuantity: it.dispositionedQuantity + (eff.final ? l.quantity : 0), restockedQuantity: it.restockedQuantity + (eff.kind === 'to_onhand' ? l.quantity : 0),
       condition: l.condition, disposition: l.disposition, inspectedBy: ctx.actor.id, inspectedAt: new Date(), notes: l.notes ?? it.notes,
@@ -210,7 +216,14 @@ export async function inspectReturn(tx: Tx, ctx: OpCtx, id: string, lines: Inspe
     it.dispositionedQuantity += eff.final ? l.quantity : 0; // keep the in-memory copy in step for repeated lines
     it.restockedQuantity += eff.kind === 'to_onhand' ? l.quantity : 0;
   }
-  const after = await move(tx, ctx, r, 'inspecting', { inspectedAt: new Date() }, 'inspected', { restocked });
+  // the legacy one-step inspect also settles the inspection track (the dashboard flow records it separately, before deciding)
+  const inspectionPatch: Partial<typeof R.$inferInsert> = {};
+  if (touchInspection && ['not_started', 'in_progress'].includes(r.inspectionStatus)) {
+    inspectionPatch.inspectionStatus = lines.every((l) => l.condition === 'sellable') ? 'passed' : 'failed';
+    inspectionPatch.inspectionStartedAt = r.inspectionStartedAt ?? new Date();
+    if (ctx.actor.type === 'user' && ctx.actor.id) inspectionPatch.inspectorId = ctx.actor.id;
+  }
+  const after = await move(tx, ctx, r, 'inspecting', { inspectedAt: new Date(), ...inspectionPatch }, 'inspected', { restocked });
   await effects(tx, ctx).event({ type: 'return.inspected', aggregateType: 'return', aggregateId: id, payload: { number: r.number, orderId: r.orderId, warehouseId: r.warehouseId, restocked, lines: lines.length } });
   return after;
 }
@@ -235,20 +248,65 @@ export async function completeReturn(tx: Tx, ctx: OpCtx, id: string, input: { ac
 // ------------------------------------------------------------------------------------------------
 // refund tracking (the money moves in the marketplace / payment system; we record the outcome)
 // ------------------------------------------------------------------------------------------------
-export async function recordRefund(tx: Tx, ctx: OpCtx, id: string, input: { status: 'processed' | 'failed' | 'pending'; amountMinor?: number | null; reference?: string | null }): Promise<ReturnRow> {
+/** append-only, non-status events (inspection, refund, disposition) feed the detail timeline; the legacy status timeline hides them */
+export async function logReturnEvent(tx: Tx, ctx: OpCtx, r: Pick<ReturnRow, 'id' | 'status'>, kind: 'inspection' | 'refund' | 'disposition' | 'assignment', note: string | null, metadata: Record<string, unknown> = {}): Promise<void> {
+  await tx.insert(RE).values({ vendorId: ctx.vendorId, returnOrderId: r.id, fromStatus: r.status, toStatus: r.status, actorId: ctx.actor.id, note, metadata: { kind, ...metadata } });
+}
+
+/** a connector can only be asked to refund when it exposes a refund operation (none does today: capabilities cover returns.fetch / webhook only) */
+export function connectorSupportsRefund(c: OpCtx['c'], marketplace: string): boolean {
+  if (!c.connectors.has(marketplace)) return false;
+  return typeof (c.connectors.get(marketplace) as unknown as { refundReturn?: unknown }).refundReturn === 'function';
+}
+
+export interface RefundInput { mode?: 'manual' | 'connector'; status?: 'processed' | 'failed' | 'pending' | 'ready' | 'processing'; amountMinor?: number | null; currency?: string | null; reference?: string | null; error?: string | null }
+const INSPECTED = ['passed', 'failed', 'requires_review'];
+
+export async function recordRefund(tx: Tx, ctx: OpCtx, id: string, input: RefundInput): Promise<ReturnRow> {
   const r = await getReturnRow(tx, ctx.vendorId, id, true);
   if (r.refundStatus === 'not_applicable') throw new AppError('CONFLICT', 'No refund is due for this return', { details: { rule: 'refund_not_applicable' } });
   if (r.refundStatus === 'processed') throw new AppError('INVALID_STATE', 'The refund is already processed', { details: { status: r.refundStatus } });
-  if (input.amountMinor != null) {
-    const [o] = await tx.select({ total: schema.orders.totalMinor }).from(schema.orders).where(eq(schema.orders.id, r.orderId));
-    if (input.amountMinor > (o?.total ?? 0)) throw new AppError('BAD_REQUEST', 'A refund cannot exceed what the customer paid for the order', { details: { rule: 'refund_above_order_total', orderTotalMinor: o?.total ?? 0 } });
-  }
-  if (input.status === 'processed' && ['requested', 'rejected', 'cancelled'].includes(r.status)) throw new AppError('INVALID_STATE', `A ${r.status} return cannot be refunded`, { details: { status: r.status } });
-  const [after] = await tx.update(R).set({ refundStatus: input.status, refundAmountMinor: input.amountMinor ?? r.refundAmountMinor, refundReference: input.reference ?? r.refundReference, refundedAt: input.status === 'processed' ? new Date() : null, version: sql`${R.version} + 1` }).where(eq(R.id, id)).returning();
+  const mode = input.mode ?? 'manual';
+  const [o] = await tx.select({ total: schema.orders.totalMinor, currency: schema.orders.currency, marketplace: schema.orders.marketplace }).from(schema.orders).where(and(eq(schema.orders.id, r.orderId), eq(schema.orders.vendorId, ctx.vendorId)));
+  if (input.amountMinor != null && input.amountMinor > (o?.total ?? 0)) throw new AppError('BAD_REQUEST', 'A refund cannot exceed what the customer paid for the order', { details: { rule: 'refund_above_order_total', orderTotalMinor: o?.total ?? 0 } });
+  const inspected = INSPECTED.includes(r.inspectionStatus);
+  let status = input.status ?? 'processed';
+  if (mode === 'connector') {
+    status = 'processing';
+    if (!inspected) throw new AppError('CONFLICT', 'Inspect the return before asking the marketplace to refund it', { details: { rule: 'inspection_required' } });
+    if (r.refundStatus === 'processing') throw new AppError('CONFLICT', 'The marketplace is already processing this refund', { details: { rule: 'refund_in_progress' } });
+    if (!o || !connectorSupportsRefund(ctx.c, o.marketplace)) throw new AppError('CONFLICT', 'This marketplace connector cannot issue refunds; record the refund manually', { details: { rule: 'not_supported_by_connector', marketplace: o?.marketplace ?? null } });
+  } else if ((status === 'ready' || status === 'processing') && !inspected) throw new AppError('CONFLICT', 'Inspect the return before moving its refund forward', { details: { rule: 'inspection_required' } });
+  if (status === 'processed' && ['requested', 'rejected', 'cancelled'].includes(r.status)) throw new AppError('INVALID_STATE', `A ${r.status} return cannot be refunded`, { details: { status: r.status } });
+  const [after] = await tx.update(R).set({
+    refundStatus: status, refundAmountMinor: input.amountMinor ?? r.refundAmountMinor, refundCurrency: input.currency ?? r.refundCurrency ?? o?.currency ?? null, refundReference: input.reference ?? r.refundReference,
+    refundSource: mode, refundError: status === 'failed' ? (input.error ?? 'Refund marked as failed') : null, refundedAt: status === 'processed' ? new Date() : null, version: sql`${R.version} + 1`,
+  }).where(eq(R.id, id)).returning();
   const fx = effects(tx, ctx);
-  await fx.audit({ action: `return.refund_${input.status}`, resourceType: 'return', resourceId: id, before: { status: r.refundStatus, amountMinor: r.refundAmountMinor }, after: { status: input.status, amountMinor: after!.refundAmountMinor, reference: input.reference ?? null } });
-  if (input.status === 'processed') await fx.event({ type: 'return.refunded', aggregateType: 'return', aggregateId: id, payload: { number: r.number, orderId: r.orderId, amountMinor: after!.refundAmountMinor } });
+  await fx.audit({ action: `return.refund_${status}`, resourceType: 'return', resourceId: id, before: { status: r.refundStatus, amountMinor: r.refundAmountMinor }, after: { status, amountMinor: after!.refundAmountMinor, reference: input.reference ?? null, mode } });
+  await logReturnEvent(tx, ctx, r, 'refund', `refund ${status}`, { status, mode, ...(input.reference ? { reference: input.reference } : {}) });
+  if (status === 'processed') await fx.event({ type: 'return.refunded', aggregateType: 'return', aggregateId: id, payload: { number: r.number, orderId: r.orderId, amountMinor: after!.refundAmountMinor } });
   return after!;
+}
+
+/** only a failed refund can be retried: a connector refund asks the marketplace again, a manual one goes back to `ready` */
+export async function retryRefund(tx: Tx, ctx: OpCtx, id: string): Promise<ReturnRow> {
+  const r = await getReturnRow(tx, ctx.vendorId, id, true);
+  if (r.refundStatus !== 'failed') throw new AppError('CONFLICT', 'Only a failed refund can be retried', { details: { rule: 'refund_not_failed', status: r.refundStatus } });
+  if (r.refundSource === 'connector') {
+    await tx.update(R).set({ refundStatus: 'ready' }).where(eq(R.id, id));
+    return recordRefund(tx, ctx, id, { mode: 'connector', amountMinor: r.refundAmountMinor, currency: r.refundCurrency });
+  }
+  const [after] = await tx.update(R).set({ refundStatus: 'ready', refundError: null, version: sql`${R.version} + 1` }).where(eq(R.id, id)).returning();
+  await effects(tx, ctx).audit({ action: 'return.refund_retry', resourceType: 'return', resourceId: id, before: { status: 'failed' }, after: { status: 'ready' } });
+  await logReturnEvent(tx, ctx, r, 'refund', 'refund retry: back to ready', { status: 'ready', mode: 'manual' });
+  return after!;
+}
+
+/** value of the units in a return at the price the customer paid (before tax / discount): "creating a return does not issue a refund" */
+export async function itemValueOf(tx: Tx, vendorId: string, returnId: string): Promise<number> {
+  const [v] = await tx.select({ n: sql<number>`coalesce(sum(${RI.quantity} * ${schema.orderItems.unitPriceMinor}), 0)::bigint` }).from(RI).innerJoin(schema.orderItems, and(eq(schema.orderItems.id, RI.orderItemId), eq(schema.orderItems.vendorId, RI.vendorId))).where(and(eq(RI.vendorId, vendorId), eq(RI.returnOrderId, returnId)));
+  return Number(v?.n ?? 0);
 }
 
 // ------------------------------------------------------------------------------------------------

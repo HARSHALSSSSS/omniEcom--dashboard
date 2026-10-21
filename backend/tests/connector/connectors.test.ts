@@ -9,9 +9,9 @@ import { ConnectorRegistry, MARKETPLACES } from '@oms/marketplace-core';
 const registry = createConnectorRegistry();
 
 describe('connector registry', () => {
-  it('registers the four launch marketplaces plus the sandbox', () => {
+  it('registers the launch marketplaces, Shopify and Meesho plus the sandbox', () => {
     expect(registry.list().map((c) => c.code).sort()).toEqual([...MARKETPLACES].sort());
-    expect(MARKETPLACES).toEqual(['amazon_in', 'flipkart', 'myntra', 'snapdeal', 'mock']);
+    expect(MARKETPLACES).toEqual(['amazon_in', 'flipkart', 'myntra', 'snapdeal', 'shopify', 'meesho', 'mock']);
   });
   it('rejects duplicate registration and unknown lookups', () => {
     expect(() => new ConnectorRegistry().register(registry.get('flipkart')).register(registry.get('flipkart'))).toThrow(/already registered/);

@@ -4,12 +4,13 @@ import { inList, minor, pk, tenantId, timestamps, tz, version } from './_helpers
 import { vendors } from './identity';
 import { productVariants } from './catalog';
 
-export const MARKETPLACE_CODES = ['amazon_in', 'flipkart', 'myntra', 'snapdeal', 'mock'] as const;
+export const MARKETPLACE_CODES = ['amazon_in', 'flipkart', 'myntra', 'snapdeal', 'shopify', 'meesho', 'mock'] as const;
 export const CONNECTION_STATUSES = ['unknown', 'connected', 'degraded', 'disconnected', 'error'] as const;
 export const ACCOUNT_MODES = ['live', 'sandbox'] as const;
 export const ACCOUNT_STATUSES = ['pending_authorization', 'active', 'paused', 'error', 'revoked'] as const;
 export const AUTHORIZATION_STATUSES = ['active', 'expiring', 'expired', 'revoked', 'error'] as const;
 /** Internal listing lifecycle (marketplace statuses are mapped to these; the original word is `external_status`). */
+export const CONTENT_STATES = ['synced', 'sync_pending', 'needs_review', 'needs_republish', 'failed'] as const;
 export const LISTING_STATUSES = ['draft', 'ready', 'approved', 'pending', 'active', 'rejected', 'correction_required', 'unpublished'] as const;
 export const LISTING_SOURCES = ['created', 'imported'] as const;
 
@@ -123,6 +124,18 @@ export const marketplaceListings = pgTable('marketplace_listings', {
   quantityDirty: boolean('quantity_dirty').notNull().default(false),
   quantityDirtyAt: tz('quantity_dirty_at'),
   quantityPushedAt: tz('quantity_pushed_at'),
+  // ---- master content propagation (edits of the master product reaching this listing)
+  /** synced = marketplace shows the current master content; sync_pending = an update is queued; needs_review = a seller decision is needed (category mapping); needs_republish = the connector cannot update live listings; failed = the last update failed */
+  contentState: text('content_state').notNull().default('synced'),
+  /** hash of the inherited master content last pushed (or last known to match) */
+  contentHash: text('content_hash'),
+  contentChangedAt: tz('content_changed_at'),
+  contentSyncedAt: tz('content_synced_at'),
+  contentError: text('content_error'),
+  /** fields of the master product that changed since the last sync, e.g. ["title","description"] */
+  contentChangedFields: jsonb('content_changed_fields').$type<string[]>().notNull().default([]),
+  /** why a seller decision is needed: { reason: 'category_changed', fromCategoryId, toCategoryId, suggestedMarketplaceCategoryId, suggestedMarketplaceCategoryName } */
+  contentReview: jsonb('content_review').$type<Record<string, unknown>>().notNull().default({}),
   version: version(),
   ...timestamps(),
 }, (t) => [
@@ -137,6 +150,8 @@ export const marketplaceListings = pgTable('marketplace_listings', {
   foreignKey({ columns: [t.vendorId, t.marketplaceAccountId], foreignColumns: [marketplaceAccounts.vendorId, marketplaceAccounts.id], name: 'marketplace_listings_account_fk' }),
   foreignKey({ columns: [t.vendorId, t.variantId], foreignColumns: [productVariants.vendorId, productVariants.id], name: 'marketplace_listings_variant_fk' }),
   check('marketplace_listings_status_chk', inList('status', LISTING_STATUSES)),
+  check('marketplace_listings_content_state_chk', inList('content_state', CONTENT_STATES)),
+  index('marketplace_listings_content_state_idx').on(t.vendorId, t.contentState).where(sql`${t.contentState} <> 'synced'`),
   check('marketplace_listings_source_chk', inList('source', LISTING_SOURCES)),
   check('marketplace_listings_override_chk', sql`(buffer_override IS NULL OR buffer_override >= 0) AND (max_quantity_override IS NULL OR max_quantity_override >= 0)`),
 ]);

@@ -6,7 +6,7 @@ import { z } from 'zod';
  * so a vendor can configure behaviour but can never inject code. Each module declares the facts it provides and the
  * actions it understands (RULE_TYPE_SPECS); creating a rule is rejected unless it fits the spec.
  */
-export const RULE_TYPES = ['pricing', 'stock', 'marketplace', 'fulfillment', 'notification'] as const;
+export const RULE_TYPES = ['pricing', 'stock', 'marketplace', 'fulfillment', 'notification', 'shipping'] as const;
 export type RuleType = (typeof RULE_TYPES)[number];
 
 export const OPS = ['eq', 'ne', 'in', 'nin', 'gt', 'gte', 'lt', 'lte', 'contains', 'startsWith', 'between', 'exists'] as const;
@@ -83,6 +83,14 @@ export const RULE_TYPE_SPECS: Record<RuleType, RuleTypeSpec> = {
     actions: {
       set_reorder_level: { description: 'Suggest a reorder level', params: z.object({ level: z.number().int().min(0) }) },
       safety_buffer: { description: 'Suggest a channel safety buffer', params: z.object({ units: z.number().int().min(0) }) },
+    },
+  },
+  shipping: {
+    title: 'Shipping rules',
+    description: 'Prefer a shipping method (marketplace / seller / third-party) for orders that are ready to ship. The first matching rule by priority decides the recommendation; a manual override stays possible where the method is available. orderValueMinor is in minor units; weightGrams in grams; sku / product hold every line of the order.',
+    fields: { marketplace: 'string', warehouse: 'string', destinationState: 'string', destinationCity: 'string', destinationPincode: 'string', orderValueMinor: 'number', sku: 'string[]', product: 'string[]', weightGrams: 'number' },
+    actions: {
+      prefer_shipping_method: { description: 'Prefer this kind of shipping method (optionally one specific provider)', params: z.object({ kind: z.enum(['marketplace', 'seller', 'third_party']), providerId: uuid.optional() }) },
     },
   },
   marketplace: {

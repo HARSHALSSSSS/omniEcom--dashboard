@@ -5,6 +5,7 @@ import { nextCounter, reserveForOrderItem } from '@oms/mod-inventory';
 import { effects, type OpCtx } from '@oms/module-kit';
 import { z } from 'zod';
 import { inventoryStatusFor, itemStatusFor, orderNumber, PRE_DISPATCH } from './domain';
+import { computeDispatchDue, loadSlaConfig } from './sla';
 import { performTransition, recordIgnored, type OrderRow } from './status';
 
 const O = schema.orders;
@@ -91,12 +92,15 @@ async function createOrder(tx: Tx, ctx: OpCtx, account: AccountRow, inc: Normali
   const shipping = inc.shippingMinor ?? Math.max(0, inc.totalMinor - (subtotal + tax - discount));
   const number = orderNumber(await nextCounter(tx, vendorId, 'order'));
   const pay = inc.payment ?? { method: 'unknown' as const };
+  // dispatch SLA: the warehouse is not known yet, so marketplace policy / business default (re-computed when a warehouse is chosen)
+  const sla = await loadSlaConfig(tx, vendorId);
+  const dispatchDueAt = computeDispatchDue(new Date(inc.placedAt), { marketplace: account.marketplace, warehouseId: null }, sla.policies, sla.timezone);
 
   const [order] = await tx
     .insert(O)
     .values({
       vendorId, marketplaceAccountId: account.id, marketplace: account.marketplace, externalOrderId: inc.externalOrderId, orderNumber: number, status: inc.status, marketplaceStatus: inc.marketplaceStatus,
-      placedAt: inc.placedAt, currency: inc.currency.toUpperCase(), subtotalMinor: subtotal, taxMinor: tax, shippingMinor: shipping, discountMinor: discount, totalMinor: inc.totalMinor,
+      placedAt: inc.placedAt, dispatchDueAt, currency: inc.currency.toUpperCase(), subtotalMinor: subtotal, taxMinor: tax, shippingMinor: shipping, discountMinor: discount, totalMinor: inc.totalMinor,
       buyer: (inc.buyer ?? {}) as Record<string, unknown>, shippingAddress: (inc.shippingAddress ?? {}) as Record<string, unknown>, rawPayload: inc.raw as never,
       paymentMethod: pay.method, paymentStatus: pay.status ?? (pay.method === 'prepaid' ? 'paid' : pay.method === 'cod' ? 'pending' : 'unknown'), codAmountMinor: pay.method === 'cod' ? pay.codAmountMinor ?? inc.totalMinor : null,
       inventoryStatus: 'pending', lastMarketplaceSyncAt: new Date(), cancelledAt: inc.status === 'cancelled' ? new Date() : null,

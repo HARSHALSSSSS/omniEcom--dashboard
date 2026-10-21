@@ -1,0 +1,24 @@
+{
+  "name": "@oms/mod-product-import",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@oms/module-kit": "workspace:*",
+    "@oms/mod-catalog": "workspace:*",
+    "@oms/mod-categories": "workspace:*",
+    "@oms/mod-inventory": "workspace:*",
+    "@oms/mod-warehouses": "workspace:*",
+    "@oms/mod-documents": "workspace:*",
+    "@oms/mod-listings": "workspace:*",
+    "@oms/mod-marketplace-accounts": "workspace:*",
+    "@oms/mod-jobs": "workspace:*",
+    "@oms/mod-vendors": "workspace:*"
+  }
+}

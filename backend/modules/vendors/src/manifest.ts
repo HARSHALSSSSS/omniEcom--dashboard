@@ -5,7 +5,7 @@ export const manifest = defineModule({
   name: "vendors",
   title: "Vendor / Organization",
   responsibility: "Tenant root. Vendor (merchant business) lifecycle, profile, status, plan assignment, tenant settings.",
-  owns: ["vendors"],
+  owns: ["vendors", "vendor_gstins"],
   dependsOn: [],
   api: ["/api/v1/vendors", "/api/v1/vendor"],
   publishes: ["vendor.created", "vendor.updated", "vendor.suspended", "vendor.reactivated"],

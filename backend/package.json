@@ -25,6 +25,7 @@
     "check:modules": "tsx scripts/check-modules.ts",
     "scaffold:modules": "node scripts/scaffold-modules.mjs",
     "openapi:export": "tsx scripts/export-openapi.ts",
+    "dev:local": "tsx scripts/dev-local.ts",
     "db:generate": "pnpm --filter @oms/database db:generate",
     "db:migrate": "pnpm --filter @oms/database db:migrate",
     "db:seed": "pnpm --filter @oms/database db:seed",

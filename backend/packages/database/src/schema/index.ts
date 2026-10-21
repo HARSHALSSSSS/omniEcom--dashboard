@@ -15,3 +15,7 @@ export * from './returns-ops';
 export * from './business-ops';
 export * from './platform-intel';
 export * from './onboarding';
+export * from './workspace';
+export * from './product-creation';
+export * from './product-edit';
+export * from './commerce-ext';

@@ -17,7 +17,7 @@ type Actor = { type: 'user' | 'api_key' | 'system' | 'webhook'; id?: string | nu
 // ------------------------------------------------------------------------------------------------
 export const toStockDto = (s: StockRow, extra: { sku: string; title: string; warehouseCode: string }) => ({
   id: s.id, variantId: s.variantId, sku: extra.sku, productTitle: extra.title, warehouseId: s.warehouseId, warehouseCode: extra.warehouseCode,
-  onHand: s.quantityOnHand, reserved: s.quantityReserved, available: availableOf(s), incoming: s.quantityIncoming, damaged: s.quantityDamaged, returned: s.quantityReturned,
+  onHand: s.quantityOnHand, reserved: s.quantityReserved, available: availableOf(s), incoming: s.quantityIncoming, damaged: s.quantityDamaged, returned: s.quantityReturned, quarantined: s.quantityQuarantined,
   reorderLevel: s.reorderLevel, version: s.version, updatedAt: s.updatedAt.toISOString(),
 });
 
@@ -48,8 +48,8 @@ export async function listStock(tx: Tx, vendorId: string, input: StockListInput)
   return { items: page.items.map((r) => toStockDto(r.s, { sku: r.sku, title: r.title, warehouseCode: r.code })), nextCursor: page.nextCursor };
 }
 
-export interface Availability { onHand: number; reserved: number; available: number; incoming: number; damaged: number; returned: number }
-const EMPTY: Availability = { onHand: 0, reserved: 0, available: 0, incoming: 0, damaged: 0, returned: 0 };
+export interface Availability { onHand: number; reserved: number; available: number; incoming: number; damaged: number; returned: number; quarantined: number }
+const EMPTY: Availability = { onHand: 0, reserved: 0, available: 0, incoming: 0, damaged: 0, returned: 0, quarantined: 0 };
 
 /** Sellable stock per variant across ACTIVE warehouses (optionally limited to the warehouses feeding one channel). */
 export async function availabilityFor(tx: Tx, vendorId: string, variantIds: string[], warehouseIds?: string[]): Promise<Map<string, Availability>> {
@@ -58,13 +58,13 @@ export async function availabilityFor(tx: Tx, vendorId: string, variantIds: stri
   const rows = await tx
     .select({
       variantId: I.variantId, onHand: sql<number>`sum(${I.quantityOnHand})::int`, reserved: sql<number>`sum(${I.quantityReserved})::int`, incoming: sql<number>`sum(${I.quantityIncoming})::int`,
-      damaged: sql<number>`sum(${I.quantityDamaged})::int`, returned: sql<number>`sum(${I.quantityReturned})::int`,
+      damaged: sql<number>`sum(${I.quantityDamaged})::int`, returned: sql<number>`sum(${I.quantityReturned})::int`, quarantined: sql<number>`sum(${I.quantityQuarantined})::int`,
     })
     .from(I)
     .innerJoin(W, and(eq(W.id, I.warehouseId), eq(W.vendorId, I.vendorId)))
     .where(and(eq(I.vendorId, vendorId), inArray(I.variantId, variantIds), eq(W.status, 'active'), isNull(W.deletedAt), warehouseIds?.length ? inArray(I.warehouseId, warehouseIds) : undefined))
     .groupBy(I.variantId);
-  for (const r of rows) out.set(r.variantId, { onHand: r.onHand, reserved: r.reserved, available: r.onHand - r.reserved, incoming: r.incoming, damaged: r.damaged, returned: r.returned });
+  for (const r of rows) out.set(r.variantId, { onHand: r.onHand, reserved: r.reserved, available: r.onHand - r.reserved, incoming: r.incoming, damaged: r.damaged, returned: r.returned, quarantined: r.quarantined });
   return out;
 }
 
@@ -74,7 +74,7 @@ export async function variantOverview(tx: Tx, vendorId: string, variantId: strin
   const rows = await tx.select({ s: I, code: W.code }).from(I).innerJoin(W, and(eq(W.id, I.warehouseId), eq(W.vendorId, I.vendorId))).where(and(eq(I.vendorId, vendorId), eq(I.variantId, variantId))).orderBy(W.code);
   const totals = { ...EMPTY };
   for (const r of rows) {
-    totals.onHand += r.s.quantityOnHand; totals.reserved += r.s.quantityReserved; totals.incoming += r.s.quantityIncoming; totals.damaged += r.s.quantityDamaged; totals.returned += r.s.quantityReturned;
+    totals.onHand += r.s.quantityOnHand; totals.reserved += r.s.quantityReserved; totals.incoming += r.s.quantityIncoming; totals.damaged += r.s.quantityDamaged; totals.returned += r.s.quantityReturned; totals.quarantined += r.s.quantityQuarantined;
   }
   totals.available = totals.onHand - totals.reserved;
   return { variantId: v.id, sku: v.sku, productTitle: v.title, totals, warehouses: rows.map((r) => toStockDto(r.s, { sku: v.sku, title: v.title, warehouseCode: r.code })) };
@@ -223,7 +223,7 @@ export async function listReservations(tx: Tx, vendorId: string, q: { limit: num
 export type MovementRow = typeof M.$inferSelect;
 export const toMovementDto = (m: MovementRow) => ({
   id: m.id, variantId: m.variantId, warehouseId: m.warehouseId, type: m.type as (typeof schema.MOVEMENT_TYPES)[number],
-  deltaOnHand: m.deltaOnHand, deltaReserved: m.deltaReserved, deltaIncoming: m.deltaIncoming, deltaDamaged: m.deltaDamaged, deltaReturned: m.deltaReturned,
+  deltaOnHand: m.deltaOnHand, deltaReserved: m.deltaReserved, deltaIncoming: m.deltaIncoming, deltaDamaged: m.deltaDamaged, deltaReturned: m.deltaReturned, deltaQuarantined: m.deltaQuarantined,
   onHandAfter: m.onHandAfter, reservedAfter: m.reservedAfter, reason: m.reason, referenceType: m.referenceType, referenceId: m.referenceId, actorType: m.actorType, actorId: m.actorId, createdAt: m.createdAt.toISOString(),
 });
 
@@ -245,7 +245,7 @@ export async function ledgerDrift(tx: Tx, vendorId: string) {
   return res.rows.map((r) => ({
     variantId: String(r.variant_id), warehouseId: String(r.warehouse_id),
     onHand: Number(r.on_hand), ledgerOnHand: Number(r.ledger_on_hand), reserved: Number(r.reserved), ledgerReserved: Number(r.ledger_reserved),
-    incoming: Number(r.incoming), ledgerIncoming: Number(r.ledger_incoming), damaged: Number(r.damaged), ledgerDamaged: Number(r.ledger_damaged), returned: Number(r.returned), ledgerReturned: Number(r.ledger_returned),
+    incoming: Number(r.incoming), ledgerIncoming: Number(r.ledger_incoming), damaged: Number(r.damaged), ledgerDamaged: Number(r.ledger_damaged), returned: Number(r.returned), ledgerReturned: Number(r.ledger_returned), quarantined: Number(r.quarantined ?? 0), ledgerQuarantined: Number(r.ledger_quarantined ?? 0),
   }));
 }
 
@@ -393,6 +393,25 @@ export async function availabilityByWarehouse(tx: Tx, vendorId: string, variantI
 export async function disposeReturned(tx: Tx, t: Target & { quantity: number }): Promise<MovementResult> {
   await assertStockTargets(tx, t.vendorId, t.variantId, t.warehouseId);
   return applyMovement(tx, { ...t, type: 'adjust', returned: -t.quantity, referenceType: t.referenceType ?? 'return' });
+}
+
+// ------------------------------------------------------------------------------------------------
+// quarantine: a separate bucket (not on hand, not sellable, not available). Repair = quarantine with reason 'repair'.
+// ------------------------------------------------------------------------------------------------
+type QuarantineTarget = Target & { quantity: number };
+
+/** moves units from the `returned` bucket (default) or from sellable on-hand stock into quarantine */
+export async function quarantineStock(tx: Tx, t: QuarantineTarget & { source?: 'returned' | 'on_hand' }): Promise<MovementResult> {
+  await assertStockTargets(tx, t.vendorId, t.variantId, t.warehouseId);
+  const { source = 'returned', quantity, ...rest } = t;
+  return applyMovement(tx, { ...rest, type: 'quarantine', quarantined: quantity, ...(source === 'on_hand' ? { onHand: -quantity } : { returned: -quantity }), referenceType: t.referenceType ?? (source === 'returned' ? 'return' : 'manual') });
+}
+
+/** moves units out of quarantine: back to sellable stock, to damaged, or off the books entirely (write_off) */
+export async function releaseQuarantine(tx: Tx, t: QuarantineTarget & { to: 'on_hand' | 'damaged' | 'write_off' }): Promise<MovementResult> {
+  await assertStockTargets(tx, t.vendorId, t.variantId, t.warehouseId);
+  const { to, quantity, ...rest } = t;
+  return applyMovement(tx, { ...rest, type: 'quarantine_release', quarantined: -quantity, ...(to === 'on_hand' ? { onHand: quantity } : to === 'damaged' ? { damaged: quantity } : {}), referenceType: t.referenceType ?? 'manual' });
 }
 
 /** damaged stock written off (scrapped, returned to supplier) */

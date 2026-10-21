@@ -4,6 +4,7 @@ import { AppError } from '@oms/shared';
 import { enqueueSyncJob, executeSyncJob, type SyncRunner } from '@oms/mod-sync';
 import type { JobHandler } from '@oms/module-kit';
 import { inventoryRunner, pricesRunner } from './channel';
+import { contentSyncRunner } from './content';
 import { loadListingContext } from './context';
 import { fx, systemCtx } from './ctx';
 import { fromReport } from './domain';
@@ -65,7 +66,7 @@ const publishRunner: SyncRunner = async (ctx): Promise<{ stats: Record<string, n
   await withVendor(db, vendorId, async (tx) => {
     await tx.update(L).set({
       status, externalListingId: result.externalListingId, externalStatus: result.marketplaceStatus, issues: result.issues, payload: { ...context.input, imageUrls: undefined, imageKeys: context.imageKeys },
-      syncHash: context.hash, lastErrorCode: result.issues.find((i) => i.severity === 'error')?.code ?? null, publishedAt: status === 'active' ? new Date() : listing.publishedAt,
+      syncHash: context.hash, contentState: 'synced', contentHash: context.inheritedHash, contentSyncedAt: new Date(), contentError: null, contentChangedFields: [], contentReview: {}, lastErrorCode: result.issues.find((i) => i.severity === 'error')?.code ?? null, publishedAt: status === 'active' ? new Date() : listing.publishedAt,
       lastPolledAt: new Date(), ...(status === 'active' ? { quantityDirty: true, quantityDirtyAt: new Date() } : {}), version: sql`${L.version} + 1`,
     }).where(eq(L.id, listing.id));
     const f = fx(tx, sctx);
@@ -131,4 +132,6 @@ export const listingJobHandlers: JobHandler[] = [
   wrap('sync.catalog_import', 'syncMarketplace', catalogImportRunner),
   wrap('sync.inventory', 'marketplacePush', inventoryRunner),
   wrap('sync.prices', 'marketplacePush', pricesRunner),
+  // master content -> live listings (job type `listings`, payload { kind: 'content' }); the job names of the sync engine are derived from its job types
+  wrap('sync.listings', 'syncMarketplace', contentSyncRunner),
 ];

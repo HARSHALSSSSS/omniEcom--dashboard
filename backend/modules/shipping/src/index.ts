@@ -5,6 +5,9 @@ import { shippingRoutes } from './routes';
 import { IN_FLIGHT, PRE_DISPATCH } from './domain';
 import { getProvider } from './providers';
 import { cancelShipment, refreshTracking } from './service';
+import { snapshotJob } from './workspace';
+
+export { snapshotJob, takeSnapshot, JOB_SNAPSHOT } from './workspace';
 
 export { manifest };
 export { shippingRoutes } from './routes';
@@ -49,6 +52,8 @@ const jobs: JobHandler[] = [{
     if (polled) c.logger.info({ polled }, 'shipment tracking polled');
   },
 }];
+
+jobs.push(snapshotJob);
 
 /**
  * Shipping: provider-neutral. Vendors enable providers (manual, sandbox courier, real couriers later); shipments, labels,

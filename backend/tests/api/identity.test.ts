@@ -118,6 +118,19 @@ describe('tokens and sessions', () => {
     expect((await c().del(`/api/v1/me/sessions/${second.sessionId}`, a)).status).toBe(404);
   });
 
+  it('signs out every other device and keeps the current one', async () => {
+    const a = await c().registerVendor();
+    const second = await c().login(a.email, a.password);
+    const third = await c().login(a.email, a.password);
+    const r = await c().del('/api/v1/me/sessions', a);
+    expect(r.status).toBe(200);
+    expect(r.body.data.revoked).toBe(2);
+    expect((await c().get('/api/v1/me', second)).status).toBe(401);
+    expect((await c().get('/api/v1/me', third)).status).toBe(401);
+    expect((await c().get('/api/v1/me', a)).status).toBe(200);
+    expect((await c().del('/api/v1/me/sessions', a)).body.data.revoked).toBe(0);
+  });
+
   it('logout-all signs out every device', async () => {
     const a = await c().registerVendor();
     const b = await c().login(a.email, a.password);

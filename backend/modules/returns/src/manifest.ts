@@ -5,7 +5,7 @@ export const manifest = defineModule({
   name: "returns",
   title: "Returns",
   responsibility: "Return/RTO/refund lifecycle: return orders and items, reasons, pickup status, receiving, inspection, disposition (restock / damaged / dispose ...) feeding the inventory engine, and refund tracking. RTO deliveries create return orders automatically.",
-  owns: ["return_orders", "return_items", "return_events"],
+  owns: ["return_orders", "return_items", "return_events", "return_inspections"],
   dependsOn: ["orders", "inventory", "warehouses"],
   api: ["/api/v1/returns"],
   publishes: ["return.created", "return.received", "return.inspected", "return.completed"],

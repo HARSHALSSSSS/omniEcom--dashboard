@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { schema, type Tx } from '@oms/database';
 import { IdParamSchema, IsoDate, successEnvelope } from '@oms/contracts';
 import { ok, opCtxFromRequest, requireVendor, vendorTx, type OpCtx } from '@oms/module-kit';
+import { proposalRoutes } from './proposal-routes';
 import { SyncWork, applyRules, bulkUpdate, clearMarketplacePrice, listHistory, listPrices, processSales, setMarketplacePrice, toPriceDto, variantPricing } from './service';
 
 const Minor = z.number().int().min(1).max(100_000_000_000);
@@ -18,7 +19,7 @@ const Change = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('percent'), value: z.number().min(-90).max(1000) }).describe('Change by a percentage (negative = reduce)'),
   z.object({ kind: z.literal('amount'), value: z.number().int().min(-100_000_000).max(100_000_000) }).describe('Add/subtract an amount (minor units)'),
 ]);
-const HistorySchema = z.object({ id: z.number().int(), variantId: z.string(), marketplaceAccountId: z.string().nullable(), field: z.enum(schema.PRICE_FIELDS), oldPriceMinor: z.number().int().nullable(), newPriceMinor: z.number().int().nullable(), source: z.enum(schema.PRICE_SOURCES), ruleId: z.string().nullable(), batchId: z.string().nullable(), reason: z.string().nullable(), actorId: z.string().nullable(), createdAt: IsoDate });
+const HistorySchema = z.object({ id: z.number().int(), variantId: z.string(), sku: z.string().nullable().optional(), productTitle: z.string().nullable().optional(), accountName: z.string().nullable().optional(), actorName: z.string().nullable().optional(), marketplaceAccountId: z.string().nullable(), field: z.enum(schema.PRICE_FIELDS), oldPriceMinor: z.number().int().nullable(), newPriceMinor: z.number().int().nullable(), source: z.enum(schema.PRICE_SOURCES), ruleId: z.string().nullable(), batchId: z.string().nullable(), reason: z.string().nullable(), actorId: z.string().nullable(), createdAt: IsoDate });
 
 /**
  * Pricing: base price (on the variant) + per-marketplace prices, sales, rule-driven prices, bulk updates and history. Marketplaces do
@@ -28,6 +29,7 @@ const HistorySchema = z.object({ id: z.number().int(), variantId: z.string(), ma
 export const pricingRoutes: FastifyPluginAsync = async (app) => {
   const r = app.withTypeProvider<ZodTypeProvider>();
   const TAGS = ['Pricing'];
+  await app.register(proposalRoutes);
   /** one request = one transaction; price pushes are queued only after it commits */
   async function run<T>(req: FastifyRequest, fn: (tx: Tx, ctx: OpCtx, work: SyncWork) => Promise<T>): Promise<{ out: T; sync: Awaited<ReturnType<SyncWork['flush']>> }> {
     const vendorId = requireVendor(req);
@@ -106,10 +108,10 @@ export const pricingRoutes: FastifyPluginAsync = async (app) => {
     config: { access: { permission: 'pricing:read' } },
     schema: {
       tags: TAGS, summary: 'Price history', description: 'Append-only. `field`: base | mrp | marketplace | sale. `marketplaceAccountId: null` = the variant\'s own price.',
-      querystring: z.object({ 'filter[variantId]': z.uuid().optional(), 'filter[accountId]': z.uuid().optional(), 'filter[batchId]': z.string().optional(), 'filter[field]': z.enum(schema.PRICE_FIELDS).optional(), before: z.coerce.number().int().optional(), limit: z.coerce.number().int().min(1).max(200).default(50) }),
+      querystring: z.object({ 'filter[variantId]': z.uuid().optional(), 'filter[accountId]': z.uuid().optional(), 'filter[batchId]': z.string().optional(), 'filter[field]': z.enum(schema.PRICE_FIELDS).optional(), before: z.coerce.number().int().optional(), limit: z.coerce.number().int().min(1).max(200).default(50), include: z.enum(['names']).optional().describe('names: add sku, productTitle, accountName and actorName to every row') }),
       response: { 200: successEnvelope(z.object({ items: z.array(HistorySchema), nextBefore: z.number().int().nullable() })) },
     },
-  }, async (req) => ok(req, await vendorTx(req, (tx, vendorId) => listHistory(tx, vendorId, { variantId: req.query['filter[variantId]'], accountId: req.query['filter[accountId]'], batchId: req.query['filter[batchId]'], field: req.query['filter[field]'], before: req.query.before, limit: req.query.limit }))));
+  }, async (req) => ok(req, await vendorTx(req, (tx, vendorId) => listHistory(tx, vendorId, { variantId: req.query['filter[variantId]'], accountId: req.query['filter[accountId]'], batchId: req.query['filter[batchId]'], field: req.query['filter[field]'], before: req.query.before, limit: req.query.limit, names: req.query.include === 'names' }))));
 };
 
 

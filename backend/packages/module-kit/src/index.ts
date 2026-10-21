@@ -113,6 +113,17 @@ export const paginated = <T>(req: FastifyRequest, items: T[], page: { limit: num
   requestId: req.id,
 });
 
+/** offset + limit for a numbered page; rejects pages deeper than the cap */
+export function pageWindow(q: { page: number; pageSize: number }): { limit: number; offset: number } {
+  const offset = (q.page - 1) * q.pageSize;
+  if (offset + q.pageSize > 10_000) throw Errors.validation({ issues: [{ path: 'page', message: 'too deep: narrow the filters instead' }] });
+  return { limit: q.pageSize, offset };
+}
+
+/** numbered-page response: { items, page, pageSize, total, pages } */
+export const paged = <T>(req: FastifyRequest, items: T[], q: { page: number; pageSize: number }, total: number) =>
+  ok(req, { items, page: q.page, pageSize: q.pageSize, total, pages: Math.max(1, Math.ceil(total / q.pageSize)) });
+
 export const created = <T>(req: FastifyRequest, reply: FastifyReply, data: T, location?: string) => {
   reply.code(201);
   if (location) reply.header('Location', location);

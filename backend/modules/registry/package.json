@@ -40,6 +40,13 @@
     "@oms/mod-automation": "workspace:*",
     "@oms/mod-audit": "workspace:*",
     "@oms/mod-platform-admin": "workspace:*",
-    "@oms/mod-onboarding": "workspace:*"
+    "@oms/mod-onboarding": "workspace:*",
+    "@oms/mod-issues": "workspace:*",
+    "@oms/mod-workspace": "workspace:*",
+    "@oms/mod-promotions": "workspace:*",
+    "@oms/mod-procurement": "workspace:*",
+    "@oms/mod-product-import": "workspace:*",
+    "@oms/mod-marketplace-hub": "workspace:*",
+    "@oms/mod-product-edit": "workspace:*"
   }
 }

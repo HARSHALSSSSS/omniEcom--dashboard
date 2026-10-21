@@ -7,7 +7,7 @@ export {
   evaluate, matches, validateRule, conditionMatches, isLive, RULE_TYPES, RULE_TYPE_SPECS, OPS,
   type Condition, type ConditionSet, type Facts, type Matched, type RuleAction, type RuleDef, type RuleType,
 } from './engine';
-export { evaluateRules, liveRules, recordExecutions, toRuleDef, createRule, getRule } from './service';
+export { evaluateRules, liveRules, recordExecutions, toRuleDef, toRuleDto, createRule, getRule, updateRule, deleteRule, listRules, type RuleRow, type RuleInput } from './service';
 
 /**
  * Business Rules: a controlled, data-driven rule engine. Modules call `evaluateRules(tx, vendorId, type, facts)`; vendors

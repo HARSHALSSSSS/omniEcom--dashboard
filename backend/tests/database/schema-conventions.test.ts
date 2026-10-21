@@ -20,7 +20,7 @@ describe('schema conventions', () => {
   });
 
   it('every mutable tenant table has timestamptz created_at/updated_at', () => {
-    const immutable = new Set(['sync_logs', 'inventory_movements', 'order_status_events', 'fulfillment_events', 'shipment_tracking_events', 'return_events', 'rule_executions', 'price_history', 'audit_logs', 'user_roles', 'refresh_tokens', 'idempotency_keys', 'outbox_events', 'category_attributes']);
+    const immutable = new Set(['sync_logs', 'inventory_movements', 'order_status_events', 'fulfillment_events', 'shipment_tracking_events', 'return_events', 'rule_executions', 'price_history', 'audit_logs', 'user_roles', 'refresh_tokens', 'idempotency_keys', 'outbox_events', 'category_attributes', 'issue_events', 'return_inspections', 'shipping_snapshots', 'inventory_group_items']);
     for (const t of tenantTables.filter((x) => !immutable.has(x.name))) {
       const names = t.columns.map((c) => c.name);
       expect(names, t.name).toContain('created_at');

@@ -3,6 +3,8 @@ import { createAmazonInConnector, type AmazonOptions } from '@oms/connector-amaz
 import { createFlipkartConnector, type FlipkartOptions } from '@oms/connector-flipkart';
 import { createMyntraConnector } from '@oms/connector-myntra';
 import { createSnapdealConnector } from '@oms/connector-snapdeal';
+import { createShopifyConnector, type ShopifyOptions } from '@oms/connector-shopify';
+import { createMeeshoConnector } from '@oms/connector-meesho';
 import { createMockConnector } from '@oms/connector-mock';
 
 export { mockControl } from '@oms/connector-mock';
@@ -10,6 +12,8 @@ export { amazonControl } from '@oms/connector-amazon-in';
 export { flipkartControl } from '@oms/connector-flipkart';
 export { myntraControl } from '@oms/connector-myntra';
 export { snapdealControl } from '@oms/connector-snapdeal';
+export { shopifyControl } from '@oms/connector-shopify';
+export { meeshoControl } from '@oms/connector-meesho';
 
 export interface RegistryOptions {
   /** register the mock sandbox connector */
@@ -17,6 +21,7 @@ export interface RegistryOptions {
   /** platform-level application credentials for redirect-based authorization (live use only; sandbox needs none) */
   amazon?: AmazonOptions['app'];
   flipkart?: FlipkartOptions['app'];
+  shopify?: ShopifyOptions['app'];
 }
 
 /**
@@ -31,7 +36,9 @@ export function createConnectorRegistry(opts: RegistryOptions = {}): ConnectorRe
     .register(createAmazonInConnector({ app: opts.amazon }))
     .register(createFlipkartConnector({ app: opts.flipkart }))
     .register(createMyntraConnector())
-    .register(createSnapdealConnector());
+    .register(createSnapdealConnector())
+    .register(createShopifyConnector({ app: opts.shopify }))
+    .register(createMeeshoConnector());
   if (opts.mock ?? true) registry.register(createMockConnector());
   return registry;
 }

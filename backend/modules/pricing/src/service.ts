@@ -47,10 +47,30 @@ async function history(tx: Tx, vendorId: string, h: { variantId: string; account
   if (h.oldMinor === h.newMinor) return;
   await tx.insert(PH).values({ vendorId, variantId: h.variantId, marketplaceAccountId: h.accountId ?? null, field: h.field, oldPriceMinor: h.oldMinor, newPriceMinor: h.newMinor, source: h.source, ruleId: h.ruleId ?? null, batchId: h.batchId ?? null, reason: h.reason ?? null, actorId: h.actorId ?? null });
 }
-export async function listHistory(tx: Tx, vendorId: string, q: { variantId?: string; accountId?: string; batchId?: string; field?: string; before?: number; limit: number }) {
+export async function listHistory(tx: Tx, vendorId: string, q: { variantId?: string; accountId?: string; batchId?: string; field?: string; before?: number; limit: number; names?: boolean }) {
   const rows = await tx.select().from(PH).where(and(eq(PH.vendorId, vendorId), q.variantId ? eq(PH.variantId, q.variantId) : undefined, q.accountId ? eq(PH.marketplaceAccountId, q.accountId) : undefined, q.batchId ? eq(PH.batchId, q.batchId) : undefined, q.field ? eq(PH.field, q.field) : undefined, q.before ? lt(PH.id, q.before) : undefined)).orderBy(desc(PH.id)).limit(q.limit + 1);
   const page = rows.slice(0, q.limit);
-  return { items: page.map((h) => ({ id: h.id, variantId: h.variantId, marketplaceAccountId: h.marketplaceAccountId, field: h.field as Field, oldPriceMinor: h.oldPriceMinor, newPriceMinor: h.newPriceMinor, source: h.source as Source, ruleId: h.ruleId, batchId: h.batchId, reason: h.reason, actorId: h.actorId, createdAt: h.createdAt.toISOString() })), nextBefore: rows.length > q.limit ? page[page.length - 1]!.id : null };
+  const names = q.names ? await historyNames(tx, vendorId, page) : null;
+  return {
+    items: page.map((h) => ({
+      id: h.id, variantId: h.variantId, marketplaceAccountId: h.marketplaceAccountId, field: h.field as Field, oldPriceMinor: h.oldPriceMinor, newPriceMinor: h.newPriceMinor, source: h.source as Source, ruleId: h.ruleId, batchId: h.batchId, reason: h.reason, actorId: h.actorId, createdAt: h.createdAt.toISOString(),
+      ...(names ? { sku: names.variants.get(h.variantId)?.sku ?? null, productTitle: names.variants.get(h.variantId)?.title ?? null, accountName: h.marketplaceAccountId ? names.accounts.get(h.marketplaceAccountId) ?? null : null, actorName: h.actorId ? names.users.get(h.actorId) ?? null : null } : {}),
+    })),
+    nextBefore: rows.length > q.limit ? page[page.length - 1]!.id : null,
+  };
+}
+
+/** sku, product title, account name and actor name for a page of history rows (`include=names`): three small lookups, not one per row */
+async function historyNames(tx: Tx, vendorId: string, rows: Array<typeof PH.$inferSelect>) {
+  const variantIds = [...new Set(rows.map((r) => r.variantId))];
+  const accountIds = [...new Set(rows.map((r) => r.marketplaceAccountId).filter((x): x is string => !!x))];
+  const userIds = [...new Set(rows.map((r) => r.actorId).filter((x): x is string => !!x && /^[0-9a-f-]{36}$/i.test(x)))];
+  const [vs, as, us] = await Promise.all([
+    variantIds.length ? tx.select({ id: V.id, sku: V.sku, title: schema.products.title }).from(V).innerJoin(schema.products, and(eq(schema.products.id, V.productId), eq(schema.products.vendorId, V.vendorId))).where(and(eq(V.vendorId, vendorId), inArray(V.id, variantIds))) : [],
+    accountIds.length ? tx.select({ id: A.id, name: A.displayName }).from(A).where(and(eq(A.vendorId, vendorId), inArray(A.id, accountIds))) : [],
+    userIds.length ? tx.select({ id: schema.users.id, name: schema.users.fullName }).from(schema.users).where(and(eq(schema.users.vendorId, vendorId), inArray(schema.users.id, userIds))) : [],
+  ]);
+  return { variants: new Map(vs.map((v) => [v.id, v])), accounts: new Map(as.map((a) => [a.id, a.name])), users: new Map(us.map((u) => [u.id, u.name])) };
 }
 
 // ------------------------------------------------------------------------------------------------

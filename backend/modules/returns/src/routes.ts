@@ -6,22 +6,24 @@ import { IdParamSchema, IsoDate, PaginationQuerySchema, paginatedEnvelope, succe
 import { created, ok, opCtxFromRequest, paginated, requireVendor, vendorTx, type OpCtx } from '@oms/module-kit';
 import { transitionOrder } from '@oms/mod-orders';
 import { assertWarehouseCapability } from '@oms/mod-warehouses';
-import { RETURN_REASONS, RETURN_STATUSES } from './domain';
+import { RETURN_REASONS, RETURN_STAGES, RETURN_STATUSES } from './domain';
 import {
-  cancelReturn, completeReturn, createReturn, decideReturn, getReturnRow, inspectReturn, listReturns, receiveReturnGoods, recordPickup, recordRefund, returnDetail, returnTimeline, schedulePickup,
+  cancelReturn, completeReturn, createReturn, decideReturn, getReturnRow, inspectReturn, itemValueOf, listReturns, receiveReturnGoods, recordPickup, recordRefund, returnDetail, returnTimeline, schedulePickup,
 } from './service';
 
 const Item = z.object({
   id: z.string(), orderItemId: z.string(), variantId: z.string().nullable(), sku: z.string().nullable(), quantity: z.number().int(), receivedQuantity: z.number().int(), dispositionedQuantity: z.number().int(), restockedQuantity: z.number().int(),
   condition: z.enum(schema.RETURN_CONDITIONS).nullable(), disposition: z.enum(schema.RETURN_DISPOSITIONS).nullable(), notes: z.string().nullable(), inspectedAt: IsoDate.nullable(),
 });
-const ReturnSchema = z.object({
-  id: z.string(), number: z.string(), orderId: z.string(), warehouseId: z.string().nullable(), source: z.enum(schema.RETURN_SOURCES), status: z.enum(RETURN_STATUSES), reasonCode: z.string(), reasonText: z.string().nullable(),
+export const ReturnSchema = z.object({
+  id: z.string(), number: z.string(), orderId: z.string(), warehouseId: z.string().nullable(), source: z.enum(schema.RETURN_SOURCES), status: z.enum(RETURN_STATUSES), stage: z.enum(RETURN_STAGES), stageLabel: z.string(), reasonCode: z.string(), reasonText: z.string().nullable(),
   marketplaceReturnId: z.string().nullable(), shipmentId: z.string().nullable(),
   pickup: z.object({ status: z.enum(schema.PICKUP_STATUSES), awb: z.string().nullable(), scheduledAt: IsoDate.nullable() }),
-  refund: z.object({ status: z.enum(schema.REFUND_STATUSES), amountMinor: z.number().int().nullable(), reference: z.string().nullable(), refundedAt: IsoDate.nullable() }),
+  refund: z.object({ status: z.enum(schema.REFUND_STATUSES), amountMinor: z.number().int().nullable(), currency: z.string().nullable(), source: z.enum(['connector', 'manual']).nullable(), error: z.string().nullable(), reference: z.string().nullable(), refundedAt: IsoDate.nullable() }),
+  inspection: z.object({ status: z.enum(schema.INSPECTION_STATUSES), inspectorId: z.string().nullable(), startedAt: IsoDate.nullable() }),
   receivedAt: IsoDate.nullable(), inspectedAt: IsoDate.nullable(), completedAt: IsoDate.nullable(), notes: z.string().nullable(), items: z.array(Item), version: z.number().int(), createdAt: IsoDate, updatedAt: IsoDate,
 }).meta({ id: 'ReturnOrder' });
+const CreatedSchema = ReturnSchema.extend({ itemValueMinor: z.number().int(), note: z.string() }).meta({ id: 'ReturnOrderCreated' });
 const Qty = z.number().int().min(1).max(100_000);
 
 /** Returns: request -> approve -> pickup -> receive -> inspect -> disposition -> refund, wired to the inventory engine. */
@@ -49,10 +51,10 @@ export const returnRoutes: FastifyPluginAsync = async (app) => {
         orderId: z.uuid(), source: z.enum(['customer', 'marketplace', 'seller']).default('customer'), reasonCode: z.string().min(2).max(60), reasonText: z.string().max(500).nullish(), marketplaceReturnId: z.string().max(120).nullish(), warehouseId: z.uuid().nullish(),
         pickupRequired: z.boolean().default(false), notes: z.string().max(500).nullish(), items: z.array(z.object({ orderItemId: z.uuid(), quantity: Qty })).min(1).max(200),
       }),
-      response: { 201: successEnvelope(ReturnSchema) },
+      response: { 201: successEnvelope(CreatedSchema) },
     },
   }, async (req, reply) => {
-    const dto = await run(req, async (tx, ctx) => { const x = await createReturn(tx, ctx, req.body); return detail(tx, ctx, x.id); });
+    const dto = await run(req, async (tx, ctx) => { const x = await createReturn(tx, ctx, req.body); return { ...(await detail(tx, ctx, x.id)), itemValueMinor: await itemValueOf(tx, ctx.vendorId, x.id), note: 'Creating a return does not issue a refund.' }; });
     return created(req, reply, dto, `/api/v1/returns/${dto.id}`);
   });
   r.get('/returns', {
@@ -93,7 +95,9 @@ export const returnRoutes: FastifyPluginAsync = async (app) => {
     '`restock` returns sellable units to stock (optionally into a bin), `damaged` moves them to the damaged bucket, `dispose` / `return_to_vendor` write them off, `quarantine` keeps them held. A non-sellable item cannot be restocked. Stock changes go through the inventory ledger.',
     z.object({ items: z.array(z.object({ returnItemId: z.uuid(), quantity: Qty, condition: z.enum(schema.RETURN_CONDITIONS), disposition: z.enum(schema.RETURN_DISPOSITIONS), binId: z.uuid().nullish(), notes: z.string().max(300).nullish() })).min(1).max(200) }),
     async (tx, ctx, id, b, req) => { const row = await getReturnRow(tx, ctx.vendorId, id); if (row.warehouseId) await canReceive(req, tx, row.warehouseId); return inspectReturn(tx, ctx, id, b.items); });
-  act('refund', 'Record the refund outcome', 'The money moves in the marketplace / payment system; this records its status and reference.', z.object({ status: z.enum(['processed', 'failed', 'pending']), amountMinor: z.number().int().min(0).nullish(), reference: z.string().max(120).nullish() }), (tx, ctx, id, b) => recordRefund(tx, ctx, id, b), 'returns:refund');
+  act('refund', 'Record or request the refund', 'Manual (default): records the outcome the marketplace / payment system reached (`status` processed|failed|pending|ready|processing, default processed when `mode` is sent). `mode: connector` asks the marketplace to refund and tracks processing -> processed|failed; 409 `not_supported_by_connector` when the connector has no refund operation, 409 `inspection_required` before inspection. Amount and currency are stored with the return.',
+    z.object({ mode: z.enum(['manual', 'connector']).optional(), status: z.enum(['processed', 'failed', 'pending', 'ready', 'processing']).optional(), amountMinor: z.number().int().min(0).nullish(), currency: z.string().length(3).toUpperCase().nullish(), reference: z.string().max(120).nullish(), error: z.string().max(300).nullish() })
+      .refine((b) => b.mode !== undefined || b.status !== undefined, { message: 'send `status` (manual) or `mode`' }), (tx, ctx, id, b) => recordRefund(tx, ctx, id, b), 'returns:refund');
   act('cancel', 'Cancel a return that has not been received', '', z.object({ note: z.string().max(300).nullish() }).default({}), (tx, ctx, id, b) => cancelReturn(tx, ctx, id, b.note));
 
   r.post('/returns/:id/complete', {

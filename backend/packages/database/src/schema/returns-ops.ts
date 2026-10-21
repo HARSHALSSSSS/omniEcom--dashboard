@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { bigserial, check, foreignKey, index, integer, jsonb, pgTable, text, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { bigserial, char, check, foreignKey, index, integer, jsonb, pgTable, text, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { createdAt, inList, minor, pk, tenantId, timestamps, tz, version } from './_helpers';
 import { vendors } from './identity';
 import { productVariants } from './catalog';
@@ -13,9 +13,9 @@ import { orderItems, orders, warehouses } from './operations';
 export const RETURN_SOURCES = ['customer', 'marketplace', 'rto', 'seller'] as const;
 export const RETURN_STATUSES = ['requested', 'approved', 'rejected', 'pickup_scheduled', 'picked_up', 'in_transit', 'received', 'inspecting', 'completed', 'cancelled'] as const;
 export const PICKUP_STATUSES = ['not_required', 'requested', 'scheduled', 'picked_up', 'failed'] as const;
-export const REFUND_STATUSES = ['not_applicable', 'pending', 'processed', 'failed'] as const;
+export const REFUND_STATUSES = ['not_applicable', 'pending', 'ready', 'processing', 'processed', 'failed'] as const;
 export const RETURN_CONDITIONS = ['sellable', 'damaged', 'defective', 'wrong_item', 'missing'] as const;
-export const RETURN_DISPOSITIONS = ['restock', 'damaged', 'dispose', 'return_to_vendor', 'quarantine'] as const;
+export const RETURN_DISPOSITIONS = ['restock', 'damaged', 'dispose', 'return_to_vendor', 'quarantine', 'rejected', 'repair'] as const;
 export const CANCELLATION_INITIATORS = ['customer', 'seller', 'marketplace', 'system'] as const;
 export const CANCELLATION_STATUSES = ['requested', 'accepted', 'rejected', 'completed'] as const;
 
@@ -39,6 +39,13 @@ export const returnOrders = pgTable('return_orders', {
   refundStatus: text('refund_status').notNull().default('not_applicable'),
   refundAmountMinor: minor('refund_amount_minor'),
   refundReference: text('refund_reference'),
+  refundCurrency: char('refund_currency', { length: 3 }),
+  /** connector = the marketplace reported / executed it, manual = recorded by staff */
+  refundSource: text('refund_source'),
+  refundError: text('refund_error'),
+  inspectionStatus: text('inspection_status').notNull().default('not_started'),
+  inspectorId: uuid('inspector_id'),
+  inspectionStartedAt: tz('inspection_started_at'),
   refundedAt: tz('refunded_at'),
   receivedAt: tz('received_at'),
   inspectedAt: tz('inspected_at'),
@@ -61,6 +68,8 @@ export const returnOrders = pgTable('return_orders', {
   check('return_orders_status_chk', inList('status', RETURN_STATUSES)),
   check('return_orders_pickup_chk', inList('pickup_status', PICKUP_STATUSES)),
   check('return_orders_refund_chk', inList('refund_status', REFUND_STATUSES)),
+  check('return_orders_inspection_chk', inList('inspection_status', ['not_started', 'in_progress', 'passed', 'failed', 'requires_review'])),
+  check('return_orders_refund_source_chk', sql`refund_source IS NULL OR refund_source IN ('connector', 'manual')`),
 ]);
 
 export const returnItems = pgTable('return_items', {

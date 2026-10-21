@@ -139,3 +139,14 @@ export const PasswordSchema = z.string().min(10, 'must be at least 10 characters
 export const GstinSchema = z.string().trim().toUpperCase().regex(/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/, 'invalid GSTIN');
 export const HsnSchema = z.string().trim().regex(/^[0-9]{4,8}$/, 'HSN/SAC must be 4-8 digits');
 export const SkuSchema = z.string().trim().min(1).max(64).regex(/^[A-Za-z0-9][A-Za-z0-9._\-/]*$/, 'SKU may contain letters, digits and . _ - /');
+
+// ---- numbered pages (workspace lists that show "Page 2 of 4" and a total) ---------------------
+export const MAX_PAGED_ROWS = 10_000;
+/** ?page=2&pageSize=25 (offset paging, capped at MAX_PAGED_ROWS rows deep; use filters beyond that) */
+export const PageQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).max(MAX_PAGED_ROWS).default(1),
+  pageSize: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
+});
+
+export const pagedEnvelope = <T extends z.ZodType>(item: T) =>
+  successEnvelope(z.object({ items: z.array(item), page: z.number().int(), pageSize: z.number().int(), total: z.number().int(), pages: z.number().int() }));

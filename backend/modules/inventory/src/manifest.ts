@@ -5,7 +5,7 @@ export const manifest = defineModule({
   name: "inventory",
   title: "Inventory",
   responsibility: "Stock per variant per warehouse (on hand / reserved / incoming / damaged / returned), the append-only movement ledger, reservations (and moving them between warehouses), bin-level stock, inbound shipments (receiving), manual outbound, adjustments, transfers and availability. Never changes a quantity without a movement.",
-  owns: ["inventory", "inventory_movements", "inventory_reservations", "stock_transfers", "stock_transfer_items", "vendor_counters", "bin_stock", "inbound_shipments", "inbound_shipment_items"],
+  owns: ["inventory", "inventory_movements", "inventory_reservations", "stock_transfers", "stock_transfer_items", "vendor_counters", "bin_stock", "inbound_shipments", "inbound_shipment_items", "inventory_groups", "inventory_group_items"],
   dependsOn: ["catalog", "warehouses"],
   api: ["/api/v1/inventory", "/api/v1/inbound-shipments", "/api/v1/bin-stock"],
   publishes: ["inventory.adjusted", "inventory.reserved", "inventory.released", "inventory.low_stock", "inventory.transferred", "inbound.created", "inbound.received"],

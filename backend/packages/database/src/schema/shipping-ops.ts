@@ -26,9 +26,16 @@ export const vendorShippingProviders = pgTable('vendor_shipping_providers', {
   isDefault: boolean('is_default').notNull().default(false),
   /** non-secret provider settings (service defaults, pickup location ids ...). Credentials will be stored encrypted when a real courier is added. */
   config: jsonb('config').$type<Record<string, unknown>>().notNull().default({}),
+  /** marketplace = the marketplace's own shipping (provider_code marketplace:<code>), seller = merchant-managed, third_party = a courier / aggregator */
+  kind: text('kind').notNull().default('third_party'),
+  channelCode: text('channel_code'),
+  /** { state: 'unverified'|'verified', verifiedAt, capabilities: { label, tracking, dispatchUpdate, statusSync } } */
+  verification: jsonb('verification').$type<Record<string, unknown>>().notNull().default({}),
+  supportedOrderTypes: jsonb('supported_order_types').$type<string[]>().notNull().default([]),
   version: version(),
   ...timestamps(),
 }, (t) => [
+  check('vendor_shipping_providers_kind_chk', sql`kind IN ('marketplace', 'seller', 'third_party')`),
   unique('vendor_shipping_providers_vendor_id_id_uq').on(t.vendorId, t.id),
   uniqueIndex('vendor_shipping_providers_uq').on(t.vendorId, t.providerCode),
   uniqueIndex('vendor_shipping_providers_default_uq').on(t.vendorId).where(sql`${t.isDefault}`),

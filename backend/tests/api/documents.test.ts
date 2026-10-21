@@ -1,5 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { buildTestApp, clientFor, JPEG_BYTES, PNG_1x1, type Actor, type TestApp } from '@oms/testing';
+import { buildTestApp, clientFor, type Actor, type TestApp } from '@oms/testing';
+import { jpeg, png } from '../helpers/image-fixtures';
+
+// uploads are validated by their real headers (min 200 px short side), so the fixtures are real 1000 px images
+const JPEG_BYTES = jpeg(1000, 1000);
+const PNG_1x1 = png(1000, 1000);
 
 let t: TestApp;
 let c: ReturnType<typeof clientFor>;

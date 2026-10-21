@@ -13,6 +13,10 @@
     "@oms/module-kit": "workspace:*",
     "@oms/mod-catalog": "workspace:*",
     "@oms/mod-listings": "workspace:*",
-    "@oms/mod-rules": "workspace:*"
+    "@oms/mod-rules": "workspace:*",
+    "@oms/mod-analytics": "workspace:*",
+    "@oms/mod-marketplace-accounts": "workspace:*",
+    "@oms/mod-orders": "workspace:*",
+    "@oms/mod-inventory": "workspace:*"
   }
 }

@@ -338,7 +338,7 @@ export async function getFulfillment(tx: Tx, c: Container, vendorId: string) {
   const F = schema.fulfillmentPreferences;
   const [pref] = await tx.select().from(F).where(eq(F.vendorId, vendorId));
   const accounts = await tx.select().from(A).where(and(eq(A.vendorId, vendorId), eq(A.status, 'active')));
-  const providers = await tx.select().from(schema.vendorShippingProviders).where(and(eq(schema.vendorShippingProviders.vendorId, vendorId), eq(schema.vendorShippingProviders.status, 'active')));
+  const providers = await tx.select().from(schema.vendorShippingProviders).where(and(eq(schema.vendorShippingProviders.vendorId, vendorId), eq(schema.vendorShippingProviders.status, 'active'), eq(schema.vendorShippingProviders.kind, 'third_party')));
   const marketplaceAvailable = accounts.length > 0;
   const thirdPartyAvailable = providers.length > 0;
   const available: Record<FulfillmentMethod, boolean> = { marketplace: marketplaceAvailable, seller: true, third_party: thirdPartyAvailable };
@@ -427,6 +427,9 @@ export async function completeOnboarding(tx: Tx, c: Container, vendorId: string)
 
 export async function skipStep(tx: Tx, vendorId: string, key: StepKey) {
   if (!STEP_META[key].skippable) throw new AppError('CONFLICT', `The ${STEP_META[key].title} step cannot be skipped`, { details: { rule: 'step_not_skippable', step: key } });
+  // a step that is already done stays done: "Skip for now" on a revisited screen must not discard the setup
+  const row = await ensureProgress(tx, vendorId);
+  if (stepStatus(row, key) === 'completed') return row;
   return setStep(tx, vendorId, key, 'skipped');
 }
 

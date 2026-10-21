@@ -16,6 +16,11 @@
     "@oms/mod-sync": "workspace:*",
     "@oms/mod-fulfillment": "workspace:*",
     "@oms/mod-notifications": "workspace:*",
-    "@oms/mod-rules": "workspace:*"
+    "@oms/mod-rules": "workspace:*",
+    "@oms/mod-pricing": "workspace:*",
+    "@oms/mod-procurement": "workspace:*",
+    "@oms/mod-listings": "workspace:*",
+    "@oms/mod-orders": "workspace:*",
+    "@oms/mod-catalog": "workspace:*"
   }
 }

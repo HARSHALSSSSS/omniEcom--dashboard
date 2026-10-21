@@ -332,6 +332,7 @@ describe('Stage 5 end-to-end', () => {
     const blob = JSON.stringify(accounts.body);
     expect(blob).not.toMatch(/sandbox_key|credentials|refreshToken|apiKey|secret/i);
     const catalog = JSON.stringify((await c.get('/api/v1/marketplaces', w.admin)).body);
-    expect(catalog).not.toMatch(/sandbox_key|refreshToken/i);
+    // the setup form names its fields (key "refreshToken"), so only a VALUE of a secret would be a leak
+    expect(catalog).not.toMatch(/sandbox_key|"refreshToken":"/i);
   });
 });

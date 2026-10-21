@@ -3,7 +3,8 @@ import { AppError, Errors } from '@oms/shared';
 import { evaluateRules } from '@oms/mod-rules';
 import { writeOutboxEvent } from '@oms/database';
 import type { Container, DomainEventLike } from '@oms/module-kit';
-import { DEFAULT_CHANNELS, SPECS, TYPE_CATALOG } from './catalog';
+import { alertEnabled, resolveSettings } from '@oms/mod-vendors';
+import { DEFAULT_CHANNELS, SPECS, TYPE_CATALOG, actionUrlFor, categoryOfType } from './catalog';
 
 const N = schema.notifications;
 const D = schema.notificationDeliveries;
@@ -15,6 +16,7 @@ export type NotificationRow = typeof N.$inferSelect;
 
 export const toDto = (n: NotificationRow) => ({
   id: n.id, type: n.type, severity: n.severity as Severity, title: n.title, body: n.body, entityType: n.entityType, entityId: n.entityId, data: n.data, read: n.readAt !== null, readAt: n.readAt ? n.readAt.toISOString() : null, createdAt: n.createdAt.toISOString(),
+  category: categoryOfType(n.type), actionUrl: actionUrlFor(n),
 });
 
 /** Push is "ready": a provider (FCM / Expo) registers itself here; without one, push deliveries are recorded as skipped, not lost silently. */
@@ -36,6 +38,10 @@ export async function notifyEvent(c: Container, e: DomainEventLike): Promise<num
   const pending: Pending[] = [];
   let created = 0;
   await withVendor(c.database.db, vendorId, async (tx) => {
+    if (spec.gate) {
+      const [v] = await tx.select({ settings: schema.vendors.settings }).from(schema.vendors).where(eq(schema.vendors.id, vendorId));
+      if (!alertEnabled(resolveSettings(v?.settings), spec.gate)) return; // switched off in Settings > Alerts
+    }
     let severity = spec.severity;
     let forced: Channel[] | null = null;
     const title = spec.title(p);
@@ -54,7 +60,7 @@ export async function notifyEvent(c: Container, e: DomainEventLike): Promise<num
       const pref = prefs.find((x) => x.userId === u.id);
       const channels: Channel[] = forced ?? (pref ? ([pref.inApp && 'in_app', pref.email && 'email', pref.push && 'push'].filter(Boolean) as Channel[]) : DEFAULT_CHANNELS[severity]);
       if (channels.length === 0) continue;
-      const [n] = await tx.insert(N).values({ vendorId, userId: u.id, type: spec.type, severity, title, body: spec.body?.(p) || null, entityType: entity?.type ?? null, entityId: entity?.id ?? null, data: { eventId: e.id, eventType: e.type }, dedupeKey: dedupe ?? `event:${e.id}` }).onConflictDoNothing().returning();
+      const [n] = await tx.insert(N).values({ vendorId, userId: u.id, type: spec.type, severity, title, body: spec.body?.(p) || null, entityType: entity?.type ?? null, entityId: entity?.id ?? null, data: { eventId: e.id, eventType: e.type, ...(spec.action?.(e.aggregateId, p) ? { actionUrl: spec.action(e.aggregateId, p) } : {}) }, dedupeKey: dedupe ?? `event:${e.id}` }).onConflictDoNothing().returning();
       if (!n) continue; // the same alert is still unread for this person
       created++;
       for (const ch of channels) {
@@ -98,14 +104,22 @@ async function deliverPending(c: Container, vendorId: string, pending: Pending[]
 // ------------------------------------------------------------------------------------------------
 // the inbox
 // ------------------------------------------------------------------------------------------------
-export async function listMine(tx: Tx, vendorId: string, userId: string, q: { limit: number; before?: string; unread?: boolean; type?: string; severity?: string }) {
-  const rows = await tx.select().from(N).where(and(eq(N.vendorId, vendorId), eq(N.userId, userId), q.unread ? isNull(N.readAt) : undefined, q.type ? eq(N.type, q.type) : undefined, q.severity ? eq(N.severity, q.severity) : undefined, q.before ? lt(N.createdAt, new Date(q.before)) : undefined)).orderBy(desc(N.createdAt), desc(N.id)).limit(q.limit + 1);
+export async function listMine(tx: Tx, vendorId: string, userId: string, q: { limit: number; before?: string; unread?: boolean; type?: string; severity?: string; category?: string }) {
+  const catTypes = q.category ? TYPE_CATALOG.filter((t) => t.category === q.category).map((t) => t.type) : null;
+  const rows = await tx.select().from(N).where(and(eq(N.vendorId, vendorId), eq(N.userId, userId), q.unread ? isNull(N.readAt) : undefined, q.type ? eq(N.type, q.type) : undefined, q.severity ? eq(N.severity, q.severity) : undefined, catTypes ? (catTypes.length ? inArray(N.type, catTypes) : sql`false`) : undefined, q.before ? lt(N.createdAt, new Date(q.before)) : undefined)).orderBy(desc(N.createdAt), desc(N.id)).limit(q.limit + 1);
   const page = rows.slice(0, q.limit);
   return { items: page.map(toDto), nextBefore: rows.length > q.limit ? page[page.length - 1]!.createdAt.toISOString() : null };
 }
-export async function unreadCount(tx: Tx, vendorId: string, userId: string): Promise<{ total: number; bySeverity: Record<string, number> }> {
-  const rows = await tx.select({ s: N.severity, n: sql<number>`count(*)::int` }).from(N).where(and(eq(N.vendorId, vendorId), eq(N.userId, userId), isNull(N.readAt))).groupBy(N.severity);
-  return { total: rows.reduce((a, r) => a + r.n, 0), bySeverity: Object.fromEntries(rows.map((r) => [r.s, r.n])) };
+export async function unreadCount(tx: Tx, vendorId: string, userId: string): Promise<{ total: number; bySeverity: Record<string, number>; byCategory: Record<string, number> }> {
+  const rows = await tx.select({ s: N.severity, t: N.type, n: sql<number>`count(*)::int` }).from(N).where(and(eq(N.vendorId, vendorId), eq(N.userId, userId), isNull(N.readAt))).groupBy(N.severity, N.type);
+  const bySeverity: Record<string, number> = {};
+  const byCategory: Record<string, number> = {};
+  for (const r of rows) {
+    bySeverity[r.s] = (bySeverity[r.s] ?? 0) + r.n;
+    const c = categoryOfType(r.t);
+    byCategory[c] = (byCategory[c] ?? 0) + r.n;
+  }
+  return { total: rows.reduce((a, r) => a + r.n, 0), bySeverity, byCategory };
 }
 export async function markRead(tx: Tx, vendorId: string, userId: string, ids: string[] | 'all'): Promise<number> {
   const rows = await tx.update(N).set({ readAt: new Date() }).where(and(eq(N.vendorId, vendorId), eq(N.userId, userId), isNull(N.readAt), ids === 'all' ? undefined : inArray(N.id, ids))).returning({ id: N.id });
@@ -148,7 +162,7 @@ export async function unregisterDevice(tx: Tx, vendorId: string, userId: string,
  * A notification that does not come from a domain event (an automation rule says "tell the team"). Same rules as event alerts:
  * notification rules can mute / escalate it, de-duplicated while unread, channels by severity.
  */
-export async function notifyVendor(c: Container, vendorId: string, input: { type?: string; severity?: Severity; title: string; body?: string | null; dedupeKey: string; entityType?: string | null; entityId?: string | null }): Promise<number> {
+export async function notifyVendor(c: Container, vendorId: string, input: { type?: string; severity?: Severity; title: string; body?: string | null; dedupeKey: string; entityType?: string | null; entityId?: string | null; actionUrl?: string | null }): Promise<number> {
   const type = input.type ?? 'automation.notice';
   const pending: Pending[] = [];
   let created = 0;
@@ -162,7 +176,7 @@ export async function notifyVendor(c: Container, vendorId: string, input: { type
     const users = await tx.select({ id: schema.users.id }).from(schema.users).where(and(eq(schema.users.vendorId, vendorId), eq(schema.users.status, 'active'), isNull(schema.users.deletedAt)));
     for (const u of users) {
       const channels = DEFAULT_CHANNELS[severity];
-      const [n] = await tx.insert(N).values({ vendorId, userId: u.id, type, severity, title: input.title.slice(0, 200), body: input.body ?? null, entityType: input.entityType ?? null, entityId: input.entityId ?? null, data: { source: 'automation' }, dedupeKey: input.dedupeKey }).onConflictDoNothing().returning();
+      const [n] = await tx.insert(N).values({ vendorId, userId: u.id, type, severity, title: input.title.slice(0, 200), body: input.body ?? null, entityType: input.entityType ?? null, entityId: input.entityId ?? null, data: { source: 'automation', ...(input.actionUrl ? { actionUrl: input.actionUrl } : {}) }, dedupeKey: input.dedupeKey }).onConflictDoNothing().returning();
       if (!n) continue;
       created++;
       for (const ch of channels) {

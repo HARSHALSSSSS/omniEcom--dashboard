@@ -23,7 +23,7 @@ const nul = (v: unknown): number | null => (v === null || v === undefined ? null
 interface Line { variantId: string | null; sku: string; revenue: number; cost: number | null; qty: number }
 interface Ord { id: string; number: string; marketplace: string; accountId: string; lines: Line[]; shipping: number | null; fee: number | null; penalty: number | null; refundProcessed: number; refundPending: number; feeProfile: { bps: number; fixed: number } | null }
 
-const comp = (amount: number | null, basis: Basis, coverage: number): Component => ({ amountMinor: amount, basis, coverage: Math.round(coverage * 1000) / 1000 });
+export const comp = (amount: number | null, basis: Basis, coverage: number): Component => ({ amountMinor: amount, basis, coverage: Math.round(coverage * 1000) / 1000 });
 
 /** pure: the profit of a set of orders (or a slice of one) from what is known about them */
 export function computeProfit(orders: Array<{ revenue: number; costKnown: number; costCovered: number; shipping: number | null; fee: number | null; penalty: number | null; refundProcessed: number; refundPending: number; feeEstimate: number | null }>): Profit {
@@ -54,9 +54,40 @@ export function computeProfit(orders: Array<{ revenue: number; costKnown: number
   };
 }
 
-const MAX_ORDERS = 5000;
+export const MAX_ORDERS = 5000;
+export const WINDOW_DAYS = 31;
+const DAY = 86_400_000;
+const iso = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+export interface Range { from: string; to: string }
 
-export async function profitability(tx: Tx, vendorId: string, r: { from: string; to: string }, groupBy: 'product' | 'marketplace' | 'order') {
+/** a long range is read in consecutive windows so that no single query has to hold a year of orders */
+export function splitWindows(r: Range, days = WINDOW_DAYS): Range[] {
+  const out: Range[] = [];
+  const end = Date.parse(r.to);
+  for (let s = Date.parse(r.from); s <= end; s += days * DAY) out.push({ from: iso(s), to: iso(Math.min(s + (days - 1) * DAY, end)) });
+  return out;
+}
+
+type Input = Parameters<typeof computeProfit>[0][number];
+interface Group { key: string; label: string; inputs: Input[]; orders: Set<string> }
+export type ProfitGroupBy = 'product' | 'marketplace' | 'order' | 'none';
+
+/** one order (or a share of it) as inputs to computeProfit; `share` allocates order-level costs to a product by revenue share */
+function toInput(o: Ord, lines: Line[], share: number): Input {
+  const revenue = lines.reduce((s, l) => s + l.revenue, 0);
+  const orderRevenue = o.lines.reduce((s, l) => s + l.revenue, 0);
+  const covered = lines.filter((l) => l.cost !== null);
+  return {
+    revenue, costKnown: covered.reduce((s, l) => s + (l.cost ?? 0), 0), costCovered: covered.reduce((s, l) => s + l.revenue, 0),
+    shipping: o.shipping === null ? null : Math.round(o.shipping * share), fee: o.fee === null ? null : Math.round(o.fee * share), penalty: o.penalty === null ? null : Math.round(o.penalty * share),
+    refundProcessed: Math.round(o.refundProcessed * share), refundPending: Math.round(o.refundPending * share),
+    feeEstimate: o.fee === null && o.feeProfile ? Math.round((orderRevenue * o.feeProfile.bps) / 10_000 * share + o.feeProfile.fixed * share) : null,
+  };
+}
+
+/** the orders placed in one window with everything their profit depends on (newest first, at most MAX_ORDERS) */
+async function loadWindow(tx: Tx, vendorId: string, r: Range): Promise<{ orders: Ord[]; inRange: number }> {
+  const inRange = n((await rows(tx, sql`select count(*)::int c from orders o where o.vendor_id = ${vendorId} and o.status <> 'cancelled' and o.placed_at >= ${r.from}::date and o.placed_at < (${r.to}::date + 1)`))[0]?.c);
   const ords = await rows(tx, sql`select o.id, o.order_number, o.marketplace, o.marketplace_account_id acct,
       (select sum(s.cost_minor) from shipments s where s.order_id = o.id and s.vendor_id = o.vendor_id and s.status <> 'cancelled' and s.cost_minor is not null) ship_cost,
       (select count(*) from shipments s where s.order_id = o.id and s.vendor_id = o.vendor_id and s.status <> 'cancelled') ship_n,
@@ -64,45 +95,57 @@ export async function profitability(tx: Tx, vendorId: string, r: { from: string;
       (select coalesce(sum(rr.refund_amount_minor), 0) from return_orders rr where rr.order_id = o.id and rr.vendor_id = o.vendor_id and rr.refund_status = 'processed') refund_done,
       (select coalesce(sum(rr.refund_amount_minor), 0) from return_orders rr where rr.order_id = o.id and rr.vendor_id = o.vendor_id and rr.refund_status = 'pending' and rr.status not in ('rejected','cancelled')) refund_pending
     from orders o left join order_financials f on f.order_id = o.id and f.vendor_id = o.vendor_id left join fee_profiles fp on fp.marketplace_account_id = o.marketplace_account_id and fp.vendor_id = o.vendor_id
-    where o.vendor_id = ${vendorId} and o.status <> 'cancelled' and o.placed_at >= ${r.from}::date and o.placed_at < (${r.to}::date + 1) order by o.placed_at desc limit ${MAX_ORDERS + 1}`);
-  const truncated = ords.length > MAX_ORDERS;
-  const used = ords.slice(0, MAX_ORDERS);
-  const ids = used.map((o) => String(o.id));
+    where o.vendor_id = ${vendorId} and o.status <> 'cancelled' and o.placed_at >= ${r.from}::date and o.placed_at < (${r.to}::date + 1) order by o.placed_at desc limit ${MAX_ORDERS}`);
+  const ids = ords.map((o) => String(o.id));
   const items = ids.length ? await rows(tx, sql`select i.order_id, i.variant_id, i.sku, i.quantity, (i.unit_price_minor * i.quantity - i.discount_minor) revenue, v.cost_price_minor cost from order_items i left join product_variants v on v.id = i.variant_id and v.vendor_id = i.vendor_id where i.vendor_id = ${vendorId} and i.order_id in (${inList(ids)}) and i.status <> 'cancelled'`) : [];
-
-  const orders: Ord[] = used.map((o) => ({
-    id: String(o.id), number: String(o.order_number), marketplace: String(o.marketplace), accountId: String(o.acct),
-    lines: items.filter((i) => String(i.order_id) === String(o.id)).map((i) => ({ variantId: i.variant_id ? String(i.variant_id) : null, sku: String(i.sku), revenue: n(i.revenue), cost: nul(i.cost) === null ? null : n(i.cost) * n(i.quantity), qty: n(i.quantity) })),
-    shipping: n(o.ship_n) > 0 ? nul(o.ship_cost) : null, fee: nul(o.fee), penalty: nul(o.penalty), refundProcessed: n(o.refund_done), refundPending: n(o.refund_pending), feeProfile: o.bps === null ? null : { bps: n(o.bps), fixed: n(o.fixed) },
-  }));
-
-  /** one order (or a share of it) as inputs to computeProfit; `share` allocates order-level costs to a product by revenue share */
-  const toInput = (o: Ord, lines: Line[], share: number) => {
-    const revenue = lines.reduce((s, l) => s + l.revenue, 0);
-    const orderRevenue = o.lines.reduce((s, l) => s + l.revenue, 0);
-    const covered = lines.filter((l) => l.cost !== null);
-    return {
-      revenue, costKnown: covered.reduce((s, l) => s + (l.cost ?? 0), 0), costCovered: covered.reduce((s, l) => s + l.revenue, 0),
-      shipping: o.shipping === null ? null : Math.round(o.shipping * share), fee: o.fee === null ? null : Math.round(o.fee * share), penalty: o.penalty === null ? null : Math.round(o.penalty * share),
-      refundProcessed: Math.round(o.refundProcessed * share), refundPending: Math.round(o.refundPending * share),
-      feeEstimate: o.fee === null && o.feeProfile ? Math.round((orderRevenue * o.feeProfile.bps) / 10_000 * share + o.feeProfile.fixed * share) : null,
-    };
-  };
-
-  const groups = new Map<string, { key: string; label: string; inputs: Array<ReturnType<typeof toInput>>; orders: Set<string> }>();
-  const put = (key: string, label: string, input: ReturnType<typeof toInput>, orderId: string) => {
-    const g = groups.get(key) ?? { key, label, inputs: [], orders: new Set<string>() };
-    g.inputs.push(input); g.orders.add(orderId); groups.set(key, g);
-  };
-  for (const o of orders) {
-    const orderRevenue = o.lines.reduce((s, l) => s + l.revenue, 0);
-    if (groupBy === 'order') put(o.id, o.number, toInput(o, o.lines, 1), o.id);
-    else if (groupBy === 'marketplace') put(o.marketplace, o.marketplace, toInput(o, o.lines, 1), o.id);
-    else for (const l of o.lines) put(l.variantId ?? `sku:${l.sku}`, l.sku, toInput(o, [l], orderRevenue > 0 ? l.revenue / orderRevenue : 0), o.id);
+  const byOrder = new Map<string, Line[]>();
+  for (const i of items) {
+    const list = byOrder.get(String(i.order_id)) ?? [];
+    list.push({ variantId: i.variant_id ? String(i.variant_id) : null, sku: String(i.sku), revenue: n(i.revenue), cost: nul(i.cost) === null ? null : n(i.cost) * n(i.quantity), qty: n(i.quantity) });
+    byOrder.set(String(i.order_id), list);
   }
-  const all = computeProfit(orders.map((o) => toInput(o, o.lines, 1)));
   return {
-    range: r, groupBy, ordersAnalysed: orders.length, truncated, total: all, allocation: groupBy === 'product' ? 'order-level costs (shipping, fees, penalties, refunds) are allocated to products by revenue share' : null,
-    groups: [...groups.values()].map((g) => ({ key: g.key, label: g.label, orders: g.orders.size, ...computeProfit(g.inputs) })).sort((a, b) => b.revenue.amountMinor! - a.revenue.amountMinor!).slice(0, 200),
+    inRange,
+    orders: ords.map((o) => ({
+      id: String(o.id), number: String(o.order_number), marketplace: String(o.marketplace), accountId: String(o.acct), lines: byOrder.get(String(o.id)) ?? [],
+      shipping: n(o.ship_n) > 0 ? nul(o.ship_cost) : null, fee: nul(o.fee), penalty: nul(o.penalty), refundProcessed: n(o.refund_done), refundPending: n(o.refund_pending), feeProfile: o.bps === null ? null : { bps: n(o.bps), fixed: n(o.fixed) },
+    })),
+  };
+}
+
+export interface Collected { ordersAnalysed: number; ordersInRange: number; truncated: boolean; windows: number; inputs: Input[]; groups: Map<string, Group> }
+
+/**
+ * Reads the orders of a range window by window and folds them into per-order inputs (for the total) and per-group inputs.
+ * `truncated` is true when any window held more than MAX_ORDERS orders: the figures then cover the newest MAX_ORDERS of that
+ * window and `ordersInRange` says how many orders there really were.
+ */
+export async function collectProfit(tx: Tx, vendorId: string, r: Range, groupBy: ProfitGroupBy): Promise<Collected> {
+  const out: Collected = { ordersAnalysed: 0, ordersInRange: 0, truncated: false, windows: 0, inputs: [], groups: new Map() };
+  const put = (key: string, label: string, input: Input, orderId: string) => {
+    const g = out.groups.get(key) ?? { key, label, inputs: [], orders: new Set<string>() };
+    g.inputs.push(input); g.orders.add(orderId); out.groups.set(key, g);
+  };
+  for (const w of splitWindows(r)) {
+    const { orders, inRange } = await loadWindow(tx, vendorId, w);
+    out.windows++; out.ordersInRange += inRange; out.ordersAnalysed += orders.length;
+    if (inRange > orders.length) out.truncated = true;
+    for (const o of orders) {
+      const orderRevenue = o.lines.reduce((s, l) => s + l.revenue, 0);
+      out.inputs.push(toInput(o, o.lines, 1));
+      if (groupBy === 'order') put(o.id, o.number, toInput(o, o.lines, 1), o.id);
+      else if (groupBy === 'marketplace') put(o.marketplace, o.marketplace, toInput(o, o.lines, 1), o.id);
+      else if (groupBy === 'product') for (const l of o.lines) put(l.variantId ?? `sku:${l.sku}`, l.sku, toInput(o, [l], orderRevenue > 0 ? l.revenue / orderRevenue : 0), o.id);
+    }
+  }
+  return out;
+}
+
+export async function profitability(tx: Tx, vendorId: string, r: Range, groupBy: Exclude<ProfitGroupBy, 'none'>) {
+  const c = await collectProfit(tx, vendorId, r, groupBy);
+  return {
+    range: r, groupBy, ordersAnalysed: c.ordersAnalysed, ordersInRange: c.ordersInRange, windows: c.windows, truncated: c.truncated, total: computeProfit(c.inputs),
+    allocation: groupBy === 'product' ? 'order-level costs (shipping, fees, penalties, refunds) are allocated to products by revenue share' : null,
+    groups: [...c.groups.values()].map((g) => ({ key: g.key, label: g.label, orders: g.orders.size, ...computeProfit(g.inputs) })).sort((a, b) => b.revenue.amountMinor! - a.revenue.amountMinor!).slice(0, 200),
   };
 }

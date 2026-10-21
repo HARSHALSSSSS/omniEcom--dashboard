@@ -1,6 +1,8 @@
 import { and, eq, inArray, isNull, schema, sql, withVendor } from '@oms/database';
 import type { EventConsumer } from '@oms/module-kit';
 import { markDirty, requestInventorySync, requestPriceSync } from './channel';
+import { onProductUpdated, requestContentSync } from './content';
+import { mapEventFields } from './content-domain';
 
 const L = schema.marketplaceListings;
 
@@ -31,6 +33,19 @@ const onStockChanged = (event: string, name: string): EventConsumer => ({
 });
 
 export const listingConsumers: EventConsumer[] = [
+  {
+    // edits that did not go through the explicit apply (plain PATCH, CSV import, AI apply ...): the same marking logic, idempotent by content hash
+    event: 'product.updated',
+    name: 'listings.product-updated',
+    async handle(e, c) {
+      const vendorId = e.vendorId;
+      if (!vendorId) return;
+      const raw = (e.payload as { fields?: unknown } | null)?.fields;
+      const hadFields = Array.isArray(raw) && raw.length > 0;
+      const accounts = await onProductUpdated(c, vendorId, e.aggregateId, mapEventFields(raw), hadFields);
+      for (const accountId of accounts) await requestContentSync(c, vendorId, accountId, 'event');
+    },
+  },
   onStockChanged('inventory.adjusted', 'listings.inventory-adjusted'),
   onStockChanged('inventory.reserved', 'listings.inventory-reserved'),
   onStockChanged('inventory.released', 'listings.inventory-released'),

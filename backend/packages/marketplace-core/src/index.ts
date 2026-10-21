@@ -20,7 +20,7 @@ export * from './simulation';
  */
 
 /** `mock` is the built-in sandbox adapter used for development/testing without marketplace approval. */
-export const MARKETPLACES = ['amazon_in', 'flipkart', 'myntra', 'snapdeal', 'mock'] as const;
+export const MARKETPLACES = ['amazon_in', 'flipkart', 'myntra', 'snapdeal', 'shopify', 'meesho', 'mock'] as const;
 export type MarketplaceCode = (typeof MARKETPLACES)[number];
 
 export type ImplementationStatus = 'planned' | 'beta' | 'ga';
@@ -278,7 +278,8 @@ export interface MarketplaceConnector {
   readonly webhook?: { signatureHeader: string; algorithm: string; description: string };
 
   // -- authenticate / authorize seller
-  buildAuthorizationUrl?(input: { state: string; redirectUri: string }): string;
+  /** `config` is the account's non-secret configuration (e.g. the Shopify shop domain the seller enters before being redirected) */
+  buildAuthorizationUrl?(input: { state: string; redirectUri: string; config?: Record<string, unknown> }): string;
   exchangeAuthorizationCode?(input: { code: string; redirectUri?: string; /** seller id returned by the marketplace's redirect (e.g. selling_partner_id), when the token response does not carry it */ externalAccountId?: string; mode?: 'live' | 'sandbox'; config?: Record<string, unknown> }): Promise<CredentialSet & { externalAccountId: string }>;
   /** direct credential validation + normalisation (API-key style marketplaces) */
   authenticate?(input: { credentials: ConnectorCredentials; mode?: 'live' | 'sandbox'; config?: Record<string, unknown> }): Promise<CredentialSet & { externalAccountId: string }>;

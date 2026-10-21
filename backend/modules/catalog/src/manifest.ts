@@ -5,10 +5,10 @@ export const manifest = defineModule({
   name: "catalog",
   title: "Product Catalog",
   responsibility: "Canonical product + variant/SKU master data. The single source of truth for what a vendor sells, independent of any marketplace.",
-  owns: ["products", "product_variants", "product_marketplace_data", "data_jobs"],
+  owns: ["products", "product_variants", "product_marketplace_data", "data_jobs", "product_creation", "brands", "product_ai_suggestions"],
   dependsOn: ["vendors", "categories", "attributes", "billing"],
-  api: ["/api/v1/products", "/api/v1/variants", "/api/v1/data-jobs"],
-  publishes: ["product.created", "product.updated", "product.archived", "variant.created", "variant.updated", "variant.price_changed"],
+  api: ["/api/v1/products", "/api/v1/variants", "/api/v1/data-jobs", "/api/v1/brands"],
+  publishes: ["product.created", "product.updated", "product.archived", "variant.created", "variant.updated", "variant.price_changed", "product.draft_discarded", "brand.created", "brand.confirmed", "brand.deleted"],
   consumes: ["category.deleted", "document.processed"],
   extraction: "later",
 });

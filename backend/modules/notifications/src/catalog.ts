@@ -1,4 +1,5 @@
 import type { schema } from '@oms/database';
+import type { AlertGate } from '@oms/mod-vendors';
 
 /**
  * Which domain events become notifications, and how. A notification type is a stable string users can set preferences for;
@@ -10,8 +11,17 @@ type P = Record<string, unknown>;
 const s = (v: unknown, d = ''): string => (v === undefined || v === null || v === '' ? d : String(v));
 const money = (minor: unknown, currency = 'INR'): string => (typeof minor === 'number' ? `${currency} ${(minor / 100).toFixed(2)}` : '');
 
+export const CATEGORIES = ['order', 'inventory', 'connector', 'security', 'returns', 'system'] as const;
+export type Category = (typeof CATEGORIES)[number];
+
 export interface Spec {
   type: string;
+  /** the bucket the notification panel groups by */
+  category: Category;
+  /** the alert family (Settings > Alerts, legacy notification switches) that can switch this type off; none = always on */
+  gate?: AlertGate;
+  /** where "Take action" leads: an app route */
+  action?: (aggregateId: string, p: P) => string | null;
   label: string;
   severity: Severity;
   title: (p: P) => string;
@@ -24,21 +34,45 @@ export interface Spec {
 export const DEFAULT_CHANNELS: Record<Severity, Channel[]> = { info: ['in_app'], warning: ['in_app', 'email'], critical: ['in_app', 'email', 'push'] };
 
 export const SPECS: Record<string, Spec> = {
-  'order.created': { type: 'order.new', label: 'New order received', severity: 'info', title: (p) => `New order ${s(p.orderNumber)}`, body: (p) => [s(p.marketplace), money(p.totalMinor)].filter(Boolean).join(' · '), entity: (id) => ({ type: 'order', id }) },
-  'order.needs_attention': { type: 'order.attention', label: 'An order needs attention', severity: 'warning', title: (p) => `Order needs attention: ${s(p.reason, 'check the order')}`, entity: (id) => ({ type: 'order', id }), dedupe: (id, p) => `order-attention:${id}:${s(p.reason)}` },
-  'order.cancellation_requested': { type: 'order.cancellation_requested', label: 'A cancellation was requested', severity: 'warning', title: (p) => `Cancellation requested for ${s(p.orderNumber)}`, body: (p) => `By ${s(p.initiator)}: ${s(p.reasonCode)}`, entity: (id) => ({ type: 'order', id }) },
-  'inventory.low_stock': { type: 'inventory.low_stock', label: 'Low stock', severity: 'warning', title: (p) => `Low stock: ${s(p.available)} left (reorder level ${s(p.reorderLevel)})`, entity: (_id, p) => (p.variantId ? { type: 'variant', id: s(p.variantId) } : null), dedupe: (_id, p) => `low-stock:${s(p.variantId)}:${s(p.warehouseId)}` },
-  'sync.failed': { type: 'sync.failed', label: 'A marketplace sync failed', severity: 'warning', title: (p) => `${s(p.type, 'Sync')} sync failed`, body: (p) => s(p.error), entity: (id) => ({ type: 'sync_job', id }), dedupe: (_id, p) => `sync-failed:${s(p.accountId)}:${s(p.type)}` },
-  'sync.dead_lettered': { type: 'sync.dead_lettered', label: 'A marketplace sync gave up', severity: 'critical', title: (p) => `${s(p.type, 'Sync')} sync gave up after ${s(p.attempts, 'several')} attempts`, body: (p) => s(p.error), entity: (id) => ({ type: 'sync_job', id }), dedupe: (_id, p) => `sync-dead:${s(p.accountId)}:${s(p.type)}` },
-  'listing.failed': { type: 'listing.rejected', label: 'A listing was rejected', severity: 'warning', title: (p) => `Listing ${s(p.sku ?? p.externalSku, '')} was rejected`.replace('  ', ' '), body: (p) => s(p.reason ?? p.error), entity: (id) => ({ type: 'listing', id }) },
-  'return.received': { type: 'return.received', label: 'A return arrived', severity: 'info', title: (p) => `Return ${s(p.number)} received (${s(p.units)} unit(s))`, body: () => 'Inspect it to restock or write it off.', entity: (id) => ({ type: 'return', id }) },
-  'marketplace_account.authorization_expired': { type: 'marketplace.authorization_expired', label: 'A marketplace authorisation expired', severity: 'critical', title: () => 'A marketplace authorisation expired: reconnect it', entity: (id) => ({ type: 'marketplace_account', id }), dedupe: (id) => `auth-expired:${id}` },
-  'marketplace_account.disconnected': { type: 'marketplace.disconnected', label: 'A marketplace was disconnected', severity: 'critical', title: () => 'A marketplace account was disconnected', body: () => 'Orders and stock are no longer synchronised for it.', entity: (id) => ({ type: 'marketplace_account', id }), dedupe: (id) => `disconnected:${id}` },
-  'fulfillment.exception_raised': { type: 'fulfillment.exception', label: 'A warehouse exception', severity: 'warning', title: (p) => `Warehouse exception on ${s(p.number)}: ${s(p.kind)}`, entity: (id) => ({ type: 'fulfillment', id }) },
-  'shipment.ndr_raised': { type: 'shipment.ndr', label: 'A delivery attempt failed (NDR)', severity: 'warning', title: (p) => `Delivery failed for ${s(p.number)} (attempt ${s(p.attemptNo)})`, body: (p) => s(p.reason), entity: (id) => ({ type: 'shipment', id }), dedupe: (id, p) => `ndr:${id}:${s(p.attemptNo)}` },
-  'shipment.rto_started': { type: 'shipment.rto', label: 'A shipment is returning to origin', severity: 'warning', title: (p) => `Shipment ${s(p.number)} is returning to origin (RTO)`, entity: (id) => ({ type: 'shipment', id }) },
-  'webhook.dead_lettered': { type: 'webhook.dead_lettered', label: 'A marketplace webhook could not be processed', severity: 'warning', title: () => 'A marketplace webhook could not be processed', entity: (id) => ({ type: 'webhook', id }) },
+  'order.created': { type: 'order.new', category: 'order', gate: 'orderAlerts', action: (id) => `/orders/${id}`, label: 'New order received', severity: 'info', title: (p) => `New order ${s(p.orderNumber)}`, body: (p) => [s(p.marketplace), money(p.totalMinor)].filter(Boolean).join(' · '), entity: (id) => ({ type: 'order', id }) },
+  'order.needs_attention': { type: 'order.attention', category: 'order', gate: 'orderAlerts', action: (id) => `/orders/${id}`, label: 'An order needs attention', severity: 'warning', title: (p) => `Order needs attention: ${s(p.reason, 'check the order')}`, entity: (id) => ({ type: 'order', id }), dedupe: (id, p) => `order-attention:${id}:${s(p.reason)}` },
+  'order.cancellation_requested': { type: 'order.cancellation_requested', category: 'order', gate: 'orderAlerts', action: (id) => `/orders/${id}`, label: 'A cancellation was requested', severity: 'warning', title: (p) => `Cancellation requested for ${s(p.orderNumber)}`, body: (p) => `By ${s(p.initiator)}: ${s(p.reasonCode)}`, entity: (id) => ({ type: 'order', id }) },
+  'inventory.low_stock': { type: 'inventory.low_stock', category: 'inventory', gate: 'lowStock', action: (_id, p) => (p.variantId ? `/inventory?search=${encodeURIComponent(s(p.sku ?? p.variantId))}` : '/inventory'), label: 'Low stock', severity: 'warning', title: (p) => `Low stock: ${s(p.available)} left (reorder level ${s(p.reorderLevel)})`, entity: (_id, p) => (p.variantId ? { type: 'variant', id: s(p.variantId) } : null), dedupe: (_id, p) => `low-stock:${s(p.variantId)}:${s(p.warehouseId)}` },
+  'sync.failed': { type: 'sync.failed', category: 'connector', gate: 'syncFailures', action: () => '/marketplace-hub/health', label: 'A marketplace sync failed', severity: 'warning', title: (p) => `${s(p.type, 'Sync')} sync failed`, body: (p) => s(p.error), entity: (id) => ({ type: 'sync_job', id }), dedupe: (_id, p) => `sync-failed:${s(p.accountId)}:${s(p.type)}` },
+  'sync.dead_lettered': { type: 'sync.dead_lettered', category: 'connector', gate: 'syncFailures', action: () => '/marketplace-hub/health', label: 'A marketplace sync gave up', severity: 'critical', title: (p) => `${s(p.type, 'Sync')} sync gave up after ${s(p.attempts, 'several')} attempts`, body: (p) => s(p.error), entity: (id) => ({ type: 'sync_job', id }), dedupe: (_id, p) => `sync-dead:${s(p.accountId)}:${s(p.type)}` },
+  'listing.failed': { type: 'listing.rejected', category: 'connector', action: (id) => `/listings/${id}`, label: 'A listing was rejected', severity: 'warning', title: (p) => `Listing ${s(p.sku ?? p.externalSku, '')} was rejected`.replace('  ', ' '), body: (p) => s(p.reason ?? p.error), entity: (id) => ({ type: 'listing', id }) },
+  'return.received': { type: 'return.received', category: 'returns', gate: 'returns', action: (id) => `/returns/${id}`, label: 'A return arrived', severity: 'info', title: (p) => `Return ${s(p.number)} received (${s(p.units)} unit(s))`, body: () => 'Inspect it to restock or write it off.', entity: (id) => ({ type: 'return', id }) },
+  'marketplace_account.authorization_expired': { type: 'marketplace.authorization_expired', category: 'connector', gate: 'tokenRenewals', action: () => '/marketplace-hub/health', label: 'A marketplace authorisation expired', severity: 'critical', title: () => 'A marketplace authorisation expired: reconnect it', entity: (id) => ({ type: 'marketplace_account', id }), dedupe: (id) => `auth-expired:${id}` },
+  'marketplace_account.disconnected': { type: 'marketplace.disconnected', category: 'connector', action: () => '/marketplace-hub/health', label: 'A marketplace was disconnected', severity: 'critical', title: () => 'A marketplace account was disconnected', body: () => 'Orders and stock are no longer synchronised for it.', entity: (id) => ({ type: 'marketplace_account', id }), dedupe: (id) => `disconnected:${id}` },
+  'fulfillment.exception_raised': { type: 'fulfillment.exception', category: 'order', action: () => '/fulfillment', label: 'A warehouse exception', severity: 'warning', title: (p) => `Warehouse exception on ${s(p.number)}: ${s(p.kind)}`, entity: (id) => ({ type: 'fulfillment', id }) },
+  'shipment.ndr_raised': { type: 'shipment.ndr', category: 'order', action: () => '/shipping', label: 'A delivery attempt failed (NDR)', severity: 'warning', title: (p) => `Delivery failed for ${s(p.number)} (attempt ${s(p.attemptNo)})`, body: (p) => s(p.reason), entity: (id) => ({ type: 'shipment', id }), dedupe: (id, p) => `ndr:${id}:${s(p.attemptNo)}` },
+  'shipment.rto_started': { type: 'shipment.rto', category: 'order', action: () => '/shipping', label: 'A shipment is returning to origin', severity: 'warning', title: (p) => `Shipment ${s(p.number)} is returning to origin (RTO)`, entity: (id) => ({ type: 'shipment', id }) },
+  'return.created': { type: 'return.requested', category: 'returns', gate: 'returns', action: (id) => `/returns/${id}`, label: 'A return was requested', severity: 'info', title: (p) => `Return requested for order ${s(p.orderNumber)}`, body: (p) => `${s(p.units)} unit(s), reason ${s(p.reasonCode)}`, entity: (id) => ({ type: 'return', id }) },
+  'user.invited': { type: 'security.user_invited', category: 'security', action: () => '/settings', label: 'A team member was invited', severity: 'info', title: () => 'A team member was invited', body: (p) => `Role: ${s(p.roleKey).replace('vendor_', '')}`, entity: (id) => ({ type: 'invitation', id }) },
+  'user.deactivated': { type: 'security.user_removed', category: 'security', action: () => '/settings', label: 'A team member was removed', severity: 'warning', title: () => 'A team member was removed', body: () => 'Their sessions were ended.', entity: (id) => ({ type: 'user', id }) },
+  'webhook.dead_lettered': { type: 'webhook.dead_lettered', category: 'connector', action: () => '/marketplace-hub/health', label: 'A marketplace webhook could not be processed', severity: 'warning', title: () => 'A marketplace webhook could not be processed', entity: (id) => ({ type: 'webhook', id }) },
 };
 
-export const TYPE_CATALOG = Object.entries(SPECS).map(([event, sp]) => ({ type: sp.type, label: sp.label, event, severity: sp.severity, defaultChannels: DEFAULT_CHANNELS[sp.severity] }));
+/**
+ * Alerts produced by a scheduled scan (`notifications.scan-alerts`) instead of a domain event: they have no event to subscribe to.
+ * They are notification types like the others (preferences, categories, de-duplication).
+ */
+export const SCAN_SPECS: Record<string, Spec> = {
+  'order.sla_breach': { type: 'order.sla_breach', category: 'order', gate: 'dispatchSlaBreach', action: () => '/orders?attention=true', label: 'Orders about to miss their dispatch deadline', severity: 'critical', title: (p) => `${s(p.count)} order(s) must be dispatched within ${s(p.thresholdMinutes)} minutes`, body: (p) => s(p.sample) },
+  'marketplace_account.token_expiring': { type: 'marketplace.token_expiring', category: 'connector', gate: 'tokenRenewals', action: () => '/marketplace-hub/health', label: 'A marketplace token is about to expire', severity: 'warning', title: (p) => `${s(p.account, 'A marketplace')} token expires in ${s(p.hours)} hours and could not be renewed`, body: () => 'Reconnect the account before it expires.' },
+};
+
+const ALL_SPECS: Record<string, Spec> = { ...SPECS, ...SCAN_SPECS };
+export const TYPE_CATALOG = Object.entries(ALL_SPECS).map(([event, sp]) => ({ type: sp.type, label: sp.label, event, category: sp.category, severity: sp.severity, defaultChannels: DEFAULT_CHANNELS[sp.severity] }));
+
+/** notification type -> category ('system' for types that are not catalogued, e.g. automation notices) */
+export const categoryOfType = (type: string): Category => Object.values(ALL_SPECS).find((x) => x.type === type)?.category ?? 'system';
+
+/** app route behind "Take action": stored with the notification, else derived from the entity it is about */
+export function actionUrlFor(n: { type: string; entityType: string | null; entityId: string | null; data: unknown }): string | null {
+  const stored = (n.data as { actionUrl?: unknown } | null)?.actionUrl;
+  if (typeof stored === 'string') return stored;
+  const spec = Object.values(ALL_SPECS).find((x) => x.type === n.type);
+  return spec?.action?.(n.entityId ?? '', {}) ?? null;
+}
 export const NOTIFICATION_TYPES = TYPE_CATALOG.map((t) => t.type);

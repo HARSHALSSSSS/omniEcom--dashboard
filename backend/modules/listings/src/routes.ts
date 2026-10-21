@@ -4,17 +4,24 @@ import { z } from 'zod';
 import { schema } from '@oms/database';
 import { IdParamSchema, IsoDate, PaginationQuerySchema, SearchQuerySchema, paginatedEnvelope, sortQuery, successEnvelope } from '@oms/contracts';
 import { audit, created, ok, paginated, requireVendor, vendorTx } from '@oms/module-kit';
+import { Errors } from '@oms/shared';
 import { SyncJobSchema, toSyncJobDto } from '@oms/mod-sync';
 import { assertAccount, getPolicy, recentStockUpdates, requestInventorySync, savePolicy, toPolicyDto } from './channel';
 import { CORE_FIELDS } from './context';
+import { lookupMarketplaceCategory, productListingContent, rememberConnectors, requestContentSync, requestListingContentSync, resolveContentReview } from './content';
 import { ctxFromRequest, fx } from './ctx';
 import { LISTING_STATUS_VALUES } from './schemas';
 import { createMasterFromImported, ignoreImported, linkImported, listImported, requestImport } from './imports';
 import { categoryRequirements, deleteAttributeMapping, deleteCategoryMapping, listAttributeMappings, listCategoryMappings, searchMarketplaceCategories, suggestMappings, toAttributeMappingDto, toCategoryMappingDto, upsertAttributeMapping, upsertCategoryMapping } from './mappings';
+import { inventoryAllocationRoutes } from './inventory-allocations';
 import * as svc from './service';
+import { editListing } from './workspace-edit';
+import { workspaceRoutes } from './workspace-routes';
+import { ChannelContentFields, TableBlockSchema } from './workspace-schemas';
+import { rowsWithTable } from './workspace-service';
 
 const Scalar = z.union([z.string().max(500), z.number(), z.boolean()]);
-const ListingSchema = z
+export const ListingSchema = z
   .object({
     id: z.string(), marketplaceAccountId: z.string(), marketplace: z.string(), variantId: z.string(), productId: z.string(), sku: z.string().describe('Master (variant) SKU'), productTitle: z.string(),
     externalSku: z.string().describe('The SKU on the marketplace'), externalListingId: z.string().nullable().describe('The marketplace\'s own listing id (ASIN / FSN / style id ...), set once submitted'),
@@ -29,7 +36,11 @@ const ListingSchema = z
     approval: z.object({ approved: z.boolean(), approvedAt: IsoDate.nullable(), approvedBy: z.string().nullable() }),
     publishedAt: IsoDate.nullable(), lastPolledAt: IsoDate.nullable(),
     quantity: z.object({ sellable: z.number().int().nullable(), pushed: z.number().int().nullable().describe('The quantity the marketplace last confirmed'), dirty: z.boolean().describe('A newer quantity is waiting to be pushed'), pushedAt: IsoDate.nullable() }),
+    contentState: z.enum(schema.CONTENT_STATES).describe('Master content propagation: synced | sync_pending (an update is queued) | needs_review (a category decision is needed) | needs_republish (the marketplace cannot update live listings) | failed (the last update failed, see contentError)'),
+    contentChangedFields: z.array(z.string()).describe('Master fields that changed since the last sync'), contentReview: z.record(z.string(), z.unknown()).describe('Why a seller decision is needed: { reason: category_changed, fromCategoryId, toCategoryId, suggestedMarketplaceCategoryId, suggestedMarketplaceCategoryName }'),
+    contentError: z.string().nullable(), contentChangedAt: IsoDate.nullable(), contentSyncedAt: IsoDate.nullable(),
     bufferOverride: z.number().int().nullable(), maxQuantityOverride: z.number().int().nullable(), version: z.number().int(), createdAt: IsoDate, updatedAt: IsoDate,
+    table: TableBlockSchema.optional().describe('Only with include=table (GET /listings) or on /listings/table: what the Listings screen shows besides the listing'),
   })
   .meta({ id: 'Listing' });
 
@@ -43,24 +54,30 @@ const CreateBody = z.object({
   priceMinor: z.number().int().min(1).nullish(), mrpMinor: z.number().int().min(1).nullish(), attributeValues: z.record(z.string().min(1).max(100), Scalar).optional(),
   bufferOverride: z.number().int().min(0).max(1_000_000).nullish(), maxQuantityOverride: z.number().int().min(0).max(1_000_000).nullish(),
 });
-const UpdateBody = CreateBody.omit({ marketplaceAccountId: true, variantId: true }).partial().extend({ version: z.number().int().optional() });
+const UpdateBody = CreateBody.omit({ marketplaceAccountId: true, variantId: true }).partial().extend({ version: z.number().int().optional(), ...ChannelContentFields });
 const ListQuery = PaginationQuerySchema.extend(SearchQuerySchema.shape).extend({
   'filter[status]': z.enum(LISTING_STATUS_VALUES).optional(), 'filter[accountId]': z.uuid().optional(), 'filter[variantId]': z.uuid().optional(), 'filter[marketplace]': z.string().max(40).optional(), 'filter[source]': z.enum(['created', 'imported']).optional(),
+  'filter[contentState]': z.enum(schema.CONTENT_STATES).optional(), 'filter[productId]': z.uuid().optional(),
   sort: sortQuery(['createdAt', 'updatedAt'] as const),
+  include: z.enum(['table']).optional().describe('table: add the Listings-screen block (`table`) to every row'),
 });
 
 export const listingRoutes: FastifyPluginAsync = async (app) => {
   const r = app.withTypeProvider<ZodTypeProvider>();
   const c = app.container;
+  rememberConnectors(c);
   const LISTINGS = ['Listings'];
   const MAPPINGS = ['Mappings'];
   const IMPORTS = ['Catalog Import'];
   const CHANNEL = ['Channel Inventory'];
   const ctxOf = (req: FastifyRequest) => ctxFromRequest(req, requireVendor(req));
+  await app.register(inventoryAllocationRoutes);
   const accepted = async (req: FastifyRequest, reply: FastifyReply, res: { job: Parameters<typeof toSyncJobDto>[0]; created: boolean }) => {
     reply.code(202);
     return ok(req, { job: toSyncJobDto(res.job), alreadyQueued: !res.created });
   };
+
+  await app.register(workspaceRoutes(ListingSchema));
 
   // ================================================================== listings
   r.post('/listings', {
@@ -82,8 +99,9 @@ export const listingRoutes: FastifyPluginAsync = async (app) => {
     schema: { tags: LISTINGS, summary: 'List listings', querystring: ListQuery, response: { 200: paginatedEnvelope(ListingSchema) } },
   }, async (req) => {
     const q = req.query;
-    const page = await vendorTx(req, (tx, vendorId) => svc.listListings(tx, vendorId, { limit: q.limit, cursor: q.cursor, sort: q.sort, q: q.q, status: q['filter[status]'], accountId: q['filter[accountId]'], variantId: q['filter[variantId]'], marketplace: q['filter[marketplace]'], source: q['filter[source]'] }));
-    return paginated(req, page.items, { limit: q.limit, nextCursor: page.nextCursor });
+    const page = await vendorTx(req, (tx, vendorId) => svc.listListings(tx, vendorId, { limit: q.limit, cursor: q.cursor, sort: q.sort, q: q.q, status: q['filter[status]'], accountId: q['filter[accountId]'], variantId: q['filter[variantId]'], marketplace: q['filter[marketplace]'], source: q['filter[source]'], contentState: q['filter[contentState]'], productId: q['filter[productId]'] }));
+    const items = q.include === 'table' ? await vendorTx(req, (tx) => rowsWithTable(ctxOf(req), tx, page.items.map((i) => i.id))) : page.items;
+    return paginated(req, items, { limit: q.limit, nextCursor: page.nextCursor });
   });
 
   r.get('/listings/:id', {
@@ -95,14 +113,15 @@ export const listingRoutes: FastifyPluginAsync = async (app) => {
     config: { access: { permission: 'listings:write' } },
     schema: {
       tags: LISTINGS,
-      summary: 'Edit a listing (category, price, attribute values, stock limits)',
-      description: 'Editing content resets validation and approval. A LIVE listing (active/pending) only accepts price, MRP and stock-limit changes; a price change is pushed to the marketplace automatically. Send `version` for optimistic concurrency.',
+      summary: 'Edit a listing (category, price, channel content, attribute values, stock limits)',
+      description: 'Editing content resets validation and approval. A LIVE listing (active/pending) accepts price, MRP, stock-limit and channel-content changes (title, description, bulletPoints, searchTerms, brand: saved as overrides of this marketplace, the master product is never touched; a live listing is queued for a content sync); a price change is pushed to the marketplace automatically. attributeOverrides merge into the attribute values of the listing (null removes one). The selling price may not exceed the MRP (400 `price_above_mrp`). Send `version` for optimistic concurrency.',
       params: IdParamSchema,
       body: UpdateBody,
       response: { 200: successEnvelope(ListingSchema) },
     },
   }, async (req) => {
-    const res = await vendorTx(req, (tx, vendorId) => svc.updateListing(tx, ctxFromRequest(req, vendorId), req.params.id, req.body));
+    const res = await editListing(ctxOf(req), req.params.id, req.body);
+    for (const accountId of res.contentSyncAccounts) await requestContentSync(c, requireVendor(req), accountId, 'manual');
     if (res.priceChanged) await (await import('./channel')).requestPriceSync(c, requireVendor(req), res.dto.marketplaceAccountId, [res.dto.id]);
     if (res.stockRulesChanged && res.dto.status === 'active') {
       await vendorTx(req, (tx, vendorId) => import('./channel').then((m) => m.markDirty(tx, vendorId, { listingIds: [res.dto.id] })));
@@ -187,6 +206,74 @@ export const listingRoutes: FastifyPluginAsync = async (app) => {
       response: { 200: successEnvelope(z.array(z.object({ id: z.string(), listingId: z.string(), syncJobId: z.string().nullable(), externalSku: z.string(), availableQuantity: z.number().int(), requestedQuantity: z.number().int(), status: z.enum(schema.STOCK_UPDATE_STATUSES), errorCode: z.string().nullable(), errorMessage: z.string().nullable(), requestedAt: IsoDate, completedAt: IsoDate.nullable() }).meta({ id: 'ChannelStockUpdate' }))) },
     },
   }, async (req) => ok(req, await vendorTx(req, async (tx, vendorId) => { await svc.getListingDto(tx, vendorId, req.params.id); return recentStockUpdates(tx, vendorId, req.params.id); })));
+
+  // ================================================================== master content propagation
+  r.post('/listings/:id/content-sync', {
+    config: { access: { permission: 'listings:write' } },
+    schema: {
+      tags: LISTINGS,
+      summary: 'Send the latest master content to a live listing',
+      description: 'Retries a `failed` content update and forces a `sync_pending` one (202, asynchronous: one coalesced job per account). 409 `details.rule`: `needs_review` (resolve the category review first), `not_live`, `nothing_to_sync` (already synced), `update_not_supported` (the marketplace cannot update live listings: republish).',
+      params: IdParamSchema,
+      response: { 202: successEnvelope(z.object({ listing: ListingSchema, job: SyncJobSchema, alreadyQueued: z.boolean() }).meta({ id: 'ContentSyncResult' })) },
+    },
+  }, async (req, reply) => {
+    const out = await vendorTx(req, (tx, vendorId) => requestListingContentSync(tx, ctxFromRequest(req, vendorId), req.params.id));
+    const res = await requestContentSync(c, requireVendor(req), out.accountId, 'manual');
+    const listing = await vendorTx(req, (tx, vendorId) => svc.getListingDto(tx, vendorId, req.params.id));
+    reply.code(202);
+    return ok(req, { listing, job: toSyncJobDto(res.job), alreadyQueued: !res.created });
+  });
+
+  r.post('/listings/:id/content-review/resolve', {
+    config: { access: { permission: 'listings:write' } },
+    schema: {
+      tags: LISTINGS,
+      summary: 'Resolve the category review of a live listing',
+      description: 'After the master category changed the listing keeps its marketplace category until you decide. `accept_mapping`: use the suggested marketplace category (400 `no_suggestion` when there is none) and sync; `keep_current`: keep the current marketplace category (other pending changes still sync); `set_category`: use another category of the marketplace tree (validated against the marketplace; 400 `unknown_marketplace_category`). 409 `not_in_review` when nothing is waiting.',
+      params: IdParamSchema,
+      body: z.discriminatedUnion('action', [
+        z.object({ action: z.literal('accept_mapping') }), z.object({ action: z.literal('keep_current') }),
+        z.object({ action: z.literal('set_category'), marketplaceCategoryId: z.string().trim().min(1).max(200) }),
+      ]).meta({ id: 'ContentReviewResolveInput' }),
+      response: { 200: successEnvelope(z.object({ listing: ListingSchema, syncQueued: z.boolean() }).meta({ id: 'ContentReviewResolution' })) },
+    },
+  }, async (req) => {
+    const vendorId = requireVendor(req);
+    const body = req.body;
+    let known: { categoryId: string; name: string } | undefined;
+    if (body.action === 'set_category') {
+      const l = await vendorTx(req, (tx, v) => svc.getListingDto(tx, v, req.params.id));
+      if (l.contentState === 'needs_review') known = await lookupMarketplaceCategory(c, vendorId, l.marketplaceAccountId, body.marketplaceCategoryId);
+    }
+    const res = await vendorTx(req, (tx, v) => resolveContentReview(tx, ctxFromRequest(req, v), req.params.id, body, known));
+    if (res.syncQueued) await requestContentSync(c, vendorId, res.listing.marketplaceAccountId, 'manual');
+    return ok(req, { listing: await vendorTx(req, (tx, v) => svc.getListingDto(tx, v, req.params.id)), syncQueued: res.syncQueued });
+  });
+
+  r.get('/products/:id/listing-content', {
+    config: { access: { permission: 'listings:read' } },
+    schema: {
+      tags: LISTINGS,
+      summary: 'Content state of every listing of a product',
+      description: 'For "View affected listings": per listing the master-content state (synced, sync_pending, needs_review, needs_republish, failed), the fields that changed, the review suggestion and the last error, plus counts. Needs `products:read` and `listings:read`; at most 500 listings.',
+      params: IdParamSchema,
+      response: {
+        200: successEnvelope(z.object({
+          productId: z.string(),
+          summary: z.object({ total: z.number().int(), needsReview: z.number().int(), syncPending: z.number().int(), failed: z.number().int(), needsRepublish: z.number().int(), rejected: z.number().int() }),
+          listings: z.array(z.object({
+            listingId: z.string(), variantId: z.string(), sku: z.string(), accountId: z.string(), accountName: z.string(), marketplace: z.string(), marketplaceName: z.string(), status: z.string(), live: z.boolean(),
+            contentState: z.enum(schema.CONTENT_STATES), contentChangedFields: z.array(z.string()), contentReview: z.record(z.string(), z.unknown()), contentError: z.string().nullable(),
+            contentChangedAt: IsoDate.nullable(), contentSyncedAt: IsoDate.nullable(), marketplaceCategoryId: z.string().nullable(),
+          })),
+        }).meta({ id: 'ProductListingContent' })),
+      },
+    },
+  }, async (req) => {
+    if (!req.ctx.principal?.permissions.has('products:read')) throw Errors.forbidden('products:read');
+    return ok(req, await vendorTx(req, (tx, vendorId) => productListingContent(tx, vendorId, req.params.id)));
+  });
 
   // ================================================================== taxonomy + mappings
   const AccountParams = IdParamSchema;

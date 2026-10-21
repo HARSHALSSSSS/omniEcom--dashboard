@@ -21,6 +21,8 @@ export const vendors = pgTable('vendors', {
   phone: text('phone'),
   gstin: text('gstin'),
   pan: text('pan'),
+  /** Corporate Identity Number (companies); PAN stays the tax id for proprietors */
+  cin: text('cin'),
   address: jsonb('address').$type<Record<string, unknown>>().notNull().default({}),
   timezone: text('timezone').notNull().default('Asia/Kolkata'),
   currency: char('currency', { length: 3 }).notNull().default('INR'),

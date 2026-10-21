@@ -2,32 +2,16 @@ import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { and, eq, schema, sql, withVendor } from '@oms/database';
-import { AppError, Errors } from '@oms/shared';
+import { Errors } from '@oms/shared';
 import { IdParamSchema, IsoDate, successEnvelope } from '@oms/contracts';
 import { audit, ok, requireVendor, vendorTx } from '@oms/module-kit';
 import { businessHealth, DEFAULT_THRESHOLDS, inventoryHealth, productHealth } from './health';
-import { profitability } from './profit';
 import { marketplacePerformance, overview, productPerformance } from './queries';
+import { D, DAY, range, RangeQuery } from './range';
 import { day, rollupVendor } from './rollup';
 
-const DAY = 86_400_000;
-const D = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'YYYY-MM-DD');
-const RangeQuery = z.object({ from: D.optional().describe('First day (UTC), default: 29 days before `to`'), to: D.optional().describe('Last day (UTC), default: today'), refresh: z.coerce.boolean().optional().describe('Recompute the last two days from the orders first (the roll-up job also does this every 15 minutes)') });
-const range = (q: { from?: string; to?: string }, maxDays = 366) => {
-  const to = q.to ?? day(new Date());
-  const from = q.from ?? day(new Date(Date.parse(to) - 29 * DAY));
-  const span = (Date.parse(to) - Date.parse(from)) / DAY;
-  if (span < 0) throw new AppError('BAD_REQUEST', '`from` must not be after `to`');
-  if (span > maxDays) throw new AppError('BAD_REQUEST', `A range is at most ${maxDays + 1} days`);
-  return { from, to };
-};
 const Money = z.number().int();
 const TAGS = ['Analytics'];
-const Comp = z.object({ amountMinor: Money.nullable(), basis: z.enum(['actual', 'estimated', 'missing']), coverage: z.number() });
-const ProfitBody = z.object({
-  revenue: Comp, productCost: Comp, shipping: Comp, marketplaceFees: Comp, penalties: Comp, refunds: Comp, contributionMinor: Money.nullable().describe('Only present when NO component is missing'), knownPartMinor: Money.describe('Revenue minus the components that are known (not a profit figure while data is missing)'),
-  marginPercent: z.number().nullable(), missing: z.array(z.string()), completeness: z.enum(['complete', 'estimated', 'incomplete']),
-});
 const Issue = z.object({ code: z.string(), message: z.string() });
 const Finding = z.object({ variantId: z.string(), sku: z.string(), title: z.string().nullable(), flags: z.array(z.string()), available: z.number().int(), onHand: z.number().int(), reserved: z.number().int(), reorderLevel: z.number().int().nullable(), unitsPerDay: z.number(), daysOfCover: z.number().nullable(), stockoutDate: z.string().nullable(), ageDays: z.number().int().nullable(), suggestedReorderUnits: z.number().int().nullable() });
 
@@ -98,19 +82,6 @@ export const analyticsRoutes: FastifyPluginAsync = async (app) => {
       response: { 200: successEnvelope(z.object({ score: z.number().int(), grade: z.enum(['healthy', 'needs_attention', 'at_risk']), generatedAt: IsoDate, issues: z.array(z.object({ code: z.string(), area: z.string(), severity: z.enum(['info', 'warning', 'critical']), count: z.number().int(), message: z.string(), sampleIds: z.array(z.string()) })) })) },
     },
   }, async (req) => ok(req, await vendorTx(req, (tx, vendorId) => businessHealth(tx, vendorId))));
-
-  r.get('/analytics/profitability', {
-    config: { access: { permission: 'analytics:read' } },
-    schema: {
-      tags: TAGS, summary: 'Profitability by product, marketplace or order, with actual / estimated / missing data kept apart',
-      description: 'Revenue and discounts are actual; shipping is the courier cost recorded on the shipment; fees and penalties come from `PUT /orders/{id}/financials` (fees may fall back to a vendor-entered fee profile, labelled estimated); product cost is the variant\'s CURRENT cost price (estimated). `contributionMinor` is null while any component is missing: nothing is guessed.',
-      querystring: z.object({ from: D.optional(), to: D.optional(), groupBy: z.enum(['product', 'marketplace', 'order']).default('product') }),
-      response: { 200: successEnvelope(z.object({
-        range: z.object({ from: z.string(), to: z.string() }), groupBy: z.string(), ordersAnalysed: z.number().int(), truncated: z.boolean().describe('More orders than the analysis limit: narrow the range'), allocation: z.string().nullable(),
-        total: ProfitBody, groups: z.array(ProfitBody.extend({ key: z.string(), label: z.string(), orders: z.number().int() })),
-      })) },
-    },
-  }, async (req) => ok(req, await vendorTx(req, (tx, vendorId) => profitability(tx, vendorId, range(req.query, 92), req.query.groupBy))));
 
   // ---------------------------------------------------------------- the financial facts profitability rests on
   const Fin = z.object({ orderId: z.string(), marketplaceFeeMinor: Money.nullable(), penaltyMinor: Money.nullable(), otherCostMinor: Money.nullable(), notes: z.string().nullable(), updatedAt: IsoDate }).meta({ id: 'OrderFinancials' });

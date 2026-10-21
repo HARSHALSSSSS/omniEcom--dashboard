@@ -5,12 +5,13 @@ import { schema } from '@oms/database';
 import { AppError } from '@oms/shared';
 import { IdParamSchema, IsoDate, successEnvelope } from '@oms/contracts';
 import { ok, vendorTx } from '@oms/module-kit';
-import { TYPE_CATALOG } from './catalog';
+import { CATEGORIES, TYPE_CATALOG } from './catalog';
 import { getMine, getPreferences, listMine, markRead, registerDevice, setPreference, unreadCount, unregisterDevice } from './service';
 
 const NotificationSchema = z.object({
   id: z.string(), type: z.string(), severity: z.enum(schema.NOTIFICATION_SEVERITIES), title: z.string(), body: z.string().nullable(), entityType: z.string().nullable(), entityId: z.string().nullable(),
   data: z.record(z.string(), z.unknown()), read: z.boolean(), readAt: IsoDate.nullable(), createdAt: IsoDate,
+  category: z.enum(CATEGORIES).describe('Panel group: order, inventory, connector, security, returns or system'), actionUrl: z.string().nullable().describe('App route behind "Take action"'),
 }).meta({ id: 'Notification' });
 const Channels = z.object({ inApp: z.boolean(), email: z.boolean(), push: z.boolean() });
 
@@ -26,21 +27,21 @@ export const notificationRoutes: FastifyPluginAsync = async (app) => {
 
   r.get('/notifications/types', {
     config: { access: { permission: 'notifications:read' } },
-    schema: { tags: TAGS, summary: 'Notification types', description: 'What can notify you (order alerts, low stock, failed syncs, listing rejections, returns, disconnected marketplaces, operational exceptions) and the default channels.', response: { 200: successEnvelope(z.array(z.object({ type: z.string(), label: z.string(), event: z.string(), severity: z.enum(schema.NOTIFICATION_SEVERITIES), defaultChannels: z.array(z.enum(schema.NOTIFICATION_CHANNELS)) }))) } },
+    schema: { tags: TAGS, summary: 'Notification types', description: 'What can notify you (order alerts, low stock, failed syncs, listing rejections, returns, disconnected marketplaces, operational exceptions) and the default channels.', response: { 200: successEnvelope(z.array(z.object({ type: z.string(), label: z.string(), event: z.string(), severity: z.enum(schema.NOTIFICATION_SEVERITIES), category: z.enum(CATEGORIES), defaultChannels: z.array(z.enum(schema.NOTIFICATION_CHANNELS)) }))) } },
   }, async (req) => ok(req, TYPE_CATALOG.map((t) => ({ ...t, defaultChannels: [...t.defaultChannels] }))));
 
   r.get('/notifications', {
     config: { access: { permission: 'notifications:read' } },
     schema: {
       tags: TAGS, summary: 'My notifications', description: 'Newest first. Page with `before` (the `nextBefore` of the previous page).',
-      querystring: z.object({ limit: z.coerce.number().int().min(1).max(100).default(30), before: z.string().optional(), 'filter[unread]': z.coerce.boolean().optional(), 'filter[type]': z.string().optional(), 'filter[severity]': z.enum(schema.NOTIFICATION_SEVERITIES).optional() }),
+      querystring: z.object({ limit: z.coerce.number().int().min(1).max(100).default(30), before: z.string().optional(), 'filter[unread]': z.coerce.boolean().optional(), 'filter[type]': z.string().optional(), 'filter[severity]': z.enum(schema.NOTIFICATION_SEVERITIES).optional(), 'filter[category]': z.enum(CATEGORIES).optional() }),
       response: { 200: successEnvelope(z.object({ items: z.array(NotificationSchema), nextBefore: z.string().nullable() })) },
     },
-  }, async (req) => ok(req, await vendorTx(req, (tx, vendorId) => listMine(tx, vendorId, me(req), { limit: req.query.limit, before: req.query.before, unread: req.query['filter[unread]'], type: req.query['filter[type]'], severity: req.query['filter[severity]'] }))));
+  }, async (req) => ok(req, await vendorTx(req, (tx, vendorId) => listMine(tx, vendorId, me(req), { limit: req.query.limit, before: req.query.before, unread: req.query['filter[unread]'], type: req.query['filter[type]'], severity: req.query['filter[severity]'], category: req.query['filter[category]'] }))));
 
   r.get('/notifications/unread-count', {
     config: { access: { permission: 'notifications:read' } },
-    schema: { tags: TAGS, summary: 'Unread badge', response: { 200: successEnvelope(z.object({ total: z.number().int(), bySeverity: z.record(z.string(), z.number().int()) })) } },
+    schema: { tags: TAGS, summary: 'Unread badge', description: 'Total and per severity and category: the sidebar and top bar badge.', response: { 200: successEnvelope(z.object({ total: z.number().int(), bySeverity: z.record(z.string(), z.number().int()), byCategory: z.record(z.string(), z.number().int()) })) } },
   }, async (req) => ok(req, await vendorTx(req, (tx, vendorId) => unreadCount(tx, vendorId, me(req)))));
 
   r.post('/notifications/read', {

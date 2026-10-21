@@ -20,6 +20,7 @@ const StockSchema = z
     incoming: z.number().int().describe('Ordered / in transit, not yet received'),
     damaged: z.number().int().describe('Physically present but unsellable'),
     returned: z.number().int().describe('Customer returns awaiting inspection'),
+    quarantined: z.number().int().describe('Held back (repair / investigation): not on hand, not sellable'),
     reorderLevel: z.number().int().nullable(), version: z.number().int(), updatedAt: IsoDate,
   })
   .meta({ id: 'StockLevel' });
@@ -27,7 +28,7 @@ const StockSchema = z
 const MovementSchema = z
   .object({
     id: z.number().int(), variantId: z.string(), warehouseId: z.string(), type: z.enum(schema.MOVEMENT_TYPES),
-    deltaOnHand: z.number().int(), deltaReserved: z.number().int(), deltaIncoming: z.number().int(), deltaDamaged: z.number().int(), deltaReturned: z.number().int(),
+    deltaOnHand: z.number().int(), deltaReserved: z.number().int(), deltaIncoming: z.number().int(), deltaDamaged: z.number().int(), deltaReturned: z.number().int(), deltaQuarantined: z.number().int(),
     onHandAfter: z.number().int(), reservedAfter: z.number().int(), reason: z.string().nullable(), referenceType: z.string().nullable(), referenceId: z.string().nullable(),
     actorType: z.string(), actorId: z.string().nullable(), createdAt: IsoDate,
   })
@@ -93,7 +94,7 @@ export const inventoryRoutes: FastifyPluginAsync = async (app) => {
       tags: TAGS,
       summary: 'Stock of one variant across all warehouses',
       params: IdParamSchema,
-      response: { 200: successEnvelope(z.object({ variantId: z.string(), sku: z.string(), productTitle: z.string(), totals: z.object({ onHand: z.number().int(), reserved: z.number().int(), available: z.number().int(), incoming: z.number().int(), damaged: z.number().int(), returned: z.number().int() }), warehouses: z.array(StockSchema) }).meta({ id: 'VariantStock' })) },
+      response: { 200: successEnvelope(z.object({ variantId: z.string(), sku: z.string(), productTitle: z.string(), totals: z.object({ onHand: z.number().int(), reserved: z.number().int(), available: z.number().int(), incoming: z.number().int(), damaged: z.number().int(), returned: z.number().int(), quarantined: z.number().int() }), warehouses: z.array(StockSchema) }).meta({ id: 'VariantStock' })) },
     },
   }, async (req) => ok(req, await vendorTx(req, (tx, vendorId) => svc.variantOverview(tx, vendorId, req.params.id))));
 
@@ -139,6 +140,28 @@ export const inventoryRoutes: FastifyPluginAsync = async (app) => {
     schema: { tags: TAGS, summary: 'Inspect held returns: restock or write off', body: Target.extend({ quantity: Qty, to: z.enum(['restock', 'damaged']) }), response: { 200: successEnvelope(MovementResultSchema) } },
   }, (req) => change(req, 'return_resolve', (tx, vendorId) => svc.resolveReturned(tx, { ...common(req, vendorId, req.body), quantity: req.body.quantity, to: req.body.to })));
 
+  r.post('/inventory/quarantine', {
+    config: { access: { permission: 'inventory:write' } },
+    schema: {
+      tags: TAGS,
+      summary: 'Move stock into quarantine',
+      description: 'Moves units from the `returned` bucket (default) or from sellable on-hand stock (`source: on_hand`) into the `quarantined` bucket: not on hand, not sellable, not available. Use reason `repair` for units sent for repair.',
+      body: Target.extend({ reason: Reason, quantity: Qty, source: z.enum(['returned', 'on_hand']).default('returned') }),
+      response: { 200: successEnvelope(MovementResultSchema) },
+    },
+  }, (req) => change(req, 'quarantine', (tx, vendorId) => svc.quarantineStock(tx, { ...common(req, vendorId, req.body), quantity: req.body.quantity, source: req.body.source })));
+
+  r.post('/inventory/quarantine/release', {
+    config: { access: { permission: 'inventory:write' } },
+    schema: {
+      tags: TAGS,
+      summary: 'Release stock from quarantine',
+      description: '`to: on_hand` makes the units sellable again, `damaged` moves them to the damaged bucket, `write_off` removes them from stock entirely.',
+      body: Target.extend({ reason: Reason, quantity: Qty, to: z.enum(['on_hand', 'damaged', 'write_off']) }),
+      response: { 200: successEnvelope(MovementResultSchema) },
+    },
+  }, (req) => change(req, 'quarantine_release', (tx, vendorId) => svc.releaseQuarantine(tx, { ...common(req, vendorId, req.body), quantity: req.body.quantity, to: req.body.to })));
+
   r.put('/inventory/reorder-level', {
     config: { access: { permission: 'inventory:write' } },
     schema: { tags: TAGS, summary: 'Set the low-stock threshold of a variant in a warehouse', body: z.object({ variantId: z.uuid(), warehouseId: z.uuid(), reorderLevel: z.number().int().min(0).nullable() }), response: { 200: successEnvelope(z.object({ ok: z.literal(true) })) } },
@@ -175,7 +198,7 @@ export const inventoryRoutes: FastifyPluginAsync = async (app) => {
       tags: TAGS,
       summary: 'Verify stock equals the movement ledger',
       description: 'Recomputes every quantity from the ledger and lists mismatches. An empty `drift` means no stock was ever changed without a movement.',
-      response: { 200: successEnvelope(z.object({ healthy: z.boolean(), drift: z.array(z.object({ variantId: z.string(), warehouseId: z.string(), onHand: z.number(), ledgerOnHand: z.number(), reserved: z.number(), ledgerReserved: z.number(), incoming: z.number(), ledgerIncoming: z.number(), damaged: z.number(), ledgerDamaged: z.number(), returned: z.number(), ledgerReturned: z.number() })) })) },
+      response: { 200: successEnvelope(z.object({ healthy: z.boolean(), drift: z.array(z.object({ variantId: z.string(), warehouseId: z.string(), onHand: z.number(), ledgerOnHand: z.number(), reserved: z.number(), ledgerReserved: z.number(), incoming: z.number(), ledgerIncoming: z.number(), damaged: z.number(), ledgerDamaged: z.number(), returned: z.number(), ledgerReturned: z.number(), quarantined: z.number(), ledgerQuarantined: z.number() })) })) },
     },
   }, async (req) => {
     const drift = await vendorTx(req, (tx, vendorId) => svc.ledgerDrift(tx, vendorId));

@@ -1,11 +1,15 @@
 import { withVendor } from '@oms/database';
 import { systemOpCtx, type EventConsumer } from '@oms/module-kit';
 import { manifest } from './manifest';
+import type { FastifyPluginAsync } from 'fastify';
 import { returnRoutes } from './routes';
+import { returnsDashboardRoutes } from './dashboard-routes';
+import { returnsReadinessRoutes } from './readiness-routes';
 import { createRtoReturn } from './service';
 
 export { manifest };
 export { returnRoutes } from './routes';
+export { returnsDashboardRoutes } from './dashboard-routes';
 export { createReturn, createRtoReturn, receiveReturnGoods, inspectReturn, completeReturn, returnDetail, listReturns, type ReturnRow } from './service';
 export { RETURN_STATUSES, RETURN_REASONS, TRANSITIONS as RETURN_TRANSITIONS, canMove as canMoveReturn, stockEffect, validateDecision, refundFor, type ReturnStatus, type Disposition } from './domain';
 
@@ -26,4 +30,10 @@ const consumers: EventConsumer[] = [{
  * Returns: customer / marketplace / RTO / seller returns as return orders. Receiving, inspection and disposition drive the
  * inventory engine (returned -> on hand / damaged / written off), so stock is always right.
  */
-export const returnsModule = { manifest, routes: returnRoutes, consumers };
+const routes: FastifyPluginAsync = async (app) => {
+  await app.register(returnRoutes);
+  await app.register(returnsDashboardRoutes);
+  await app.register(returnsReadinessRoutes);
+};
+
+export const returnsModule = { manifest, routes, consumers };

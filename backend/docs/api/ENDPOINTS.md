@@ -40,6 +40,7 @@ Current user profile, password and sessions
 | POST | `/api/v1/me/change-password` | any signed-in user | Change my password |
 | GET | `/api/v1/me/profile` | any signed-in user | My profile |
 | PATCH | `/api/v1/me/profile` | any signed-in user | Update my profile |
+| DELETE | `/api/v1/me/sessions` | any signed-in user | Sign out every other device |
 | GET | `/api/v1/me/sessions` | any signed-in user | My active sessions |
 | DELETE | `/api/v1/me/sessions/{id}` | any signed-in user | Revoke one of my sessions |
 
@@ -49,8 +50,18 @@ Vendor (business) profile, settings and platform-level vendor administration
 
 | Method | Path | Access | Summary |
 |---|---|---|---|
+| GET | `/api/v1/settings` | `vendors:read` | Settings screen aggregate |
+| PATCH | `/api/v1/settings` | `vendors:write` | Save the settings screen |
+| PUT | `/api/v1/settings/alerts` | `vendors:write` | Save the alert preferences |
 | GET | `/api/v1/vendor` | `vendors:read` | Get my vendor (business) profile |
 | PATCH | `/api/v1/vendor` | `vendors:write` | Update my vendor profile |
+| GET | `/api/v1/vendor/gst-states` | `vendors:read` | GST state and union territory codes |
+| GET | `/api/v1/vendor/gstins` | `vendors:read` | GST registrations of my business |
+| POST | `/api/v1/vendor/gstins` | `vendors:write` | Register a GSTIN |
+| DELETE | `/api/v1/vendor/gstins/{id}` | `vendors:write` | Remove a GST registration |
+| PATCH | `/api/v1/vendor/gstins/{id}` | `vendors:write` | Change a GST registration |
+| POST | `/api/v1/vendor/gstins/{id}/primary` | `vendors:write` | Make a registration the primary one |
+| POST | `/api/v1/vendor/gstins/validate` | `vendors:read` | Check a GSTIN without saving it |
 | GET | `/api/v1/vendor/settings` | `vendors:read` | Get my business settings |
 | PATCH | `/api/v1/vendor/settings` | `vendors:write` | Update my business settings |
 | GET | `/api/v1/vendors` | `platform:vendors` | List all vendors (platform staff) |
@@ -129,13 +140,27 @@ Products: CRUD, search, bulk operations, marketplace readiness
 | DELETE | `/api/v1/products/{id}` | `products:delete` | Delete a product |
 | GET | `/api/v1/products/{id}` | `products:read` | Get a product with its variants and attribute values |
 | PATCH | `/api/v1/products/{id}` | `products:write` | Update a product (partial) or change its status |
+| GET | `/api/v1/products/{id}/activity` | `products:read` | Product activity feed |
+| GET | `/api/v1/products/{id}/ai/description` | `products:read` | Latest description suggestions of a product (newest first) |
+| POST | `/api/v1/products/{id}/ai/description` | `products:write` | Suggest a product description (rewrite, concise or benefits) |
+| POST | `/api/v1/products/{id}/ai/description/{suggestionId}/apply` | `products:write` | Apply a description suggestion |
+| POST | `/api/v1/products/{id}/ai/description/{suggestionId}/dismiss` | `products:write` | Dismiss a description suggestion |
 | GET | `/api/v1/products/{id}/attribute-values` | `products:read` | Attribute values of a product and its variants |
 | PUT | `/api/v1/products/{id}/attribute-values` | `products:write` | Set (or clear with null) attribute values |
+| GET | `/api/v1/products/{id}/content` | `products:read` | Product content tab |
+| POST | `/api/v1/products/{id}/duplicate` | `products:write` | Duplicate a product as a draft |
+| GET | `/api/v1/products/{id}/inventory` | `products:read` | Product inventory tab |
+| GET | `/api/v1/products/{id}/listings` | `products:read` | Product listings tab |
 | GET | `/api/v1/products/{id}/marketplace-data` | `products:read` | Marketplace-specific data for a product |
 | DELETE | `/api/v1/products/{id}/marketplace-data/{marketplace}` | `products:write` | Remove marketplace-specific data |
 | PUT | `/api/v1/products/{id}/marketplace-data/{marketplace}` | `products:write` | Set marketplace-specific data for one marketplace |
+| GET | `/api/v1/products/{id}/overview` | `products:read` | Product details header, health strip and Overview tab in one response |
 | GET | `/api/v1/products/{id}/readiness` | `products:read` | Is this product ready for marketplace listing? |
 | POST | `/api/v1/products/bulk` | `products:write` | Bulk operations (create, change status, delete) |
+| POST | `/api/v1/products/bulk-actions` | `products:write` | Bulk actions on selected products (archive, unarchive, duplicate, check publish readiness) |
+| GET | `/api/v1/products/catalog` | `products:read` | Products workspace list (numbered pages, filters, card summaries) |
+| GET | `/api/v1/products/export` | `products:read` | Export the filtered catalog as CSV (synchronous, max 50,000 rows) |
+| GET | `/api/v1/products/stats` | `products:read` | Catalog counters and tab counts |
 
 ## Variants
 
@@ -143,12 +168,16 @@ Product variants / SKUs
 
 | Method | Path | Access | Summary |
 |---|---|---|---|
+| GET | `/api/v1/products/{id}/variant-grid` | `products:read` | Variants & SKU workspace grid (numbered pages) |
+| GET | `/api/v1/products/{id}/variant-grid/counts` | `products:read` | Variant tab counts |
 | GET | `/api/v1/products/{id}/variants` | `products:read` | List a product's variants |
 | POST | `/api/v1/products/{id}/variants` | `products:write` | Add a variant (SKU) to a product |
+| POST | `/api/v1/products/{id}/variants/bulk` | `products:write` | Bulk archive / activate / delete variants of a product |
 | GET | `/api/v1/variants` | `products:read` | Look up / search variants across all products |
 | DELETE | `/api/v1/variants/{id}` | `products:write` | Delete a variant |
 | GET | `/api/v1/variants/{id}` | `products:read` | Get a variant |
 | PATCH | `/api/v1/variants/{id}` | `products:write` | Update a variant (partial) |
+| PUT | `/api/v1/variants/{id}/lead-time` | `products:write` | Set the replenishment lead time of a variant |
 
 ## Documents
 
@@ -156,14 +185,17 @@ Product images, documents and listing documents (object storage)
 
 | Method | Path | Access | Summary |
 |---|---|---|---|
-| DELETE | `/api/v1/documents/{id}` | `documents:write` | Delete a document |
+| DELETE | `/api/v1/documents/{id}` | `documents:write` | Delete a document (or cancel an upload in progress) |
 | GET | `/api/v1/documents/{id}` | `documents:read` | Get a document |
 | PATCH | `/api/v1/documents/{id}` | `documents:write` | Reorder, rename or make an image primary |
+| POST | `/api/v1/documents/{id}/cancel` | `documents:write` | Cancel an upload in progress |
 | POST | `/api/v1/documents/{id}/confirm` | `documents:write` | Confirm a direct (presigned) upload (step 2, "presigned" strategy) |
 | GET | `/api/v1/documents/{id}/content` | `documents:read` | Download the file content |
 | POST | `/api/v1/documents/{id}/upload` | `documents:write` | Upload the file bytes through the API (step 2, "api" strategy) |
 | GET | `/api/v1/products/{id}/documents` | `documents:read` | List a product's images and documents |
 | POST | `/api/v1/products/{id}/documents` | `documents:write` | Register a product image / document / listing document and get upload instructions |
+| POST | `/api/v1/products/{id}/documents/placeholder` | `documents:write` | Generate a placeholder product image |
+| GET | `/api/v1/products/{id}/primary-image` | `documents:read` | State of the product's primary image |
 
 ## Data Jobs
 
@@ -259,6 +291,8 @@ Stock levels, the append-only movement ledger, reservations, adjustments and war
 | GET | `/api/v1/inventory/ledger-check` | `inventory:read` | Verify stock equals the movement ledger |
 | GET | `/api/v1/inventory/movements` | `inventory:read` | Movement ledger (append-only) |
 | POST | `/api/v1/inventory/outbound` | `inventory:write` | Issue stock out of a warehouse without an order |
+| POST | `/api/v1/inventory/quarantine` | `inventory:write` | Move stock into quarantine |
+| POST | `/api/v1/inventory/quarantine/release` | `inventory:write` | Release stock from quarantine |
 | POST | `/api/v1/inventory/receive` | `inventory:write` | Receive stock into a warehouse |
 | PUT | `/api/v1/inventory/reorder-level` | `inventory:write` | Set the low-stock threshold of a variant in a warehouse |
 | GET | `/api/v1/inventory/reservations` | `inventory:read` | Stock reservations |
@@ -283,14 +317,17 @@ Master product -> marketplace listing: validate, preview, merchant approval, pub
 | POST | `/api/v1/listings` | `listings:write` | Start a listing: master variant -> marketplace account |
 | DELETE | `/api/v1/listings/{id}` | `listings:write` | Delete a listing that never reached the marketplace |
 | GET | `/api/v1/listings/{id}` | `listings:read` | Get a listing |
-| PATCH | `/api/v1/listings/{id}` | `listings:write` | Edit a listing (category, price, attribute values, stock limits) |
+| PATCH | `/api/v1/listings/{id}` | `listings:write` | Edit a listing (category, price, channel content, attribute values, stock limits) |
 | POST | `/api/v1/listings/{id}/approve` | `listings:write` | Merchant approval |
+| POST | `/api/v1/listings/{id}/content-review/resolve` | `listings:write` | Resolve the category review of a live listing |
+| POST | `/api/v1/listings/{id}/content-sync` | `listings:write` | Send the latest master content to a live listing |
 | GET | `/api/v1/listings/{id}/preview` | `listings:read` | Preview exactly what will be sent to the marketplace |
 | POST | `/api/v1/listings/{id}/publish` | `listings:write` | Publish (submit) an approved listing |
 | POST | `/api/v1/listings/{id}/refresh-status` | `listings:write` | Check this listing's status on the marketplace now |
 | POST | `/api/v1/listings/{id}/unpublish` | `listings:write` | Take a listing down from the marketplace |
 | POST | `/api/v1/listings/{id}/validate` | `listings:write` | Validate against the marketplace category rules |
 | POST | `/api/v1/marketplace-accounts/{id}/refresh-listing-status` | `listings:write` | Check the status of every pending listing on the account |
+| GET | `/api/v1/products/{id}/listing-content` | `listings:read` | Content state of every listing of a product |
 
 ## Mappings
 
@@ -326,6 +363,7 @@ Per-marketplace sellable quantity: safety buffer, allocation, caps and push hist
 
 | Method | Path | Access | Summary |
 |---|---|---|---|
+| GET | `/api/v1/inventory/channel-allocations` | `inventory:read` | Stock each marketplace account may sell, per variant |
 | GET | `/api/v1/listings/{id}/stock-updates` | `listings:read` | Quantity pushes for this listing |
 | GET | `/api/v1/marketplace-accounts/{id}/inventory-policy` | `listings:read` | Channel inventory policy |
 | PUT | `/api/v1/marketplace-accounts/{id}/inventory-policy` | `marketplace_accounts:write` | Set the channel inventory policy |
@@ -346,12 +384,22 @@ Normalised marketplace orders: import, status model, timeline, cancellation, sta
 | POST | `/api/v1/orders/{id}/cancellation-requests/{cid}/accept` | `orders:write` | Accept a cancellation request (cancels the order and releases stock) |
 | POST | `/api/v1/orders/{id}/cancellation-requests/{cid}/reject` | `orders:write` | Reject a cancellation request (the order carries on) |
 | GET | `/api/v1/orders/{id}/cancellations` | `orders:read` | Cancellation history of an order |
+| GET | `/api/v1/orders/{id}/drawer` | `orders:read` | Order side drawer |
+| GET | `/api/v1/orders/{id}/next-actions` | `orders:read` | Allowed next steps of an order |
 | GET | `/api/v1/orders/{id}/status-updates` | `orders:read` | Status pushes to the marketplace |
 | POST | `/api/v1/orders/{id}/status-updates/{updateId}/retry` | `orders:write` | Retry a failed status push |
 | GET | `/api/v1/orders/{id}/timeline` | `orders:read` | Order timeline |
 | POST | `/api/v1/orders/{id}/transition` | `orders:write` | Move an order to its next status |
+| GET | `/api/v1/orders/activity` | `orders:read` | Recent order activity across marketplaces |
+| POST | `/api/v1/orders/bulk` | `orders:write` | Bulk action on orders (confirm, cancel, assign warehouse, mark priority) |
 | GET | `/api/v1/orders/cancellation-reasons` | `orders:read` | Cancellation reason codes |
+| GET | `/api/v1/orders/export` | `orders:read` | Export orders as CSV |
+| GET | `/api/v1/orders/ledger` | `orders:read` | Orders ledger (numbered pages) |
+| GET | `/api/v1/orders/sla-policies` | `orders:read` | Dispatch SLA policies |
+| PUT | `/api/v1/orders/sla-policies` | `orders:write` | Create or update a dispatch SLA policy |
+| DELETE | `/api/v1/orders/sla-policies/{id}` | `orders:write` | Delete a dispatch SLA policy |
 | GET | `/api/v1/orders/summary` | `orders:read` | Central dashboard numbers |
+| GET | `/api/v1/orders/workspace` | `orders:read` | Orders workspace: pulse, needs attention, sources, SLA pressure and tab counters |
 
 ## Sync Jobs
 
@@ -405,6 +453,11 @@ Order routing, fulfillment lifecycle and exceptions
 | POST | `/api/v1/fulfillment-exceptions` | `fulfillment:write` | Raise an exception manually |
 | GET | `/api/v1/fulfillment-exceptions/{id}` | `fulfillment:read` | Get an exception |
 | POST | `/api/v1/fulfillment-exceptions/{id}/resolve` | `fulfillment:write` | Resolve or dismiss an exception |
+| POST | `/api/v1/fulfillment/{orderId}/actions` | `fulfillment:write` | Run a fulfillment action on an order |
+| POST | `/api/v1/fulfillment/batch-handover` | `shipping:write` | Hand a batch of orders over to one carrier (manifest) |
+| GET | `/api/v1/fulfillment/exceptions` | `fulfillment:read` | Exceptions of the fulfillment screen |
+| GET | `/api/v1/fulfillment/queue` | `fulfillment:read` | Fulfillment queue (orders by warehouse stage) |
+| GET | `/api/v1/fulfillment/workspace/{orderId}` | `fulfillment:read` | Order drawer of the fulfillment screen |
 | GET | `/api/v1/fulfillments` | `fulfillment:read` | List fulfillments |
 | GET | `/api/v1/fulfillments/{id}` | `fulfillment:read` | Get a fulfillment (items, packages, routing explanation) |
 | POST | `/api/v1/fulfillments/{id}/cancel` | `fulfillment:write` | Cancel a fulfillment (before shipping) |
@@ -472,10 +525,39 @@ Shipping providers, shipments, labels, manifests, tracking, NDR and RTO
 | POST | `/api/v1/shipments/{id}/simulate` | `shipping:write` | Simulate a courier event (sandbox courier only) |
 | GET | `/api/v1/shipments/{id}/tracking` | `shipping:read` | Delivery tracking timeline |
 | POST | `/api/v1/shipments/{id}/tracking-events` | `shipping:write` | Record tracking updates |
+| GET | `/api/v1/shipping/carriers` | `shipping:read` | Configured carriers with status |
+| GET | `/api/v1/shipping/exceptions` | `shipping:read` | Shipping exceptions: six categories with what / why / what to do |
+| GET | `/api/v1/shipping/exceptions/export` | `shipping:read` | Export shipping exceptions (CSV) |
+| POST | `/api/v1/shipping/labels/bulk` | `shipping:write` | Print labels of several shipments |
+| GET | `/api/v1/shipping/methods` | `shipping:read` | Shipping methods and the capability matrix |
+| POST | `/api/v1/shipping/methods` | `shipping:configure` | Add a shipping method (Add Provider) |
+| PATCH | `/api/v1/shipping/methods/{id}` | `shipping:configure` | Set as default, disable / enable or configure a method |
+| GET | `/api/v1/shipping/methods/{id}/capabilities` | `shipping:read` | View capability of a method |
+| POST | `/api/v1/shipping/methods/{id}/verify` | `shipping:configure` | Verify a method (safe capability check) |
+| GET | `/api/v1/shipping/orders` | `shipping:read` | Orders to ship: the shipping decision per order |
+| GET | `/api/v1/shipping/orders/{fulfillmentId}/options` | `shipping:read` | Choose Shipping: options for one order |
+| POST | `/api/v1/shipping/orders/{fulfillmentId}/selection` | `shipping:write` | Confirm the shipping method of an order |
+| POST | `/api/v1/shipping/orders/bulk` | `shipping:write` | Bulk: assign a method, generate labels, recalculate |
+| GET | `/api/v1/shipping/orders/export` | `shipping:read` | Export orders to ship (CSV) |
+| GET | `/api/v1/shipping/overview` | `shipping:read` | Shipping overview |
 | GET | `/api/v1/shipping/providers` | `shipping:read` | Providers enabled for this vendor |
 | POST | `/api/v1/shipping/providers` | `shipping:configure` | Enable a shipping provider |
 | PATCH | `/api/v1/shipping/providers/{id}` | `shipping:configure` | Update / disable a shipping provider or make it the default |
 | GET | `/api/v1/shipping/providers/catalog` | `shipping:read` | Available shipping providers |
+| GET | `/api/v1/shipping/rules` | `rules:read` | Shipping rules (IF / AND / THEN) |
+| POST | `/api/v1/shipping/rules` | `shipping:configure` | Create a shipping rule |
+| DELETE | `/api/v1/shipping/rules/{id}` | `shipping:configure` | Delete a shipping rule |
+| PATCH | `/api/v1/shipping/rules/{id}` | `shipping:configure` | Update a shipping rule |
+| POST | `/api/v1/shipping/rules/{id}/disable` | `shipping:configure` | Disable a shipping rule |
+| POST | `/api/v1/shipping/rules/{id}/duplicate` | `shipping:configure` | Duplicate a shipping rule (the copy is disabled and last) |
+| POST | `/api/v1/shipping/rules/{id}/enable` | `shipping:configure` | Enable a shipping rule |
+| PUT | `/api/v1/shipping/rules/order` | `shipping:configure` | Re-order shipping rules |
+| GET | `/api/v1/shipping/shipments` | `shipping:read` | Shipments table of the shipping screen |
+| GET | `/api/v1/shipping/summary` | `shipping:read` | Carrier ribbon of the shipping screen |
+| POST | `/api/v1/shipping/sync` | `shipping:write` | Sync Shipping |
+| GET | `/api/v1/shipping/tracking` | `shipping:read` | Tracking: dispatched shipments with a derived status |
+| GET | `/api/v1/shipping/tracking/failures` | `shipping:read` | Tracking sync failures (what failed, why, retry) |
+| POST | `/api/v1/shipping/tracking/sync` | `shipping:write` | Sync tracking of open shipments (bulk refresh) |
 
 ## Returns
 
@@ -490,14 +572,36 @@ Return orders, receiving, inspection, disposition, refunds
 | POST | `/api/v1/returns/{id}/approve` | `returns:write` | Approve a return |
 | POST | `/api/v1/returns/{id}/cancel` | `returns:write` | Cancel a return that has not been received |
 | POST | `/api/v1/returns/{id}/complete` | `returns:write` | Complete a return |
+| GET | `/api/v1/returns/{id}/detail` | `returns:read` | Return drawer: header, product, details, current state, full timeline (future steps pending) and actions |
+| POST | `/api/v1/returns/{id}/disposition` | `returns:write` | Confirm the disposition of the received units |
+| GET | `/api/v1/returns/{id}/disposition-options` | `returns:read` | What should happen to this returned stock? |
 | POST | `/api/v1/returns/{id}/inspect` | `returns:write` | Inspect received units and decide their disposition |
+| GET | `/api/v1/returns/{id}/inspection` | `returns:read` | Latest inspection and its history |
+| POST | `/api/v1/returns/{id}/inspection` | `returns:write` | Save an inspection |
+| POST | `/api/v1/returns/{id}/inspection/assign` | `returns:write` | Assign inspection |
+| GET | `/api/v1/returns/{id}/next-actions` | `returns:read` | The next steps of a return |
 | POST | `/api/v1/returns/{id}/pickup` | `returns:write` | Schedule a reverse pickup |
 | POST | `/api/v1/returns/{id}/pickup-status` | `returns:write` | Record reverse pickup progress |
 | POST | `/api/v1/returns/{id}/receive` | `returns:write` | Receive the returned goods into a warehouse |
-| POST | `/api/v1/returns/{id}/refund` | `returns:refund` | Record the refund outcome |
+| GET | `/api/v1/returns/{id}/refund` | `returns:read` | Refund detail |
+| POST | `/api/v1/returns/{id}/refund` | `returns:refund` | Record or request the refund |
+| POST | `/api/v1/returns/{id}/refund/retry` | `returns:refund` | Retry a failed refund |
 | POST | `/api/v1/returns/{id}/reject` | `returns:write` | Reject a return |
 | GET | `/api/v1/returns/{id}/timeline` | `returns:read` | Return timeline |
+| GET | `/api/v1/returns/analytics` | `returns:read` | Why products are coming back |
+| GET | `/api/v1/returns/attention` | `returns:read` | Returns that need attention (computed live) |
+| GET | `/api/v1/returns/attention/export` | `returns:read` | Export the attention list as CSV |
+| GET | `/api/v1/returns/counts` | `returns:read` | Counts for the ledger tabs |
+| GET | `/api/v1/returns/eligibility` | `returns:read` | Find an order and the units that can still be returned |
+| GET | `/api/v1/returns/export` | `returns:read` | Export the ledger as CSV |
+| GET | `/api/v1/returns/insights` | `returns:read` | Why and what comes back |
+| POST | `/api/v1/returns/inspection/assign` | `returns:write` | Assign inspection to a member (bulk) |
+| GET | `/api/v1/returns/ledger` | `returns:read` | Returns ledger (numbered pages) |
+| GET | `/api/v1/returns/overview` | `returns:read` | Returns workspace overview |
 | GET | `/api/v1/returns/reasons` | `returns:read` | Return reason catalogue |
+| GET | `/api/v1/returns/refunds` | `returns:read` | Refund queue |
+| GET | `/api/v1/returns/summary` | `returns:read` | KPI tiles of the returns screen |
+| POST | `/api/v1/returns/sync` | `returns:write` | Sync returns from the marketplaces |
 
 ## Pricing
 
@@ -507,10 +611,27 @@ Marketplace prices, sales, price rules, bulk updates and price history
 |---|---|---|---|
 | POST | `/api/v1/pricing/apply-rules` | `pricing:write` | Price an account's variants from the pricing rules |
 | POST | `/api/v1/pricing/bulk-update` | `pricing:write` | Bulk price update (set / % / amount) |
+| GET | `/api/v1/pricing/competitor-prices` | `pricing:read` | Competitor price observations |
+| POST | `/api/v1/pricing/competitor-prices` | `pricing:write` | Record a competitor price |
+| DELETE | `/api/v1/pricing/competitor-prices/{id}` | `pricing:write` | Delete a competitor price observation |
+| POST | `/api/v1/pricing/competitor-prices/import` | `pricing:write` | Import competitor prices from CSV |
 | GET | `/api/v1/pricing/history` | `pricing:read` | Price history |
 | GET | `/api/v1/pricing/marketplace-prices` | `pricing:read` | List marketplace prices |
 | PUT | `/api/v1/pricing/marketplace-prices` | `pricing:write` | Set a marketplace price (and optionally a scheduled sale) |
 | DELETE | `/api/v1/pricing/marketplace-prices/{id}` | `pricing:write` | Remove a marketplace price (the listing follows the variant price again) |
+| GET | `/api/v1/pricing/overview` | `pricing:read` | Tiles of the pricing screen |
+| GET | `/api/v1/pricing/policies` | `pricing:read` | Pricing policies (strategy rules) |
+| POST | `/api/v1/pricing/policies` | `pricing:write` | Create a pricing policy |
+| DELETE | `/api/v1/pricing/policies/{id}` | `pricing:write` | Delete a pricing policy |
+| GET | `/api/v1/pricing/policies/{id}` | `pricing:read` | One pricing policy |
+| PATCH | `/api/v1/pricing/policies/{id}` | `pricing:write` | Change a pricing policy (pause / resume, thresholds, ...) |
+| POST | `/api/v1/pricing/policies/preview` | `pricing:read` | How many variants a policy would look at |
+| GET | `/api/v1/pricing/proposals` | `pricing:read` | Price proposals (the review queue) |
+| GET | `/api/v1/pricing/proposals/{id}` | `pricing:read` | One price proposal |
+| POST | `/api/v1/pricing/proposals/{id}/approve` | `pricing:approve` | Approve a proposal and put the price live |
+| POST | `/api/v1/pricing/proposals/{id}/reject` | `pricing:approve` | Reject a proposal |
+| POST | `/api/v1/pricing/proposals/bulk` | `pricing:approve` | Approve or reject many proposals |
+| POST | `/api/v1/pricing/proposals/generate` | `pricing:write` | Generate proposals from the active policies |
 | POST | `/api/v1/pricing/sales/process` | `pricing:write` | Start / end due sales now |
 | GET | `/api/v1/pricing/variants/{id}` | `pricing:read` | All prices of a variant |
 
@@ -553,3 +674,399 @@ Audit trail
 |---|---|---|---|
 | GET | `/api/v1/audit-logs` | `audit:read` | Audit trail (newest first) |
 | GET | `/api/v1/audit-logs/entities/{resourceType}/{resourceId}` | `audit:read` | History of one entity (who changed what, previous and new value) |
+
+## AI
+
+
+
+| Method | Path | Access | Summary |
+|---|---|---|---|
+| GET | `/api/v1/ai/anomalies` | `ai:use` | Unusual days in revenue, orders, cancellations and returns |
+| POST | `/api/v1/ai/ask` | `ai:use` | Ask a business question in plain language |
+| GET | `/api/v1/ai/conversations` | `ai:use` | My conversation history (newest activity first) |
+| POST | `/api/v1/ai/conversations` | `ai:use` | Start a conversation |
+| DELETE | `/api/v1/ai/conversations/{id}` | `ai:use` | Delete a conversation and its messages |
+| GET | `/api/v1/ai/conversations/{id}` | `ai:use` | One conversation with all its messages (oldest first) |
+| PATCH | `/api/v1/ai/conversations/{id}` | `ai:use` | Rename or archive a conversation |
+| POST | `/api/v1/ai/conversations/{id}/messages` | `ai:use` | Ask in a conversation |
+| GET | `/api/v1/ai/insights` | `ai:use` | Proactive insight cards |
+| GET | `/api/v1/ai/recommendations` | `ai:use` | Recommendations |
+| GET | `/api/v1/ai/recommendations/{id}` | `ai:use` | One recommendation with its evidence |
+| POST | `/api/v1/ai/recommendations/{id}/approve` | `ai:use` | Approve a recommendation |
+| POST | `/api/v1/ai/recommendations/{id}/reject` | `ai:use` | Reject a recommendation |
+| POST | `/api/v1/ai/recommendations/{id}/rollback` | `ai:use` | Undo an applied recommendation |
+| POST | `/api/v1/ai/recommendations/generate` | `ai:use` | Analyse the data now and store recommendations |
+| GET | `/api/v1/ai/settings` | `ai:use` | AI safety settings (observe / recommend / approve / automate) |
+| PUT | `/api/v1/ai/settings` | `ai:use` | Change AI settings |
+| GET | `/api/v1/ai/summary` | `ai:use` | Business summary: the headlines, risks and what to look at |
+| GET | `/api/v1/products/{id}/ai/description` | `products:read` | Latest description suggestions of a product (newest first) |
+| POST | `/api/v1/products/{id}/ai/description` | `products:write` | Suggest a product description (rewrite, concise or benefits) |
+| POST | `/api/v1/products/{id}/ai/description/{suggestionId}/apply` | `products:write` | Apply a description suggestion |
+| POST | `/api/v1/products/{id}/ai/description/{suggestionId}/dismiss` | `products:write` | Dismiss a description suggestion |
+
+## Analytics
+
+
+
+| Method | Path | Access | Summary |
+|---|---|---|---|
+| GET | `/api/v1/analytics/business-health` | `analytics:read` | Business health: operational bottlenecks and failures |
+| GET | `/api/v1/analytics/fee-profiles` | `analytics:read` | Commission terms per marketplace account (used for ESTIMATED fees only) |
+| PUT | `/api/v1/analytics/fee-profiles/{id}` | `pricing:write` | Set the commission terms of a marketplace account |
+| GET | `/api/v1/analytics/inventory-health` | `analytics:read` | Inventory health: low stock, stockout risk, excess, aging, fast and slow movers |
+| GET | `/api/v1/analytics/marketing-spend` | `analytics:read` | Marketing spend rows (newest first) |
+| POST | `/api/v1/analytics/marketing-spend` | `pricing:write` | Record advertising spend |
+| DELETE | `/api/v1/analytics/marketing-spend/{id}` | `pricing:write` | Delete a spend row |
+| PATCH | `/api/v1/analytics/marketing-spend/{id}` | `pricing:write` | Correct a spend row |
+| POST | `/api/v1/analytics/marketing-spend/import` | `pricing:write` | Import advertising spend from a CSV file |
+| GET | `/api/v1/analytics/marketing-spend/summary` | `analytics:read` | Marketing spend totals for a range: by account, by campaign and by day |
+| GET | `/api/v1/analytics/marketplaces` | `analytics:read` | Marketplace performance and connection health |
+| GET | `/api/v1/analytics/overview` | `analytics:read` | Business overview (sales, orders, revenue) vs the previous period |
+| GET | `/api/v1/analytics/product-health` | `analytics:read` | Product health: completeness, listing errors, inventory and marketplace issues |
+| GET | `/api/v1/analytics/products` | `analytics:read` | Product performance (units, revenue, returns, trend) |
+| GET | `/api/v1/analytics/profitability` | `analytics:read` | Profitability by product, marketplace or order, with actual / estimated / missing data kept apart |
+| GET | `/api/v1/analytics/profitability/waterfall` | `analytics:read` | P&L bridge from gross revenue to net contribution, plus the per-marketplace table |
+| POST | `/api/v1/analytics/rollups/rebuild` | `sync:write` | Rebuild the daily roll-ups for a date range (backfill after a late import or correction) |
+| GET | `/api/v1/orders/{id}/financials` | `orders:read` | Marketplace fee / penalty / other costs recorded for an order (null = unknown) |
+| PUT | `/api/v1/orders/{id}/financials` | `orders:write` | Record what the marketplace actually charged for an order |
+| GET | `/api/v1/product-intelligence` | `analytics:read` | Product intelligence: one recommended action per variant, with the facts behind it |
+
+## Automation
+
+
+
+| Method | Path | Access | Summary |
+|---|---|---|---|
+| GET | `/api/v1/automation/approvals` | `automation:read` | Approvals queue: runs waiting for a person |
+| POST | `/api/v1/automation/approvals/{id}/dismiss` | `automation:write` | Dismiss a waiting approval |
+| GET | `/api/v1/automation/catalog` | `automation:read` | Triggers and actions available to rules |
+| GET | `/api/v1/automation/executions` | `automation:read` | Execution history |
+| GET | `/api/v1/automation/executions/{id}` | `automation:read` | One execution |
+| POST | `/api/v1/automation/executions/{id}/approve` | `automation:write` | Approve a waiting execution and run it |
+| POST | `/api/v1/automation/executions/{id}/reject` | `automation:write` | Reject a waiting execution |
+| POST | `/api/v1/automation/executions/{id}/rollback` | `automation:write` | Undo an executed, reversible action |
+| GET | `/api/v1/automation/overview` | `automation:read` | Metrics strip of the Automation screen |
+| GET | `/api/v1/automation/rules` | `automation:read` | List rules |
+| POST | `/api/v1/automation/rules` | `automation:write` | Create a rule |
+| DELETE | `/api/v1/automation/rules/{id}` | `automation:write` | Delete a rule that never ran |
+| GET | `/api/v1/automation/rules/{id}` | `automation:read` | Get a rule |
+| PATCH | `/api/v1/automation/rules/{id}` | `automation:write` | Change a rule |
+| POST | `/api/v1/automation/rules/{id}/activate` | `automation:write` | Activate a rule |
+| POST | `/api/v1/automation/rules/{id}/disable` | `automation:write` | Disable a rule |
+| POST | `/api/v1/automation/rules/{id}/test` | `automation:read` | Dry run: would this rule fire for this event payload? |
+| GET | `/api/v1/automation/runs` | `automation:read` | Run log of the Automation screen |
+
+## Billing
+
+
+
+| Method | Path | Access | Summary |
+|---|---|---|---|
+| POST | `/api/v1/admin/billing/invoices/{id}/payments` | `platform:system` | Record a payment outcome for an invoice (platform staff / payment provider callback) |
+| POST | `/api/v1/admin/billing/invoices/run` | `platform:system` | Invoice every subscription whose period ended (also runs hourly) |
+| GET | `/api/v1/admin/billing/plans` | `platform:vendors` | All plans including retired ones (platform staff) |
+| PUT | `/api/v1/admin/billing/plans/{code}` | `platform:system` | Create or change a plan (platform staff) |
+| GET | `/api/v1/billing/invoices` | `billing:read` | My invoices |
+| GET | `/api/v1/billing/invoices/{id}` | `billing:read` | One invoice with its lines and payments |
+| GET | `/api/v1/billing/plans` | `billing:read` | Plans on offer |
+| GET | `/api/v1/billing/subscription` | `billing:read` | My subscription |
+| POST | `/api/v1/billing/subscription` | `billing:write` | Change plan |
+| POST | `/api/v1/billing/subscription/cancel` | `billing:write` | Cancel at the end of the current period |
+| GET | `/api/v1/billing/usage` | `billing:read` | Usage against plan limits |
+
+## Brands
+
+
+
+| Method | Path | Access | Summary |
+|---|---|---|---|
+| GET | `/api/v1/brands` | `products:read` | List the business's brands |
+| POST | `/api/v1/brands` | `products:write` | Create (and confirm) a brand |
+| DELETE | `/api/v1/brands/{id}` | `products:write` | Delete a brand |
+| POST | `/api/v1/brands/{id}/confirm` | `products:write` | Confirm a brand |
+
+## Inventory Control Room
+
+
+
+| Method | Path | Access | Summary |
+|---|---|---|---|
+| POST | `/api/v1/inventory/adjustments` | `inventory:write` | Adjust stock by type (damage / return / correction / manual / other) |
+| POST | `/api/v1/inventory/adjustments/preview` | `inventory:write` | Preview an adjustment (nothing is written) |
+| POST | `/api/v1/inventory/bulk` | `inventory:write` | Bulk action on a selection (adjust / transfer / export / sync / group) |
+| GET | `/api/v1/inventory/channel-sync` | `inventory:read` | Channel synchronisation: master stock, state per marketplace account, incidents |
+| POST | `/api/v1/inventory/channel-sync` | `inventory:write` | Sync inventory to the channels (all connected accounts, or one) |
+| GET | `/api/v1/inventory/channel-sync/{accountId}/affected` | `inventory:read` | SKUs whose last channel push was rejected or differs |
+| GET | `/api/v1/inventory/export` | `inventory:read` | Export the ledger as CSV (same filters as the ledger) |
+| GET | `/api/v1/inventory/groups` | `inventory:read` | Saved groups (static lists of products) |
+| POST | `/api/v1/inventory/groups` | `inventory:write` | Create a saved group |
+| DELETE | `/api/v1/inventory/groups/{id}` | `inventory:write` | Delete a saved group (the products stay) |
+| POST | `/api/v1/inventory/groups/{id}/items` | `inventory:write` | Add products to a saved group |
+| DELETE | `/api/v1/inventory/groups/{id}/items/{variantId}` | `inventory:write` | Remove a product from a saved group |
+| GET | `/api/v1/inventory/kpis` | `inventory:read` | KPI tiles of the Inventory screen |
+| GET | `/api/v1/inventory/ledger` | `inventory:read` | Inventory ledger table (one row per product variant with stock) |
+| POST | `/api/v1/inventory/ledger/selection-count` | `inventory:read` | How many products a filter selects ("24 products selected") |
+| GET | `/api/v1/inventory/movements/feed` | `inventory:read` | Human movement feed (newest first) |
+| GET | `/api/v1/inventory/overview` | `inventory:read` | Inventory control room: stock pulse, horizon, signals, advisory, distribution, recent movements |
+| POST | `/api/v1/inventory/quick-adjust` | `inventory:write` | Adjust stock in one call (SKU or variant, default warehouse, screen reasons) |
+| POST | `/api/v1/inventory/transfer-now` | `inventory:write` | Move stock between two warehouses immediately |
+| GET | `/api/v1/inventory/variants/{id}/panel` | `inventory:read` | Product context panel: snapshot, stock by location, channel availability, health, recent movements, actions |
+
+## Issues
+
+
+
+| Method | Path | Access | Summary |
+|---|---|---|---|
+| GET | `/api/v1/issues` | `issues:read` | The issue queue (grouped problems), ranked by priority then due time |
+| GET | `/api/v1/issues/{id}` | `issues:read` | Issue detail (drawer): why it matters, affected records, deadline, recommended action and timeline |
+| POST | `/api/v1/issues/{id}/assign` | `issues:write` | Assign an issue to a member of the business |
+| POST | `/api/v1/issues/{id}/resolve` | `issues:write` | Mark an issue resolved, manually or by running its safe action |
+| POST | `/api/v1/issues/{id}/snooze` | `issues:write` | Snooze an issue until later (it returns automatically) |
+| POST | `/api/v1/issues/{id}/start` | `issues:write` | Mark an issue in progress ("working on it") |
+| POST | `/api/v1/issues/{id}/unsnooze` | `issues:write` | Bring a snoozed issue back to the queue |
+| GET | `/api/v1/issues/assignees` | `issues:write` | Members an issue can be assigned to |
+| POST | `/api/v1/issues/bulk` | `issues:write` | Resolve, snooze or assign several issues at once (partial success allowed) |
+| GET | `/api/v1/issues/counts` | `issues:read` | Open issue count, tab counts and counts per area (sidebar badge, dashboard) |
+| GET | `/api/v1/issues/history` | `issues:read` | Resolved and snoozed issues |
+| GET | `/api/v1/issues/recommendation` | `issues:read` | The "Recommended action" banner of the queue (null when there is nothing to say) |
+| POST | `/api/v1/issues/refresh` | `issues:write` | Run the detectors for this business now |
+
+## Listings Workspace
+
+
+
+| Method | Path | Access | Summary |
+|---|---|---|---|
+| GET | `/api/v1/listings/{id}/activity` | `listings:read` | Activity timeline of a listing (audit trail), newest first |
+| POST | `/api/v1/listings/{id}/publish-flow` | `listings:write` | Validate, approve and publish in one call |
+| GET | `/api/v1/listings/{id}/readiness` | `listings:read` | Readiness checklist of a listing |
+| GET | `/api/v1/listings/{id}/studio` | `listings:read` | Everything the Listing Studio shows, in one call |
+| POST | `/api/v1/listings/bulk-actions` | `listings:write` | Bulk action on listings: validate | publish | unpublish | retry | sync_inventory |
+| POST | `/api/v1/listings/bulk-publish` | `listings:write` | Publish many listings (validate, approve, publish each) |
+| GET | `/api/v1/listings/not-listed` | `listings:read` | Products that are not listed yet on a connected account (the "Not listed" tab) |
+| GET | `/api/v1/listings/overview` | `listings:read` | Counts for the Listings screen: tabs, marketplaces, content states |
+| GET | `/api/v1/listings/table` | `listings:read` | The Listings screen table (numbered pages, with totals and tab counts) |
+
+## Marketplace Hub
+
+
+
+| Method | Path | Access | Summary |
+|---|---|---|---|
+| GET | `/api/v1/marketplace-hub/accounts` | `marketplace_accounts:read` | My connected accounts as cards |
+| GET | `/api/v1/marketplace-hub/accounts/{id}` | `marketplace_accounts:read` | One account for the detail page |
+| GET | `/api/v1/marketplace-hub/accounts/{id}/connect-url` | `marketplace_accounts:write` | Where to send the seller to (re)authorize an account |
+| POST | `/api/v1/marketplace-hub/accounts/{id}/sync` | `marketplace_accounts:write` | Sync an account now |
+| GET | `/api/v1/marketplace-hub/accounts/{id}/sync-status` | `marketplace_accounts:read` | Combined sync progress of an account |
+| POST | `/api/v1/marketplace-hub/connect` | `marketplace_accounts:write` | Connect a marketplace in one call |
+| GET | `/api/v1/marketplace-hub/connectors/{code}/readiness` | `marketplace_accounts:read` | Sandbox / live readiness of a connector |
+| GET | `/api/v1/marketplace-hub/directory` | `marketplace_accounts:read` | Connector directory merged with my accounts |
+| GET | `/api/v1/marketplace-hub/health` | `marketplace_accounts:read` | Connection health of the whole network |
+| POST | `/api/v1/marketplace-hub/oauth/complete` | `marketplace_accounts:write` | Finish a redirect connection |
+
+## Onboarding
+
+
+
+| Method | Path | Access | Summary |
+|---|---|---|---|
+| GET | `/api/v1/onboarding` | `onboarding:read` | Where am I in the setup? |
+| PUT | `/api/v1/onboarding/business` | `onboarding:write` | Save the business profile (step 2) |
+| GET | `/api/v1/onboarding/channels` | `onboarding:read` | Sales channels: what can be connected and what is |
+| PUT | `/api/v1/onboarding/channels` | `onboarding:write` | Save the ticked channels and continue (step 3) |
+| POST | `/api/v1/onboarding/channels/{code}/connect` | `onboarding:write` | Connect a channel |
+| POST | `/api/v1/onboarding/complete` | `onboarding:write` | Go to dashboard: finish onboarding |
+| GET | `/api/v1/onboarding/fulfillment` | `onboarding:read` | Fulfillment preferences, shipping connections and preview (step 6) |
+| PUT | `/api/v1/onboarding/fulfillment` | `onboarding:write` | Save fulfillment preferences (step 6) |
+| GET | `/api/v1/onboarding/inventory` | `onboarding:read` | Inventory setup: mode, location and starting-stock options (step 5) |
+| PUT | `/api/v1/onboarding/inventory` | `onboarding:write` | Save inventory setup (step 5) |
+| GET | `/api/v1/onboarding/inventory/overview` | `onboarding:read` | Inventory overview numbers: products, units, low stock, out of stock |
+| GET | `/api/v1/onboarding/options` | `onboarding:read` | Choices for the business screen |
+| GET | `/api/v1/onboarding/products` | `onboarding:read` | Products: connected catalogs and ways to bring products in (step 4) |
+| POST | `/api/v1/onboarding/products/continue` | `onboarding:write` | Continue from the products step |
+| POST | `/api/v1/onboarding/products/import` | `onboarding:write` | Import the catalog of one connected marketplace |
+| POST | `/api/v1/onboarding/products/refresh-counts` | `onboarding:write` | Count the products available on each connected marketplace |
+| GET | `/api/v1/onboarding/readiness` | `onboarding:read` | Setup readiness checklist (Review setup / Ready screen) |
+| PUT | `/api/v1/onboarding/steps/{step}/draft` | `onboarding:write` | Save & exit: keep the half-filled form of a step |
+| POST | `/api/v1/onboarding/steps/{step}/skip` | `onboarding:write` | Skip for now |
+
+## Platform Admin
+
+
+
+| Method | Path | Access | Summary |
+|---|---|---|---|
+| GET | `/api/v1/admin/connectors` | `platform:vendors` | Marketplace connectors: switch state and connection health across tenants |
+| PUT | `/api/v1/admin/connectors/{code}` | `platform:system` | Switch a marketplace connector on or off for the whole platform |
+| GET | `/api/v1/admin/feature-flags` | `platform:vendors` | All feature flags with their per-vendor overrides |
+| PUT | `/api/v1/admin/feature-flags/{key}` | `platform:system` | Create or change a feature flag (platform default) |
+| DELETE | `/api/v1/admin/feature-flags/{key}/vendors/{vendorId}` | `platform:system` | Remove a vendor override (the platform default applies again) |
+| PUT | `/api/v1/admin/feature-flags/{key}/vendors/{vendorId}` | `platform:system` | Override a flag for one vendor (vendor-specific capability) |
+| GET | `/api/v1/admin/integrations/failing` | `platform:vendors` | Marketplace connections that are not healthy (all vendors) |
+| GET | `/api/v1/admin/jobs/failed` | `platform:vendors` | Failed and dead-lettered sync jobs across all vendors |
+| GET | `/api/v1/admin/overview` | `platform:vendors` | Platform overview |
+| GET | `/api/v1/admin/system/health` | `platform:system` | System health (database, outbox, stuck work) |
+| GET | `/api/v1/admin/users` | `platform:vendors` | Search users across all vendors |
+| POST | `/api/v1/admin/users/{id}/disable` | `platform:system` | Disable a user (any vendor) |
+| POST | `/api/v1/admin/users/{id}/enable` | `platform:system` | Re-enable a user (any vendor) |
+| GET | `/api/v1/admin/vendors/{id}/summary` | `platform:vendors` | One vendor at a glance |
+| GET | `/api/v1/features/me` | any signed-in user | Feature flags as they apply to my business |
+
+## Procurement
+
+
+
+| Method | Path | Access | Summary |
+|---|---|---|---|
+| GET | `/api/v1/procurement/overview` | `procurement:read` | Procurement tiles |
+| GET | `/api/v1/procurement/reorder-suggestions` | `procurement:read` | Reorder suggestions |
+| GET | `/api/v1/procurement/variants` | `procurement:read` | Find products for a purchase order line |
+| GET | `/api/v1/purchase-orders` | `procurement:read` | List purchase orders |
+| POST | `/api/v1/purchase-orders` | `procurement:write` | Create a draft purchase order |
+| DELETE | `/api/v1/purchase-orders/{id}` | `procurement:write` | Delete a draft purchase order |
+| GET | `/api/v1/purchase-orders/{id}` | `procurement:read` | Get a purchase order |
+| PATCH | `/api/v1/purchase-orders/{id}` | `procurement:write` | Edit a draft purchase order |
+| POST | `/api/v1/purchase-orders/{id}/acknowledge` | `procurement:write` | Record the supplier confirmation |
+| POST | `/api/v1/purchase-orders/{id}/approve` | `procurement:approve` | Approve and submit a purchase order |
+| POST | `/api/v1/purchase-orders/{id}/cancel` | `procurement:write` | Cancel a purchase order |
+| POST | `/api/v1/purchase-orders/{id}/duplicate` | `procurement:write` | Duplicate a purchase order into a new draft |
+| POST | `/api/v1/purchase-orders/{id}/receive` | `procurement:write` | Receive goods (a purchase order can be received in several parts) |
+| POST | `/api/v1/purchase-orders/from-suggestions` | `procurement:write` | Draft purchase orders from reorder suggestions |
+| GET | `/api/v1/suppliers` | `procurement:read` | List suppliers |
+| POST | `/api/v1/suppliers` | `procurement:write` | Create a supplier |
+| DELETE | `/api/v1/suppliers/{id}` | `procurement:write` | Delete a supplier (soft) |
+| GET | `/api/v1/suppliers/{id}` | `procurement:read` | Get a supplier with its products and recent purchase orders |
+| PATCH | `/api/v1/suppliers/{id}` | `procurement:write` | Update a supplier |
+| GET | `/api/v1/suppliers/{id}/products` | `procurement:read` | The supplier price list |
+| PUT | `/api/v1/suppliers/{id}/products` | `procurement:write` | Add or update products on the supplier price list |
+| DELETE | `/api/v1/suppliers/{id}/products/{variantId}` | `procurement:write` | Remove a product from the supplier price list |
+
+## Product Import
+
+
+
+| Method | Path | Access | Summary |
+|---|---|---|---|
+| GET | `/api/v1/imports` | `imports:read` | Import history |
+| POST | `/api/v1/imports` | `imports:write` | Start an import (step 1) |
+| GET | `/api/v1/imports/{id}` | `imports:read` | Status and counters of an import (poll this for progress) |
+| POST | `/api/v1/imports/{id}/cancel` | `imports:write` | Cancel an import (a running validation or commit stops; rows already imported stay) |
+| POST | `/api/v1/imports/{id}/commit` | `imports:write` | Import the validated rows (background job) |
+| GET | `/api/v1/imports/{id}/commit-preview` | `imports:read` | Exact row counts for each commit choice |
+| GET | `/api/v1/imports/{id}/errors.csv` | `imports:read` | Download the unresolved issues as CSV |
+| POST | `/api/v1/imports/{id}/file` | `imports:write` | Upload the file (step 2) and analyse it |
+| GET | `/api/v1/imports/{id}/issues` | `imports:read` | Issues with the row they belong to |
+| POST | `/api/v1/imports/{id}/issues/{issueId}` | `imports:write` | Resolve one issue (accept the suggestion, type a value, or ignore it) |
+| POST | `/api/v1/imports/{id}/issues/bulk` | `imports:write` | Apply one decision to every open issue of a code |
+| GET | `/api/v1/imports/{id}/mapping` | `imports:read` | Column mapping with confidence and sample values |
+| PUT | `/api/v1/imports/{id}/mapping` | `imports:write` | Change the column mapping |
+| POST | `/api/v1/imports/{id}/revalidate` | `imports:write` | Validate again after fixing issues |
+| GET | `/api/v1/imports/{id}/rows` | `imports:read` | Rows with their normalised values, status and (after the commit) result |
+| PUT | `/api/v1/imports/{id}/settings` | `imports:write` | Import settings (duplicates, channels, warehouse, default category, price unit) |
+| GET | `/api/v1/imports/{id}/summary` | `imports:read` | Issue counts per code and severity (the tabs of the issues screen) |
+| POST | `/api/v1/imports/{id}/validate` | `imports:write` | Validate the file (step 4, background job) |
+| GET | `/api/v1/imports/options` | `imports:read` | Wizard options: target fields, duplicate strategies, limits, presets |
+| GET | `/api/v1/imports/template` | `imports:read` | Download the import template (all columns plus an example row) |
+
+## Product creation
+
+
+
+| Method | Path | Access | Summary |
+|---|---|---|---|
+| GET | `/api/v1/products/{id}/creation` | `products:read` | The creation view of a product |
+| GET | `/api/v1/products/{id}/creation-readiness` | `products:read` | Creation readiness of a saved product |
+| POST | `/api/v1/products/{id}/creation/continue` | `products:write` | Continue from the basic step |
+| DELETE | `/api/v1/products/{id}/draft` | `products:write` | Discard a draft |
+| PATCH | `/api/v1/products/{id}/draft` | `products:write` | Save a draft (autosave) |
+| POST | `/api/v1/products/{id}/sku/verify` | `products:write` | Verify a Master SKU for a product |
+| POST | `/api/v1/products/{id}/validate-step` | `products:write` | Validate the basic step |
+| POST | `/api/v1/products/creation-readiness` | `products:read` | Creation readiness of unsaved form values |
+| GET | `/api/v1/products/drafts` | `products:read` | My unfinished drafts |
+| POST | `/api/v1/products/drafts` | `products:write` | Create a draft product |
+| GET | `/api/v1/products/form-options` | `products:read` | Options and limits for the product editor |
+| GET | `/api/v1/products/sku-check` | `products:read` | Is this Master SKU free? |
+| GET | `/api/v1/products/standard-categories` | `products:read` | Suggestions for the "standard product category" field |
+
+## Product edit
+
+
+
+| Method | Path | Access | Summary |
+|---|---|---|---|
+| POST | `/api/v1/products/{id}/change-impact` | `products:read` | What would this edit affect? (preview, nothing is saved) |
+| GET | `/api/v1/products/{id}/edit` | `products:read` | The editing page of a product in one call |
+| POST | `/api/v1/products/{id}/edit/save` | `products:write` | Save the edit page (atomic) and propagate to the connected listings |
+| GET | `/api/v1/products/{id}/insights` | `products:read` | Suggested improvements of a product |
+| POST | `/api/v1/products/{id}/insights/{key}/dismiss` | `products:write` | Dismiss a suggested improvement |
+| POST | `/api/v1/products/{id}/insights/{key}/restore` | `products:write` | Show a dismissed suggestion again |
+
+## Promotions
+
+
+
+| Method | Path | Access | Summary |
+|---|---|---|---|
+| GET | `/api/v1/promotions/campaigns` | `promotions:read` | Campaign ledger |
+| POST | `/api/v1/promotions/campaigns` | `promotions:write` | Create a draft campaign |
+| DELETE | `/api/v1/promotions/campaigns/{id}` | `promotions:write` | Delete a draft campaign |
+| GET | `/api/v1/promotions/campaigns/{id}` | `promotions:read` | One campaign with its results and velocity lift |
+| PATCH | `/api/v1/promotions/campaigns/{id}` | `promotions:write` | Edit a draft campaign |
+| POST | `/api/v1/promotions/campaigns/{id}/activate` | `promotions:write` | Start a campaign now |
+| POST | `/api/v1/promotions/campaigns/{id}/cancel` | `promotions:write` | Cancel a draft or scheduled campaign |
+| POST | `/api/v1/promotions/campaigns/{id}/duplicate` | `promotions:write` | Copy a campaign as a new draft |
+| POST | `/api/v1/promotions/campaigns/{id}/end` | `promotions:write` | End a running campaign |
+| POST | `/api/v1/promotions/campaigns/{id}/evaluate` | `promotions:write` | Re-check every product of a campaign |
+| DELETE | `/api/v1/promotions/campaigns/{id}/products` | `promotions:write` | Remove products from a draft campaign |
+| GET | `/api/v1/promotions/campaigns/{id}/products` | `promotions:read` | Products of a campaign |
+| PUT | `/api/v1/promotions/campaigns/{id}/products` | `promotions:write` | Set the products of a draft campaign |
+| POST | `/api/v1/promotions/campaigns/{id}/schedule` | `promotions:write` | Schedule a draft campaign |
+| GET | `/api/v1/promotions/overview` | `promotions:read` | Tiles of the Promotions page |
+| POST | `/api/v1/promotions/process` | `promotions:write` | Run the campaign scheduler now |
+| GET | `/api/v1/promotions/products` | `promotions:read` | Promoted SKUs across campaigns |
+
+## Report exports
+
+
+
+| Method | Path | Access | Summary |
+|---|---|---|---|
+| GET | `/api/v1/reports/catalog` | `reports:read` | Report catalog |
+| POST | `/api/v1/reports/exports` | `reports:write` | Export a report as csv, xlsx or pdf |
+| GET | `/api/v1/reports/overview` | `reports:read` | Reports page overview |
+| GET | `/api/v1/reports/runs` | `reports:read` | List report runs |
+| GET | `/api/v1/reports/runs/{id}` | `reports:read` | Get a report run |
+| GET | `/api/v1/reports/runs/{id}/download` | `reports:read` | Download the file of a report run |
+
+## Report schedules
+
+
+
+| Method | Path | Access | Summary |
+|---|---|---|---|
+| GET | `/api/v1/reports/schedules` | `reports:read` | List report schedules |
+| POST | `/api/v1/reports/schedules` | `reports:write` | Schedule a report |
+| DELETE | `/api/v1/reports/schedules/{id}` | `reports:write` | Delete a report schedule |
+| GET | `/api/v1/reports/schedules/{id}` | `reports:read` | Get a report schedule |
+| PATCH | `/api/v1/reports/schedules/{id}` | `reports:write` | Change a report schedule |
+| POST | `/api/v1/reports/schedules/{id}/pause` | `reports:write` | Pause a report schedule |
+| POST | `/api/v1/reports/schedules/{id}/resume` | `reports:write` | Resume a report schedule |
+| POST | `/api/v1/reports/schedules/{id}/run-now` | `reports:write` | Run a schedule now |
+
+## Workspace
+
+
+
+| Method | Path | Access | Summary |
+|---|---|---|---|
+| GET | `/api/v1/channels/{id}/overview` | `marketplace_accounts:read` | Channel connection panel |
+| GET | `/api/v1/dashboard` | `analytics:read` | Dashboard home |
+| GET | `/api/v1/me/businesses` | any signed-in user | Businesses of the signed-in user |
+| GET | `/api/v1/search` | any signed-in user | Global search (Cmd+K) |
+| GET | `/api/v1/views` | `views:read` | Saved views |
+| POST | `/api/v1/views` | `views:write` | Save a view |
+| DELETE | `/api/v1/views/{id}` | `views:write` | Delete a view |
+| PATCH | `/api/v1/views/{id}` | `views:write` | Change a view |
+| GET | `/api/v1/workspace/recommendations` | any signed-in user | Recommendations page: channel, product and replenishment cards |
+| GET | `/api/v1/workspace/shell` | any signed-in user | App shell data |

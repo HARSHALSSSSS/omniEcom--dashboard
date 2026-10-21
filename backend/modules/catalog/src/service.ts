@@ -1,15 +1,29 @@
-import { and, eq, escapeLike, gte, ilike, inArray, isNull, keyset, lte, or, schema, sql, type SQL, type Tx } from '@oms/database';
+import { and, eq, escapeLike, gte, ilike, inArray, isNull, keyset, lte, or, PG, pgError, schema, sql, type SQL, type Tx } from '@oms/database';
 import { AppError, Errors } from '@oms/shared';
 import { enforceLimit } from '@oms/mod-billing';
 import { getCategory } from '@oms/mod-categories';
 import { getProductAttributeValues, setProductAttributeValues, type ProductValueInput } from '@oms/mod-attributes';
 import type { Effects } from './effects';
+import { upsertBrand } from './brands';
+import { isPlaceholderCode, normalizeFields, type CustomAttribute, type CustomAttributeInput, type FieldIssue, type NormalizedFields, type RawFields } from './fields';
+import { canonicalDimensions, displayDimensions, displayWeight, type DimensionsInput, type WeightInput } from './physical';
 
 export type ProductRow = typeof schema.products.$inferSelect;
 export type VariantRow = typeof schema.productVariants.$inferSelect;
 
 const P = schema.products;
 const V = schema.productVariants;
+
+// ------------------------------------------------------------------------------------------------
+// master code lock (decision E1 of docs/figma/51-edit-build-brief.md)
+// ------------------------------------------------------------------------------------------------
+/** the master code can only change while the product is a draft (a listed SKU is an identifier other systems hold) */
+export const isCodeLocked = (status: string): boolean => status !== 'draft';
+
+export const CODE_LOCKED_MESSAGE = 'The master code cannot be changed once the product is no longer a draft';
+
+export const codeLockedError = (code: string, attempted: string): AppError =>
+  new AppError('CONFLICT', CODE_LOCKED_MESSAGE, { details: { rule: 'code_locked', field: 'productCode', code, attempted } });
 
 // ------------------------------------------------------------------------------------------------
 // mappers
@@ -26,14 +40,28 @@ export const toProductDto = (p: ProductRow, variantCount = 0) => ({
   hsnCode: p.hsnCode,
   gstRateBps: p.gstRateBps,
   tags: p.tags,
+  descriptionHtml: p.descriptionHtml,
+  dimensions: displayDimensions(p),
+  dimensionsMm: canonicalDimensions(p),
+  weight: displayWeight(p.weightGrams),
+  weightGrams: p.weightGrams,
+  material: p.material,
+  standardCategory: p.standardCategory,
+  customAttributes: (p.customAttributes ?? []) as CustomAttribute[],
+  productType: ((p.attributes as Record<string, unknown> | null)?.productType ?? 'physical') as 'physical' | 'digital' | 'service',
   status: p.status as 'draft' | 'active' | 'archived',
+  productCodeLocked: isCodeLocked(p.status),
   variantCount,
   version: p.version,
   createdAt: p.createdAt.toISOString(),
   updatedAt: p.updatedAt.toISOString(),
 });
 
-export const toVariantDto = (v: VariantRow) => ({
+/** what a variant inherits from its product when it has no dimensions / weight of its own */
+export type VariantInheritance = { dimensionsMm: { length: number; width: number; height: number } | null; weightGrams: number | null };
+export const inheritanceOf = (p: { lengthMm: number | null; widthMm: number | null; heightMm: number | null; weightGrams: number | null }): VariantInheritance => ({ dimensionsMm: canonicalDimensions(p), weightGrams: p.weightGrams });
+
+export const toVariantDto = (v: VariantRow, inherit?: VariantInheritance) => ({
   id: v.id,
   productId: v.productId,
   sku: v.sku,
@@ -46,6 +74,8 @@ export const toVariantDto = (v: VariantRow) => ({
   taxRateBps: v.taxRateBps,
   weightGrams: v.weightGrams,
   dimensionsMm: v.dimensionsMm ? { length: v.dimensionsMm.l, width: v.dimensionsMm.w, height: v.dimensionsMm.h } : null,
+  effectiveDimensionsMm: v.dimensionsMm ? { length: v.dimensionsMm.l, width: v.dimensionsMm.w, height: v.dimensionsMm.h } : inherit?.dimensionsMm ?? null,
+  effectiveWeightGrams: v.weightGrams ?? inherit?.weightGrams ?? null,
   status: v.status as 'active' | 'inactive',
   version: v.version,
   createdAt: v.createdAt.toISOString(),
@@ -65,8 +95,63 @@ export interface VariantInput {
 }
 export interface ProductInput {
   productCode: string; title: string; description?: string | null; brand?: string | null; manufacturer?: string | null; countryOfOrigin?: string | null;
-  categoryId?: string | null; hsnCode?: string | null; gstRateBps?: number | null; tags?: string[]; status?: 'draft' | 'active' | 'archived';
+  categoryId?: string | null; hsnCode?: string | null; gstRateBps?: number | null; tags?: string[]; status?: 'draft' | 'active' | 'archived'; productType?: 'physical' | 'digital' | 'service';
   variants?: VariantInput[]; attributeValues?: ProductValueInput[];
+  /** rich description (sanitised); wins over `description` when both are sent */
+  descriptionHtml?: string | null;
+  material?: string | null; standardCategory?: string | null;
+  /** display units in (cm / mm / in, kg / g / lb); stored as integer mm / grams */
+  dimensions?: DimensionsInput | null; weight?: WeightInput | null;
+  customAttributes?: CustomAttributeInput[] | null;
+}
+
+export interface ProductWriteOptions {
+  /**
+   * HTTP callers: a too-long description / title / brand is a 400. Internal callers (CSV and marketplace imports, product copies) keep their
+   * previous leniency: the value is cut to the limit instead of failing the whole row.
+   */
+  strict?: boolean;
+  /** the product code was generated by the server (DRAFT-xxxx placeholder) */
+  generatedCode?: boolean;
+  /** audit action written by updateProduct / applyProductPatch (default product.update / product.archive); null = write no audit record */
+  auditAction?: string | null;
+}
+
+/** field problems -> the repo's standard 400 shape (`details.issues[{ path, code, message }]`), plus `details.rule` for the description limit */
+export function validationError(issues: Array<FieldIssue & { length?: number; max?: number }>): AppError {
+  const tooLong = issues.find((i) => i.code === 'description_too_long');
+  return Errors.validation({
+    ...(tooLong ? { rule: 'description_too_long', length: tooLong.length, max: tooLong.max } : {}),
+    issues: issues.map((i) => ({ path: i.field, code: i.code, message: i.message, ...(i.length !== undefined ? { length: i.length, max: i.max } : {}) })),
+  });
+}
+
+export const versionConflict = (currentVersion: number) => new AppError('VERSION_CONFLICT', undefined, { details: { currentVersion } });
+
+/** the live product (other than `excludeId`) that already uses this master code, ignoring case */
+export async function findCodeConflict(tx: Tx, vendorId: string, code: string, excludeId?: string | null): Promise<{ id: string; title: string; code: string } | null> {
+  const [row] = await tx
+    .select({ id: P.id, title: P.title, code: P.productCode })
+    .from(P)
+    .where(and(liveProduct(vendorId), sql`lower(${P.productCode}) = lower(${code})`, excludeId ? sql`${P.id} <> ${excludeId}` : undefined))
+    .limit(1);
+  return row ?? null;
+}
+
+export function duplicateCodeError(code: string, conflict: { id: string; title: string; code: string } | null): AppError {
+  return new AppError('CONFLICT', 'Master SKU already exists', {
+    details: { rule: 'duplicate_product_code', field: 'productCode', code, conflict: conflict ? { type: 'product', id: conflict.id, title: conflict.title, code: conflict.code } : null },
+  });
+}
+
+/**
+ * Maps a unique violation on the master code (race: two writers took the same code) to the clean 409. The caller ran the failing statement in a
+ * SAVEPOINT, so the transaction is still usable for the lookup of the winner. Anything else is returned unchanged.
+ */
+export async function mapCodeViolation(tx: Tx, vendorId: string, e: unknown, code: string, excludeId?: string | null): Promise<unknown> {
+  const pg = pgError(e);
+  if (pg?.code === PG.UNIQUE_VIOLATION && pg.constraint?.startsWith('products_vendor_code')) return duplicateCodeError(code, await findCodeConflict(tx, vendorId, code, excludeId));
+  return e;
 }
 
 function assertPrices(v: { mrpMinor?: number | null; sellingPriceMinor?: number | null; sku?: string }) {
@@ -101,7 +186,8 @@ export async function getProductRow(tx: Tx, vendorId: string, id: string): Promi
 export async function getProductDetail(tx: Tx, vendorId: string, id: string) {
   const p = await getProductRow(tx, vendorId, id);
   const variants = await tx.select().from(V).where(and(liveVariant(vendorId), eq(V.productId, id))).orderBy(V.createdAt, V.id);
-  return { ...toProductDto(p, variants.length), variants: variants.map(toVariantDto), attributeValues: await getProductAttributeValues(tx, vendorId, id) };
+  const inherit = inheritanceOf(p);
+  return { ...toProductDto(p, variants.length), variants: variants.map((v) => toVariantDto(v, inherit)), attributeValues: await getProductAttributeValues(tx, vendorId, id) };
 }
 
 export interface ProductListInput {
@@ -161,22 +247,35 @@ async function assertCanActivate(tx: Tx, vendorId: string, productId: string): P
   if (!row) throw new AppError('CONFLICT', 'A product needs at least one active variant (SKU) before it can be activated', { details: { rule: 'needs_variant' } });
 }
 
-export async function createProduct(tx: Tx, vendorId: string, input: ProductInput, fx: Effects) {
-  if (input.categoryId) await getCategory(tx, vendorId, input.categoryId);
+export async function createProduct(tx: Tx, vendorId: string, input: ProductInput, fx: Effects, opts: ProductWriteOptions = {}) {
+  const { fields, issues } = normalizeFields(input as RawFields, { strict: opts.strict === true, currentPlaceholderCode: opts.generatedCode ? input.productCode : null });
+  if (issues.length) throw validationError(issues);
+  if (fields.categoryId) await getCategory(tx, vendorId, fields.categoryId);
   await enforceLimit(tx, vendorId, 'products'); // reports always; rejects only when the platform enabled billing.enforce_limits for this vendor
   for (const v of input.variants ?? []) assertPrices(v);
   const skus = (input.variants ?? []).map((v) => v.sku);
   if (new Set(skus).size !== skus.length) throw Errors.validation({ issues: [{ path: 'variants', message: 'duplicate SKU in request' }] });
 
-  const [p] = await tx
-    .insert(P)
-    .values({
-      vendorId, productCode: input.productCode, title: input.title, description: input.description ?? null, brand: input.brand ?? null,
-      manufacturer: input.manufacturer ?? null, countryOfOrigin: input.countryOfOrigin ?? null, categoryId: input.categoryId ?? null,
-      hsnCode: input.hsnCode ?? null, gstRateBps: input.gstRateBps ?? null, tags: input.tags ?? [], status: 'draft',
-    })
-    .returning();
-  const productId = p!.id;
+  const brand = fields.brand ? (await upsertBrand(tx, vendorId, fields.brand, fx)).name : null; // canonical spelling of an existing brand wins
+  let p: ProductRow;
+  try {
+    // a SAVEPOINT: a unique violation (two creators racing for one master code) must leave the transaction usable to report the winner
+    [p] = await tx.transaction((sp) => (sp as unknown as Tx)
+      .insert(P)
+      .values({
+        vendorId, productCode: fields.productCode!, title: fields.title!, description: fields.description ?? null, descriptionHtml: fields.descriptionHtml ?? null, brand,
+        manufacturer: fields.manufacturer ?? null, countryOfOrigin: fields.countryOfOrigin ?? null, categoryId: fields.categoryId ?? null,
+        hsnCode: fields.hsnCode ?? null, gstRateBps: fields.gstRateBps ?? null, tags: fields.tags ?? [], status: 'draft',
+        material: fields.material ?? null, standardCategory: fields.standardCategory ?? null,
+        lengthMm: fields.lengthMm ?? null, widthMm: fields.widthMm ?? null, heightMm: fields.heightMm ?? null, weightGrams: fields.weightGrams ?? null,
+        customAttributes: fields.customAttributes ?? [],
+        ...(fields.productType ? { attributes: { productType: fields.productType } } : {}),
+      })
+      .returning()) as [ProductRow];
+  } catch (e) {
+    throw await mapCodeViolation(tx, vendorId, e, fields.productCode!);
+  }
+  const productId = p.id;
 
   for (const v of input.variants ?? []) {
     const [row] = await tx.insert(V).values({ vendorId, productId, sku: v.sku, ...variantColumns(v) }).returning();
@@ -190,31 +289,74 @@ export async function createProduct(tx: Tx, vendorId: string, input: ProductInpu
     await assertCanActivate(tx, vendorId, productId);
     await tx.update(P).set({ status: 'active' }).where(eq(P.id, productId));
   }
-  await fx.event({ type: 'product.created', aggregateType: 'product', aggregateId: productId, payload: { productCode: input.productCode, status: input.status ?? 'draft' } });
-  await fx.audit({ action: 'product.create', resourceType: 'product', resourceId: productId, after: { productCode: input.productCode, title: input.title, variants: skus } });
+  await fx.event({ type: 'product.created', aggregateType: 'product', aggregateId: productId, payload: { productCode: fields.productCode, status: input.status ?? 'draft' } });
+  await fx.audit({ action: 'product.create', resourceType: 'product', resourceId: productId, after: { productCode: fields.productCode, title: fields.title, variants: skus } });
   return getProductDetail(tx, vendorId, productId);
 }
 
 export type ProductPatch = Partial<Omit<ProductInput, 'variants' | 'attributeValues'>> & { version?: number };
 
-export async function updateProduct(tx: Tx, vendorId: string, id: string, patch: ProductPatch, fx: Effects) {
+const PATCH_COLUMNS = [
+  'productCode', 'title', 'description', 'descriptionHtml', 'manufacturer', 'countryOfOrigin', 'categoryId', 'hsnCode', 'gstRateBps', 'tags',
+  'material', 'standardCategory', 'lengthMm', 'widthMm', 'heightMm', 'weightGrams', 'customAttributes',
+] as const;
+
+/**
+ * The write path of every product edit (PATCH, draft autosave, step continue, AI apply): validates and normalises the fields, upserts the brand,
+ * applies an optimistic-lock-guarded UPDATE (the version check is part of the statement, so two editors holding the same version cannot both win)
+ * and maps a lost race for the master code to a clean 409. Emits the outbox event; the audit record is written unless `opts.auditAction` is null.
+ */
+export async function applyProductPatch(tx: Tx, vendorId: string, id: string, patch: ProductPatch, fx: Effects, opts: ProductWriteOptions = {}) {
   const before = await getProductRow(tx, vendorId, id);
-  if (patch.version !== undefined && patch.version !== before.version) throw new AppError('VERSION_CONFLICT', undefined, { details: { currentVersion: before.version } });
-  if (patch.categoryId) await getCategory(tx, vendorId, patch.categoryId);
-  if (patch.status === 'active' && before.status !== 'active') await assertCanActivate(tx, vendorId, id);
+  if (patch.version !== undefined && patch.version !== before.version) throw versionConflict(before.version);
+  const placeholder = opts.generatedCode ? patch.productCode ?? null : before.status === 'draft' && isPlaceholderCode(before.productCode) ? before.productCode : null;
+  const { fields, issues } = normalizeFields(patch as RawFields, { strict: opts.strict === true, previousAttributes: (before.customAttributes ?? []) as CustomAttribute[], currentPlaceholderCode: placeholder });
+  if (issues.length) throw validationError(issues);
+  return writeProductFields(tx, vendorId, before, fields, { status: patch.status, version: patch.version }, fx, opts);
+}
+
+/** writes already-normalised fields (see normalizeFields) with the optimistic-lock guard; see applyProductPatch */
+export async function writeProductFields(tx: Tx, vendorId: string, before: ProductRow, fields: NormalizedFields, extra: { status?: 'draft' | 'active' | 'archived'; version?: number }, fx: Effects, opts: ProductWriteOptions = {}) {
+  const id = before.id;
+  if (extra.version !== undefined && extra.version !== before.version) throw versionConflict(before.version);
+  // E1: the master code is locked once the product is not a draft (the status BEFORE this write decides: a draft may change its code and activate in one call)
+  if (fields.productCode !== undefined && fields.productCode !== before.productCode && isCodeLocked(before.status)) throw codeLockedError(before.productCode, fields.productCode);
+  if (fields.categoryId) await getCategory(tx, vendorId, fields.categoryId);
+  if (extra.status === 'active' && before.status !== 'active') await assertCanActivate(tx, vendorId, id);
 
   const set: Partial<typeof schema.products.$inferInsert> = {};
-  for (const k of ['productCode', 'title', 'description', 'brand', 'manufacturer', 'countryOfOrigin', 'categoryId', 'hsnCode', 'gstRateBps', 'tags', 'status'] as const) {
-    if (patch[k] !== undefined) (set as Record<string, unknown>)[k] = patch[k];
-  }
-  const [after] = await tx.update(P).set({ ...set, version: sql`${P.version} + 1` as never }).where(eq(P.id, id)).returning();
+  for (const k of PATCH_COLUMNS) if (fields[k] !== undefined) (set as Record<string, unknown>)[k] = fields[k];
+  if (extra.status !== undefined) set.status = extra.status;
+  if (fields.brand !== undefined) set.brand = fields.brand === null ? null : (await upsertBrand(tx, vendorId, fields.brand, fx)).name;
+  if (fields.productType !== undefined) set.attributes = { ...((before.attributes as Record<string, unknown>) ?? {}), productType: fields.productType };
 
-  const archived = patch.status === 'archived' && before.status !== 'archived';
+  const guard = and(eq(P.id, id), eq(P.vendorId, vendorId), isNull(P.deletedAt), extra.version !== undefined ? eq(P.version, extra.version) : undefined);
+  const run = (db: Tx) => db.update(P).set({ ...set, version: sql`${P.version} + 1` as never }).where(guard).returning();
+  let after: ProductRow | undefined;
+  try {
+    [after] = set.productCode !== undefined ? await tx.transaction((sp) => run(sp as unknown as Tx)) : await run(tx);
+  } catch (e) {
+    throw await mapCodeViolation(tx, vendorId, e, set.productCode ?? '', id);
+  }
+  if (!after) throw versionConflict((await getProductRow(tx, vendorId, id)).version); // somebody else wrote between our read and the guarded update
+  if (set.productCode !== undefined && set.productCode !== before.productCode) {
+    await tx.update(schema.productCreation).set({ codeIsPlaceholder: isPlaceholderCode(set.productCode) }).where(and(eq(schema.productCreation.vendorId, vendorId), eq(schema.productCreation.productId, id)));
+  }
+
+  const archived = extra.status === 'archived' && before.status !== 'archived';
   await fx.event({ type: archived ? 'product.archived' : 'product.updated', aggregateType: 'product', aggregateId: id, payload: { fields: Object.keys(set) } });
-  await fx.audit({
-    action: archived ? 'product.archive' : 'product.update', resourceType: 'product', resourceId: id,
-    before: { title: before.title, status: before.status, productCode: before.productCode }, after: { title: after!.title, status: after!.status, productCode: after!.productCode },
-  });
+  if (opts.auditAction !== null) {
+    await fx.audit({
+      action: opts.auditAction ?? (archived ? 'product.archive' : 'product.update'), resourceType: 'product', resourceId: id,
+      before: { title: before.title, status: before.status, productCode: before.productCode }, after: { title: after.title, status: after.status, productCode: after.productCode },
+      ...(opts.auditAction ? { metadata: { fields: Object.keys(set) } } : {}),
+    });
+  }
+  return { before, after, changed: Object.keys(set) };
+}
+
+export async function updateProduct(tx: Tx, vendorId: string, id: string, patch: ProductPatch, fx: Effects, opts: ProductWriteOptions = {}) {
+  await applyProductPatch(tx, vendorId, id, patch, fx, opts);
   return getProductDetail(tx, vendorId, id);
 }
 
@@ -249,18 +391,24 @@ export async function getVariantRow(tx: Tx, vendorId: string, id: string): Promi
 }
 
 export async function listProductVariants(tx: Tx, vendorId: string, productId: string) {
-  await getProductRow(tx, vendorId, productId);
+  const inherit = inheritanceOf(await getProductRow(tx, vendorId, productId));
   const rows = await tx.select().from(V).where(and(liveVariant(vendorId), eq(V.productId, productId))).orderBy(V.createdAt, V.id);
-  return rows.map(toVariantDto);
+  return rows.map((v) => toVariantDto(v, inherit));
+}
+
+/** a variant with the dimensions / weight it inherits from its product */
+export async function getVariantDto(tx: Tx, vendorId: string, id: string) {
+  const v = await getVariantRow(tx, vendorId, id);
+  return toVariantDto(v, inheritanceOf(await getProductRow(tx, vendorId, v.productId)));
 }
 
 export async function createVariant(tx: Tx, vendorId: string, productId: string, input: VariantInput, fx: Effects) {
-  await getProductRow(tx, vendorId, productId);
+  const product = await getProductRow(tx, vendorId, productId);
   assertPrices(input);
   const [row] = await tx.insert(V).values({ vendorId, productId, sku: input.sku, ...variantColumns(input) }).returning();
   await fx.event({ type: 'variant.created', aggregateType: 'variant', aggregateId: row!.id, payload: { productId, sku: input.sku } });
   await fx.audit({ action: 'variant.create', resourceType: 'variant', resourceId: row!.id, after: { sku: input.sku, productId } });
-  return toVariantDto(row!);
+  return toVariantDto(row!, inheritanceOf(product));
 }
 
 export async function updateVariant(tx: Tx, vendorId: string, id: string, patch: Partial<VariantInput> & { version?: number }, fx: Effects) {
@@ -277,7 +425,7 @@ export async function updateVariant(tx: Tx, vendorId: string, id: string, patch:
     before: { sku: before.sku, sellingPriceMinor: before.sellingPriceMinor, mrpMinor: before.mrpMinor, status: before.status },
     after: { sku: after!.sku, sellingPriceMinor: after!.sellingPriceMinor, mrpMinor: after!.mrpMinor, status: after!.status },
   });
-  return toVariantDto(after!);
+  return toVariantDto(after!, inheritanceOf(await getProductRow(tx, vendorId, before.productId)));
 }
 
 export async function deleteVariant(tx: Tx, vendorId: string, id: string, fx: Effects) {
@@ -300,7 +448,7 @@ export interface VariantListInput {
 }
 
 export async function listVariants(tx: Tx, vendorId: string, input: VariantListInput) {
-  const ks = keyset<{ v: VariantRow; productCode: string; productTitle: string }>({
+  const ks = keyset<{ v: VariantRow; productCode: string; productTitle: string; pd: { lengthMm: number | null; widthMm: number | null; heightMm: number | null; weightGrams: number | null } }>({
     sorts: { sku: { column: V.sku, kind: 'text' }, createdAt: { column: V.createdAt, kind: 'timestamp' }, updatedAt: { column: V.updatedAt, kind: 'timestamp' } },
     idColumn: V.id,
     sort: input.sort,
@@ -311,7 +459,7 @@ export async function listVariants(tx: Tx, vendorId: string, input: VariantListI
   const like = input.q ? `%${escapeLike(input.q)}%` : null;
   const field = input.sort?.[0]?.field ?? 'sku';
   const rows = await tx
-    .select({ v: V, productCode: P.productCode, productTitle: P.title })
+    .select({ v: V, productCode: P.productCode, productTitle: P.title, pd: { lengthMm: P.lengthMm, widthMm: P.widthMm, heightMm: P.heightMm, weightGrams: P.weightGrams } })
     .from(V)
     .innerJoin(P, and(eq(P.id, V.productId), eq(P.vendorId, V.vendorId)))
     .where(and(
@@ -326,7 +474,7 @@ export async function listVariants(tx: Tx, vendorId: string, input: VariantListI
     .orderBy(...ks.orderBy)
     .limit(ks.fetch);
   const page = ks.finish(rows, ({ v }) => ({ sortValue: field === 'createdAt' ? v.createdAt : field === 'updatedAt' ? v.updatedAt : v.sku, id: v.id }));
-  return { items: page.items.map(({ v, productCode, productTitle }) => ({ ...toVariantDto(v), productCode, productTitle })), nextCursor: page.nextCursor };
+  return { items: page.items.map(({ v, productCode, productTitle, pd }) => ({ ...toVariantDto(v, inheritanceOf(pd)), productCode, productTitle })), nextCursor: page.nextCursor };
 }
 
 // ------------------------------------------------------------------------------------------------

@@ -16,6 +16,7 @@ import { allModules } from '@oms/modules-registry';
 import { MemoryStorage } from '@oms/storage';
 import { asc, eq, isNull, schema, seedReferenceData, withSystem, type Database, type Db } from '@oms/database';
 import { newId } from '@oms/shared';
+import { jpeg, png } from './images';
 
 export { mockControl, amazonControl, flipkartControl, myntraControl, snapdealControl, MemoryMailer, MemoryStorage };
 
@@ -361,5 +362,6 @@ export class Client {
 export const clientFor = (t: TestApp): Client => new Client(t);
 
 /** Smallest valid image bytes for upload tests. */
-export const PNG_1x1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
-export const JPEG_BYTES = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(64, 1)]);
+/** valid 256x256 images (the product image validation rejects anything smaller than 200 px); the name is historical */
+export const PNG_1x1 = png(256, 256);
+export const JPEG_BYTES = jpeg(256, 256);

@@ -12,6 +12,12 @@
   "dependencies": {
     "@oms/module-kit": "workspace:*",
     "@oms/mod-analytics": "workspace:*",
-    "@oms/mod-inventory": "workspace:*"
+    "@oms/mod-inventory": "workspace:*",
+    "@oms/mod-pricing": "workspace:*",
+    "@oms/mod-catalog": "workspace:*",
+    "@oms/mod-procurement": "workspace:*",
+    "@oms/mod-orders": "workspace:*",
+    "@oms/mod-issues": "workspace:*",
+    "@oms/mod-marketplace-accounts": "workspace:*"
   }
 }

@@ -4,13 +4,17 @@ import { audit, emit, ok, paginated, requireScope, scopedTx, vendorTx } from '@o
 import { IdParamSchema, paginatedEnvelope, successEnvelope } from '@oms/contracts';
 import { notifyVendorChanged } from '@oms/shared';
 import * as svc from './service';
+import { gstRoutes } from './gst-routes';
+import { settingsRoutes } from './settings-routes';
 import { SetStatusBodySchema, UpdateVendorBodySchema, VendorListQuerySchema, VendorSchema, VendorSettingsSchema } from './schemas';
 
-const snapshot = (v: svc.VendorRow) => ({ displayName: v.displayName, legalName: v.legalName, status: v.status, gstin: v.gstin, pan: v.pan, timezone: v.timezone, currency: v.currency.trim(), settings: v.settings });
+const snapshot = (v: svc.VendorRow) => ({ displayName: v.displayName, legalName: v.legalName, status: v.status, gstin: v.gstin, pan: v.pan, cin: v.cin, timezone: v.timezone, currency: v.currency.trim(), settings: v.settings });
 
 export const vendorRoutes: FastifyPluginAsync = async (app) => {
   const r = app.withTypeProvider<ZodTypeProvider>();
   const TAGS = ['Vendors'];
+  await app.register(gstRoutes);
+  await app.register(settingsRoutes);
 
   // ------------------------------------------------------------------ the caller's own vendor
   r.get('/vendor', {

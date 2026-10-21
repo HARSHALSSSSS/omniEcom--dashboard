@@ -42,8 +42,8 @@ export const CHANNELS: ChannelDef[] = [
   { code: 'amazon_in', name: 'Amazon', kind: 'marketplace', description: 'Products, orders, inventory and listings', connector: 'amazon_in' },
   { code: 'flipkart', name: 'Flipkart', kind: 'marketplace', description: 'Products, orders, inventory and listings', connector: 'flipkart' },
   { code: 'myntra', name: 'Myntra', kind: 'marketplace', description: 'Products, orders, inventory and listings', connector: 'myntra' },
-  { code: 'meesho', name: 'Meesho', kind: 'marketplace', description: 'Catalog, orders and inventory', connector: null },
-  { code: 'shopify', name: 'Shopify', kind: 'online_store', description: 'Products, orders, customers and inventory', connector: null },
+  { code: 'meesho', name: 'Meesho', kind: 'marketplace', description: 'Catalog, orders and inventory', connector: 'meesho' },
+  { code: 'shopify', name: 'Shopify', kind: 'online_store', description: 'Products, orders, customers and inventory', connector: 'shopify' },
   { code: 'snapdeal', name: 'Snapdeal', kind: 'marketplace', description: 'Products, orders and inventory', connector: 'snapdeal' },
   { code: 'social_commerce', name: 'Social Commerce', kind: 'social', description: 'Catalog and orders from social channels', connector: null },
 ];

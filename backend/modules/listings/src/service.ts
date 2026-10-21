@@ -30,11 +30,13 @@ export const toListingDto = (r: ListingJoin) => {
     approval: { approved: r.l.status === 'approved' || r.l.approvedAt !== null, approvedAt: r.l.approvedAt ? r.l.approvedAt.toISOString() : null, approvedBy: r.l.approvedBy },
     publishedAt: r.l.publishedAt ? r.l.publishedAt.toISOString() : null, lastPolledAt: r.l.lastPolledAt ? r.l.lastPolledAt.toISOString() : null,
     quantity: { sellable: r.l.sellableQuantity, pushed: r.l.pushedQuantity, dirty: r.l.quantityDirty, pushedAt: r.l.quantityPushedAt ? r.l.quantityPushedAt.toISOString() : null },
+    contentState: r.l.contentState as 'synced' | 'sync_pending' | 'needs_review' | 'needs_republish' | 'failed', contentChangedFields: r.l.contentChangedFields, contentReview: r.l.contentReview,
+    contentError: r.l.contentError, contentChangedAt: r.l.contentChangedAt ? r.l.contentChangedAt.toISOString() : null, contentSyncedAt: r.l.contentSyncedAt ? r.l.contentSyncedAt.toISOString() : null,
     bufferOverride: r.l.bufferOverride, maxQuantityOverride: r.l.maxQuantityOverride, version: r.l.version, createdAt: r.l.createdAt.toISOString(), updatedAt: r.l.updatedAt.toISOString(),
   };
 };
 
-async function joined(tx: Tx, vendorId: string, where: SQL | undefined, extra?: { limit?: number; order?: SQL[] }): Promise<ListingJoin[]> {
+export async function joined(tx: Tx, vendorId: string, where: SQL | undefined, extra?: { limit?: number; order?: SQL[] }): Promise<ListingJoin[]> {
   const q = tx
     .select({ l: L, sku: V.sku, productId: P.id, productTitle: P.title, marketplace: A.marketplace, variantPriceMinor: V.sellingPriceMinor, variantMrpMinor: V.mrpMinor })
     .from(L)
@@ -51,7 +53,7 @@ export async function getListingDto(tx: Tx, vendorId: string, id: string) {
   return toListingDto(row);
 }
 
-export interface ListingFilter { limit: number; cursor?: string; sort?: Array<{ field: string; direction: 'asc' | 'desc' }>; q?: string; status?: string; accountId?: string; variantId?: string; marketplace?: string; source?: string }
+export interface ListingFilter { limit: number; cursor?: string; sort?: Array<{ field: string; direction: 'asc' | 'desc' }>; q?: string; status?: string; accountId?: string; variantId?: string; marketplace?: string; source?: string; contentState?: string; productId?: string }
 
 export async function listListings(tx: Tx, vendorId: string, f: ListingFilter) {
   const ks = keyset<ListingJoin>({ sorts: { createdAt: { column: L.createdAt, kind: 'timestamp' }, updatedAt: { column: L.updatedAt, kind: 'timestamp' } }, idColumn: L.id, sort: f.sort, defaultSort: { field: 'createdAt', direction: 'desc' }, cursor: f.cursor, limit: f.limit });
@@ -59,7 +61,7 @@ export async function listListings(tx: Tx, vendorId: string, f: ListingFilter) {
   const search = f.q ? or(ilike(L.externalSku, `%${escapeLike(f.q)}%`), ilike(P.title, `%${escapeLike(f.q)}%`), ilike(V.sku, `%${escapeLike(f.q)}%`)) : undefined;
   const rows = await joined(
     tx, vendorId,
-    and(f.status ? eq(L.status, f.status) : undefined, f.accountId ? eq(L.marketplaceAccountId, f.accountId) : undefined, f.variantId ? eq(L.variantId, f.variantId) : undefined, f.marketplace ? eq(A.marketplace, f.marketplace) : undefined, f.source ? eq(L.source, f.source) : undefined, search, ks.where),
+    and(f.status ? eq(L.status, f.status) : undefined, f.accountId ? eq(L.marketplaceAccountId, f.accountId) : undefined, f.variantId ? eq(L.variantId, f.variantId) : undefined, f.marketplace ? eq(A.marketplace, f.marketplace) : undefined, f.source ? eq(L.source, f.source) : undefined, f.contentState ? eq(L.contentState, f.contentState) : undefined, f.productId ? eq(P.id, f.productId) : undefined, search, ks.where),
     { limit: ks.fetch, order: ks.orderBy },
   );
   const page = ks.finish(rows, (r) => ({ sortValue: field === 'updatedAt' ? r.l.updatedAt : r.l.createdAt, id: r.l.id }));

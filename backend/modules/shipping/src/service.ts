@@ -60,7 +60,7 @@ function validateConfig(config: Record<string, unknown>): void {
 export const toVendorProviderDto = (p: typeof SP.$inferSelect) => ({ id: p.id, providerCode: p.providerCode, label: p.label, status: p.status as 'active' | 'disabled', isDefault: p.isDefault, config: visibleConfig(p.providerCode, p.config), version: p.version, createdAt: p.createdAt.toISOString() });
 
 export async function listVendorProviders(tx: Tx, vendorId: string) {
-  return (await tx.select().from(SP).where(eq(SP.vendorId, vendorId)).orderBy(SP.createdAt)).map(toVendorProviderDto);
+  return (await tx.select().from(SP).where(and(eq(SP.vendorId, vendorId), eq(SP.kind, 'third_party'))).orderBy(SP.createdAt)).map(toVendorProviderDto);
 }
 export async function enableProvider(tx: Tx, ctx: OpCtx, input: { providerCode: string; label?: string; config?: Record<string, unknown>; isDefault?: boolean }) {
   const p = getProvider(input.providerCode);
@@ -68,7 +68,7 @@ export async function enableProvider(tx: Tx, ctx: OpCtx, input: { providerCode: 
   validateConfig(input.config ?? {});
   const [dup] = await tx.select({ id: SP.id }).from(SP).where(and(eq(SP.vendorId, ctx.vendorId), eq(SP.providerCode, p.code)));
   if (dup) throw new AppError('CONFLICT', 'This provider is already enabled', { details: { providerId: dup.id } });
-  const [any] = await tx.select({ id: SP.id }).from(SP).where(eq(SP.vendorId, ctx.vendorId)).limit(1);
+  const [any] = await tx.select({ id: SP.id }).from(SP).where(and(eq(SP.vendorId, ctx.vendorId), eq(SP.kind, 'third_party'))).limit(1);
   const makeDefault = input.isDefault ?? !any;
   if (makeDefault) await tx.update(SP).set({ isDefault: false }).where(and(eq(SP.vendorId, ctx.vendorId), eq(SP.isDefault, true)));
   const [row] = await tx.insert(SP).values({ vendorId: ctx.vendorId, providerCode: p.code, label: input.label ?? p.name, config: input.config ?? {}, isDefault: makeDefault }).returning();
@@ -76,7 +76,7 @@ export async function enableProvider(tx: Tx, ctx: OpCtx, input: { providerCode: 
   return toVendorProviderDto(row!);
 }
 export async function updateProvider(tx: Tx, ctx: OpCtx, id: string, patch: { label?: string; config?: Record<string, unknown>; status?: 'active' | 'disabled'; isDefault?: boolean }) {
-  const [before] = await tx.select().from(SP).where(and(eq(SP.id, id), eq(SP.vendorId, ctx.vendorId)));
+  const [before] = await tx.select().from(SP).where(and(eq(SP.id, id), eq(SP.vendorId, ctx.vendorId), eq(SP.kind, 'third_party')));
   if (!before) throw Errors.notFound('Shipping provider', id);
   if (patch.config) validateConfig(patch.config);
   const status = patch.status ?? before.status;
@@ -90,7 +90,7 @@ export async function updateProvider(tx: Tx, ctx: OpCtx, id: string, patch: { la
 }
 
 async function resolveProvider(tx: Tx, vendorId: string, code?: string): Promise<{ code: string; config: Record<string, unknown> }> {
-  const rows = await tx.select().from(SP).where(and(eq(SP.vendorId, vendorId), eq(SP.status, 'active')));
+  const rows = await tx.select().from(SP).where(and(eq(SP.vendorId, vendorId), eq(SP.status, 'active'), eq(SP.kind, 'third_party'))); // marketplace / seller methods are decisions, not courier adapters
   const row = code ? rows.find((r) => r.providerCode === code) : (rows.find((r) => r.isDefault) ?? rows[0]);
   if (code && !row) {
     if (code === 'manual') return { code, config: {} }; // manual hand-over always works, even before any provider is set up
@@ -323,11 +323,20 @@ export async function refreshTracking(ctx: OpCtx, shipmentId: string): Promise<T
   const s = await withVendor(db, ctx.vendorId, (tx) => getShipment(tx, ctx.vendorId, shipmentId));
   if (!s.awb || !(IN_FLIGHT as readonly string[]).includes(s.status)) throw new AppError('INVALID_STATE', `A ${s.status} shipment is not being tracked`, { details: { status: s.status } });
   const cfg = await withVendor(db, ctx.vendorId, async (tx) => (await tx.select({ c: SP.config }).from(SP).where(and(eq(SP.vendorId, ctx.vendorId), eq(SP.providerCode, s.providerCode))))[0]?.c ?? {});
-  const updates = await getProvider(s.providerCode).track(s.awb, cfg, s.lastTrackedAt ?? undefined);
+  let updates: TrackingUpdate[];
+  try {
+    updates = await getProvider(s.providerCode).track(s.awb, cfg, s.lastTrackedAt ?? undefined);
+  } catch (e) {
+    // remembered so the shipping workspace can show "tracking sync failed" and offer a retry
+    await withVendor(db, ctx.vendorId, (tx) => tx.update(S).set({ providerData: sql`${S.providerData} || ${JSON.stringify({ trackingError: { at: new Date().toISOString(), message: (e as Error).message.slice(0, 300) } })}::jsonb` }).where(eq(S.id, shipmentId)));
+    throw e;
+  }
+  const clearError = sql`${S.providerData} - 'trackingError'`;
   if (updates.length === 0) {
-    const shipment = await withVendor(db, ctx.vendorId, async (tx) => (await tx.update(S).set({ lastTrackedAt: new Date() }).where(eq(S.id, shipmentId)).returning())[0]!);
+    const shipment = await withVendor(db, ctx.vendorId, async (tx) => (await tx.update(S).set({ lastTrackedAt: new Date(), providerData: clearError }).where(eq(S.id, shipmentId)).returning())[0]!);
     return { shipment, applied: 0, recorded: 0, duplicates: 0, followUps: [] };
   }
+  await withVendor(db, ctx.vendorId, (tx) => tx.update(S).set({ providerData: clearError }).where(eq(S.id, shipmentId)));
   return ingestTracking(ctx, shipmentId, updates, 'provider');
 }
 

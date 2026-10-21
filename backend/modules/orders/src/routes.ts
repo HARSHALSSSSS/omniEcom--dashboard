@@ -11,6 +11,9 @@ import { requestOrderSync } from './runners';
 import { CANCELLATION_REASONS, REASON_CODES, decideCancellation, listCancellations, requestCancellation } from './cancellations';
 import { allocateOrder, getOrderDetail, listOrders, listStatusUpdates, orderSummary, orderTimeline, transitionOrder } from './service';
 import { retryStatusUpdate, toStatusUpdateDto } from './status';
+import { orderWorkspaceRoutes } from './workspace-routes';
+import { orderReadinessRoutes } from './readiness-routes';
+import { ALL_STATUSES, summaryExtras } from './read-models';
 
 const Money = z.number().int();
 const OrderItemSchema = z.object({
@@ -72,16 +75,27 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
     return paginated(req, page.items, { limit: q.limit, nextCursor: page.nextCursor });
   });
 
+  await orderWorkspaceRoutes(app, {}); // workspace endpoints (ledger, drawer, SLA ...): static paths, registered before `/orders/:id`
+  await orderReadinessRoutes(app, {}); // bulk + next-actions
+
   r.get('/orders/summary', {
     config: { access: { permission: 'orders:read' } },
     schema: {
       tags: TAGS,
       summary: 'Central dashboard numbers',
-      description: 'Orders placed in the window (default last 30 days) across ALL marketplaces: totals by normalised status and by marketplace, plus how many open orders need attention.',
-      querystring: z.object({ days: z.coerce.number().int().min(1).max(365).default(30) }),
-      response: { 200: successEnvelope(z.object({ since: IsoDate, total: z.number().int(), byStatus: z.record(z.string(), z.number().int()), byMarketplace: z.record(z.string(), z.object({ orders: z.number().int(), revenueMinor: z.number() })), needsAttention: z.number().int() })) },
+      description: 'Orders placed in the window (default last 30 days) across ALL marketplaces: totals by normalised status and by marketplace, plus how many open orders need attention. Additive screen numbers (all-time, not windowed): `statusCounts` per status, `tabs` (same definitions as the ledger tabs), `sla` bands, `today` (orders, new orders and revenue on `asOf`, business time zone), `pendingDispatchCount`, `avgFulfillmentHours` and `cancellationRatePct` (last 30 days, null without data).',
+      querystring: z.object({ days: z.coerce.number().int().min(1).max(365).default(30), asOf: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }),
+      response: { 200: successEnvelope(z.object({ since: IsoDate, total: z.number().int(), byStatus: z.record(z.string(), z.number().int()), byMarketplace: z.record(z.string(), z.object({ orders: z.number().int(), revenueMinor: z.number() })), needsAttention: z.number().int(),
+        asOf: z.string(), statusCounts: z.record(z.enum(ALL_STATUSES), z.number().int()),
+        tabs: z.object({ all: z.number().int(), needsAttention: z.number().int(), new: z.number().int(), processing: z.number().int(), shipped: z.number().int(), delivered: z.number().int(), returnsDisputes: z.number().int() }),
+        sla: z.object({ safe: z.number().int(), approaching: z.number().int(), atRisk: z.number().int(), breached: z.number().int(), atRiskMinutes: z.number().int(), approachingMinutes: z.number().int() }),
+        today: z.object({ orders: z.number().int(), newOrders: z.number().int(), revenueMinor: z.number(), currency: z.string() }),
+        pendingDispatchCount: z.number().int(), avgFulfillmentHours: z.number().nullable(), cancellationRatePct: z.number().nullable(), windowDays: z.number().int(),
+      })) },
     },
-  }, async (req) => ok(req, await vendorTx(req, (tx, vendorId) => orderSummary(tx, vendorId, new Date(Date.now() - req.query.days * 86_400_000)))));
+  }, async (req) => ok(req, await vendorTx(req, async (tx, vendorId) => ({
+    ...(await orderSummary(tx, vendorId, new Date(Date.now() - req.query.days * 86_400_000))), ...(await summaryExtras(tx, vendorId, req.query.asOf)),
+  }))));
 
   r.get('/orders/:id', {
     config: { access: { permission: 'orders:read' } },

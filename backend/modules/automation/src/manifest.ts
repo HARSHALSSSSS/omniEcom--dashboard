@@ -6,9 +6,9 @@ export const manifest = defineModule({
   title: "Automation",
   responsibility: "Vendor-defined rules (trigger event -> conditions -> whitelisted action) with execution history, human approval and rollback; every event is processed at most once per rule.",
   owns: ["automation_rules", "automation_executions"],
-  dependsOn: ["ai", "inventory", "sync", "fulfillment", "notifications", "rules"],
+  dependsOn: ["ai", "inventory", "sync", "fulfillment", "notifications", "rules", "pricing", "procurement", "listings", "orders", "catalog"],
   api: ["/api/v1/automation"],
-  publishes: ["automation.rule_fired", "automation.approval_requested"],
-  consumes: ["order.created", "order.needs_attention", "order.cancellation_requested", "inventory.low_stock", "sync.failed", "sync.dead_lettered", "listing.failed", "return.received", "marketplace_account.disconnected", "marketplace_account.authorization_expired", "fulfillment.exception_raised", "shipment.ndr_raised", "shipment.rto_started"],
+  publishes: ["automation.rule_fired", "automation.approval_requested", "order.sla_at_risk", "price.competitor_lower", "schedule.cadence"],
+  consumes: ["order.sla_at_risk", "price.competitor_lower", "schedule.cadence", "order.created", "order.needs_attention", "order.cancellation_requested", "inventory.low_stock", "sync.failed", "sync.dead_lettered", "listing.failed", "return.received", "marketplace_account.disconnected", "marketplace_account.authorization_expired", "fulfillment.exception_raised", "shipment.ndr_raised", "shipment.rto_started"],
   extraction: "later",
 });

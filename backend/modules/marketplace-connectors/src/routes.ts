@@ -7,8 +7,20 @@ import { enabledCapabilities, requireCapability, type MarketplaceConnector } fro
 import { AppError } from '@oms/shared';
 import { AccountSchema, getAccount, getAccountRow } from '@oms/mod-marketplace-accounts';
 import { ConnectorHost, signState, verifyState } from './host';
+import { connectorProfile } from './profiles';
 
 const CapabilityMatrixSchema = z.record(z.string(), z.unknown()).meta({ id: 'CapabilityMatrix', description: 'Nested capability flags: auth, account, catalog, listings, inventory, pricing, orders, returns, shipping, limits' });
+
+const CredentialFieldSchema = z.object({
+  key: z.string(), label: z.string(), type: z.enum(['text', 'password', 'select']), required: z.boolean(), secret: z.boolean(),
+  pattern: z.string().nullable().describe('Regular expression source the value must match'), help: z.string().nullable(),
+  options: z.array(z.object({ value: z.string(), label: z.string() })).optional(),
+});
+export const AuthFlowSchema = z.object({
+  type: z.string(), mode: z.enum(['redirect', 'credentials', 'both']).describe('redirect = approve on the marketplace; credentials = paste keys; both = either'),
+  fields: z.array(CredentialFieldSchema).describe('Direct credentials form'), redirectFields: z.array(CredentialFieldSchema).describe('Fields needed before the redirect (kept in the account configuration)'),
+  partnerGated: z.boolean(), refreshable: z.boolean(),
+}).meta({ id: 'ConnectorAuthFlow' });
 
 const ConnectorInfoSchema = z
   .object({
@@ -20,6 +32,14 @@ const ConnectorInfoSchema = z
     refreshableTokens: z.boolean(),
     enabledCapabilities: z.array(z.string()).describe('Flat list, e.g. orders.fetch, inventory.push'),
     capabilities: CapabilityMatrixSchema,
+    category: z.enum(['marketplace', 'storefront', 'shipping']),
+    description: z.string(),
+    logoKey: z.string().describe('Key of the logo asset the frontend ships for this connector'),
+    supportedRegions: z.array(z.string()),
+    authFlow: AuthFlowSchema,
+    rating: z.null().describe('Always null: the platform does not collect ratings'),
+    reviewsCount: z.null().describe('Always null: the platform does not collect reviews'),
+    pricing: z.null().describe('Always null: connectors have no separate price'),
   })
   .meta({ id: 'ConnectorInfo' });
 
@@ -32,6 +52,10 @@ const toInfo = (c: MarketplaceConnector) => ({
   refreshableTokens: c.capabilities.auth.refreshable,
   enabledCapabilities: enabledCapabilities(c),
   capabilities: c.capabilities as unknown as Record<string, unknown>,
+  ...connectorProfile(c),
+  rating: null,
+  reviewsCount: null,
+  pricing: null,
 });
 
 const AuthorizeBody = z
@@ -106,7 +130,7 @@ export const connectorRoutes: FastifyPluginAsync = async (app) => {
     });
     if (!connector.buildAuthorizationUrl) throw new AppError('CAPABILITY_UNSUPPORTED', `${connector.displayName} has no redirect authorization flow; send credentials to /authorize instead`, { details: { capability: 'auth.redirectFlow' } });
     const state = signState(secret, acc.vendorId, acc.id);
-    return ok(req, { authorizationUrl: connector.buildAuthorizationUrl({ state, redirectUri: req.query.redirectUri }), state, expiresInSeconds: 600 });
+    return ok(req, { authorizationUrl: connector.buildAuthorizationUrl({ state, redirectUri: req.query.redirectUri, config: acc.config as Record<string, unknown> }), state, expiresInSeconds: 600 });
   });
 
   const authorizeHandler = (action: 'authorize' | 'reconnect') => async (req: import('fastify').FastifyRequest<{ Params: { id: string }; Body: z.infer<typeof AuthorizeBody> }>) => {

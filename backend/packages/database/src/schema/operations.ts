@@ -51,6 +51,8 @@ export const inventory = pgTable('inventory', {
   quantityDamaged: integer('quantity_damaged').notNull().default(0),
   quantityReturned: integer('quantity_returned').notNull().default(0),
   reorderLevel: integer('reorder_level'),
+  /** units held back for review or repair: physically present, not sellable, not counted as damaged or returned */
+  quantityQuarantined: integer('quantity_quarantined').notNull().default(0),
   version: version(),
   ...timestamps(),
 }, (t) => [
@@ -59,6 +61,7 @@ export const inventory = pgTable('inventory', {
   foreignKey({ columns: [t.vendorId, t.variantId], foreignColumns: [productVariants.vendorId, productVariants.id], name: 'inventory_variant_fk' }),
   foreignKey({ columns: [t.vendorId, t.warehouseId], foreignColumns: [warehouses.vendorId, warehouses.id], name: 'inventory_warehouse_fk' }),
   unique('inventory_vendor_id_id_uq').on(t.vendorId, t.id),
+  check('inventory_quarantined_chk', sql`quantity_quarantined >= 0`),
   check('inventory_qty_chk', sql`quantity_on_hand >= 0 AND quantity_reserved >= 0 AND quantity_reserved <= quantity_on_hand AND quantity_incoming >= 0 AND quantity_damaged >= 0 AND quantity_returned >= 0`),
 ]);
 
@@ -91,6 +94,8 @@ export const orders = pgTable('orders', {
   cancelReason: text('cancel_reason'),
   lastMarketplaceSyncAt: tz('last_marketplace_sync_at'),
   placedAt: tz('placed_at').notNull(),
+  /** when the order must be handed to the courier (marketplace SLA); the SLA band (safe / approaching / at risk / breached) is derived from it */
+  dispatchDueAt: tz('dispatch_due_at'),
   currency: char('currency', { length: 3 }).notNull().default('INR'),
   subtotalMinor: minor('subtotal_minor').notNull().default(0),
   taxMinor: minor('tax_minor').notNull().default(0),
@@ -106,6 +111,7 @@ export const orders = pgTable('orders', {
   ...timestamps(),
 }, (t) => [
   unique('orders_vendor_id_id_uq').on(t.vendorId, t.id),
+  index('orders_vendor_dispatch_due_idx').on(t.vendorId, t.dispatchDueAt),
   uniqueIndex('orders_account_external_uq').on(t.marketplaceAccountId, t.externalOrderId),
   /** an order is unique per (vendor, marketplace, marketplace order id): the ingestion duplicate guard */
   uniqueIndex('orders_vendor_marketplace_external_uq').on(t.vendorId, t.marketplace, t.externalOrderId),

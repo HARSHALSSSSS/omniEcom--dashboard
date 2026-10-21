@@ -7,6 +7,8 @@ import { created, ok, opCtxFromRequest, paginated, requireVendor, vendorTx, type
 import { Work, getFulfillment } from '@oms/mod-fulfillment';
 import { allowedWarehouses, assertWarehouseCapability } from '@oms/mod-warehouses';
 import { SHIPMENT_STATUSES, TRACKING_STATUSES } from './domain';
+import { registerWorkspaceRoutes } from './workspace-routes';
+import { registerScreenRoutes } from './screen-routes';
 import {
   actOnNdr, cancelManifest, cancelShipment, closeManifest, createManifest, createShipment, dispatchManifest, dispatchShipment, enableProvider, getLabel, getManifest, getNdr, getShipment, ingestTracking, latestShipmentOfOrder,
   listManifests, listNdr, listShipments, listVendorProviders, providerCatalog, refreshTracking, simulateTracking, toManifestDto, toNdrDto, toShipmentDto, trackingEvents, updateProvider,
@@ -206,4 +208,8 @@ export const shippingRoutes: FastifyPluginAsync = async (app) => {
       params: IdParamSchema, body: z.object({ action: z.enum(schema.NDR_ACTIONS), nextAttemptAt: z.coerce.date().nullish(), note: z.string().max(300).nullish() }), response: { 200: successEnvelope(z.object({ ndr: NdrSchema, shipment: ShipmentSchema })) },
     },
   }, async (req) => { const x = await actOnNdr(ctxOf(req), req.params.id, req.body); return ok(req, { ndr: toNdrDto(x.ndr), shipment: toShipmentDto(x.shipment) }); });
+
+  // ------------------------------------------------------------ the Shipping workspace (methods, decision per order, overview, tracking, exceptions, rules)
+  registerWorkspaceRoutes(app);
+  registerScreenRoutes(app);
 };

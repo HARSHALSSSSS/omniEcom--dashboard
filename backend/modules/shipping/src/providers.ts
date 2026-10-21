@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { AppError, newId } from '@oms/shared';
 import type { TrackingStatus } from './domain';
+import { blueDartProvider, delhiveryProvider } from './providers/index';
 
 /**
  * The shipping provider interface. Core code (shipments, manifests, tracking, NDR/RTO) only ever talks to this interface, so
@@ -74,7 +75,7 @@ const manualProvider: ShippingProvider = {
 const sandboxProvider: ShippingProvider = {
   code: 'sandbox', simulator: true, name: 'Sandbox courier (simulator)', description: 'A built-in simulated courier for development, demos and tests. Issues AWBs and labels; tracking events are simulated through the API.',
   capabilities: { labels: true, polling: false, cancel: true, reattempt: true, rto: true, manifest: true },
-  configFields: [{ key: 'fail', description: 'Test hook: "create" makes shipment creation fail', required: false }],
+  configFields: [{ key: 'fail', description: 'Test hook: "create" makes shipment creation fail, "track" makes tracking refreshes fail', required: false }],
   async createShipment(req, config) {
     if (config.fail === 'create') throw new AppError('UPSTREAM_ERROR', 'Sandbox courier rejected the shipment (simulated failure)');
     const awb = `SBX${createHash('sha1').update(`${req.shipmentNumber}:${newId()}`).digest('hex').slice(0, 10).toUpperCase()}`;
@@ -85,12 +86,15 @@ const sandboxProvider: ShippingProvider = {
     };
   },
   async cancelShipment() { /* accepted */ },
-  async track() { return []; },
+  async track(_awb, config) {
+    if (config.fail === 'track') throw new AppError('UPSTREAM_ERROR', 'Sandbox courier tracking timed out (simulated failure)');
+    return [];
+  },
   async requestReattempt() { /* accepted */ },
   async initiateRto() { /* accepted */ },
 };
 
-const REGISTRY = new Map<string, ShippingProvider>([[manualProvider.code, manualProvider], [sandboxProvider.code, sandboxProvider]]);
+const REGISTRY = new Map<string, ShippingProvider>([[manualProvider.code, manualProvider], [sandboxProvider.code, sandboxProvider], [delhiveryProvider.code, delhiveryProvider], [blueDartProvider.code, blueDartProvider]]);
 export const listProviders = (): ShippingProvider[] => [...REGISTRY.values()];
 export function getProvider(code: string): ShippingProvider {
   const p = REGISTRY.get(code);
