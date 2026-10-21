@@ -5,7 +5,9 @@ import axios from "axios";
  * All api/*.api.ts functions use this — nothing else calls the network.
  */
 export const client = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL ?? "/api/v1",
+  baseURL: import.meta.env.VITE_API_BASE_URL
+    ? import.meta.env.VITE_API_BASE_URL.replace(/\/api\/v\d+\/?$/, "")
+    : undefined,
   headers: {
     "Content-Type": "application/json",
   },

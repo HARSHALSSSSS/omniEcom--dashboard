@@ -4,7 +4,6 @@ import {
   initialOrdersSummary,
   initialOrders,
   initialBatches,
-  initialReturns,
 } from "@/mocks/data/orders.data";
 import { Order, OrderStatus } from "@/types/orders";
 
@@ -99,15 +98,6 @@ export const orderHandlers = [
         batches: initialBatches,
         unbatchedOrders: orders.filter((o) => o.status === OrderStatus.New || o.status === OrderStatus.Confirmed),
       },
-    });
-  }),
-
-  // Returns list
-  http.get(ENDPOINTS.RETURNS, async () => {
-    await delay(150);
-    return HttpResponse.json({
-      data: initialReturns,
-      meta: { total: initialReturns.length },
     });
   }),
 ];

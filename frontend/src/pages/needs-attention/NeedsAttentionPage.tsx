@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   History,
@@ -9,8 +9,10 @@ import {
   Check,
   HelpCircle,
   Clock,
+  RotateCw,
 } from "lucide-react";
 import { ROUTES } from "@/constants/routes";
+import { useNeedsAttention, useResolveAttention } from "@/hooks/useNeedsAttention";
 
 interface AttentionQueueItem {
   id: string;
@@ -206,6 +208,9 @@ type HistoryFilter = "all" | "resolved" | "snoozed";
 
 export default function NeedsAttentionPage() {
   const navigate = useNavigate();
+  const { data: attentionResponse, isLoading, refetch } = useNeedsAttention();
+  const resolveMutation = useResolveAttention();
+
   const [viewMode, setViewMode] = useState<ViewMode>("queue");
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>("all");
   const [activeTab, setActiveTab] = useState<PriorityTab>("all");
@@ -217,7 +222,6 @@ export default function NeedsAttentionPage() {
   const [activeDrawerIssue, setActiveDrawerIssue] = useState<AttentionQueueItem | null>(null);
   const [snoozeOpen, setSnoozeOpen] = useState<boolean>(false);
   const [openDropdown, setOpenDropdown] = useState<"area" | "priority" | "status" | "due" | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
   const [resolvedNotice, setResolvedNotice] = useState<{
     heading: string;
     description: string;
@@ -252,6 +256,11 @@ export default function NeedsAttentionPage() {
       setResolvedIssueIds((prev) => [...new Set([...prev, ...resolvingIds])]);
       setSnoozedNotice(null);
 
+      // Trigger mutation for API persistence
+      resolvingIds.forEach((id) => {
+        resolveMutation.mutate({ id, action: "resolve" });
+      });
+
       const selectedItems = ALL_ISSUES.filter((i) => resolvingIds.includes(i.id));
       const firstItem = selectedItems[0];
       const heading =
@@ -280,6 +289,11 @@ export default function NeedsAttentionPage() {
       const snoozingIds = [...selectedRows];
       setSnoozedIssueIds((prev) => [...new Set([...prev, ...snoozingIds])]);
       setResolvedNotice(null);
+
+      // Trigger mutation for API persistence
+      snoozingIds.forEach((id) => {
+        resolveMutation.mutate({ id, action: "snooze", snoozeHours: 4 });
+      });
 
       const selectedItems = ALL_ISSUES.filter((i) => snoozingIds.includes(i.id));
       const firstItem = selectedItems[0];
@@ -389,24 +403,38 @@ export default function NeedsAttentionPage() {
           </p>
         </div>
 
-        {/* Queue summary */}
-        <div className="flex flex-col items-end gap-1 shrink-0">
-          <span className="text-[13px] font-semibold text-[#000000] leading-[145%]">
-            {isLoading
-              ? "Loading issues..."
-              : viewMode === "history"
-              ? "16 open issues"
-              : selectedStatus === "In progress"
-              ? "18 active issues"
-              : filteredIssues.length === 0
-              ? "0 open issues"
-              : resolvedNotice || snoozedNotice
-              ? "17 open issues"
-              : `${totalOpenCount} open issues`}
-          </span>
-          <span className="text-[11px] font-normal text-[#666666] leading-[145%]">
-            {isLoading ? "Checking for updates" : "Updated 2 min ago"}
-          </span>
+        {/* Queue summary & actions */}
+        <div className="flex flex-row items-center gap-3 shrink-0">
+          <button
+            type="button"
+            onClick={() => refetch()}
+            className="box-border flex flex-row items-center px-[10px] gap-[6px] h-[32px] bg-white border border-[#EAEAEA] rounded-lg hover:bg-neutral-50 transition-colors cursor-pointer"
+          >
+            <RotateCw className={`w-[14px] h-[14px] text-[#666666] stroke-[1.5px] ${isLoading ? "animate-spin" : ""}`} />
+            <span className="text-[12px] font-normal leading-[145%] text-[#666666]">
+              Refresh
+            </span>
+          </button>
+          <div className="flex flex-col items-end gap-1">
+            <span className="text-[13px] font-semibold text-[#000000] leading-[145%]">
+              {isLoading
+                ? "Loading issues..."
+                : attentionResponse?.meta?.openCount
+                ? `${attentionResponse.meta.openCount} open issues`
+                : viewMode === "history"
+                ? "16 open issues"
+                : selectedStatus === "In progress"
+                ? "18 active issues"
+                : filteredIssues.length === 0
+                ? "0 open issues"
+                : resolvedNotice || snoozedNotice
+                ? "17 open issues"
+                : `${totalOpenCount} open issues`}
+            </span>
+            <span className="text-[11px] font-normal text-[#666666] leading-[145%]">
+              {isLoading ? "Checking for updates..." : "Updated 2 min ago"}
+            </span>
+          </div>
         </div>
       </div>
 

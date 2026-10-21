@@ -11,6 +11,8 @@ import { inventoryHandlers } from "./inventory.handlers";
 import { orderHandlers } from "./order.handlers";
 import { attentionHandlers } from "./attention.handlers";
 import { hardeningHandlers } from "./hardening.handlers";
+import { shippingHandlers } from "./shipping.handlers";
+import { returnsHandlers } from "./returns.handlers";
 
 export const handlers = [
   ...authHandlers,
@@ -22,4 +24,6 @@ export const handlers = [
   ...orderHandlers,
   ...attentionHandlers,
   ...hardeningHandlers,
+  ...shippingHandlers,
+  ...returnsHandlers,
 ];

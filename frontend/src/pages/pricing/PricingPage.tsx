@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   ShieldAlert,
   XCircle,
   Check,
+  RotateCw,
 } from "lucide-react";
 import {
   MOCK_PRICING_METRICS,
@@ -11,8 +12,13 @@ import {
 } from "@/mocks/data/phase10.data";
 import type { PriceProposal, PricingRule } from "@/types/pricing";
 import { formatINR } from "@/utils/format";
+import { usePricingOverview, usePriceProposals, useActionProposal } from "@/hooks/usePricing";
 
 export default function PricingPage() {
+  const { data: overviewData, refetch, isFetching } = usePricingOverview();
+  const { data: proposalsData } = usePriceProposals();
+  const actionMutation = useActionProposal();
+
   const [activeTab, setActiveTab] = useState<"proposals" | "rules" | "history">(
     "proposals",
   );
@@ -27,11 +33,26 @@ export default function PricingPage() {
     action: "approve" | "reject";
   } | null>(null);
 
+  useEffect(() => {
+    if (proposalsData?.proposals && proposalsData.proposals.length > 0) {
+      setProposals(proposalsData.proposals);
+    }
+  }, [proposalsData?.proposals]);
+
+  useEffect(() => {
+    if (overviewData?.rules && overviewData.rules.length > 0) {
+      setRules(overviewData.rules);
+    }
+  }, [overviewData?.rules]);
+
+  const metrics = overviewData?.metrics ?? MOCK_PRICING_METRICS;
+
   const pendingCount = proposals.filter(
     (p) => p.status === "pending_review",
   ).length;
 
   const handleAction = (proposalId: string, action: "approve" | "reject") => {
+    actionMutation.mutate({ id: proposalId, action });
     setProposals((prev) =>
       prev.map((p) =>
         p.id === proposalId
@@ -78,41 +99,53 @@ export default function PricingPage() {
           </p>
         </div>
 
-        {/* Global tab selector */}
-        <div className="inline-flex items-center bg-neutral-100 p-1 rounded-lg border border-[#EAEAEA] shrink-0">
+        {/* Global tab selector & actions */}
+        <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={() => setActiveTab("proposals")}
-            className={`px-3.5 py-1.5 rounded-md text-[12px] font-medium transition-all ${
-              activeTab === "proposals"
-                ? "bg-white text-black shadow-xs font-semibold"
-                : "text-[#666666] hover:text-black"
-            }`}
+            onClick={() => refetch()}
+            className="box-border flex flex-row items-center px-[10px] gap-[6px] h-[34px] bg-white border border-[#EAEAEA] rounded-lg hover:bg-neutral-50 transition-colors cursor-pointer"
           >
-            Price Proposals ({pendingCount})
+            <RotateCw className={`w-[14px] h-[14px] text-[#666666] stroke-[1.5px] ${isFetching ? "animate-spin" : ""}`} />
+            <span className="text-[12px] font-normal leading-[145%] text-[#666666]">
+              Refresh
+            </span>
           </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("rules")}
-            className={`px-3.5 py-1.5 rounded-md text-[12px] font-medium transition-all ${
-              activeTab === "rules"
-                ? "bg-white text-black shadow-xs font-semibold"
-                : "text-[#666666] hover:text-black"
-            }`}
-          >
-            Strategy Rules ({rules.length})
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("history")}
-            className={`px-3.5 py-1.5 rounded-md text-[12px] font-medium transition-all ${
-              activeTab === "history"
-                ? "bg-white text-black shadow-xs font-semibold"
-                : "text-[#666666] hover:text-black"
-            }`}
-          >
-            Audit Log
-          </button>
+          <div className="inline-flex items-center bg-neutral-100 p-1 rounded-lg border border-[#EAEAEA] shrink-0">
+            <button
+              type="button"
+              onClick={() => setActiveTab("proposals")}
+              className={`px-3.5 py-1.5 rounded-md text-[12px] font-medium transition-all ${
+                activeTab === "proposals"
+                  ? "bg-white text-black shadow-xs font-semibold"
+                  : "text-[#666666] hover:text-black"
+              }`}
+            >
+              Price Proposals ({pendingCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("rules")}
+              className={`px-3.5 py-1.5 rounded-md text-[12px] font-medium transition-all ${
+                activeTab === "rules"
+                  ? "bg-white text-black shadow-xs font-semibold"
+                  : "text-[#666666] hover:text-black"
+              }`}
+            >
+              Strategy Rules ({rules.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("history")}
+              className={`px-3.5 py-1.5 rounded-md text-[12px] font-medium transition-all ${
+                activeTab === "history"
+                  ? "bg-white text-black shadow-xs font-semibold"
+                  : "text-[#666666] hover:text-black"
+              }`}
+            >
+              Audit Log
+            </button>
+          </div>
         </div>
       </div>
 
@@ -134,7 +167,7 @@ export default function PricingPage() {
             Potential Margin Gain
           </span>
           <span className="text-[24px] font-bold text-[#16A34A]">
-            +{formatINR(MOCK_PRICING_METRICS.potentialMarginGain)}
+            +{formatINR((metrics as { potentialMarginGain?: number }).potentialMarginGain ?? 128400)}
           </span>
           <span className="text-[11px] text-[#666666]">
             Forecasted net increase

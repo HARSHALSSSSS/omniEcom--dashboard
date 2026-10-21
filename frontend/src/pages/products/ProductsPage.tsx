@@ -157,7 +157,7 @@ export default function ProductsPage() {
       channelDetail: "Amazon / Flipkart",
       operationalContext: "Stock coverage: 2 days",
       primaryActionLabel: "Review inventory",
-      primaryActionPath: `${ROUTES.PRODUCTS}/prod-1`,
+      primaryActionPath: `${ROUTES.PRODUCTS}/prod-2`,
     },
     {
       id: "prod-3",
@@ -175,7 +175,7 @@ export default function ProductsPage() {
       channelDetail: "Shopify · Amazon",
       operationalContext: "Potential lost sales",
       primaryActionLabel: "Update inventory",
-      primaryActionPath: `${ROUTES.PRODUCTS}/prod-1/edit`,
+      primaryActionPath: `${ROUTES.PRODUCTS}/prod-3`,
     },
     {
       id: "prod-4",
@@ -192,7 +192,7 @@ export default function ProductsPage() {
       channelDetail: "Amazon · Not published",
       operationalContext: "Images and description missing",
       primaryActionLabel: "Continue editing",
-      primaryActionPath: `${ROUTES.PRODUCTS}/prod-5`,
+      primaryActionPath: `${ROUTES.PRODUCTS}/prod-4/edit`,
     },
   ];
 
@@ -1018,7 +1018,7 @@ export default function ProductsPage() {
               return (
                 <div
                   key={p.id}
-                  onClick={(e) => handleToggleSelectProduct(p.id, e)}
+                  onClick={() => navigate(`${ROUTES.PRODUCTS}/${p.id}`)}
                   className={`group relative box-border flex flex-col justify-between p-4 h-[262px] bg-[#FFFFFF] rounded-[12px] transition-all cursor-pointer ${
                     isSelected
                       ? "border-2 border-[#000000] shadow-[0px_2px_8px_rgba(0,0,0,0.06)]"

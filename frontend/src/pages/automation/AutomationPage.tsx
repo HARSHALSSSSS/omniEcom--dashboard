@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Zap, Plus, AlertTriangle, Check } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Zap, Plus, AlertTriangle, Check, RotateCw } from "lucide-react";
 import {
   MOCK_AUTOMATION_RULES,
   MOCK_AUTOMATION_APPROVALS,
@@ -10,8 +10,10 @@ import type {
   AutomationApprovalItem,
   AutomationRunLog,
 } from "@/types/automation";
+import { useAutomationOverview } from "@/hooks/usePlatform";
 
 export default function AutomationPage() {
+  const { data: autoOverview, refetch, isFetching } = useAutomationOverview();
   const [activeTab, setActiveTab] = useState<"overview" | "rules" | "approvals" | "runs">(
     "overview",
   );
@@ -19,8 +21,20 @@ export default function AutomationPage() {
   const [approvals, setApprovals] = useState<AutomationApprovalItem[]>(
     MOCK_AUTOMATION_APPROVALS,
   );
-  const [runs] = useState<AutomationRunLog[]>(MOCK_AUTOMATION_RUNS);
+  const [runs, setRuns] = useState<AutomationRunLog[]>(MOCK_AUTOMATION_RUNS);
   const [showCreateRule, setShowCreateRule] = useState(false);
+
+  useEffect(() => {
+    if (autoOverview?.rules && autoOverview.rules.length > 0) {
+      setRules(autoOverview.rules);
+    }
+    if (autoOverview?.approvals && autoOverview.approvals.length > 0) {
+      setApprovals(autoOverview.approvals);
+    }
+    if (autoOverview?.runs && autoOverview.runs.length > 0) {
+      setRuns(autoOverview.runs);
+    }
+  }, [autoOverview]);
 
   // New Rule State
   const [ruleName, setRuleName] = useState("");
@@ -141,6 +155,17 @@ export default function AutomationPage() {
               Execution Runs
             </button>
           </div>
+
+          <button
+            type="button"
+            onClick={() => refetch()}
+            className="box-border flex flex-row items-center px-[10px] gap-[6px] h-[34px] bg-white border border-[#EAEAEA] rounded-lg hover:bg-neutral-50 transition-colors cursor-pointer"
+          >
+            <RotateCw className={`w-[14px] h-[14px] text-[#666666] stroke-[1.5px] ${isFetching ? "animate-spin" : ""}`} />
+            <span className="text-[12px] font-normal leading-[145%] text-[#666666]">
+              Refresh
+            </span>
+          </button>
 
           <button
             type="button"

@@ -4,7 +4,6 @@ import {
   Package,
   Boxes,
   ShoppingCart,
-  Truck,
   Ship,
   RefreshCcw,
   List,
@@ -26,6 +25,7 @@ export interface NavItem {
   label: string;
   href: string;
   icon: LucideIcon;
+  badge?: "needs-attention"; // special badge driven by store
 }
 
 export interface NavGroup {
@@ -42,11 +42,11 @@ export const NAV_GROUPS: NavGroup[] = [
         label: "Needs Attention",
         href: ROUTES.NEEDS_ATTENTION,
         icon: AlertCircle,
+        badge: "needs-attention",
       },
       { label: "Products", href: ROUTES.PRODUCTS, icon: Package },
       { label: "Inventory", href: ROUTES.INVENTORY, icon: Boxes },
       { label: "Orders", href: ROUTES.ORDERS, icon: ShoppingCart },
-      { label: "Fulfillment", href: ROUTES.FULFILLMENT, icon: Truck },
       { label: "Shipping", href: ROUTES.SHIPPING, icon: Ship },
       { label: "Returns", href: ROUTES.RETURNS, icon: RefreshCcw },
     ],

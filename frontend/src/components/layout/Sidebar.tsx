@@ -10,7 +10,7 @@ import { cn } from "@/utils/cn";
 export const Sidebar: React.FC = () => {
   const navigate = useNavigate();
   const { sidebarCollapsed, toggleSidebar } = useUiStore();
-  const { user, clearWorkspace } = useWorkspaceStore();
+  const { user, needsAttentionCount, clearWorkspace } = useWorkspaceStore();
 
   const displayName = user?.fullName ?? "Abhishek";
   const displayRole = user?.role === "owner" ? "Business owner" : "Seller";
@@ -71,6 +71,8 @@ export const Sidebar: React.FC = () => {
             <ul className="space-y-1">
               {group.items.map((item) => {
                 const Icon = item.icon;
+                const showBadge =
+                  item.badge === "needs-attention" && needsAttentionCount > 0;
 
                 return (
                   <li key={item.href}>
@@ -79,17 +81,22 @@ export const Sidebar: React.FC = () => {
                       title={sidebarCollapsed ? item.label : undefined}
                       className={({ isActive }) =>
                         cn(
-                          "flex h-[34px] items-center gap-2.5 rounded-lg px-2.5 text-[13px] transition-colors",
+                          "flex h-[34px] items-center gap-2.5 rounded-lg px-2.5 text-[12px] leading-[17px] transition-colors",
                           isActive
-                            ? "bg-[#E6F4FF] text-[#1D4ED8] font-semibold"
+                            ? "bg-[#F5F5F5] text-[#000000] font-semibold"
                             : "bg-white text-[#666666] font-normal hover:bg-neutral-50 hover:text-[#0A0A0A]",
                           sidebarCollapsed && "justify-center px-0",
                         )
                       }
                     >
-                      <Icon className="h-4 w-4 shrink-0" />
+                      <Icon className={cn("h-4 w-4 shrink-0", "stroke-[1.5px]")} />
                       {!sidebarCollapsed && (
                         <span className="flex-1 truncate">{item.label}</span>
+                      )}
+                      {!sidebarCollapsed && showBadge && (
+                        <span className="ml-auto text-[11px] font-semibold text-[#000000] tabular-nums">
+                          {needsAttentionCount}
+                        </span>
                       )}
                     </NavLink>
                   </li>

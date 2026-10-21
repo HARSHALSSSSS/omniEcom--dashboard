@@ -1,13 +1,21 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Download, Plus } from "lucide-react";
 import { MOCK_SCHEDULED_REPORTS } from "@/mocks/data/phase10.data";
 import type { ScheduledReport } from "@/types/intelligence";
+import { useReports } from "@/hooks/useIntelligence";
 
 export default function ReportsPage() {
-  const [reports] = useState<ScheduledReport[]>(
+  const { data: reportsData } = useReports();
+  const [reports, setReports] = useState<ScheduledReport[]>(
     MOCK_SCHEDULED_REPORTS,
   );
   const [exportingId, setExportingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (reportsData?.reports && reportsData.reports.length > 0) {
+      setReports(reportsData.reports);
+    }
+  }, [reportsData?.reports]);
 
   const handleExport = (reportId: string) => {
     setExportingId(reportId);

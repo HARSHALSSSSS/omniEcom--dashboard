@@ -116,7 +116,7 @@
   input,
   textarea,
   select {
-    @apply outline-none ring-0 border-none;
+    @apply outline-none ring-0;
   }
 
   input:focus,

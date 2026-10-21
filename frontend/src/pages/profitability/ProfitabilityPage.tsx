@@ -1,15 +1,20 @@
 import { useState } from "react";
-import { Download, ArrowDownRight, ArrowUpRight } from "lucide-react";
+import { Download, ArrowDownRight, ArrowUpRight, RotateCw } from "lucide-react";
 import {
   MOCK_PROFITABILITY_WATERFALL,
   MOCK_CHANNEL_PROFITABILITY,
 } from "@/mocks/data/phase10.data";
 import { formatINR } from "@/utils/format";
+import { useProfitability } from "@/hooks/useIntelligence";
 
 export default function ProfitabilityPage() {
+  const { data: profitData, refetch, isFetching } = useProfitability();
   const [selectedRange, setSelectedRange] = useState<"30d" | "mtd" | "ytd">(
     "30d",
   );
+
+  const waterfallData = profitData?.waterfall ?? MOCK_PROFITABILITY_WATERFALL;
+  const channelData = profitData?.channels ?? MOCK_CHANNEL_PROFITABILITY;
 
   const totalGMV = 2840000;
   const netContribution = 630480;
@@ -35,6 +40,16 @@ export default function ProfitabilityPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => refetch()}
+            className="box-border flex flex-row items-center px-[10px] gap-[6px] h-[34px] bg-white border border-[#EAEAEA] rounded-lg hover:bg-neutral-50 transition-colors cursor-pointer"
+          >
+            <RotateCw className={`w-[14px] h-[14px] text-[#666666] stroke-[1.5px] ${isFetching ? "animate-spin" : ""}`} />
+            <span className="text-[12px] font-normal leading-[145%] text-[#666666]">
+              Refresh
+            </span>
+          </button>
           <div className="inline-flex items-center bg-neutral-100 p-1 rounded-lg border border-[#EAEAEA]">
             <button
               type="button"
@@ -135,7 +150,7 @@ export default function ProfitabilityPage() {
         </div>
 
         <div className="flex flex-col divide-y divide-[#EAEAEA]">
-          {MOCK_PROFITABILITY_WATERFALL.map((step, idx) => {
+          {waterfallData.map((step, idx) => {
             const isSubtotal = step.type === "subtotal";
             const isNegative = step.type === "negative";
 
@@ -212,7 +227,7 @@ export default function ProfitabilityPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#EAEAEA]">
-              {MOCK_CHANNEL_PROFITABILITY.map((c) => (
+              {channelData.map((c) => (
                 <tr key={c.channel} className="hover:bg-neutral-50 transition-colors">
                   <td className="py-3.5 px-4 font-semibold text-[#000000]">
                     {c.channel}

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { X, Check, Clock3, AlertCircle } from "lucide-react";
 import { ROUTES } from "@/constants/routes";

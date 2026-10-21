@@ -86,6 +86,8 @@ export interface ReturnOrder {
   reason: string;
   status: ReturnStatus;
   requestedAt: string;
+  receivedAt?: string;
+  inspectionStatus?: "pending" | "review" | "not_started" | "passed" | "failed";
   items: Array<{
     sku: string;
     title: string;
@@ -93,7 +95,10 @@ export interface ReturnOrder {
     disposition?: ReturnDisposition;
   }>;
   refundAmount: number;
-  refundStatus: "pending" | "processed" | "rejected";
+  refundStatus: "pending" | "ready" | "processed" | "refunded" | "rejected" | "na";
+  inventoryDisposition?: "pending" | "damaged" | "sellable" | "rejected";
+  issueNote?: string;
+  actionText?: string;
 }
 
 export const orderFilterSchema = z.object({

@@ -31,13 +31,28 @@ const ImportWizardPage = lazy(() => import("@/pages/import/ImportWizardPage"));
 const ImportIssuesPage = lazy(() => import("@/pages/import/ImportIssuesPage"));
 const InventoryPage = lazy(() => import("@/pages/inventory/InventoryPage"));
 const OrdersPage = lazy(() => import("@/pages/orders/OrdersPage"));
-const FulfillmentPage = lazy(
-  () => import("@/pages/fulfillment/FulfillmentPage"),
-);
 const ShippingPage = lazy(() => import("@/pages/shipping/ShippingPage"));
 const ReturnsPage = lazy(() => import("@/pages/returns/ReturnsPage"));
 // Commerce
 const ListingsPage = lazy(() => import("@/pages/listings/ListingsPage"));
+const PublishingPreparationPage = lazy(
+  () => import("@/pages/listings/PublishingPreparationPage"),
+);
+const BulkSelectedListingsPage = lazy(
+  () => import("@/pages/listings/BulkSelectedListingsPage"),
+);
+const ListingReadinessPage = lazy(
+  () => import("@/pages/listings/ListingReadinessPage"),
+);
+const ListingBlockerPage = lazy(
+  () => import("@/pages/listings/ListingBlockerPage"),
+);
+const ListingSyncPage = lazy(
+  () => import("@/pages/listings/ListingSyncPage"),
+);
+const ListingUnlistedPage = lazy(
+  () => import("@/pages/listings/ListingUnlistedPage"),
+);
 const ListingStudioPage = lazy(
   () => import("@/pages/listings/ListingStudioPage"),
 );
@@ -169,14 +184,52 @@ export const router = createBrowserRouter([
       { path: ROUTES.INVENTORY, element: withSuspense(InventoryPage) },
       // Orders
       { path: ROUTES.ORDERS, element: withSuspense(OrdersPage) },
-      // Fulfillment
-      { path: ROUTES.FULFILLMENT, element: withSuspense(FulfillmentPage) },
       // Shipping
       { path: ROUTES.SHIPPING, element: withSuspense(ShippingPage) },
       // Returns
       { path: ROUTES.RETURNS, element: withSuspense(ReturnsPage) },
       // Listings
       { path: ROUTES.LISTINGS, element: withSuspense(ListingsPage) },
+      {
+        path: ROUTES.LISTINGS_PUBLISH,
+        element: withSuspense(PublishingPreparationPage),
+      },
+      {
+        path: ROUTES.LISTINGS_BULK,
+        element: withSuspense(BulkSelectedListingsPage),
+      },
+      {
+        path: ROUTES.LISTINGS_SELECTED,
+        element: withSuspense(BulkSelectedListingsPage),
+      },
+      {
+        path: ROUTES.LISTINGS_READINESS,
+        element: withSuspense(ListingReadinessPage),
+      },
+      {
+        path: ROUTES.LISTINGS_BLOCKER,
+        element: withSuspense(ListingBlockerPage),
+      },
+      {
+        path: ROUTES.LISTINGS_BLOCKED,
+        element: withSuspense(ListingBlockerPage),
+      },
+      {
+        path: ROUTES.LISTINGS_SYNC,
+        element: withSuspense(ListingSyncPage),
+      },
+      {
+        path: "/listings/sync",
+        element: withSuspense(ListingSyncPage),
+      },
+      {
+        path: ROUTES.LISTINGS_UNLISTED,
+        element: withSuspense(ListingUnlistedPage),
+      },
+      {
+        path: "/listings/unlisted",
+        element: withSuspense(ListingUnlistedPage),
+      },
       {
         path: `${ROUTES.LISTINGS}/:id`,
         element: withSuspense(ListingStudioPage),

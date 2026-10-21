@@ -1,18 +1,29 @@
-import { useState } from "react";
-import { Truck, Plus } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Truck, Plus, RotateCw } from "lucide-react";
 import {
   MOCK_SUPPLIERS,
   MOCK_PURCHASE_ORDERS,
 } from "@/mocks/data/phase10.data";
 import type { Supplier, PurchaseOrder } from "@/types/procurement";
 import { formatINR } from "@/utils/format";
+import { useProcurementOverview } from "@/hooks/useProcurement";
 
 export default function ProcurementPage() {
+  const { data: procurementOverview, refetch, isFetching } = useProcurementOverview();
   const [activeTab, setActiveTab] = useState<"orders" | "suppliers">("orders");
   const [orders, setOrders] = useState<PurchaseOrder[]>(MOCK_PURCHASE_ORDERS);
   const [suppliers, setSuppliers] = useState<Supplier[]>(MOCK_SUPPLIERS);
   const [showCreatePO, setShowCreatePO] = useState(false);
   const [showAddSupplier, setShowAddSupplier] = useState(false);
+
+  useEffect(() => {
+    if (procurementOverview?.orders && procurementOverview.orders.length > 0) {
+      setOrders(procurementOverview.orders);
+    }
+    if (procurementOverview?.suppliers && procurementOverview.suppliers.length > 0) {
+      setSuppliers(procurementOverview.suppliers);
+    }
+  }, [procurementOverview]);
 
   // New PO state
   const [selectedSupplierId, setSelectedSupplierId] = useState(
@@ -136,6 +147,17 @@ export default function ProcurementPage() {
               Suppliers ({suppliers.length})
             </button>
           </div>
+
+          <button
+            type="button"
+            onClick={() => refetch()}
+            className="box-border flex flex-row items-center px-[10px] gap-[6px] h-[34px] bg-white border border-[#EAEAEA] rounded-lg hover:bg-neutral-50 transition-colors cursor-pointer"
+          >
+            <RotateCw className={`w-[14px] h-[14px] text-[#666666] stroke-[1.5px] ${isFetching ? "animate-spin" : ""}`} />
+            <span className="text-[12px] font-normal leading-[145%] text-[#666666]">
+              Refresh
+            </span>
+          </button>
 
           {activeTab === "orders" ? (
             <button

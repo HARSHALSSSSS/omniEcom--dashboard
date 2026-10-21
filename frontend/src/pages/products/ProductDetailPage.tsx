@@ -51,86 +51,68 @@ export default function ProductDetailPage() {
 
   const { data: product, isLoading } = useProduct(id || "prod-1");
 
-  // Canonical dataset for Screen 11 (Premium Travel Bag)
-  const productTitle = product?.title || "Premium Travel Bag";
-  const productSku = product?.sku || "TRV-1042";
-  const productCategory = product?.category || "Travel Accessories";
-  const productBrand = product?.brand || "Urban Carry";
-  const productStatus = isDraftState ? "Draft" : product?.status === "active" ? "Active" : "Active";
-  const productVariantsCount = product?.variants?.length || 4;
-  const productChannelsCount = isDraftState ? 0 : 3;
+  // Derive product fields dynamically based on the current product
+  const productTitle = product?.title || (id === "prod-2" ? "Classic Backpack" : id === "prod-3" ? "Cotton Overshirt" : id === "prod-4" ? "Travel Organizer Set" : "Premium Travel Bag");
+  const productSku = product?.sku || (id === "prod-2" ? "BP-1021" : id === "prod-3" ? "OS-2048" : id === "prod-4" ? "ORG-3102" : "TRV-1042");
+  const productCategory = product?.category || (id === "prod-3" ? "Apparel & Fashion" : "Bags & Luggage");
+  const productBrand = product?.brand || "Nova Living";
+  const productDescription = product?.description || (id === "prod-2" ? "Everyday minimalist classic backpack featuring padded straps, dual water bottle holders, and durable canvas build." : "A durable premium travel bag designed for short business trips and weekend travel.");
+  const productStatus = isDraftState || product?.status === "incomplete" ? "Draft" : product?.status === "active" ? "Active" : "Active";
+  const productVariantsCount = product?.variants?.length ?? (id === "prod-2" ? 6 : id === "prod-3" ? 8 : 4);
+  const productChannelsCount = isDraftState ? 0 : (product?.channels?.length ?? 3);
   const lastUpdatedText = "Last updated 2 hours ago";
 
-  // Gallery image thumbnails matching Screen 11
-  const galleryImages = [
-    {
-      id: "img-1",
-      url: "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&w=400&q=80",
-      isPrimary: true,
-      label: "Primary image",
-    },
-    {
-      id: "img-2",
-      url: "https://images.unsplash.com/photo-1546938576-6e6a64f317cc?auto=format&fit=crop&w=400&q=80",
-      isPrimary: false,
-    },
-    {
-      id: "img-3",
-      url: "https://images.unsplash.com/photo-1581605405669-fcdf81165afa?auto=format&fit=crop&w=400&q=80",
-      isPrimary: false,
-    },
-    {
-      id: "img-4",
-      url: "https://images.unsplash.com/photo-1577733966973-d680bffd2e80?auto=format&fit=crop&w=400&q=80",
-      isPrimary: false,
-    },
-    {
-      id: "img-5",
-      url: "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&w=400&q=80",
-      isPrimary: false,
-    },
-    {
-      id: "img-6",
-      url: "https://images.unsplash.com/photo-1622560480605-d83c853bc5c3?auto=format&fit=crop&w=400&q=80",
-      isPrimary: false,
-    },
-  ];
+  // Gallery image thumbnails matching product media or defaults
+  const productMediaList = product?.media && product.media.length > 0
+    ? product.media.map((m, idx) => ({
+        id: m.id || `img-${idx}`,
+        url: m.url,
+        isPrimary: m.isPrimary ?? idx === 0,
+        label: m.isPrimary ? "Primary image" : undefined,
+      }))
+    : [
+        {
+          id: "img-1",
+          url: id === "prod-2"
+            ? "https://images.unsplash.com/photo-1622560480605-d83c853bc5c3?auto=format&fit=crop&w=400&q=80"
+            : id === "prod-3"
+            ? "https://images.unsplash.com/photo-1576995853123-5a10305d93c0?auto=format&fit=crop&w=400&q=80"
+            : "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&w=400&q=80",
+          isPrimary: true,
+          label: "Primary image",
+        },
+      ];
 
-  // Variants list matching Screen 11 Table
-  const variantsData = [
-    {
-      variant: "Black / Cabin",
-      sku: "TRV-1042-B-C",
-      size: "Cabin",
-      color: "Black",
-      inventory: "48",
-      status: "Active",
-    },
-    {
-      variant: "Black / Large",
-      sku: "TRV-1042-B-L",
-      size: "Large",
-      color: "Black",
-      inventory: "32",
-      status: "Active",
-    },
-    {
-      variant: "Navy / Cabin",
-      sku: "TRV-1042-N-C",
-      size: "Cabin",
-      color: "Navy",
-      inventory: "28",
-      status: "Active",
-    },
-    {
-      variant: "Navy / Large",
-      sku: "TRV-1042-N-L",
-      size: "Large",
-      color: "Navy",
-      inventory: "16",
-      status: "Low stock",
-    },
-  ];
+  const galleryImages = productMediaList;
+
+  // Variants list dynamically mapped or fallback matching Screen 11 Table
+  const variantsData = product?.variants && product.variants.length > 0
+    ? product.variants.map((v) => ({
+        variant: v.title,
+        sku: v.sku,
+        size: v.options?.Size || v.options?.Capacity || "Standard",
+        color: v.options?.Color || "Default",
+        inventory: String(v.inventory ?? 0),
+        status: v.status === "active" ? "Active" : "Inactive",
+      }))
+    : [
+        {
+          variant: "Black / Cabin",
+          sku: `${productSku}-B-C`,
+          size: "Cabin",
+          color: "Black",
+          inventory: "48",
+          status: "Active",
+        },
+        {
+          variant: "Black / Large",
+          sku: `${productSku}-B-L`,
+          size: "Large",
+          color: "Black",
+          inventory: "32",
+          status: "Active",
+        },
+      ];
 
   // Sales Channels data matching Screen 11
   const channelsData = [
@@ -615,7 +597,7 @@ export default function ProductDetailPage() {
                     Description
                   </span>
                   <p className="text-[12px] font-normal leading-[17px] text-[#000000]">
-                    A durable premium travel bag designed for short business trips and weekend travel.
+                    {productDescription}
                   </p>
                 </div>
               </div>
@@ -1251,7 +1233,7 @@ export default function ProductDetailPage() {
                     Description
                   </span>
                   <p className="text-[12px] font-normal leading-[17px] text-[#000000]">
-                    A durable premium travel bag designed for short business trips and weekend travel.
+                    {productDescription}
                   </p>
                 </div>
               </div>
@@ -1527,7 +1509,7 @@ export default function ProductDetailPage() {
                     Description
                   </span>
                   <p className="text-[12px] font-normal leading-[17px] text-[#000000]">
-                    A durable premium travel bag designed for short business trips and weekend travel.
+                    {productDescription}
                   </p>
                 </div>
               </div>

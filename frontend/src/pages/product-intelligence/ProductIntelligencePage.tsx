@@ -1,16 +1,24 @@
-import { useState } from "react";
-import { Sparkles, Lightbulb } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Sparkles, Lightbulb, RotateCw } from "lucide-react";
 import { MOCK_PRODUCT_INTELLIGENCE } from "@/mocks/data/phase10.data";
 import type { ProductIntelligenceItem } from "@/types/intelligence";
 import { formatINR } from "@/utils/format";
+import { useProductIntelligence } from "@/hooks/useIntelligence";
 
 export default function ProductIntelligencePage() {
-  const [items] = useState<ProductIntelligenceItem[]>(
+  const { data: productIntelData, refetch, isFetching } = useProductIntelligence();
+  const [items, setItems] = useState<ProductIntelligenceItem[]>(
     MOCK_PRODUCT_INTELLIGENCE,
   );
   const [selectedFilter, setSelectedFilter] = useState<
     "all" | "reorder" | "raise_price" | "liquidate"
   >("all");
+
+  useEffect(() => {
+    if (productIntelData?.items && productIntelData.items.length > 0) {
+      setItems(productIntelData.items);
+    }
+  }, [productIntelData?.items]);
 
   const filteredItems =
     selectedFilter === "all"
@@ -52,52 +60,64 @@ export default function ProductIntelligencePage() {
           </p>
         </div>
 
-        {/* Filter Pills */}
-        <div className="inline-flex items-center bg-neutral-100 p-1 rounded-lg border border-[#EAEAEA]">
+        {/* Filter Pills & Refresh */}
+        <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={() => setSelectedFilter("all")}
-            className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-all ${
-              selectedFilter === "all"
-                ? "bg-white text-black shadow-xs font-semibold"
-                : "text-[#666666] hover:text-black"
-            }`}
+            onClick={() => refetch()}
+            className="box-border flex flex-row items-center px-[10px] gap-[6px] h-[34px] bg-white border border-[#EAEAEA] rounded-lg hover:bg-neutral-50 transition-colors cursor-pointer"
           >
-            All Insights ({items.length})
+            <RotateCw className={`w-[14px] h-[14px] text-[#666666] stroke-[1.5px] ${isFetching ? "animate-spin" : ""}`} />
+            <span className="text-[12px] font-normal leading-[145%] text-[#666666]">
+              Refresh
+            </span>
           </button>
-          <button
-            type="button"
-            onClick={() => setSelectedFilter("reorder")}
-            className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-all ${
-              selectedFilter === "reorder"
-                ? "bg-white text-black shadow-xs font-semibold"
-                : "text-[#666666] hover:text-black"
-            }`}
-          >
-            Reorder Urgently
-          </button>
-          <button
-            type="button"
-            onClick={() => setSelectedFilter("raise_price")}
-            className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-all ${
-              selectedFilter === "raise_price"
-                ? "bg-white text-black shadow-xs font-semibold"
-                : "text-[#666666] hover:text-black"
-            }`}
-          >
-            Pricing Upside
-          </button>
-          <button
-            type="button"
-            onClick={() => setSelectedFilter("liquidate")}
-            className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-all ${
-              selectedFilter === "liquidate"
-                ? "bg-white text-black shadow-xs font-semibold"
-                : "text-[#666666] hover:text-black"
-            }`}
-          >
-            Slow Movers
-          </button>
+          <div className="inline-flex items-center bg-neutral-100 p-1 rounded-lg border border-[#EAEAEA]">
+            <button
+              type="button"
+              onClick={() => setSelectedFilter("all")}
+              className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-all ${
+                selectedFilter === "all"
+                  ? "bg-white text-black shadow-xs font-semibold"
+                  : "text-[#666666] hover:text-black"
+              }`}
+            >
+              All Insights ({items.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedFilter("reorder")}
+              className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-all ${
+                selectedFilter === "reorder"
+                  ? "bg-white text-black shadow-xs font-semibold"
+                  : "text-[#666666] hover:text-black"
+              }`}
+            >
+              Reorder Urgently
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedFilter("raise_price")}
+              className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-all ${
+                selectedFilter === "raise_price"
+                  ? "bg-white text-black shadow-xs font-semibold"
+                  : "text-[#666666] hover:text-black"
+              }`}
+            >
+              Pricing Upside
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedFilter("liquidate")}
+              className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-all ${
+                selectedFilter === "liquidate"
+                  ? "bg-white text-black shadow-xs font-semibold"
+                  : "text-[#666666] hover:text-black"
+              }`}
+            >
+              Slow Movers
+            </button>
+          </div>
         </div>
       </div>
 

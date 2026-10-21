@@ -1,17 +1,28 @@
-import { useState } from "react";
-import { Plus, Sparkles } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Plus, Sparkles, RotateCw } from "lucide-react";
 import {
   MOCK_CAMPAIGNS,
   MOCK_PROMO_PRODUCTS,
 } from "@/mocks/data/phase10.data";
 import type { PromotionCampaign, PromotionProductLink } from "@/types/promotions";
 import { formatINR } from "@/utils/format";
+import { usePromotionsOverview } from "@/hooks/usePromotions";
 
 export default function PromotionsPage() {
+  const { data: promoOverview, refetch, isFetching } = usePromotionsOverview();
   const [activeTab, setActiveTab] = useState<"campaigns" | "products">("campaigns");
   const [campaigns, setCampaigns] = useState<PromotionCampaign[]>(MOCK_CAMPAIGNS);
-  const [products] = useState<PromotionProductLink[]>(MOCK_PROMO_PRODUCTS);
+  const [products, setProducts] = useState<PromotionProductLink[]>(MOCK_PROMO_PRODUCTS);
   const [showCreateModal, setShowCreateModal] = useState(false);
+
+  useEffect(() => {
+    if (promoOverview?.campaigns && promoOverview.campaigns.length > 0) {
+      setCampaigns(promoOverview.campaigns);
+    }
+    if (promoOverview?.products && promoOverview.products.length > 0) {
+      setProducts(promoOverview.products);
+    }
+  }, [promoOverview]);
 
   // New campaign form state
   const [newCampaignName, setNewCampaignName] = useState("");
@@ -91,6 +102,17 @@ export default function PromotionsPage() {
               Promoted SKUs ({products.length})
             </button>
           </div>
+
+          <button
+            type="button"
+            onClick={() => refetch()}
+            className="box-border flex flex-row items-center px-[10px] gap-[6px] h-[34px] bg-white border border-[#EAEAEA] rounded-lg hover:bg-neutral-50 transition-colors cursor-pointer"
+          >
+            <RotateCw className={`w-[14px] h-[14px] text-[#666666] stroke-[1.5px] ${isFetching ? "animate-spin" : ""}`} />
+            <span className="text-[12px] font-normal leading-[145%] text-[#666666]">
+              Refresh
+            </span>
+          </button>
 
           <button
             type="button"

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus, Trash2, Check, Save } from "lucide-react";
 import {
   MOCK_BUSINESS_SETTINGS,
@@ -10,8 +10,10 @@ import type {
   GstinEntry,
   OperationalPreferences,
 } from "@/types/settings";
+import { usePlatformSettings } from "@/hooks/usePlatform";
 
 export default function SettingsPage() {
+  const { data: serverSettings } = usePlatformSettings();
   const [activeTab, setActiveTab] = useState<
     "business" | "gstin" | "operations" | "notifications"
   >("business");
@@ -24,6 +26,14 @@ export default function SettingsPage() {
   const [preferences, setPreferences] = useState<OperationalPreferences>(
     MOCK_OPERATIONAL_PREFERENCES,
   );
+
+  useEffect(() => {
+    if (serverSettings) {
+      if (serverSettings.business) setBusiness(serverSettings.business);
+      if (serverSettings.gstin) setGstinList(serverSettings.gstin);
+      if (serverSettings.preferences) setPreferences(serverSettings.preferences);
+    }
+  }, [serverSettings]);
 
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showSavedToast, setShowSavedToast] = useState(false);
