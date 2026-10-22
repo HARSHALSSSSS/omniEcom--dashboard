@@ -1,14 +1,25 @@
 import { client, unwrap } from "./client";
 import { ENDPOINTS } from "./endpoints";
 import type {
+  AdjustmentBody,
+  AdjustmentPreview,
+  AdjustmentResult,
+  AffectedPage,
+  BulkBody,
+  BulkResult,
+  ChannelSyncState,
+  InventoryGroup,
+  InventoryOverview,
+  InventoryPreset,
+  StockTransfer,
+  TransferDraftBody,
+  TransferDraftPatch,
   FeedPage,
   FeedQuery,
   InventoryFilters,
   InventoryKpis,
   LedgerPage,
   LedgerQuery,
-  QuickAdjustBody,
-  QuickAdjustResult,
   SyncJob,
   SyncStartResult,
   TransferBody,
@@ -18,6 +29,7 @@ import type {
   VariantStock,
   Warehouse,
 } from "@/types/inventory";
+import { filterBody } from "@/types/inventory";
 
 /** `{stockStatus:"low_stock"}` to the API's `filter[stockStatus]=low_stock` style; empty values are left out */
 export function filterParams(f: InventoryFilters): Record<string, string | number> {
@@ -31,6 +43,7 @@ export function filterParams(f: InventoryFilters): Record<string, string | numbe
   if (f.movement) out["filter[movement]"] = f.movement;
   if (f.stockMin !== undefined) out["filter[stockMin]"] = f.stockMin;
   if (f.stockMax !== undefined) out["filter[stockMax]"] = f.stockMax;
+  if (f.group) out["filter[group]"] = f.group;
   return out;
 }
 
@@ -91,9 +104,60 @@ export const inventoryApi = {
     return res.data.data.map((w) => ({ id: w.id, code: w.code, name: w.name, city: w.address?.city ?? null, isDefault: w.isDefault }));
   },
 
-  quickAdjust: async (body: QuickAdjustBody) => unwrap<QuickAdjustResult>(await client.post(ENDPOINTS.INVENTORY_QUICK_ADJUST, body)),
+  /** the top of the page in one call: stock pulse, horizon, signals, advisory, distribution, recent movements */
+  overview: async (warehouseId: string | undefined, signal?: AbortSignal) =>
+    unwrap<InventoryOverview>(await client.get(ENDPOINTS.INVENTORY_OVERVIEW, { params: { movements: 5, limit: 5, ...(warehouseId ? { warehouseId } : {}) }, signal })),
+
+  /** master stock, one state per marketplace account, incidents, the four operational counters */
+  channelSyncState: async (signal?: AbortSignal) => unwrap<ChannelSyncState>(await client.get(ENDPOINTS.INVENTORY_CHANNEL_SYNC_STATE, { signal })),
+
+  affectedListings: async (accountId: string, page: number, signal?: AbortSignal) =>
+    unwrap<AffectedPage>(await client.get(ENDPOINTS.INVENTORY_CHANNEL_SYNC_AFFECTED(accountId), { params: { page, pageSize: 10 }, signal })),
+
+  /** one ledger movement by type; the dry run answers with the numbers (or the exact error the write would give) */
+  adjust: async (body: AdjustmentBody) => unwrap<AdjustmentResult>(await client.post(ENDPOINTS.INVENTORY_ADJUSTMENTS, body)),
+
+  previewAdjustment: async (body: AdjustmentBody, signal?: AbortSignal) => unwrap<AdjustmentPreview>(await client.post(ENDPOINTS.INVENTORY_ADJUSTMENTS_PREVIEW, body, { signal })),
+
+  bulk: async (body: BulkBody) => unwrap<BulkResult>(await client.post(ENDPOINTS.INVENTORY_BULK, body)),
+
+  selectionCount: async (filters: InventoryFilters, signal?: AbortSignal) =>
+    unwrap<{ total: number }>(await client.post(ENDPOINTS.INVENTORY_SELECTION_COUNT, { filters: filterBody(filters) }, { signal })),
+
+  groups: async (signal?: AbortSignal) => unwrap<InventoryGroup[]>(await client.get(ENDPOINTS.INVENTORY_GROUPS, { signal })),
+
+  createGroup: async (name: string) => unwrap<InventoryGroup>(await client.post(ENDPOINTS.INVENTORY_GROUPS, { name })),
+
+  deleteGroup: async (id: string) => {
+    await client.delete(ENDPOINTS.INVENTORY_GROUP(id));
+  },
 
   transfer: async (body: TransferBody) => unwrap<TransferResult>(await client.post(ENDPOINTS.INVENTORY_TRANSFER_NOW, body)),
+
+  /** the transfers in one state (the Draft transfers section asks for `draft`), newest first */
+  transfers: async (status: "draft", signal?: AbortSignal): Promise<StockTransfer[]> => {
+    const res = await client.get<{ data: StockTransfer[] }>(ENDPOINTS.INVENTORY_TRANSFERS, { params: { limit: 100, "filter[status]": status }, signal });
+    return res.data.data;
+  },
+
+  /** saves a transfer as a draft: nothing moves until it is submitted */
+  createDraft: async (body: TransferDraftBody) => unwrap<StockTransfer>(await client.post(ENDPOINTS.INVENTORY_TRANSFERS, body)),
+
+  updateDraft: async (id: string, body: TransferDraftPatch) => unwrap<StockTransfer>(await client.patch(ENDPOINTS.INVENTORY_TRANSFER(id), body)),
+
+  /** the stock moves now (409 INSUFFICIENT_STOCK when the source cannot cover a line); repeating it changes nothing */
+  submitDraft: async (id: string) => unwrap<{ duplicate: boolean; transfer: StockTransfer }>(await client.post(ENDPOINTS.INVENTORY_TRANSFER_SUBMIT(id), {})),
+
+  discardDraft: async (id: string) => unwrap<StockTransfer>(await client.post(ENDPOINTS.INVENTORY_TRANSFER_CANCEL(id), {})),
+
+  presets: async () => unwrap<InventoryPreset[]>(await client.get(ENDPOINTS.VIEWS, { params: { screen: "inventory" } })),
+
+  createPreset: async (input: { name: string; filters: Record<string, unknown>; sort: string | null; shared: boolean }) =>
+    unwrap<InventoryPreset>(await client.post(ENDPOINTS.VIEWS, { screen: "inventory", ...input })),
+
+  deletePreset: async (id: string) => {
+    await client.delete(ENDPOINTS.VIEW(id));
+  },
 
   setReorderLevel: async (body: { variantId: string; warehouseId: string; reorderLevel: number | null }) => {
     await client.put(ENDPOINTS.INVENTORY_REORDER_LEVEL, body);

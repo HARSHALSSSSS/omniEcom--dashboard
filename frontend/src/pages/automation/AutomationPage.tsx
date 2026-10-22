@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/common/PageHeader";
+import { RefreshButton } from "@/components/common/RefreshButton";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { ApprovalsTable } from "@/components/automation/ApprovalsTable";
@@ -268,6 +269,13 @@ function AutomationScreen() {
                 </button>
               ))}
             </div>
+            <RefreshButton
+              onRefresh={() => {
+                void overview.refetch();
+                void list.refetch();
+              }}
+              spinning={overview.isFetching || list.isFetching}
+            />
             <Button size="sm" disabled={!canWrite || catalog.isError} title={canWrite ? undefined : WRITE_REASON} onClick={startCreate}>
               New rule
             </Button>

@@ -1,5 +1,4 @@
 import { useEffect, useRef } from "react";
-import { Bold, Italic, Link2, List } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { DESCRIPTION_MAX, htmlToPlain } from "./form";
 
@@ -9,6 +8,7 @@ interface Props {
   onChange: (html: string) => void;
   disabled?: boolean;
   invalid?: boolean;
+  modified?: boolean;
   describedBy?: string;
 }
 
@@ -21,7 +21,7 @@ const exec = (command: string, arg?: string) => {
  * Compact rich text editor (bold, italic, bullets, link) with the character counter of the design. The HTML it emits is sanitised again by
  * the server; the counter counts plain text characters like the server limit does.
  */
-export function RichDescriptionEditor({ id, value, onChange, disabled, invalid, describedBy }: Props) {
+export function RichDescriptionEditor({ id, value, onChange, disabled, invalid, modified, describedBy }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   /** the last html this editor emitted: a value that equals it is the user's own typing and must not reset the caret */
   const emitted = useRef<string | null>(null);
@@ -41,12 +41,12 @@ export function RichDescriptionEditor({ id, value, onChange, disabled, invalid, 
 
   const chars = [...htmlToPlain(value)].length;
   const tools = [
-    { label: "Bold", icon: Bold, run: () => exec("bold") },
-    { label: "Italic", icon: Italic, run: () => exec("italic") },
-    { label: "Bulleted list", icon: List, run: () => exec("insertUnorderedList") },
+    { label: "Bold", text: "Bold", run: () => exec("bold") },
+    { label: "Italic", text: "Italic", run: () => exec("italic") },
+    { label: "Bulleted list", text: "Bullets", run: () => exec("insertUnorderedList") },
     {
       label: "Add link",
-      icon: Link2,
+      text: "Link",
       run: () => {
         const url = window.prompt("Link address (https://...)");
         if (url && /^https?:\/\//i.test(url.trim())) exec("createLink", url.trim());
@@ -55,39 +55,49 @@ export function RichDescriptionEditor({ id, value, onChange, disabled, invalid, 
   ];
 
   return (
-    <div className={cn("rounded-md border bg-background", invalid ? "border-destructive" : "border-input", disabled && "opacity-60")}>
-      <div role="toolbar" aria-label="Description formatting" className="flex items-center gap-1 border-b border-border px-2 py-1">
-        {tools.map(({ label, icon: Icon, run }) => (
-          <button
-            key={label}
-            type="button"
-            title={label}
-            aria-label={label}
-            disabled={disabled}
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={run}
-            className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none"
-          >
-            <Icon className="h-3.5 w-3.5" />
-          </button>
-        ))}
-      </div>
+    <>
       <div
-        ref={ref}
-        id={id}
-        role="textbox"
-        aria-multiline="true"
-        aria-label="Description"
-        aria-invalid={invalid || undefined}
-        aria-describedby={describedBy}
-        contentEditable={!disabled}
-        suppressContentEditableWarning
-        onInput={emit}
-        className="min-h-[110px] px-3 py-2 text-sm leading-relaxed focus-visible:outline-none [&_ul]:list-disc [&_ul]:pl-5 [&_a]:text-primary [&_a]:underline"
-      />
-      <div className={cn("border-t border-border px-3 py-1 text-right text-[11px]", chars > DESCRIPTION_MAX ? "font-medium text-destructive" : "text-muted-foreground")}>
+        className={cn(
+          "flex flex-col w-full border rounded-[8px] bg-white overflow-hidden transition-colors",
+          invalid ? "border-[#B42318]" : modified ? "border-[#000000]" : "border-[#BDBDBD] focus-within:border-[#000000]",
+          disabled && "opacity-60",
+        )}
+      >
+        <div role="toolbar" aria-label="Description formatting" className="flex flex-row items-center px-3.5 gap-6 h-9 border-b border-[#EAEAEA] bg-white shrink-0">
+          {tools.map(({ label, text, run }) => (
+            <button
+              key={label}
+              type="button"
+              title={label}
+              aria-label={label}
+              disabled={disabled}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={run}
+              className="text-[12px] font-normal text-[#666666] hover:text-[#000000] cursor-pointer disabled:pointer-events-none"
+            >
+              {text}
+            </button>
+          ))}
+        </div>
+        <div className="p-4">
+          <div
+            ref={ref}
+            id={id}
+            role="textbox"
+            aria-multiline="true"
+            aria-label="Description"
+            aria-invalid={invalid || undefined}
+            aria-describedby={describedBy}
+            contentEditable={!disabled}
+            suppressContentEditableWarning
+            onInput={emit}
+            className="min-h-[66px] w-full text-[13px] text-[#000000] leading-[145%] outline-none bg-transparent [&_ul]:list-disc [&_ul]:pl-5 [&_a]:underline"
+          />
+        </div>
+      </div>
+      <div className={cn("text-[11px] font-normal leading-[145%]", chars > DESCRIPTION_MAX ? "font-medium text-[#B42318]" : "text-[#666666]")}>
         {chars.toLocaleString()} / {DESCRIPTION_MAX.toLocaleString()} characters
       </div>
-    </div>
+    </>
   );
 }

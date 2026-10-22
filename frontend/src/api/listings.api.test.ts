@@ -35,6 +35,42 @@ describe("listings api", () => {
     expect(tableParams({ ...base, tab: "not_listed" })["filter[screenStatus]"]).toBeUndefined();
   });
 
+  it("sends the Draft tab as the lifecycle filter and the catalogue filters as filter[...]", () => {
+    expect(tableParams({ ...base, tab: "draft" })).toEqual({ "filter[status]": "draft", pageSize: 25, sort: "-updatedAt" });
+    // the tab wins over the lifecycle select
+    expect(tableParams({ ...base, tab: "draft", status: "active" })["filter[status]"]).toBe("draft");
+    expect(tableParams({ ...base, issue: "missing_images", categoryId: "c1", productStatus: "draft", readiness: "high", inventory: "in_stock", potential: "high_velocity" })).toEqual({
+      "filter[issue]": "missing_images",
+      "filter[categoryId]": "c1",
+      "filter[productStatus]": "draft",
+      "filter[readiness]": "high",
+      "filter[inventory]": "in_stock",
+      "filter[potential]": "high_velocity",
+      pageSize: 25,
+      sort: "-updatedAt",
+    });
+  });
+
+  it("reads the channel summary, the filter options and creates master listings in bulk", async () => {
+    http.get.mockResolvedValueOnce({ data: { data: { channels: [], groups: [] } } });
+    expect(await listingsApi.channelSummary()).toEqual({ channels: [], groups: [] });
+    expect(http.get.mock.calls[0]?.[0]).toContain("/listings/channel-summary");
+    http.get.mockResolvedValueOnce({ data: { data: { categories: [] } } });
+    expect(await listingsApi.filterOptions()).toEqual({ categories: [] });
+    expect(http.get.mock.calls[1]?.[0]).toContain("/listings/filter-options");
+    http.post.mockResolvedValueOnce({ data: { data: { summary: { total: 2, created: 2, existing: 0, failed: 0 }, marketplaces: [], results: [] } } });
+    await listingsApi.bulkCreate({ productIds: ["p1"], accountIds: ["a1", "a2"] });
+    expect(http.post.mock.calls[0]?.[0]).toContain("/listings/bulk-create");
+    expect(http.post.mock.calls[0]?.[1]).toEqual({ productIds: ["p1"], accountIds: ["a1", "a2"] });
+  });
+
+  it("counts the draft listings of one product", async () => {
+    http.get.mockResolvedValue({ data: { data: [{ id: "1", status: "draft", table: { screenStatus: "blocked" } }, { id: "2", status: "active", table: { screenStatus: "live" } }] } });
+    const res = await listingsApi.productListings({ ...base, productId: "p1", tab: "draft" });
+    expect(res.items.map((i) => i.id)).toEqual(["1"]);
+    expect(res.counts).toMatchObject({ all: 2, draft: 1, live: 1, blocked: 1 });
+  });
+
   it("filters the overview by marketplace and account", async () => {
     http.get.mockResolvedValue({ data: { data: { totals: {} } } });
     await listingsApi.overview({ marketplace: "flipkart", accountId: "a" });

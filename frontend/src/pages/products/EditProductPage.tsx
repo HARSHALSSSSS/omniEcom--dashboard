@@ -1,13 +1,13 @@
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { AlertTriangle, ArrowLeft, RotateCcw, Save } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { AlertTriangle, Check } from "lucide-react";
 import { ROUTES } from "@/constants/routes";
 import { errorMessage, isApiError } from "@/api/errors";
 import { useEditController } from "@/hooks/useProductEdit";
 import { useToast } from "@/hooks/useToast";
+import { useUiStore } from "@/store/ui.store";
 import { AiPanel, type AiRequest } from "@/components/products/edit/AiPanel";
-import { ConfirmImpactDialog, ConflictDialog, LeaveDialog } from "@/components/products/edit/Dialogs";
+import { ConfirmImpactDialog, ConflictDialog, LeaveDialog, SaveImpactDialog } from "@/components/products/edit/Dialogs";
 import { EditSidebar } from "@/components/products/edit/EditSidebar";
 import { ImpactPanel } from "@/components/products/edit/ImpactPanel";
 import { InsightsPanel } from "@/components/products/edit/InsightsPanel";
@@ -16,15 +16,23 @@ import { ReadinessPanel } from "@/components/products/edit/ReadinessPanel";
 import { FIELD_LABEL, htmlToPlain, modifiedKeys, toFormValues } from "@/components/products/edit/form";
 import type { AiMode } from "@/types/productEdit";
 
-const STATUS_STYLE: Record<string, string> = {
-  active: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  draft: "bg-amber-50 text-amber-700 border-amber-200",
-  archived: "bg-muted text-muted-foreground border-border",
-};
+const STATUS_LABEL: Record<string, string> = { active: "Active", draft: "Draft", archived: "Archived" };
+
+const actionClass = (enabled: boolean, primary: boolean) =>
+  `flex items-center justify-center h-9 px-4 rounded-[8px] text-[12px] font-semibold leading-[145%] transition-colors ${
+    enabled
+      ? primary
+        ? "bg-[#000000] text-white hover:bg-neutral-800 cursor-pointer"
+        : "bg-white text-[#000000] hover:bg-neutral-100 cursor-pointer"
+      : "bg-[#F5F5F5] text-[#9E9E9E] cursor-not-allowed"
+  }`;
+
+const BACK_LINK = "inline-flex h-9 items-center rounded-[8px] border border-[#666666] bg-white px-4 text-[12px] font-semibold text-[#000000] hover:bg-neutral-50";
 
 export default function EditProductPage() {
   const { id = "" } = useParams<{ id: string }>();
   const { toast } = useToast();
+  const { sidebarCollapsed } = useUiStore();
   const ctl = useEditController(id);
   const { editor, values, base, dirty, canWrite, saving, blocker } = ctl;
   const [ai, setAi] = useState<AiRequest | null>(null);
@@ -44,17 +52,17 @@ export default function EditProductPage() {
   if (ctl.editorQuery.isError) {
     const notFound = isApiError(ctl.editorQuery.error) && ctl.editorQuery.error.status === 404;
     return (
-      <div role="alert" className="mx-auto max-w-lg space-y-3 py-16 text-center">
-        <AlertTriangle className="mx-auto h-6 w-6 text-amber-600" aria-hidden="true" />
-        <h1 className="text-lg font-semibold">{notFound ? "Product not found" : "Could not load this product"}</h1>
-        <p className="text-sm text-muted-foreground">{notFound ? "It may have been deleted." : errorMessage(ctl.editorQuery.error)}</p>
+      <div role="alert" className="mx-auto max-w-lg flex flex-col items-center gap-3 py-16 text-center font-['Inter',sans-serif] text-[#000000]">
+        <AlertTriangle className="h-6 w-6 text-[#B45309]" aria-hidden="true" />
+        <h1 className="text-[18px] font-semibold leading-[145%]">{notFound ? "Product not found" : "Could not load this product"}</h1>
+        <p className="text-[13px] text-[#666666]">{notFound ? "It may have been deleted." : errorMessage(ctl.editorQuery.error)}</p>
         <div className="flex justify-center gap-2">
           {!notFound && (
-            <Button type="button" size="sm" onClick={() => void ctl.editorQuery.refetch()}>
+            <button type="button" onClick={() => void ctl.editorQuery.refetch()} className="flex items-center justify-center h-9 px-4 rounded-[8px] bg-[#000000] text-[12px] font-semibold text-white hover:bg-neutral-800 cursor-pointer">
               Try again
-            </Button>
+            </button>
           )}
-          <Link to={ROUTES.PRODUCTS} className="inline-flex h-8 items-center rounded-md border border-border px-3 text-xs font-medium hover:bg-muted">
+          <Link to={ROUTES.PRODUCTS} className={BACK_LINK}>
             Back to products
           </Link>
         </div>
@@ -64,85 +72,133 @@ export default function EditProductPage() {
   if (!editor || !values || !base) {
     return (
       <div role="status" aria-label="Loading product editor" className="flex h-96 items-center justify-center">
-        <div className="h-7 w-7 animate-spin rounded-full border-2 border-border border-t-primary" />
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#EAEAEA] border-t-[#000000]" />
       </div>
     );
   }
 
   const product = editor.product;
-  const stateLabel = dirty ? "Unsaved changes" : "Saved";
+  const justSaved = !dirty && !!ctl.lastSave?.saved;
   const readOnlyReason = "You have view-only access to products.";
+  const canAct = dirty && canWrite;
+
+  const actions = (
+    <div className="flex flex-row items-center gap-2 shrink-0">
+      <button type="button" disabled={!dirty || saving || !canWrite} onClick={ctl.revertAll} className={actionClass(dirty && !saving && canWrite, false)}>
+        Discard
+      </button>
+      <button type="button" disabled={!canAct || saving} title={canWrite ? undefined : readOnlyReason} onClick={() => void ctl.requestSave()} className={actionClass(canAct && !saving, true)}>
+        {saving ? "Saving..." : "Save changes"}
+      </button>
+    </div>
+  );
 
   return (
-    <div className="mx-auto max-w-7xl space-y-5">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
-        <div className="flex items-center gap-3">
-          <Link to={`${ROUTES.PRODUCTS}/${product.id}`} aria-label="Back to product" className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-muted">
-            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+    <div className="flex flex-col w-full text-[#000000] font-['Inter',sans-serif] pb-24">
+      <div className="flex flex-col gap-2.5 pb-5 border-b border-[#EAEAEA]">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-[12px] leading-[145%] text-[#666666]">
+          <Link to={ROUTES.PRODUCTS} className="hover:text-[#000000] transition-colors cursor-pointer">
+            Products
           </Link>
-          <div>
-            <p className="flex items-center gap-2 text-[11px] text-muted-foreground">
-              Master product &middot; <span className="font-mono">{editor.meta.productId}</span>
-              <span className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold capitalize ${STATUS_STYLE[editor.status] ?? STATUS_STYLE.archived}`}>{editor.status}</span>
-            </p>
-            <h1 className="text-xl font-bold tracking-tight text-foreground">Edit product</h1>
+          <span aria-hidden="true">/</span>
+          <Link to={`${ROUTES.PRODUCTS}/${product.id}`} className="hover:text-[#000000] transition-colors cursor-pointer">
+            {product.title}
+          </Link>
+        </nav>
+
+        <div className="flex flex-row items-center justify-between gap-3">
+          <div className="flex flex-col gap-1">
+            <div className="flex flex-row items-center gap-3.5">
+              <h1 className="text-[26px] font-semibold text-[#000000] leading-[145%]">Edit product</h1>
+              {(dirty || justSaved) && (
+                <span role="status" aria-live="polite" className="text-[11px] font-normal text-[#666666] leading-[145%]">
+                  {dirty ? "Unsaved changes" : "Saved"}
+                </span>
+              )}
+            </div>
+            <div className="flex flex-row items-center gap-3">
+              <span className="text-[12px] font-normal text-[#666666] leading-[145%]">
+                Master product &middot; <span>{editor.meta.productId}</span>
+              </span>
+              <span className="inline-flex items-center px-1.5 py-0.5 border border-[#EAEAEA] rounded-[2px] text-[11px] font-normal text-[#000000] leading-[145%]">
+                {STATUS_LABEL[editor.status] ?? editor.status}
+              </span>
+            </div>
           </div>
-          <span role="status" aria-live="polite" className={`text-xs font-medium ${dirty ? "text-amber-700" : "text-muted-foreground"}`}>
-            {stateLabel}
-          </span>
+          {actions}
         </div>
-        <div className="flex items-center gap-2">
-          <Button type="button" variant="outline" size="sm" className="gap-1.5 text-xs" disabled={!dirty || saving || !canWrite} onClick={ctl.revertAll}>
-            <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
-            Discard
-          </Button>
-          <Button type="button" size="sm" className="gap-1.5 text-xs" loading={saving} disabled={!dirty || !canWrite} title={canWrite ? undefined : readOnlyReason} onClick={() => void save()}>
-            {!saving && <Save className="h-3.5 w-3.5" aria-hidden="true" />}
-            Save changes
-          </Button>
-        </div>
-      </header>
+      </div>
 
       {!canWrite && (
-        <p role="note" className="rounded-md border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+        <p role="note" className="mt-4 rounded-[8px] bg-[#F5F5F5] p-3 text-[12px] text-[#666666] leading-[145%]">
           {readOnlyReason} You can look at the product and preview its impact, but not change it.
         </p>
       )}
       {ctl.banner && (
-        <div role="alert" className="flex items-start justify-between gap-3 rounded-md border border-destructive/40 bg-red-50 p-3 text-xs text-red-900">
+        <div role="alert" className="mt-4 flex items-start justify-between gap-3 rounded-[8px] border border-[#B42318]/40 bg-[#FEF3F2] p-3 text-[12px] text-[#7A271A] leading-[145%]">
           <p>
             {ctl.banner.message}{" "}
             {ctl.banner.link && (
-              <Link to={ctl.banner.link.to} className="font-medium underline">
+              <Link to={ctl.banner.link.to} className="font-semibold underline">
                 {ctl.banner.link.label}
               </Link>
             )}
           </p>
-          <button type="button" className="font-medium underline" onClick={ctl.dismissBanner}>
+          <button type="button" className="font-semibold underline cursor-pointer" onClick={ctl.dismissBanner}>
             Dismiss
           </button>
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[180px_minmax(0,1fr)_300px]">
+      <div className="flex flex-row items-start pt-6 gap-6 w-full flex-1">
         <EditSidebar editor={editor} />
 
-        <div className="space-y-4">
-          <ProductInformation ctl={ctl} onImproveWithAi={() => openAi("rewrite")} />
-          {canWrite && <AiPanel productId={product.id} request={ai} getText={() => htmlToPlain(values.description)} onAccept={ctl.setDescriptionHtml} onClose={() => setAi(null)} />}
-        </div>
+        <ProductInformation
+          ctl={ctl}
+          onImproveWithAi={() => (ai ? setAi(null) : openAi("rewrite"))}
+          aiOpen={!!ai}
+          aiPanel={canWrite ? <AiPanel productId={product.id} request={ai} getText={() => htmlToPlain(values.description)} onAccept={ctl.setDescriptionHtml} onClose={() => setAi(null)} /> : null}
+        />
 
-        <div className="space-y-4">
+        <div className="flex flex-col gap-5 w-[248px] border-l border-[#EAEAEA] pl-6 shrink-0">
           <ImpactPanel productId={product.id} dirty={dirty} impact={ctl.impact} pending={ctl.impactPending} failed={ctl.impactError} lastSave={ctl.lastSave} notice={ctl.notice} />
+          <div className="w-full h-[1px] bg-[#EAEAEA]" />
           <ReadinessPanel readiness={editor.readiness} />
+          <div className="w-full h-[1px] bg-[#EAEAEA]" />
           <InsightsPanel productId={product.id} editor={editor} canWrite={canWrite} onReviewSuggestion={() => openAi("benefits")} />
         </div>
       </div>
 
-      <footer className="sticky bottom-0 z-30 border-t border-border bg-background/95 py-2 text-xs backdrop-blur">
-        <p className={dirty ? "font-medium text-amber-700" : "text-muted-foreground"}>{dirty ? "Unsaved changes" : "All changes saved"}</p>
-      </footer>
+      <div
+        className={`fixed bottom-0 right-0 z-20 flex flex-row items-center justify-between h-[72px] px-12 bg-white border-t border-[#EAEAEA] transition-all duration-300 ${sidebarCollapsed ? "left-14" : "left-[224px]"}`}
+      >
+        <div className="flex items-center gap-2">
+          {!dirty && justSaved && <Check className="w-3.5 h-3.5 text-[#666666] stroke-[2.5]" aria-hidden="true" />}
+          <span className="text-[12px] font-normal text-[#666666] leading-[145%]">{dirty ? "Unsaved changes" : "All changes saved"}</span>
+        </div>
+        {actions}
+      </div>
 
+      <SaveImpactDialog
+        open={!!ctl.saveDialog}
+        impact={ctl.saveDialog?.impact ?? null}
+        loading={ctl.saveDialog?.loading ?? false}
+        failed={ctl.saveDialog?.failed ?? false}
+        saving={saving}
+        mapping={
+          "categoryId" in ctl.changes
+            ? { from: product.category?.name ?? "No category", to: values.categoryId ? ctl.categoryName(values.categoryId) : "No category" }
+            : null
+        }
+        onReview={() => {
+          ctl.closeSaveDialog();
+          document.getElementById("change-impact")?.scrollIntoView?.({ behavior: "smooth" });
+        }}
+        onCancel={ctl.closeSaveDialog}
+        onConfirm={() => {
+          void save(false).then(ctl.closeSaveDialog);
+        }}
+      />
       <ConfirmImpactDialog
         impact={ctl.confirmation}
         saving={saving}
@@ -154,13 +210,7 @@ export default function EditProductPage() {
         onConfirm={() => void save(true)}
       />
       <ConflictDialog conflict={ctl.conflict} changedLabels={conflictLabels} hasMyEdits={dirty} onReload={ctl.reloadFromConflict} onClose={ctl.closeConflict} />
-      <LeaveDialog
-        open={blocker.state === "blocked"}
-        saving={saving}
-        onKeep={() => blocker.reset?.()}
-        onDiscard={ctl.revertAll}
-        onSave={() => void save()}
-      />
+      <LeaveDialog open={blocker.state === "blocked"} saving={saving} onKeep={() => blocker.reset?.()} onDiscard={ctl.revertAll} onSave={() => void save()} />
     </div>
   );
 }

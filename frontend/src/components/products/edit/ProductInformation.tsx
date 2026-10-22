@@ -1,30 +1,38 @@
 import { useState, type KeyboardEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { ChevronDown, ChevronRight, Lock, Plus, Sparkles, X } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { ArrowDown, Lock, Sparkles, X } from "lucide-react";
 import { ROUTES } from "@/constants/routes";
 import type { EditController } from "@/hooks/useProductEdit";
+import { useBrands } from "@/hooks/useProductCreation";
 import type { ProductType } from "@/types/productEdit";
+import { ProductImage } from "@/components/products/detail/ProductImage";
 import { cn } from "@/utils/cn";
+import { PRODUCT_TYPE_OPTIONS } from "../productTypes";
+import { AttributeStatus, CategoryAttributeFields } from "./CategoryAttributes";
+import { DesignCombo, DesignSelect } from "./DesignSelect";
 import { FieldShell } from "./FieldShell";
+import { INPUT_CLASS, boxClass } from "./fieldStyles";
 import { RichDescriptionEditor } from "./RichDescriptionEditor";
 import { previousText, type FormKey, type FormValues } from "./form";
 
-const SELECT_CLASS =
-  "h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60";
+type TextKey = Exclude<keyof FormValues, "tags" | "customAttributes" | "productType" | "categoryAttrs">;
 
-type TextKey = Exclude<keyof FormValues, "tags" | "customAttributes" | "productType">;
+/** the design's four types: Physical, Digital, Service / Warranty, Bundle / Kit */
+const TYPE_OPTIONS = PRODUCT_TYPE_OPTIONS;
 
 interface Props {
   ctl: EditController;
   onImproveWithAi: () => void;
+  /** the Improve with AI panel, shown under the description */
+  aiPanel?: ReactNode;
+  aiOpen?: boolean;
 }
 
-export function ProductInformation({ ctl, onImproveWithAi }: Props) {
+export function ProductInformation({ ctl, onImproveWithAi, aiPanel, aiOpen }: Props) {
   const { editor, values, base, modified, fieldErrors, canWrite, categoryName } = ctl;
   const [open, setOpen] = useState(false);
   const [tagDraft, setTagDraft] = useState("");
+  const brands = useBrands();
   if (!editor || !values || !base) return null;
 
   const ro = !canWrite;
@@ -45,29 +53,38 @@ export function ProductInformation({ ctl, onImproveWithAi }: Props) {
     fk: FormKey,
     id: string,
     label: string,
-    opts: { hint?: string; maxLength?: number; mono?: boolean; inputMode?: "decimal" | "numeric" | "text" } = {},
+    opts: { hint?: string; maxLength?: number; mono?: boolean; inputMode?: "decimal" | "numeric" | "text"; required?: boolean } = {},
   ) =>
     shell(
       fk,
       id,
       label,
-      <Input
-        id={id}
-        value={values[key]}
-        disabled={ro}
-        maxLength={opts.maxLength}
-        inputMode={opts.inputMode}
-        error={!!fieldErrors[fk]}
-        aria-invalid={!!fieldErrors[fk] || undefined}
-        aria-describedby={fieldErrors[fk] ? `${id}-error` : undefined}
-        className={cn("text-sm", opts.mono && "font-mono")}
-        onChange={(e) => edit(key, e.target.value, fk)}
-      />,
+      <div className={boxClass({ modified: mod(fk), error: !!fieldErrors[fk], disabled: ro })}>
+        <input
+          id={id}
+          type="text"
+          value={values[key]}
+          disabled={ro}
+          maxLength={opts.maxLength}
+          inputMode={opts.inputMode}
+          placeholder={opts.required ? undefined : "Not supplied"}
+          autoComplete="off"
+          aria-invalid={!!fieldErrors[fk] || undefined}
+          aria-describedby={fieldErrors[fk] ? `${id}-error` : undefined}
+          className={cn(INPUT_CLASS, opts.mono && "font-mono")}
+          onChange={(e) => edit(key, e.target.value, fk)}
+        />
+      </div>,
       opts.hint,
     );
 
   const categories = ctl.categories ?? [];
   const hasCurrent = !values.categoryId || categories.some((c) => c.id === values.categoryId);
+  const categoryOptions = [
+    { value: "", label: product.status === "draft" ? "No category" : "Select a category" },
+    ...(hasCurrent ? [] : [{ value: values.categoryId, label: categoryName(values.categoryId) }]),
+    ...categories.map((c) => ({ value: c.id, label: c.name, ...(c.parentId ? { hint: c.path } : {}) })),
+  ];
   const addTag = () => {
     const t = tagDraft.trim();
     if (t && !values.tags.some((x) => x.toLowerCase() === t.toLowerCase())) edit("tags", [...values.tags, t], "tags");
@@ -87,136 +104,211 @@ export function ProductInformation({ ctl, onImproveWithAi }: Props) {
   const locked = editor.locks.productCode.locked;
   const thumbs = editor.media.thumbnails;
   const configured = editor.attributes.configured;
+  const channels = editor.inheritance.channels;
+  const brandNames = (brands.data ?? []).map((b) => b.name);
 
   return (
-    <section aria-labelledby="product-information" className="space-y-5 rounded-xl border border-border bg-card p-5 shadow-xs">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 id="product-information" className="text-sm font-bold text-foreground">
+    <div className="flex flex-col gap-4 flex-1 min-w-0 pr-2">
+      <div className="flex flex-row items-start justify-between gap-3">
+        <div className="flex flex-col gap-1.5">
+          <h2 id="product-information" className="text-[18px] font-semibold text-[#000000] leading-[145%]">
             Product information
           </h2>
-          <p className="text-xs text-muted-foreground">Changes made here update the master product and may affect connected listings.</p>
+          <p className="text-[13px] font-normal text-[#666666] leading-[145%]">Changes made here update the master product and may affect connected listings.</p>
         </div>
         {modified.length > 1 && !ro && (
-          <button type="button" onClick={ctl.revertAll} className="text-xs font-medium text-primary hover:underline">
+          <button type="button" onClick={ctl.revertAll} className="text-[12px] font-semibold text-[#000000] hover:underline cursor-pointer shrink-0">
             Revert all
           </button>
         )}
       </div>
 
-      <div className="flex items-center gap-3" role="group" aria-label="Product media">
-        <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-lg border border-border bg-muted text-[10px] text-muted-foreground">
-          {editor.media.primaryImageUrl ? <img src={editor.media.primaryImageUrl} alt="Primary product" className="h-full w-full object-cover" /> : "No image"}
-        </div>
-        <div className="flex gap-2">
-          {thumbs.slice(1, 3).map((t) => (
-            <img key={t.id} src={t.url} alt="Product thumbnail" className="h-12 w-12 rounded-md border border-border object-cover" />
-          ))}
-        </div>
-        <div className="text-xs">
-          <p className="text-muted-foreground">
+      <div className="flex flex-row items-start gap-5 w-full">
+        <div className="flex flex-col gap-2 w-[148px] shrink-0" role="group" aria-label="Product media">
+          <ProductImage url={editor.media.primaryImageUrl} alt="Primary product" className="w-[148px] h-[148px] rounded-[4px] overflow-hidden border border-[#EAEAEA]" />
+          <span className="text-[11px] font-normal text-[#666666] leading-[145%]">Primary image</span>
+
+          {thumbs.length > 1 && (
+            <div className="flex flex-row items-center gap-1.5 w-full">
+              {thumbs.slice(1, 4).map((t) => (
+                <ProductImage key={t.id} url={t.url} alt="Product thumbnail" className="w-[44px] h-[40px] rounded-[4px] overflow-hidden border border-[#EAEAEA]" />
+              ))}
+            </div>
+          )}
+
+          <p className="text-[11px] font-normal text-[#666666] leading-[145%]">
             {editor.media.total} {editor.media.total === 1 ? "image" : "images"}
           </p>
-          <Link to={`${ROUTES.PRODUCTS}/${product.id}?tab=media`} className="font-medium text-primary hover:underline">
+          <Link to={`${ROUTES.PRODUCTS}/${product.id}?tab=media`} className="text-[11px] font-normal text-[#000000] hover:underline cursor-pointer text-left pt-1">
             Manage media
           </Link>
         </div>
-      </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <div className="md:col-span-2">{text("title", "title", "field-title", "Product name", { maxLength: 200 })}</div>
+        <div className="flex flex-col gap-3 flex-1 min-w-0">
+          {text("title", "title", "field-title", "Product name", { maxLength: 200, required: true })}
 
-        {shell(
-          "productType",
-          "field-type",
-          "Product type",
-          <select id="field-type" className={SELECT_CLASS} disabled={ro} value={values.productType} onChange={(e) => edit("productType", e.target.value as ProductType, "productType")}>
-            <option value="physical">Physical product</option>
-            <option value="digital">Digital product</option>
-            <option value="service">Service</option>
-          </select>,
-        )}
-
-        {locked ? (
-          <FieldShell id="field-code" label="Master SKU" error={fieldErrors.productCode}>
-            <div className="relative">
-              <Input id="field-code" value={values.productCode} readOnly aria-readonly="true" aria-describedby="field-code-reason" className="bg-muted/50 pr-9 font-mono text-sm" />
-              <Lock className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+          <div className="flex flex-row items-start gap-5 w-full">
+            <div className="flex-1 min-w-0">
+              {shell(
+                "productType",
+                "field-type",
+                "Product type",
+                <DesignSelect
+                  id="field-type"
+                  value={values.productType}
+                  options={TYPE_OPTIONS}
+                  disabled={ro}
+                  modified={mod("productType")}
+                  error={!!fieldErrors.productType}
+                  onChange={(v) => edit("productType", v as ProductType, "productType")}
+                />,
+              )}
             </div>
-            <p id="field-code-reason" className="text-[11px] text-muted-foreground">
-              Locked. {editor.locks.productCode.reason}
-            </p>
-          </FieldShell>
-        ) : (
-          text("productCode", "productCode", "field-code", "Master SKU", { mono: true, maxLength: 200 })
-        )}
 
-        {shell(
-          "categoryId",
-          "field-category",
-          "Category",
-          <select id="field-category" className={SELECT_CLASS} disabled={ro} value={values.categoryId} onChange={(e) => edit("categoryId", e.target.value, "categoryId")}>
-            <option value="">{product.status === "draft" ? "No category" : "Select a category"}</option>
-            {!hasCurrent && <option value={values.categoryId}>{categoryName(values.categoryId)}</option>}
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>,
-          ctl.categoriesError ? "The category list could not be loaded." : undefined,
-        )}
+            <div className="flex-1 min-w-0">
+              {locked ? (
+                <div className="flex flex-col gap-1.5 w-full" data-field="field-code">
+                  <div className="flex flex-row items-center justify-between w-full">
+                    <label htmlFor="field-code" className="text-[12px] font-normal text-[#000000] leading-[145%]">
+                      Master SKU
+                    </label>
+                    <Lock className="w-3 h-3 text-[#666666]" aria-hidden="true" />
+                  </div>
+                  <div className="flex items-center h-10 px-3 bg-[#F5F5F5] border border-[#BDBDBD] rounded-[8px]">
+                    <input
+                      id="field-code"
+                      value={values.productCode}
+                      readOnly
+                      aria-readonly="true"
+                      aria-describedby="field-code-reason"
+                      className="w-full text-[13px] font-mono text-[#000000] leading-[145%] select-all outline-none bg-transparent"
+                    />
+                  </div>
+                  {fieldErrors.productCode && (
+                    <span id="field-code-error" role="alert" className="text-[11px] font-medium text-[#B42318]">
+                      {fieldErrors.productCode}
+                    </span>
+                  )}
+                </div>
+              ) : (
+                text("productCode", "productCode", "field-code", "Master SKU", { mono: true, maxLength: 200, required: true })
+              )}
+            </div>
+          </div>
 
-        {text("brand", "brand", "field-brand", "Brand", { maxLength: 500 })}
+          <span id="field-code-reason" className="text-[11px] font-normal text-[#666666] leading-[145%] -mt-1">
+            {locked ? `Locked. ${editor.locks.productCode.reason ?? "Used as the primary internal product identifier."}` : "Used as the primary internal product identifier."}
+          </span>
+
+          <div className="flex flex-row items-start gap-5 w-full">
+            <div className="flex-1 min-w-0">
+              {shell(
+                "categoryId",
+                "field-category",
+                "Category",
+                <DesignSelect
+                  id="field-category"
+                  value={values.categoryId}
+                  options={categoryOptions}
+                  disabled={ro}
+                  modified={mod("categoryId")}
+                  error={!!fieldErrors.categoryId}
+                  onChange={(v) => edit("categoryId", v, "categoryId")}
+                />,
+                ctl.categoriesError ? "The category list could not be loaded." : undefined,
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              {shell(
+                "brand",
+                "field-brand",
+                "Brand",
+                <DesignCombo
+                  id="field-brand"
+                  value={values.brand}
+                  suggestions={brandNames}
+                  disabled={ro}
+                  modified={mod("brand")}
+                  error={!!fieldErrors.brand}
+                  maxLength={500}
+                  describedBy={fieldErrors.brand ? "field-brand-error" : undefined}
+                  onChange={(v) => edit("brand", v, "brand")}
+                />,
+              )}
+            </div>
+          </div>
+        </div>
       </div>
 
-      {shell(
-        "description",
-        "field-description",
-        "Description",
+      <div className="flex flex-col gap-2.5 w-full pt-2">
+        <div className="flex flex-row justify-between items-center w-full">
+          <h3 className="text-[18px] font-semibold text-[#000000] leading-[145%]">Description</h3>
+          <div className="flex flex-row items-center gap-3">
+            {mod("description") && (
+              <div className="flex items-center gap-2 text-[12px]">
+                <span className="text-[11px] text-[#666666]">Modified</span>
+                {!ro && (
+                  <button type="button" onClick={() => ctl.revert("description")} aria-label="Revert Description" className="font-semibold text-[#000000] hover:underline cursor-pointer">
+                    Revert
+                  </button>
+                )}
+              </div>
+            )}
+            {!ro && (
+              <button
+                type="button"
+                onClick={onImproveWithAi}
+                className={cn("flex items-center gap-1.5 text-[12px] font-semibold px-2 py-1 rounded cursor-pointer transition-colors", aiOpen ? "bg-[#F5F5F5] text-[#000000]" : "text-[#000000] hover:bg-neutral-50")}
+              >
+                <Sparkles className="w-3.5 h-3.5 text-[#C739FF]" aria-hidden="true" />
+                <span>Improve with AI</span>
+              </button>
+            )}
+          </div>
+        </div>
         <RichDescriptionEditor
           id="field-description"
           value={values.description}
           disabled={ro}
           invalid={!!fieldErrors.description}
+          modified={mod("description")}
           describedBy={fieldErrors.description ? "field-description-error" : undefined}
           onChange={(html) => edit("description", html, "description")}
-        />,
-      )}
-      {!ro && (
-        <button type="button" onClick={onImproveWithAi} className="-mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline">
-          <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
-          Improve with AI
-        </button>
-      )}
-
-      <div className="rounded-lg border border-border">
-        <button
-          type="button"
-          aria-expanded={open}
-          aria-controls="additional-attributes"
-          onClick={() => setOpen((o) => !o)}
-          className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <span>Additional attributes</span>
-          <span className="flex items-center gap-2 text-xs font-normal text-muted-foreground">
-            {configured} {configured === 1 ? "attribute" : "attributes"} configured
-            {open ? <ChevronDown className="h-4 w-4" aria-hidden="true" /> : <ChevronRight className="h-4 w-4" aria-hidden="true" />}
+        />
+        {mod("description") && <span className="text-[11px] font-normal text-[#666666] leading-[145%]">Previously: {prev("description")}</span>}
+        {fieldErrors.description && (
+          <span id="field-description-error" role="alert" className="text-[11px] font-medium text-[#B42318]">
+            {fieldErrors.description}
           </span>
-        </button>
-        {open && (
-          <div id="additional-attributes" className="space-y-4 border-t border-border p-4">
-            <ul className="grid grid-cols-2 gap-2 text-xs md:grid-cols-3" aria-label="Attribute status">
-              {editor.attributes.slots.map((s) => (
-                <li key={s.key} className="flex items-center justify-between rounded-md border border-border px-2.5 py-1.5">
-                  <span>{s.label}</span>
-                  <span className={s.supplied ? "text-emerald-700" : "text-muted-foreground"}>{s.supplied ? "Supplied" : "Not supplied"}</span>
-                </li>
-              ))}
-            </ul>
-            {editor.attributes.note && <p className="rounded-md bg-amber-50 p-2.5 text-[11px] text-amber-900">{editor.attributes.note}</p>}
+        )}
+        {aiPanel}
+      </div>
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div className="flex flex-col gap-4 w-full pt-4 border-t border-[#EAEAEA]">
+        <div className="flex flex-row justify-between items-center w-full">
+          <button
+            type="button"
+            aria-expanded={open}
+            aria-controls="additional-attributes"
+            onClick={() => setOpen((o) => !o)}
+            className="text-[12px] font-semibold text-[#000000] hover:underline cursor-pointer flex items-center gap-1"
+          >
+            Additional attributes {open ? "–" : "+"}
+          </button>
+          <span className="text-[11px] font-normal text-[#666666] leading-[145%]">
+            {configured} {configured === 1 ? "attribute" : "attributes"} configured
+          </span>
+        </div>
+
+        {open && (
+          <div id="additional-attributes" className="flex flex-col gap-4 w-full">
+            {editor.attributes.note && <p className="text-[11px] font-normal text-[#666666] leading-[145%]">{editor.attributes.note}</p>}
+
+            <AttributeStatus editor={editor} values={values} defs={ctl.attrDefs} />
+
+            <CategoryAttributeFields ctl={ctl} />
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 w-full">
               {text("material", "material", "field-material", "Material", { maxLength: 500 })}
               {text("countryOfOrigin", "countryOfOrigin", "field-country", "Country of origin", { maxLength: 32, hint: "Country name or ISO code, for example IN" })}
               {text("hsnCode", "hsnCode", "field-hsn", "HSN code", { maxLength: 32, mono: true })}
@@ -235,17 +327,18 @@ export function ProductInformation({ ctl, onImproveWithAi }: Props) {
                       ["dimHeight", "Height"],
                     ] as const
                   ).map(([k, l], i) => (
-                    <Input
-                      key={k}
-                      id={i === 0 ? "field-dim-length" : undefined}
-                      aria-label={`${l} in cm`}
-                      placeholder={l}
-                      inputMode="decimal"
-                      disabled={ro}
-                      value={values[k]}
-                      error={!!fieldErrors.dimensions}
-                      onChange={(e) => edit(k, e.target.value, "dimensions")}
-                    />
+                    <div key={k} className={cn(boxClass({ modified: mod("dimensions"), error: !!fieldErrors.dimensions, disabled: ro }), "flex-1 min-w-0")}>
+                      <input
+                        id={i === 0 ? "field-dim-length" : undefined}
+                        aria-label={`${l} in cm`}
+                        placeholder={l}
+                        inputMode="decimal"
+                        disabled={ro}
+                        value={values[k]}
+                        className={INPUT_CLASS}
+                        onChange={(e) => edit(k, e.target.value, "dimensions")}
+                      />
+                    </div>
                   ))}
                 </div>,
               )}
@@ -256,20 +349,20 @@ export function ProductInformation({ ctl, onImproveWithAi }: Props) {
               "tags",
               "field-tags",
               "Tags",
-              <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-input p-1.5">
+              <div className={cn(boxClass({ modified: mod("tags"), error: !!fieldErrors.tags, disabled: ro }), "h-auto min-h-10 flex-wrap gap-1.5 py-1.5")}>
                 {values.tags.map((t) => (
-                  <span key={t} className="inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-xs">
+                  <span key={t} className="inline-flex items-center gap-1 rounded-[4px] bg-[#F5F5F5] px-2 py-0.5 text-[12px] text-[#000000]">
                     {t}
                     {!ro && (
-                      <button type="button" aria-label={`Remove tag ${t}`} onClick={() => edit("tags", values.tags.filter((x) => x !== t), "tags")}>
-                        <X className="h-3 w-3" aria-hidden="true" />
+                      <button type="button" aria-label={`Remove tag ${t}`} onClick={() => edit("tags", values.tags.filter((x) => x !== t), "tags")} className="cursor-pointer">
+                        <X className="h-3 w-3 text-[#666666]" aria-hidden="true" />
                       </button>
                     )}
                   </span>
                 ))}
                 <input
                   id="field-tags"
-                  className="min-w-[8rem] flex-1 bg-transparent px-1 py-0.5 text-sm focus-visible:outline-none"
+                  className="min-w-[8rem] flex-1 bg-transparent px-1 text-[13px] outline-none placeholder:text-[#666666]"
                   placeholder={ro ? "" : "Type a tag and press Enter"}
                   disabled={ro}
                   value={tagDraft}
@@ -284,27 +377,34 @@ export function ProductInformation({ ctl, onImproveWithAi }: Props) {
               "customAttributes",
               "field-custom-attributes",
               "Custom attributes",
-              <div id="field-custom-attributes" className="space-y-2">
+              <div id="field-custom-attributes" className="flex flex-col gap-2">
                 {values.customAttributes.map((a, i) => (
                   <div key={i} className="flex items-center gap-2">
-                    <Input aria-label={`Attribute ${i + 1} name`} placeholder="Name" disabled={ro} value={a.name} onChange={(e) => setAttr(i, { name: e.target.value })} />
-                    <Input aria-label={`Attribute ${i + 1} value`} placeholder="Value" disabled={ro} value={a.value} onChange={(e) => setAttr(i, { value: e.target.value })} />
-                    <label className="flex shrink-0 items-center gap-1 text-[11px]">
-                      <input type="checkbox" disabled={ro} checked={a.confirmed} onChange={(e) => setAttr(i, { confirmed: e.target.checked })} />
+                    <div className={cn(boxClass({ modified: mod("customAttributes"), disabled: ro }), "flex-1 min-w-0")}>
+                      <input aria-label={`Attribute ${i + 1} name`} placeholder="Name" disabled={ro} value={a.name} onChange={(e) => setAttr(i, { name: e.target.value })} className={INPUT_CLASS} />
+                    </div>
+                    <div className={cn(boxClass({ modified: mod("customAttributes"), disabled: ro }), "flex-1 min-w-0")}>
+                      <input aria-label={`Attribute ${i + 1} value`} placeholder="Value" disabled={ro} value={a.value} onChange={(e) => setAttr(i, { value: e.target.value })} className={INPUT_CLASS} />
+                    </div>
+                    <label className="flex shrink-0 items-center gap-1 text-[11px] text-[#666666]">
+                      <input type="checkbox" disabled={ro} checked={a.confirmed} onChange={(e) => setAttr(i, { confirmed: e.target.checked })} className="accent-black" />
                       Confirmed
                     </label>
                     {!ro && (
-                      <button type="button" aria-label={`Remove attribute ${i + 1}`} onClick={() => edit("customAttributes", values.customAttributes.filter((_, j) => j !== i), "customAttributes")}>
-                        <X className="h-4 w-4" aria-hidden="true" />
+                      <button type="button" aria-label={`Remove attribute ${i + 1}`} onClick={() => edit("customAttributes", values.customAttributes.filter((_, j) => j !== i), "customAttributes")} className="cursor-pointer">
+                        <X className="h-4 w-4 text-[#666666]" aria-hidden="true" />
                       </button>
                     )}
                   </div>
                 ))}
                 {!ro && (
-                  <Button type="button" size="sm" variant="outline" onClick={() => edit("customAttributes", [...values.customAttributes, { name: "", value: "", confirmed: false }], "customAttributes")}>
-                    <Plus className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
-                    Add attribute
-                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => edit("customAttributes", [...values.customAttributes, { name: "", value: "", confirmed: false }], "customAttributes")}
+                    className="self-start text-[12px] font-semibold text-[#000000] hover:underline cursor-pointer"
+                  >
+                    + Add attribute
+                  </button>
                 )}
               </div>,
               "Only confirmed attributes are sent to listings.",
@@ -313,33 +413,42 @@ export function ProductInformation({ ctl, onImproveWithAi }: Props) {
         )}
       </div>
 
-      <p className="text-xs text-muted-foreground">
+      <p className="text-[11px] font-normal text-[#666666] leading-[145%]">
         Price, MRP and stock are managed per variant, not on the master product.{" "}
-        <Link to={`${ROUTES.PRODUCTS}/${product.id}/variants`} className="font-medium text-primary hover:underline">
+        <Link to={`${ROUTES.PRODUCTS}/${product.id}/variants`} className="font-semibold text-[#000000] hover:underline">
           Manage variants
         </Link>
       </p>
 
-      <div className="rounded-lg bg-muted/40 p-4 text-xs">
-        <p className="font-semibold text-foreground">Master product</p>
-        <p className="mt-0.5 text-muted-foreground">Inherited by connected listings</p>
-        {editor.inheritance.channels.length > 0 ? (
-          <ul className="mt-2 flex flex-wrap gap-2" aria-label="Connected channels">
-            {editor.inheritance.channels.map((c) => (
-              <li key={c.accountId} className="rounded-full border border-border bg-background px-2.5 py-0.5">
-                {c.name}
-                {c.independentFields.length > 0 && <span className="text-muted-foreground"> (independent content)</span>}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="mt-2 text-muted-foreground">{editor.inheritance.limited ? "This product has too many listings to show them here." : "No connected listings yet."}</p>
-        )}
-        <p className="mt-2 text-muted-foreground">{editor.inheritance.text}</p>
-        <Link to={`${ROUTES.LISTINGS}?productId=${product.id}`} className="mt-2 inline-block font-medium text-primary hover:underline">
+      <div className="flex flex-col gap-2 pt-4 border-t border-[#EAEAEA] w-full">
+        <span className="text-[12px] font-semibold text-[#000000] leading-[145%]">Master product</span>
+        <div className="flex flex-col gap-1 text-[11px] leading-[145%]">
+          <div className="flex items-center gap-1.5 text-[#666666]">
+            <ArrowDown className="w-3 h-3 text-[#666666]" aria-hidden="true" />
+            <span>Inherited by connected listings</span>
+          </div>
+          {channels.length > 0 ? (
+            <div className="flex items-center gap-1.5 font-medium text-[#000000]" aria-label="Connected channels" role="group">
+              <ArrowDown className="w-3 h-3 text-[#000000]" aria-hidden="true" />
+              <span>
+                {channels.map((c, i) => (
+                  <span key={c.accountId}>
+                    {i > 0 ? " · " : ""}
+                    {c.name}
+                    {c.independentFields.length > 0 && <span className="font-normal text-[#666666]"> (independent content)</span>}
+                  </span>
+                ))}
+              </span>
+            </div>
+          ) : (
+            <p className="text-[#666666]">{editor.inheritance.limited ? "This product has too many listings to show them here." : "No connected listings yet."}</p>
+          )}
+        </div>
+        <p className="text-[11px] font-normal text-[#666666] leading-[145%]">{editor.inheritance.text}</p>
+        <Link to={`${ROUTES.LISTINGS}?productId=${product.id}`} className="text-[12px] font-semibold text-[#000000] hover:underline cursor-pointer text-left pt-1">
           View affected listings
         </Link>
       </div>
-    </section>
+    </div>
   );
 }

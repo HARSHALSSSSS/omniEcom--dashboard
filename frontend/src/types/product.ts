@@ -95,7 +95,7 @@ export type CreateProductInput = z.infer<typeof createProductSchema>;
 // ---------------------------------------------------------------------------------------------------------
 
 export type CatalogProductStatus = "draft" | "active" | "archived";
-export type CatalogProductType = "physical" | "digital" | "service";
+export type CatalogProductType = "physical" | "digital" | "service" | "bundle";
 export type CatalogInventoryStatus = "healthy" | "low" | "out";
 export type CatalogListingStatus = "active" | "attention" | "pending" | "draft" | "unpublished";
 export type CatalogPrimaryActionKey = "open" | "review_inventory" | "update_inventory" | "continue_editing";

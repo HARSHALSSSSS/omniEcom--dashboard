@@ -12,6 +12,8 @@ import type {
   MarketplaceRef,
   NextActions,
   OrderAccount,
+  OrderActivityItem,
+  OrderSavedView,
   OrderDetail,
   OrderDrawerData,
   OrderFilters,
@@ -35,6 +37,9 @@ export function filterParams(f: OrderFilters): Record<string, string> {
   if (f.status?.length) out["filter[status]"] = f.status.join(",");
   if (f.slaState?.length) out["filter[slaState]"] = f.slaState.join(",");
   if (f.payment) out["filter[payment]"] = f.payment;
+  if (f.fulfillment?.length) out["filter[fulfillmentStatus]"] = f.fulfillment.join(",");
+  if (f.attention?.length) out["filter[attention]"] = f.attention.join(",");
+  if (f.date) out["filter[date]"] = f.date;
   return out;
 }
 
@@ -65,6 +70,19 @@ export const ordersApi = {
     if (sort) params.sort = sort;
     const res = await client.get<Blob>(ENDPOINTS.ORDERS_EXPORT, { params, responseType: "blob" });
     return { blob: res.data, fileName: fileNameOf(res.headers["content-disposition"], "orders.csv") };
+  },
+
+  /** newest first, across every marketplace */
+  activity: async (limit = 5, signal?: AbortSignal) =>
+    unwrap<OrderActivityItem[]>(await client.get(ENDPOINTS.ORDERS_ACTIVITY, { params: { limit }, signal })),
+
+  views: async () => unwrap<OrderSavedView[]>(await client.get(ENDPOINTS.VIEWS, { params: { screen: "orders" } })),
+
+  createView: async (input: { name: string; filters: Record<string, unknown>; sort: string | null; shared: boolean }) =>
+    unwrap<OrderSavedView>(await client.post(ENDPOINTS.VIEWS, { screen: "orders", ...input })),
+
+  deleteView: async (id: string) => {
+    await client.delete(ENDPOINTS.VIEW(id));
   },
 
   drawer: async (id: string, signal?: AbortSignal) => unwrap<OrderDrawerData>(await client.get(ENDPOINTS.ORDER_DRAWER(id), { signal })),

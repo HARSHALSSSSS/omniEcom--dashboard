@@ -3,7 +3,7 @@
  * backend/modules/catalog/src/creation-schemas.ts, ai-description-routes.ts and modules/documents/src/routes.ts.
  */
 
-export type ProductType = "physical" | "digital" | "service";
+export type ProductType = "physical" | "digital" | "service" | "bundle";
 export type DimensionUnit = "cm" | "mm" | "in";
 export type WeightUnit = "kg" | "g" | "lb";
 export type CreationStep = "basic" | "variants" | "inventory" | "listings" | "channels";

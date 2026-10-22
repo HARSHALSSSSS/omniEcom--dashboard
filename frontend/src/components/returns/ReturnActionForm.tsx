@@ -1,12 +1,11 @@
 import { useState, type ReactNode } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { useReturnWarehouses } from "@/hooks/useReturns";
 import type { ActionInput, ActionKey, NextAction, ReceiveItem } from "@/types/returns";
+import { DRAWER_BTN_DARK, DRAWER_BTN_LIGHT } from "./design";
 import { fromMinor, toMinor } from "./returnFormat";
 
-export type FormKind = ActionKey | "reject" | "cancel";
+/** the steps that take a form here; the inspection has its own drawer */
+export type FormKind = Exclude<ActionKey, "inspection"> | "reject" | "cancel";
 
 interface ReturnActionFormProps {
   kind: FormKind;
@@ -19,25 +18,16 @@ interface ReturnActionFormProps {
   onClose: () => void;
 }
 
-const FIELD = "h-9 w-full rounded-lg border border-border bg-card px-2.5 text-xs";
-
-const CHECKLIST: ReadonlyArray<{ key: string; label: string; defaultValue: boolean }> = [
-  { key: "packagingIntact", label: "Packaging intact", defaultValue: true },
-  { key: "productUsable", label: "Product usable", defaultValue: true },
-  { key: "accessoriesPresent", label: "Accessories present", defaultValue: true },
-  { key: "visibleDamage", label: "Visible damage", defaultValue: false },
-  { key: "productMismatch", label: "Product does not match the order", defaultValue: false },
-  { key: "missingQuantity", label: "Quantity missing", defaultValue: false },
-];
+const FIELD = "h-[36px] w-full rounded-lg border border-[#EAEAEA] bg-white px-3 text-[12px] text-black focus:border-black focus:outline-none disabled:opacity-60";
 
 const inputOf = (action: NextAction | null, name: string): ActionInput | undefined => action?.inputs.find((i) => i.name === name);
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
     <label className="block space-y-1">
-      <span className="font-semibold text-foreground">{label}</span>
+      <span className="text-[12px] font-semibold text-black">{label}</span>
       {children}
-      {hint && <span className="block text-[11px] text-muted-foreground">{hint}</span>}
+      {hint && <span className="block text-[11px] text-[#666666]">{hint}</span>}
     </label>
   );
 }
@@ -53,7 +43,6 @@ export function ReturnActionForm({ kind, action, busy, error, submitLabel, onSub
   const { data: warehouses = [], isLoading: loadingWarehouses } = useReturnWarehouses(needsWarehouse);
 
   const items = defaultItems(action);
-  const resultOptions = inputOf(action, "result")?.options ?? [];
   const kindInput = inputOf(action, "kind");
   const modeInput = inputOf(action, "mode");
   const amountInput = inputOf(action, "amountMinor");
@@ -61,8 +50,6 @@ export function ReturnActionForm({ kind, action, busy, error, submitLabel, onSub
 
   const [warehouseId, setWarehouseId] = useState(typeof inputOf(action, "warehouseId")?.default === "string" ? (inputOf(action, "warehouseId")?.default as string) : "");
   const [quantities, setQuantities] = useState<Record<string, string>>(() => Object.fromEntries(items.map((i) => [i.returnItemId, String(i.quantity)])));
-  const [result, setResult] = useState(resultOptions[0]?.value ?? "pass");
-  const [checks, setChecks] = useState<Record<string, boolean>>(() => Object.fromEntries(CHECKLIST.map((c) => [c.key, c.defaultValue])));
   const [dispositionKind, setDispositionKind] = useState(typeof kindInput?.default === "string" ? kindInput.default : "");
   const [mode, setMode] = useState(typeof modeInput?.default === "string" ? modeInput.default : (modeInput?.options?.[0]?.value ?? "manual"));
   const [amount, setAmount] = useState(typeof amountInput?.default === "number" ? fromMinor(amountInput.default) : "");
@@ -78,6 +65,8 @@ export function ReturnActionForm({ kind, action, busy, error, submitLabel, onSub
     (kind === "reject" && note.trim().length < 2) ||
     (kind === "refund" && amountMinor === null);
 
+  const isRetry = kind === "refund" && Boolean(action?.href.endsWith("/refund/retry"));
+
   const body = (): Record<string, unknown> => {
     const withNote = note.trim() ? { note: note.trim() } : {};
     switch (kind) {
@@ -85,12 +74,10 @@ export function ReturnActionForm({ kind, action, busy, error, submitLabel, onSub
         return { ...withNote, ...(warehouseId ? { warehouseId } : {}) };
       case "receive":
         return { warehouseId, items: receiveItems, ...withNote };
-      case "inspection":
-        return { checklist: checks, result, ...withNote };
       case "disposition":
         return { kind: dispositionKind, ...withNote };
       case "refund":
-        return action?.href.endsWith("/refund/retry") ? {} : { mode, ...(amountMinor !== undefined && amountMinor !== null ? { amountMinor } : {}), ...(reference.trim() ? { reference: reference.trim() } : {}) };
+        return isRetry ? {} : { mode, ...(amountMinor !== undefined && amountMinor !== null ? { amountMinor } : {}), ...(reference.trim() ? { reference: reference.trim() } : {}) };
       case "complete":
         return { ...(acceptShort ? { acceptShort: true } : {}), ...withNote };
       default:
@@ -98,13 +85,12 @@ export function ReturnActionForm({ kind, action, busy, error, submitLabel, onSub
     }
   };
 
-  const isRetry = kind === "refund" && action?.href.endsWith("/refund/retry");
   const showNote = kind !== "refund";
 
   return (
     <form
       aria-label={action?.label ?? (kind === "reject" ? "Reject return" : "Cancel return")}
-      className="space-y-3 rounded-lg border border-border bg-muted/20 p-3 text-xs"
+      className="space-y-3 rounded-lg border border-[#EAEAEA] bg-[#FAFAFA] p-3 text-[12px]"
       onSubmit={(e) => {
         e.preventDefault();
         if (!invalid) onSubmit(body());
@@ -125,45 +111,24 @@ export function ReturnActionForm({ kind, action, busy, error, submitLabel, onSub
 
       {kind === "receive" && (
         <fieldset className="space-y-2">
-          <legend className="font-semibold text-foreground">Units received</legend>
+          <legend className="text-[12px] font-semibold text-black">Units received</legend>
           {items.map((i) => (
             <div key={i.returnItemId} className="flex items-center justify-between gap-3">
-              <span className="font-mono text-[11px] text-muted-foreground">{i.sku ?? "No SKU"} (up to {i.quantity})</span>
-              <Input
+              <span className="font-mono text-[11px] text-[#666666]">
+                {i.sku ?? "No SKU"} (up to {i.quantity})
+              </span>
+              <input
                 type="number"
                 min={0}
                 max={i.quantity}
                 aria-label={`Quantity received for ${i.sku ?? "item"}`}
                 value={quantities[i.returnItemId] ?? ""}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setQuantities((q) => ({ ...q, [i.returnItemId]: e.target.value }))}
-                className="h-8 w-20 text-xs"
+                onChange={(e) => setQuantities((q) => ({ ...q, [i.returnItemId]: e.target.value }))}
+                className="h-8 w-20 rounded-lg border border-[#EAEAEA] bg-white px-2 text-[12px] focus:border-black focus:outline-none"
               />
             </div>
           ))}
         </fieldset>
-      )}
-
-      {kind === "inspection" && (
-        <>
-          <Field label="Result">
-            <select aria-label="Inspection result" value={result} onChange={(e) => setResult(e.target.value)} className={FIELD}>
-              {resultOptions.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <fieldset className="space-y-1.5">
-            <legend className="font-semibold text-foreground">Checklist</legend>
-            {CHECKLIST.map((c) => (
-              <label key={c.key} className="flex items-center gap-2">
-                <input type="checkbox" checked={checks[c.key]} onChange={(e) => setChecks((s) => ({ ...s, [c.key]: e.target.checked }))} className="h-4 w-4 accent-[#1D4ED8]" />
-                {c.label}
-              </label>
-            ))}
-          </fieldset>
-        </>
       )}
 
       {kind === "disposition" && (
@@ -192,44 +157,51 @@ export function ReturnActionForm({ kind, action, busy, error, submitLabel, onSub
             </select>
           </Field>
           <Field label="Amount" hint={amountInput?.note}>
-            <Input aria-label="Refund amount" inputMode="decimal" value={amount} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAmount(e.target.value)} className="h-9 text-xs" />
+            <input aria-label="Refund amount" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className={FIELD} />
           </Field>
-          {amountMinor === null && <p className="text-rose-700">Enter the amount in rupees, for example 1499.00.</p>}
+          {amountMinor === null && <p className="text-[#DC2626]">Enter the amount as a number, for example 1499.00.</p>}
           <Field label="Reference (optional)">
-            <Input aria-label="Refund reference" maxLength={120} value={reference} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setReference(e.target.value)} className="h-9 text-xs" />
+            <input aria-label="Refund reference" maxLength={120} value={reference} onChange={(e) => setReference(e.target.value)} className={FIELD} />
           </Field>
         </>
       )}
-      {isRetry && <p className="text-muted-foreground">The failed refund is tried again. A marketplace refund asks the marketplace once more; a manual one goes back to ready.</p>}
+      {isRetry && <p className="text-[#666666]">The failed refund is tried again. A marketplace refund asks the marketplace once more; a manual one goes back to ready.</p>}
 
       {kind === "complete" && shortInput && (
         <label className="flex items-start gap-2">
-          <input type="checkbox" checked={acceptShort} onChange={(e) => setAcceptShort(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[#1D4ED8]" />
+          <input type="checkbox" checked={acceptShort} onChange={(e) => setAcceptShort(e.target.checked)} className="mt-0.5 h-3.5 w-3.5 accent-black" />
           <span>
             Accept the units that never arrived
-            {shortInput.note && <span className="block text-[11px] text-muted-foreground">{shortInput.note}</span>}
+            {shortInput.note && <span className="block text-[11px] text-[#666666]">{shortInput.note}</span>}
           </span>
         </label>
       )}
 
       {showNote && (
         <Field label={kind === "reject" ? "Reason (required)" : "Note (optional)"}>
-          <Textarea aria-label={kind === "reject" ? "Rejection reason" : "Note"} value={note} maxLength={300} onChange={(e) => setNote(e.target.value)} className="text-xs" />
+          <textarea
+            aria-label={kind === "reject" ? "Rejection reason" : "Note"}
+            value={note}
+            maxLength={300}
+            rows={2}
+            onChange={(e) => setNote(e.target.value)}
+            className="w-full resize-none rounded-lg border border-[#EAEAEA] bg-white p-3 text-[12px] text-black focus:border-black focus:outline-none"
+          />
         </Field>
       )}
 
       {error && (
-        <p role="alert" className="text-rose-700">
+        <p role="alert" className="text-[#DC2626]">
           {error}
         </p>
       )}
       <div className="flex justify-end gap-2">
-        <Button type="button" variant="outline" size="sm" className="h-8 text-xs" disabled={busy} onClick={onClose}>
+        <button type="button" disabled={busy} onClick={onClose} className={DRAWER_BTN_LIGHT}>
           Close
-        </Button>
-        <Button type="submit" size="sm" className="h-8 text-xs" disabled={invalid || busy}>
+        </button>
+        <button type="submit" disabled={invalid || busy} className={DRAWER_BTN_DARK}>
           {busy ? "Working..." : submitLabel}
-        </Button>
+        </button>
       </div>
     </form>
   );

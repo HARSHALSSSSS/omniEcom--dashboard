@@ -56,9 +56,32 @@ export interface ReturnsSummary {
   stages: Array<{ stage: ReturnStage; label: string; count: number }>;
 }
 
+/** GET /returns/overview: the status line, whether a return can be created here, the eight stage queues and the attention signals */
 export interface ReturnsOverview {
+  statusLine?: { open: number; awaitingInspection: number; refundsPending: number };
   createReturn: { available: boolean; reason: string | null; allowedChannels: string[] };
+  stages?: Record<string, { count: number; needReview?: number; refundPending?: number; hint?: string; window?: string }>;
+  stagesNote?: string;
+  /** only the signals with a count above zero are listed */
+  attention?: Array<{ key: ReturnSignal; count: number }>;
 }
+
+/** the fixed stages of the lifecycle rail, in order, with the key the overview uses and the ledger stage filter it opens */
+export const LIFECYCLE_STAGES = [
+  { key: "requested", stage: "requested", label: "Requested", hint: "To review" },
+  { key: "approved", stage: "approved", label: "Approved", hint: "Authorized" },
+  { key: "inTransit", stage: "in_transit", label: "In Transit", hint: "Await receipt" },
+  { key: "received", stage: "received", label: "Received", hint: "Verify stock" },
+  { key: "inspecting", stage: "inspecting", label: "Inspecting", hint: "" },
+  { key: "resolution", stage: "resolution", label: "Resolution", hint: "" },
+  { key: "refunded", stage: "refunded", label: "Refunded", hint: "Disposition" },
+  { key: "closed", stage: "closed", label: "Closed", hint: "Complete" },
+] as const satisfies ReadonlyArray<{ key: string; stage: ReturnStage; label: string; hint: string }>;
+
+/** what the latest saved inspection checklist says about the goods */
+export type PhysicalCondition = "usable" | "damaged" | "wrong_product" | "incomplete";
+
+export type LedgerActionKey = "inspect" | "review" | "view" | "track" | "refund";
 
 export type TabCounts = Record<ReturnTab, number>;
 
@@ -78,11 +101,13 @@ export interface LedgerRow {
   stageLabel: string;
   requestedAt: string;
   receivedAt: string | null;
-  inspection: { status: InspectionStatus; inspector: { id: string; name: string | null } | null };
+  inspection: { status: InspectionStatus; inspector: { id: string; name: string | null } | null; physical?: PhysicalCondition | null };
   refund: { status: RefundStatus; amountMinor: number | null; currency: string | null; source: "connector" | "manual" | null };
   disposition: string;
   customer: { name: string | null; email: string | null } | null;
   signals: string[];
+  /** the next thing to do with this return (the label of the row's action button) */
+  action?: { key: LedgerActionKey; href: string };
 }
 
 export interface LedgerPage {
@@ -223,7 +248,7 @@ export interface EligibilityItem {
 }
 
 export interface Eligibility {
-  order: { id: string; number: string; channel: { code: string; name: string }; status: string; totalMinor: number; currency: string; customer: { name: string | null } | null };
+  order: { id: string; number: string; channel: { code: string; name: string }; status: string; totalMinor: number; currency: string; customer: { name: string | null; email?: string | null } | null; placedAt?: string; itemCount?: number };
   items: EligibilityItem[];
   note: string;
 }
@@ -245,4 +270,209 @@ export interface WarehouseOption {
 export interface DownloadedFile {
   blob: Blob;
   fileName: string;
+}
+
+/** GET /returns/analytics: reason shares of the last returns, concentration and the recommendation-only notes */
+export interface ReturnsAnalytics {
+  window: { returns: number; days: number; sample: number };
+  reasons: Array<{ code: string; label: string; count: number; sharePct: number }>;
+  concentration: { products: number; text: string };
+  intelligence: Array<{ kind: "reason_spike" | "sku_baseline"; text: string; evidence: string; action: { key: string; label: string; href: string } }>;
+  recommendationOnly: true;
+  note: string;
+}
+
+export type AttentionIssue = "inspection_overdue" | "refund_pending" | "quantity_mismatch" | "disposition_missing";
+
+/** GET /returns/attention: one row per affected return */
+export interface AttentionList {
+  total: number;
+  items: Array<{ returnId: string; number: string; orderNumber: string; issue: AttentionIssue; signals: string[]; impact: string; recommendedAction: { text: string; href: string } }>;
+}
+
+export interface RefundQueueRow {
+  returnId: string;
+  number: string;
+  orderNumber: string;
+  channel: { code: string; name: string };
+  product: { title: string | null; sku: string | null };
+  refund: { status: RefundStatus; amountMinor: number | null; currency: string | null; source: "connector" | "manual" | null; error: string | null };
+  returnStatus: string;
+  inspectionStatus: InspectionStatus;
+  lastUpdateAt: string;
+  action: { key: "review_failure" | "view" | "review_refund"; href: string };
+}
+
+export interface RefundQueue {
+  items: RefundQueueRow[];
+  page: number;
+  pageSize: number;
+  total: number;
+  pages: number;
+  counts: { pending: number; ready: number; processing: number; failed: number };
+}
+
+export interface RefundQuery {
+  q?: string;
+  status?: RefundStatus;
+  marketplace?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+/** GET /returns/{id}/refund */
+export interface RefundView {
+  returnId: string;
+  number: string;
+  orderId: string;
+  orderNumber: string | null;
+  channel: { code: string; name: string };
+  product: { title: string | null; sku: string | null };
+  quantity: number;
+  refund: { status: RefundStatus; amountMinor: number | null; currency: string | null; source: string | null; reference: string | null; error: string | null; refundedAt: string | null; lastUpdateAt: string; amountFrom: string };
+  returnStatus: string;
+  inspectionStatus: InspectionStatus;
+  actionable: boolean;
+  timeline: Array<{ step: "requested" | "approved" | "processing" | "completed"; status: "complete" | "pending"; actor: { id: string | null; name: string | null } | null; at: string | null; note: string | null }>;
+  note: string;
+}
+
+export const INSPECTION_RESULTS = ["pass", "fail", "needs_review"] as const;
+export type InspectionResult = (typeof INSPECTION_RESULTS)[number];
+
+export interface InspectionChecklist {
+  packagingIntact: boolean;
+  productUsable: boolean;
+  accessoriesPresent: boolean;
+  visibleDamage: boolean;
+  productMismatch: boolean;
+  missingQuantity: boolean;
+  custom?: Array<{ label: string; ok: boolean }>;
+}
+
+export interface InspectionRecord {
+  id: string;
+  checklist: InspectionChecklist;
+  result: InspectionResult;
+  systemCondition: string;
+  note: string | null;
+  inspector: { id: string; name: string | null } | null;
+  at: string;
+}
+
+/** GET /returns/{id}/inspection: the latest inspection and its history */
+export interface InspectionView {
+  returnId: string;
+  number: string;
+  status: InspectionStatus;
+  inspector: { id: string; name: string | null } | null;
+  startedAt: string | null;
+  systemCondition: "receipt_matched" | "quantity_mismatch";
+  quantity: { expected: number; received: number };
+  latest: InspectionRecord | null;
+  history: InspectionRecord[];
+  note: string;
+}
+
+export type DispositionKind = "sellable" | "damaged" | "rejected" | "quarantine" | "repair" | "write_off";
+
+/** GET /returns/{id}/disposition-options: the suggestion (never applied) and the six choices */
+export interface DispositionOptions {
+  returnId: string;
+  number: string;
+  inspectionStatus: InspectionStatus;
+  recommendation: { kind: DispositionKind | null; reason: string; suggestedOnly: true };
+  options: Array<{ kind: DispositionKind; label: string; description: string }>;
+  undecidedUnits: number;
+  decided: string[];
+  canConfirm: boolean;
+  blockedReason: string | null;
+  note: string;
+}
+
+/** one queued `returns` sync job (one per connected account that can fetch returns) */
+export interface SyncJobInfo {
+  accountId: string;
+  accountName: string;
+  marketplace: string;
+  jobId: string;
+  status: string;
+  alreadyQueued: boolean;
+}
+
+export type SyncSkipReason = "returns_fetch_not_supported" | "connector_not_ready" | "connector_unavailable";
+
+export interface SyncSkipped {
+  accountId: string;
+  accountName: string;
+  marketplace: string;
+  reason: SyncSkipReason;
+}
+
+/** POST /returns/sync: the jobs queued, and the accounts whose connector cannot fetch returns */
+export interface SyncResult {
+  enqueued: boolean;
+  reason: "no_eligible_accounts" | null;
+  eligibleAccounts: number;
+  jobs: SyncJobInfo[];
+  skipped: SyncSkipped[];
+}
+
+export type SyncJobStatus = "queued" | "running" | "retrying" | "succeeded" | "partially_failed" | "failed" | "dead_lettered" | "cancelled";
+export const SYNC_JOB_DONE: ReadonlyArray<SyncJobStatus> = ["succeeded", "partially_failed", "failed", "dead_lettered", "cancelled"];
+
+/** GET /sync/jobs/{id}: the live state of one sync run */
+export interface SyncJob {
+  id: string;
+  status: SyncJobStatus;
+  marketplaceAccountId: string | null;
+  progress: { total: number; done: number; failed: number };
+  /** fetched, created, duplicates, cancelled, rejected, unmatched, failed */
+  stats: Record<string, number>;
+  error: { code?: string; message?: string } | null;
+  failureDetails: Array<{ ref: string; code?: string; message: string }>;
+}
+
+export interface SyncAccountReport {
+  accountId: string;
+  accountName: string;
+  marketplace: string;
+  alreadyQueued: boolean;
+  /** null until the first poll answered */
+  job: SyncJob | null;
+}
+
+/** what the sync panel shows: per account, from the real jobs, while they run and after */
+export interface SyncReport {
+  startedAt: number;
+  accounts: SyncAccountReport[];
+  skipped: SyncSkipped[];
+  /** every job reached an end state */
+  finished: boolean;
+  /** the jobs kept running longer than we waited; they continue in the background */
+  stillRunning: boolean;
+  /** nothing could be queued (no connected account can fetch returns) */
+  nothingToSync: boolean;
+}
+
+export interface MarkResult {
+  marked: string[];
+  skipped: Array<{ id: string; reason: string }>;
+}
+
+export interface MemberOption {
+  id: string;
+  name: string;
+}
+
+export interface AssignResult {
+  assigned: string[];
+  skipped: Array<{ id: string; reason: string }>;
+}
+
+export interface SaveInspectionInput {
+  id: string;
+  checklist: InspectionChecklist;
+  result: InspectionResult;
+  note?: string;
 }

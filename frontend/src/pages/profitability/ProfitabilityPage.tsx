@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { PageHeader } from "@/components/common/PageHeader";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import { RefreshButton } from "@/components/common/RefreshButton";
 import { Button } from "@/components/ui/button";
 import { ChannelsTable } from "@/components/profitability/ChannelsTable";
 import { ProfitBanners } from "@/components/profitability/ProfitBanners";
@@ -94,20 +95,23 @@ export default function ProfitabilityPage() {
         title="Profitability and unit economics"
         description="Where each rupee of revenue goes: refunds, product cost, marketplace fees, shipping and advertising, with every figure marked actual, estimated or missing."
         actions={
-          <div role="tablist" aria-label="Profitability view" className="inline-flex items-center rounded-lg border border-border bg-muted p-1">
-            {VIEWS.map((v) => (
-              <button
-                key={v.id}
-                type="button"
-                role="tab"
-                aria-selected={view === v.id}
-                onClick={() => update({ view: v.id, account: null, q: null })}
-                className={`rounded-md px-3.5 py-1.5 text-xs font-medium transition-all ${view === v.id ? "bg-background font-semibold text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-              >
-                {v.label}
-              </button>
-            ))}
-          </div>
+          <>
+            {canRead && <RefreshButton onRefresh={() => void waterfall.refetch()} spinning={waterfall.isFetching} />}
+            <div role="tablist" aria-label="Profitability view" className="inline-flex items-center rounded-lg border border-border bg-muted p-1">
+              {VIEWS.map((v) => (
+                <button
+                  key={v.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={view === v.id}
+                  onClick={() => update({ view: v.id, account: null, q: null })}
+                  className={`rounded-md px-3.5 py-1.5 text-xs font-medium transition-all ${view === v.id ? "bg-background font-semibold text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  {v.label}
+                </button>
+              ))}
+            </div>
+          </>
         }
       />
 

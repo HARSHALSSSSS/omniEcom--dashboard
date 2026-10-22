@@ -77,9 +77,31 @@ describe("edit form helpers", () => {
     expect(plainToHtml("one\n\ntwo <b>")).toBe("<p>one</p><p>two &lt;b&gt;</p>");
   });
 
+  it("category attributes: compares and sends only the attributes of the chosen category, '' clears", () => {
+    const cats = [
+      { attributeId: "a1", code: "capacity", name: "Capacity", dataType: "number" as const, unit: "L", isRequired: false, options: [], value: 35 },
+      { attributeId: "a2", code: "organic", name: "Organic", dataType: "boolean" as const, unit: null, isRequired: false, options: [], value: null },
+    ];
+    const base = toFormValues(product({ categoryAttributes: cats }));
+    expect(base.categoryAttrs).toEqual({ a1: "35", a2: "" });
+    expect(modifiedKeys(base, toFormValues(product({ categoryAttributes: cats })))).toEqual([]);
+
+    const cur = { ...base, categoryAttrs: { a1: " 40 ", a2: "true" } };
+    expect(modifiedKeys(base, cur)).toEqual(["categoryAttributes"]);
+    expect(buildChanges(base, cur).changes).toEqual({ categoryAttributes: [{ attributeId: "a1", value: "40" }, { attributeId: "a2", value: "true" }] });
+    expect(buildChanges(base, { ...base, categoryAttrs: { a1: "", a2: "" } }).changes).toEqual({ categoryAttributes: [{ attributeId: "a1", value: null }] });
+
+    // after a category change only the new category's attributes count: a1 is gone, a3 is new
+    const scope = new Set(["a2", "a3"]);
+    const switched = { ...base, categoryAttrs: { a1: "", a2: "", a3: "wool" } };
+    expect(buildChanges(base, switched, scope).changes).toEqual({ categoryAttributes: [{ attributeId: "a3", value: "wool" }] });
+    expect(isModified(base, { ...base, categoryAttrs: { a1: "99", a2: "" } }, "categoryAttributes", scope)).toBe(false);
+    expect(revertField(cur, base, "categoryAttributes").categoryAttrs).toEqual({ a1: "35", a2: "" });
+  });
+
   it("maps server field paths to the page fields", () => {
-    const { byKey, other } = mapFieldErrors({ title: "Too short", gstRateBps: "bad", "dimensions.length": "bad", unknownField: "x", descriptionHtml: "too long" });
-    expect(byKey).toEqual({ title: "Too short", gstPercent: "bad", dimensions: "bad", description: "too long" });
+    const { byKey, other } = mapFieldErrors({ title: "Too short", gstRateBps: "bad", "dimensions.length": "bad", unknownField: "x", descriptionHtml: "too long", "categoryAttributes[0].value": "must be a number" });
+    expect(byKey).toEqual({ title: "Too short", gstPercent: "bad", dimensions: "bad", description: "too long", categoryAttributes: "must be a number" });
     expect(other).toEqual(["unknownField: x"]);
   });
 });

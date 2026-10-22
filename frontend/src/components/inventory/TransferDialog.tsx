@@ -4,31 +4,48 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { errorMessage } from "@/api/errors";
 import { toast } from "@/hooks/useToast";
-import { useTransferNow } from "@/hooks/useInventory";
+import { useCreateDraftTransfer, useTransferNow } from "@/hooks/useInventory";
 import { formatNumber } from "@/utils/format";
-import type { Warehouse } from "@/types/inventory";
+import type { LedgerRow, Warehouse } from "@/types/inventory";
 import { InlineError } from "./inventoryUi";
+import { ProductField } from "./ProductField";
 import type { StockTarget } from "./stockTarget";
 
 const SELECT = "h-9 w-full rounded-md border border-input bg-background px-3 text-xs";
 
 interface TransferDialogProps {
+  open: boolean;
+  /** the product to move (null = pick one in the dialog) */
   target: StockTarget | null;
   warehouses: Warehouse[];
+  onPick: (row: LedgerRow) => void;
   onClose: () => void;
 }
 
 /** POST /inventory/transfer-now: moves units between two warehouses immediately. Only offered with 2+ warehouses. */
-export function TransferDialog({ target, warehouses, onClose }: TransferDialogProps) {
+export function TransferDialog({ open, target, warehouses, onPick, onClose }: TransferDialogProps) {
   return (
-    <Dialog open={target !== null} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-md">{target && <TransferForm key={target.variantId} target={target} warehouses={warehouses} onClose={onClose} />}</DialogContent>
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Transfer Stock{target ? `: ${target.sku}` : ""}</DialogTitle>
+          <DialogDescription>{target ? target.title : "Pick the product to move between warehouses."}</DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-col gap-1">
+          <label htmlFor="tr-product" className="text-xs font-semibold">
+            Product
+          </label>
+          <ProductField id="tr-product" value={target} onPick={onPick} />
+        </div>
+        {target && <TransferForm key={target.variantId} target={target} warehouses={warehouses} onClose={onClose} />}
+      </DialogContent>
     </Dialog>
   );
 }
 
 function TransferForm({ target, warehouses, onClose }: { target: StockTarget; warehouses: Warehouse[]; onClose: () => void }) {
   const transfer = useTransferNow();
+  const saveDraft = useCreateDraftTransfer();
   const [from, setFrom] = useState(() => warehouses.find((w) => target.locations.some((l) => l.warehouseId === w.id && l.available > 0))?.id ?? warehouses[0]?.id ?? "");
   const [to, setTo] = useState(() => warehouses.find((w) => w.id !== from)?.id ?? "");
   const [qty, setQty] = useState("");
@@ -56,21 +73,33 @@ function TransferForm({ target, warehouses, onClose }: { target: StockTarget; wa
     }
   };
 
+  /** saves the transfer as a draft: nothing moves until it is submitted from the Draft transfers section */
+  const onSaveDraft = async () => {
+    if (!ready) return;
+    setServerError(null);
+    try {
+      const draft = await saveDraft.mutateAsync({ fromWarehouseId: from, toWarehouseId: to, items: [{ variantId: target.variantId, quantity: n }] });
+      toast({ title: "Draft saved", description: `${draft.number}: ${formatNumber(n)} units of ${target.sku}. Nothing has moved yet. Submit it from Draft transfers.`, variant: "success" });
+      onClose();
+    } catch (e) {
+      setServerError(errorMessage(e, "Could not save the draft."));
+    }
+  };
+
+  const busy = transfer.isPending || saveDraft.isPending;
   const nameOf = (w: Warehouse) => `${w.name}${w.city ? `, ${w.city}` : ""}`;
   return (
     <form onSubmit={submit} noValidate className="flex flex-col gap-4">
-      <DialogHeader>
-        <DialogTitle>Transfer Stock: {target.sku}</DialogTitle>
-        <DialogDescription>{target.title}</DialogDescription>
-      </DialogHeader>
-
       {serverError && <InlineError message={serverError} />}
 
       <div className="flex flex-col gap-1">
         <label htmlFor="tr-from" className="text-xs font-semibold">
           From warehouse
         </label>
-        <select id="tr-from" value={from} onChange={(e) => {
+        <select
+          id="tr-from"
+          value={from}
+          onChange={(e) => {
             setFrom(e.target.value);
             if (e.target.value === to) setTo(warehouses.find((w) => w.id !== e.target.value)?.id ?? "");
           }}
@@ -113,10 +142,13 @@ function TransferForm({ target, warehouses, onClose }: { target: StockTarget; wa
       </div>
 
       <DialogFooter className="gap-2 sm:gap-0">
-        <Button type="button" variant="outline" size="sm" disabled={transfer.isPending} onClick={onClose}>
+        <Button type="button" variant="outline" size="sm" disabled={busy} onClick={onClose}>
           Cancel
         </Button>
-        <Button type="submit" size="sm" loading={transfer.isPending} disabled={!ready}>
+        <Button type="button" variant="outline" size="sm" loading={saveDraft.isPending} disabled={!ready || busy} onClick={() => void onSaveDraft()}>
+          Save as draft
+        </Button>
+        <Button type="submit" size="sm" loading={transfer.isPending} disabled={!ready || busy}>
           Transfer Stock
         </Button>
       </DialogFooter>

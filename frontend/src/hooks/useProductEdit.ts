@@ -9,6 +9,7 @@ import {
   formKeyOf,
   mapFieldErrors,
   modifiedKeys,
+  revertAttribute,
   revertField,
   toFormValues,
   type FieldProblems,
@@ -18,6 +19,7 @@ import {
 import type {
   AiMode,
   ChangeImpact,
+  CategoryAttributeDef,
   CategoryOption,
   EditChanges,
   EditSaveResult,
@@ -31,6 +33,7 @@ export const EDIT_KEYS = {
   impact: (id: string, version: number, changes: string) => ["product-edit", id, "impact", version, changes] as const,
   insights: (id: string) => ["product-edit", id, "insights"] as const,
   categories: ["product-edit", "categories"] as const,
+  categoryAttributes: (categoryId: string) => ["product-edit", "category-attributes", categoryId] as const,
 };
 
 // ------------------------------------------------------------------------------------------------ queries
@@ -92,6 +95,23 @@ export function useEditController(id: string) {
 
   const base = useMemo(() => (editor ? toFormValues(editor.product) : null), [editor]);
   const [values, setValues] = useState<FormValues | null>(null);
+
+  // the category-specific attributes follow the category chosen in the form (the product's own list while it is unchanged)
+  const baseCategoryId = editor?.product.categoryId ?? "";
+  const chosenCategoryId = values?.categoryId ?? baseCategoryId;
+  const sameCategory = chosenCategoryId === baseCategoryId;
+  const attrQuery = useQuery<CategoryAttributeDef[]>({
+    queryKey: EDIT_KEYS.categoryAttributes(chosenCategoryId),
+    queryFn: () => productEditApi.listCategoryAttributes(chosenCategoryId),
+    enabled: !!editor && !!chosenCategoryId && !sameCategory,
+    staleTime: 60_000,
+    retry: false,
+  });
+  const attrDefs = useMemo<CategoryAttributeDef[]>(
+    () => (sameCategory ? (editor?.product.categoryAttributes ?? []) : (attrQuery.data ?? [])),
+    [attrQuery.data, editor, sameCategory],
+  );
+  const attrScope = useMemo<ReadonlySet<string>>(() => new Set(attrDefs.map((d) => d.attributeId)), [attrDefs]);
   /** the editor version the form was last initialised from: a refetch of the same version never overwrites typing */
   const initialised = useRef<string | null>(null);
   useEffect(() => {
@@ -103,9 +123,12 @@ export function useEditController(id: string) {
     }
   }, [editor]);
 
-  const modified = useMemo(() => (base && values ? modifiedKeys(base, values) : []), [base, values]);
+  const modified = useMemo(() => (base && values ? modifiedKeys(base, values, attrScope) : []), [base, values, attrScope]);
   const dirty = modified.length > 0;
-  const { changes, problems } = useMemo(() => (base && values ? buildChanges(base, values) : { changes: {}, problems: {} as FieldProblems }), [base, values]);
+  const { changes, problems } = useMemo(
+    () => (base && values ? buildChanges(base, values, attrScope) : { changes: {}, problems: {} as FieldProblems }),
+    [base, values, attrScope],
+  );
   const changesKey = JSON.stringify(changes);
   const debouncedKey = useDebounced(changesKey, 500);
   const hasProposal = dirty && Object.keys(changes).length > 0;
@@ -140,6 +163,17 @@ export function useEditController(id: string) {
     setValues((v) => (v ? { ...v, [key]: value } : v));
   }, []);
   const clearError = useCallback((key: FormKey) => setServerErrors((e) => (e[key] ? { ...e, [key]: undefined } : e)), []);
+  const setAttr = useCallback((attributeId: string, text: string) => {
+    setValues((v) => (v ? { ...v, categoryAttrs: { ...v.categoryAttrs, [attributeId]: text } } : v));
+    setServerErrors((e) => (e.categoryAttributes ? { ...e, categoryAttributes: undefined } : e));
+  }, []);
+  const revertAttr = useCallback(
+    (attributeId: string) => {
+      setValues((v) => (v && base ? revertAttribute(v, base, attributeId) : v));
+      setServerErrors((e) => (e.categoryAttributes ? { ...e, categoryAttributes: undefined } : e));
+    },
+    [base],
+  );
 
   const revert = useCallback(
     (key: FormKey) => {
@@ -149,7 +183,7 @@ export function useEditController(id: string) {
     [base, clearError],
   );
   const revertAll = useCallback(() => {
-    if (base) setValues({ ...base, tags: [...base.tags], customAttributes: base.customAttributes.map((a) => ({ ...a })) });
+    if (base) setValues({ ...base, tags: [...base.tags], customAttributes: base.customAttributes.map((a) => ({ ...a })), categoryAttrs: { ...base.categoryAttrs } });
     setServerErrors({});
     setBanner(null);
   }, [base]);
@@ -254,6 +288,35 @@ export function useEditController(id: string) {
     [applySaved, canWrite, changes, editor, id, problems, saveMutation],
   );
 
+  // ---- the design's save-impact dialog: opens on every Save with the real impact (fetched now when the preview has not loaded)
+  const [saveDialog, setSaveDialog] = useState<{ impact: ChangeImpact | null; loading: boolean; failed: boolean } | null>(null);
+  const requestSave = useCallback(async () => {
+    if (!editor || !canWrite || inflight.current) return;
+    if (Object.keys(problems).length > 0) {
+      setServerErrors(problems);
+      setBanner({ message: "Fix the highlighted fields before saving." });
+      return;
+    }
+    const cached = hasProposal && debouncedKey === changesKey && !impactQuery.isFetching ? impactQuery.data : undefined;
+    if (cached) {
+      setSaveDialog({ impact: cached, loading: false, failed: false });
+      return;
+    }
+    setSaveDialog({ impact: null, loading: true, failed: false });
+    const key = changesKey;
+    try {
+      const fresh = await qc.fetchQuery({
+        queryKey: EDIT_KEYS.impact(id, editor.version, key),
+        queryFn: () => productEditApi.changeImpact(id, JSON.parse(key) as EditChanges),
+        staleTime: 30_000,
+      });
+      setSaveDialog((d) => (d ? { impact: fresh, loading: false, failed: false } : d));
+    } catch {
+      setSaveDialog((d) => (d ? { impact: null, loading: false, failed: true } : d));
+    }
+  }, [canWrite, changesKey, debouncedKey, editor, hasProposal, id, impactQuery.data, impactQuery.isFetching, problems, qc]);
+  const closeSaveDialog = useCallback(() => setSaveDialog(null), []);
+
   /** show the latest version after a VERSION_CONFLICT; keep the seller's own edits on top when asked */
   const reloadFromConflict = useCallback(
     (keepMine: boolean) => {
@@ -323,6 +386,11 @@ export function useEditController(id: string) {
     dirty,
     changes,
     setField,
+    setAttr,
+    revertAttr,
+    attrDefs,
+    attrDefsLoading: !sameCategory && !!chosenCategoryId && attrQuery.isLoading,
+    attrDefsError: !sameCategory && attrQuery.isError,
     revert,
     revertAll,
     fieldErrors,
@@ -331,6 +399,9 @@ export function useEditController(id: string) {
     impactError: hasProposal && impactQuery.isError,
     saving: saveMutation.isPending,
     submit,
+    saveDialog,
+    requestSave,
+    closeSaveDialog,
     banner,
     dismissBanner: () => setBanner(null),
     notice,

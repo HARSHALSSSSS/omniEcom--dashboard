@@ -2,12 +2,12 @@ import { useNavigate } from "react-router-dom";
 import { ROUTES } from "@/constants/routes";
 import { toAppPath } from "@/lib/links";
 import { formatNumber } from "@/utils/format";
+import { productTypeLabel } from "../productTypes";
 import type { FieldRow, OverviewProduct, ProductOverview } from "@/types/productDetail";
 import { Empty, KeyValue, LINK_BTN, Row, TableShell } from "./shared";
 import { fieldLabel, fieldStateLabel, listingStatusLabel, optionColumns, relative } from "./format";
 import type { ActionState, DetailActions } from "./useDetailActions";
 
-const PRODUCT_TYPE = { physical: "Physical product", digital: "Digital product", service: "Service" } as const;
 
 /** "Edit information" style link to the edit screen, disabled when the product cannot be edited */
 export function EditLink({ actions, productId, label }: { actions: DetailActions; productId: string; label: string }) {
@@ -25,7 +25,7 @@ export function ProductInformation({ product }: { product: OverviewProduct }) {
     <>
       <dl className="w-full grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 pt-1">
         <KeyValue label="Product name" value={product.title} />
-        <KeyValue label="Product type" value={PRODUCT_TYPE[product.productType]} />
+        <KeyValue label="Product type" value={productTypeLabel(product.productType)} />
         <KeyValue label="Category" value={product.category?.name ?? "Not set"} />
         <KeyValue label="Master SKU" value={product.productCode} />
         <KeyValue label="Brand" value={product.brand ?? "Not set"} />

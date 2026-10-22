@@ -4,6 +4,7 @@ import type {
   NextAction,
   NextActions,
   OrderDetail,
+  OrderActivityItem,
   OrderDrawerData,
   OrderTimelineEntry,
   OrdersSummary,
@@ -25,10 +26,43 @@ export const summary = (over: Partial<OrdersSummary> = {}): OrdersSummary => ({
 
 export const workspace = (over: Partial<OrdersWorkspace> = {}): OrdersWorkspace => ({
   asOf: "2026-10-20",
+  pulse: {
+    today: 12,
+    stages: [
+      { key: "new", count: 4 },
+      { key: "confirmed", count: 3 },
+      { key: "picking", count: 2 },
+      { key: "packed", count: 1 },
+      { key: "ready_to_dispatch", count: 1 },
+      { key: "dispatched", count: 1 },
+      { key: "in_transit", count: 0 },
+    ],
+  },
   needsAttention: { slaRisk: 2, unprocessed: 7, inventoryIssue: 1, paymentIssue: 0, cancellationRisk: 0, returns: 3 },
-  slaPressure: { summary: "2 orders may breach dispatch SLA within the next 60 minutes.", reviewHref: "/orders?filter[slaState]=at_risk", thresholds: { atRiskMinutes: 60, approachingMinutes: 180 } },
+  sources: {
+    total: 10,
+    windowHours: 24,
+    items: [
+      { channel: { code: "amazon_in", name: "Amazon India" }, orders: 6, sharePct: 60 },
+      { channel: { code: "flipkart", name: "Flipkart" }, orders: 4, sharePct: 40 },
+    ],
+  },
+  slaPressure: {
+    summary: "2 orders may breach dispatch SLA within the next 60 minutes.",
+    reviewHref: "/orders?filter[slaState]=at_risk",
+    thresholds: { atRiskMinutes: 60, approachingMinutes: 180 },
+    safe: { orders: 20, hintKey: "sla.safe", hint: "more than 3 h" },
+    approaching: { orders: 4, hintKey: "sla.approaching", hint: "60 min to 3 h" },
+    atRisk: { orders: 2, hintKey: "sla.at_risk", hint: "less than 60 min" },
+    breached: { orders: 1, hintKey: "sla.breached", hint: "past the deadline" },
+  },
   ...over,
 });
+
+export const activity = (): OrderActivityItem[] => [
+  { at: "2026-10-20T09:40:00.000Z", orderId: "o1", orderNumber: "ORD-1001", channel: { code: "amazon_in", name: "Amazon India" }, event: "payment_confirmed", text: "Payment confirmed" },
+  { at: "2026-10-20T09:30:00.000Z", orderId: "o2", orderNumber: "ORD-1002", channel: { code: "flipkart", name: "Flipkart" }, event: "sla_risk", text: "SLA risk detected" },
+];
 
 export const row = (over: Partial<LedgerOrder> = {}): LedgerOrder => ({
   id: "o1",

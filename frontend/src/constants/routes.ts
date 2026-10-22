@@ -25,6 +25,13 @@ export const ROUTES = {
 
   // Commerce
   LISTINGS: "/listings",
+  // listing workflow screens (static paths win over /listings/:id)
+  LISTINGS_BULK: "/listings/bulk",
+  LISTINGS_PUBLISH: "/listings/publish",
+  LISTINGS_READINESS: "/listings/readiness",
+  LISTING_BLOCKED: "/listings/:id/blocked",
+  LISTING_SYNC: "/listings/:id/sync",
+  LISTING_UNLISTED: "/listings/:id/unlisted",
   MARKETPLACE_HUB: "/marketplace-hub",
   MARKETPLACE_HUB_CONNECTORS: "/marketplace-hub/connectors",
   MARKETPLACE_HUB_HEALTH: "/marketplace-hub/health",

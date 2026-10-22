@@ -14,6 +14,7 @@ const TYPES: ReadonlyArray<{ id: MovementType; label: string }> = [
   { id: "transfer", label: "Transfers" },
   { id: "manual_adjustment", label: "Manual adjustments" },
   { id: "damage", label: "Damage" },
+  { id: "shrinkage", label: "Shrinkage" },
   { id: "return", label: "Returns" },
   { id: "quarantine", label: "Quarantine" },
 ];
@@ -25,13 +26,13 @@ export function MovementsFeed({ warehouseId }: { warehouseId: string | undefined
   const items = feed.data?.pages.flatMap((p) => p.items) ?? [];
 
   return (
-    <section className="space-y-4 rounded-xl border border-border bg-card p-6 shadow-sm" aria-label="Recent stock movements">
+    <section className="w-full space-y-4 rounded-xl border border-[#EAEAEA] bg-white p-5 shadow-2xs" aria-label="Inventory audit trail">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <History className="h-5 w-5 text-muted-foreground" aria-hidden />
-          <h3 className="text-base font-semibold text-foreground">Recent Stock Movements & Audit Trail</h3>
+          <History className="h-4 w-4 stroke-[1.5px] text-[#555555]" aria-hidden />
+          <h3 className="m-0 text-[14px] font-semibold text-[#111111]">Inventory audit trail</h3>
         </div>
-        <select aria-label="Movement type" value={type} onChange={(e) => setType(e.target.value as MovementType | "")} className="h-8 rounded-md border border-input bg-background px-2 text-xs">
+        <select aria-label="Movement type" value={type} onChange={(e) => setType(e.target.value as MovementType | "")} className="h-8 rounded-lg border border-[#EAEAEA] bg-white px-2 text-xs">
           <option value="">All movements</option>
           {TYPES.map((t) => (
             <option key={t.id} value={t.id}>

@@ -20,8 +20,35 @@ export type SlaState = (typeof SLA_STATES)[number];
 export const ORDER_TABS = ["all", "needs_attention", "new", "processing", "shipped", "delivered", "returns_disputes"] as const;
 export type OrderTab = (typeof ORDER_TABS)[number];
 
-export const PAYMENT_FILTERS = ["prepaid", "cod"] as const;
+/** a payment method (prepaid, cod) or a payment status (paid, pending, failed): the API takes either under `filter[payment]` */
+export const PAYMENT_FILTERS = ["prepaid", "cod", "paid", "pending", "failed"] as const;
 export type PaymentFilter = (typeof PAYMENT_FILTERS)[number];
+
+/** the "needs attention" chips; each is one SQL predicate shared by the ledger filter and the workspace counters */
+export const ATTENTION_KEYS = ["sla_risk", "unprocessed", "inventory_issue", "payment_issue", "cancellation_risk", "delayed", "returns", "disputes"] as const;
+export type AttentionKey = (typeof ATTENTION_KEYS)[number];
+
+/** the latest fulfillment status of an order, or `none` before a fulfillment exists */
+export const FULFILLMENT_FILTERS = [
+  "none",
+  "confirmed",
+  "picking",
+  "picked",
+  "packing",
+  "packed",
+  "ready_to_ship",
+  "on_hold",
+  "shipped",
+  "in_transit",
+  "delivered",
+  "delivery_failed",
+  "cancelled",
+] as const;
+export type FulfillmentFilter = (typeof FULFILLMENT_FILTERS)[number];
+
+/** a day in the business time zone */
+export const DATE_FILTERS = ["today", "yesterday"] as const;
+export type DateFilter = (typeof DATE_FILTERS)[number];
 
 /** `-placedAt` is the API default */
 export const ORDER_SORTS = ["-placedAt", "placedAt", "-value", "value", "sla", "-sla"] as const;
@@ -44,10 +71,55 @@ export interface OrdersSummary {
   windowDays: number;
 }
 
+export const PIPELINE_STAGES = ["new", "confirmed", "picking", "packed", "ready_to_dispatch", "dispatched", "in_transit"] as const;
+export type PipelineStage = (typeof PIPELINE_STAGES)[number];
+
+export interface SlaBand {
+  orders: number;
+  hintKey: string;
+  hint: string;
+}
+
+/** GET /orders/workspace: the top of the screen in one call */
 export interface OrdersWorkspace {
   asOf: string;
+  /** orders placed on `asOf` (business time zone) by their current status */
+  pulse: { today: number; stages: Array<{ key: PipelineStage; count: number }> };
   needsAttention: { slaRisk: number; unprocessed: number; inventoryIssue: number; paymentIssue: number; cancellationRisk: number; returns: number };
-  slaPressure: { summary: string; reviewHref: string; thresholds: { atRiskMinutes: number; approachingMinutes: number } };
+  /** orders placed in the last `windowHours` hours, per marketplace */
+  sources: { total: number; windowHours: number; items: Array<{ channel: MarketplaceRef; orders: number; sharePct: number }> };
+  slaPressure: {
+    summary: string;
+    reviewHref: string;
+    thresholds: { atRiskMinutes: number; approachingMinutes: number };
+    safe: SlaBand;
+    approaching: SlaBand;
+    atRisk: SlaBand;
+    breached: SlaBand;
+  };
+}
+
+export type OrderActivityEvent = "payment_confirmed" | "ready_to_dispatch" | "picking_started" | "sla_risk" | "return_requested";
+
+/** GET /orders/activity */
+export interface OrderActivityItem {
+  at: string;
+  orderId: string;
+  orderNumber: string;
+  channel: MarketplaceRef;
+  event: OrderActivityEvent;
+  text: string;
+}
+
+/** a saved view of the Orders screen (GET/POST /views, screen "orders") */
+export interface OrderSavedView {
+  id: string;
+  name: string;
+  filters: Record<string, unknown>;
+  sort: string | null;
+  shared: boolean;
+  mine: boolean;
+  canEdit: boolean;
 }
 
 export interface LedgerSla {
@@ -100,6 +172,9 @@ export interface OrderFilters {
   status?: OrderStatus[];
   slaState?: SlaState[];
   payment?: PaymentFilter;
+  fulfillment?: FulfillmentFilter[];
+  attention?: AttentionKey[];
+  date?: DateFilter;
 }
 
 export interface LedgerQuery extends OrderFilters {

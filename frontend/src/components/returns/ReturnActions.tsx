@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import { errorMessage } from "@/api/errors";
 import { useReturnNextActions, useRunReturnAction } from "@/hooks/useReturns";
 import { toast } from "@/hooks/useToast";
 import { useWorkspaceStore } from "@/store/workspace.store";
 import type { NextAction } from "@/types/returns";
+import { cn } from "@/utils/cn";
+import { DRAWER_BTN_DARK, DRAWER_BTN_LIGHT } from "./design";
 import { ReturnActionForm, type FormKind } from "./ReturnActionForm";
 import { NO_REFUND_REASON, NO_WRITE_REASON, writeErrorMessage } from "./returnFormat";
 
@@ -20,30 +20,33 @@ interface ReturnActionsProps {
   returnNumber: string;
   /** the return's status from the detail, for reject and cancel */
   status: string;
+  /** the inspection and the refund have their own drawers: their step opens it */
+  onOpenInspection: () => void;
+  onOpenRefund: () => void;
 }
 
 type Open = { kind: FormKind; action: NextAction | null } | null;
 
 /**
  * The steps of the return flow (GET /returns/{id}/next-actions): approve, receive, inspect, disposition, refund, complete.
- * Each says whether it is done, ready, or why it is blocked, and its form is built from the inputs the API returns.
- * Refunds need returns:refund (admins); reject and cancel are the ways out before the goods arrive.
+ * Each says whether it is done, ready, or why it is blocked. Approve, receive, disposition and complete take their form here; the
+ * inspection and the refund open their own drawers. Refunds need returns:refund (admins); reject and cancel are the ways out before the goods arrive.
  */
-export function ReturnActions({ returnId, returnNumber, status }: ReturnActionsProps) {
+export function ReturnActions({ returnId, returnNumber, status, onOpenInspection, onOpenRefund }: ReturnActionsProps) {
   const permissions = useWorkspaceStore((s) => s.permissions);
   const { data, isLoading, isError, error, refetch } = useReturnNextActions(returnId);
   const run = useRunReturnAction();
   const [open, setOpen] = useState<Open>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
-  if (isLoading) return <Skeleton className="h-32 w-full" role="status" aria-label="Loading next steps" />;
+  if (isLoading) return <div role="status" aria-label="Loading next steps" className="h-32 w-full animate-pulse rounded-lg bg-[#F5F5F5]" />;
   if (isError || !data) {
     return (
-      <div role="alert" className="space-y-2 rounded-lg border border-border p-3 text-xs">
-        <p className="text-muted-foreground">The next steps could not be loaded. {errorMessage(error)}</p>
-        <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => void refetch()}>
+      <div role="alert" className="space-y-2 rounded-lg border border-[#FCA5A5] bg-[#FEF2F2] p-3 text-[12px]">
+        <p className="text-[#991B1B]">The next steps could not be loaded. {errorMessage(error)}</p>
+        <button type="button" className={DRAWER_BTN_LIGHT} onClick={() => void refetch()}>
           Retry
-        </Button>
+        </button>
       </div>
     );
   }
@@ -77,38 +80,44 @@ export function ReturnActions({ returnId, returnNumber, status }: ReturnActionsP
   const canCancel = canWrite && CANCELLABLE.includes(status);
 
   return (
-    <section aria-label="Next steps" className="space-y-3">
-      <h4 className="text-[11px] font-semibold uppercase tracking-wider text-foreground">Next steps</h4>
+    <section aria-label="Next steps" className="space-y-2 pt-1">
+      <h3 className="pb-1 text-[14px] font-semibold leading-[20px] text-black">Next steps</h3>
       <ol className="space-y-2">
         {data.actions.map((a) => {
           const reason = blockedReason(a);
           const isOpen = open?.kind === a.key;
-          const state = a.done ? "Done" : reason ? "Blocked" : data.next === a.key ? "Next" : "Ready";
+          const isNext = data.next === a.key;
+          const opensDrawer = a.key === "inspection" || a.key === "refund";
           return (
-            <li key={a.key} className="space-y-2 rounded-lg border border-border p-3">
+            <li key={a.key} className="space-y-2 rounded-lg border border-[#EAEAEA] p-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="font-semibold text-foreground">{a.label}</p>
-                  <p className="text-[11px] text-muted-foreground">{a.done ? "Done" : (reason ?? (state === "Next" ? "Ready to do now" : "Can be done now"))}</p>
+                  <p className="text-[13px] font-semibold text-black">{a.label}</p>
+                  <p className={cn("text-[11px]", a.done ? "text-[#16A34A]" : reason ? "text-[#666666]" : "text-[#D97706]")}>
+                    {a.done ? "Done" : (reason ?? (isNext ? "Ready to do now" : "Can be done now"))}
+                  </p>
                 </div>
                 {!a.done && (
-                  <Button
-                    size="sm"
-                    variant={state === "Next" ? "default" : "outline"}
-                    className="h-7 shrink-0 text-xs"
+                  <button
+                    type="button"
+                    className={cn(isNext ? DRAWER_BTN_DARK : DRAWER_BTN_LIGHT, "shrink-0")}
                     disabled={reason !== null || run.isPending}
                     title={reason ?? undefined}
-                    aria-expanded={isOpen}
-                    aria-label={isOpen ? `Hide ${a.label}` : a.label}
-                    onClick={() => toggle({ kind: a.key, action: a })}
+                    aria-expanded={opensDrawer ? undefined : isOpen}
+                    aria-label={opensDrawer ? `Open ${a.label}` : isOpen ? `Hide ${a.label}` : a.label}
+                    onClick={() => {
+                      if (a.key === "inspection") onOpenInspection();
+                      else if (a.key === "refund") onOpenRefund();
+                      else toggle({ kind: a.key as FormKind, action: a });
+                    }}
                   >
-                    {isOpen ? "Hide" : "Start"}
-                  </Button>
+                    {opensDrawer ? "Open" : isOpen ? "Hide" : "Start"}
+                  </button>
                 )}
               </div>
-              {isOpen && (
+              {isOpen && !opensDrawer && (
                 <ReturnActionForm
-                  kind={a.key}
+                  kind={a.key as FormKind}
                   action={a}
                   busy={run.isPending}
                   error={formError}
@@ -123,17 +132,17 @@ export function ReturnActions({ returnId, returnNumber, status }: ReturnActionsP
       </ol>
 
       {(canReject || canCancel) && (
-        <div className="space-y-2">
+        <div className="space-y-2 pt-1">
           <div className="flex gap-2">
             {canReject && (
-              <Button variant="outline" size="sm" className="h-8 text-xs" aria-expanded={open?.kind === "reject"} onClick={() => toggle({ kind: "reject", action: null })}>
+              <button type="button" className={DRAWER_BTN_LIGHT} aria-expanded={open?.kind === "reject"} onClick={() => toggle({ kind: "reject", action: null })}>
                 Reject return
-              </Button>
+              </button>
             )}
             {canCancel && (
-              <Button variant="outline" size="sm" className="h-8 text-xs" aria-expanded={open?.kind === "cancel"} onClick={() => toggle({ kind: "cancel", action: null })}>
+              <button type="button" className={DRAWER_BTN_LIGHT} aria-expanded={open?.kind === "cancel"} onClick={() => toggle({ kind: "cancel", action: null })}>
                 Cancel return
-              </Button>
+              </button>
             )}
           </div>
           {(open?.kind === "reject" || open?.kind === "cancel") && (
@@ -149,7 +158,7 @@ export function ReturnActions({ returnId, returnNumber, status }: ReturnActionsP
           )}
         </div>
       )}
-      {!canWrite && <p className="text-[11px] text-muted-foreground">{NO_WRITE_REASON}</p>}
+      {!canWrite && <p className="text-[11px] text-[#666666]">{NO_WRITE_REASON}</p>}
     </section>
   );
 }

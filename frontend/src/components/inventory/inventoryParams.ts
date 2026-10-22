@@ -83,6 +83,7 @@ export function readUrlState(params: URLSearchParams): InventoryUrlState {
       movement: oneOf(params.get("movement"), MOVEMENT_OPTIONS),
       stockMin: whole(params.get("min")),
       stockMax: whole(params.get("max")),
+      group: UUID.test(params.get("group") ?? "") ? (params.get("group") ?? undefined) : undefined,
     },
     sort: SORT_OPTIONS.some((o) => o.id === sort) ? sort : "",
     page: Number.isInteger(page) && page > 1 ? page : 1,
@@ -91,9 +92,9 @@ export function readUrlState(params: URLSearchParams): InventoryUrlState {
   };
 }
 
-export type Patch = Partial<Record<"status" | "q" | "warehouse" | "channel" | "health" | "signal" | "movement" | "min" | "max" | "sort" | "page" | "size" | "drawer", string | null>>;
+export type Patch = Partial<Record<"status" | "q" | "warehouse" | "channel" | "health" | "signal" | "movement" | "min" | "max" | "group" | "sort" | "page" | "size" | "drawer", string | null>>;
 
-const FILTER_KEYS = ["status", "q", "warehouse", "channel", "health", "signal", "movement", "min", "max"] as const;
+const FILTER_KEYS = ["status", "q", "warehouse", "channel", "health", "signal", "movement", "min", "max", "group"] as const;
 
 /** The Inventory screen keeps tab, search, filters, sort, page and the open drawer in the URL, so reload and back behave. */
 export function useInventoryUrlState() {
@@ -125,3 +126,60 @@ export function useInventoryUrlState() {
 }
 
 export const hasActiveFilters = (f: InventoryFilters): boolean => Object.values(f).some((v) => v !== undefined);
+
+// ---- saved filters (presets): the API keys of a saved view <-> this screen's URL state
+
+/** the filter keys of a saved view (the API names) and the URL parameter each one is read from */
+const PRESET_URL_KEY = { q: "q", stockStatus: "status", warehouse: "warehouse", channel: "channel", health: "health", signal: "signal", movement: "movement", stockMin: "min", stockMax: "max", group: "group" } as const;
+
+/** the filters of a saved view as this screen understands them (a value that is no longer valid is dropped) */
+export function presetFilters(raw: Record<string, unknown>): InventoryFilters {
+  const params = new URLSearchParams();
+  for (const [key, urlKey] of Object.entries(PRESET_URL_KEY)) {
+    const v = raw[key];
+    if (typeof v === "string" || typeof v === "number") params.set(urlKey, String(v));
+  }
+  return readUrlState(params).filters;
+}
+
+/** applying a saved view: every filter it does not hold is cleared, so the screen shows exactly what was saved */
+export function presetToPatch(preset: { filters: Record<string, unknown>; sort: string | null }): Patch {
+  const f = presetFilters(preset.filters);
+  const num = (v: number | undefined) => (v === undefined ? null : String(v));
+  return {
+    q: f.q ?? null,
+    status: f.stockStatus ?? null,
+    warehouse: f.warehouse ?? null,
+    channel: f.channel ?? null,
+    health: f.health ?? null,
+    signal: f.signal ?? null,
+    movement: f.movement ?? null,
+    min: num(f.stockMin),
+    max: num(f.stockMax),
+    group: f.group ?? null,
+    sort: preset.sort && SORT_OPTIONS.some((o) => o.id === preset.sort) ? preset.sort : null,
+  };
+}
+
+/** whether the screen currently shows exactly this saved view */
+export function isActivePreset(preset: { filters: Record<string, unknown>; sort: string | null }, filters: InventoryFilters, sort: string): boolean {
+  const saved = presetFilters(preset.filters);
+  const keys = Object.keys(PRESET_URL_KEY) as Array<keyof InventoryFilters>;
+  return keys.every((k) => saved[k] === filters[k]) && (preset.sort ?? "") === sort;
+}
+
+/** one short phrase per filter of a saved view ("Warehouse: Delhi DC", "Stock 1–50") */
+export function describeFilters(raw: Record<string, unknown>, nameOf: (kind: "warehouse" | "channel", id: string) => string): string[] {
+  const f = presetFilters(raw);
+  const out: string[] = [];
+  if (f.q) out.push(`Matching "${f.q}"`);
+  if (f.warehouse) out.push(`Warehouse: ${nameOf("warehouse", f.warehouse)}`);
+  if (f.channel) out.push(`Channel: ${nameOf("channel", f.channel)}`);
+  if (f.health) out.push(HEALTH_OPTIONS.find((o) => o.id === f.health)?.label ?? f.health);
+  if (f.stockStatus) out.push(STATUS_TABS.find((o) => o.id === f.stockStatus)?.label ?? f.stockStatus);
+  if (f.signal) out.push(SIGNAL_OPTIONS.find((o) => o.id === f.signal)?.label ?? f.signal);
+  if (f.movement) out.push(MOVEMENT_OPTIONS.find((o) => o.id === f.movement)?.label ?? f.movement);
+  if (f.stockMin !== undefined || f.stockMax !== undefined) out.push(`Stock ${f.stockMin ?? 0}–${f.stockMax ?? "any"}`);
+  if (f.group) out.push("A saved group");
+  return out;
+}

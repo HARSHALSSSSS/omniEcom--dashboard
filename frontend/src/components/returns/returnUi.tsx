@@ -1,35 +1,53 @@
-import { cn } from "@/utils/cn";
-import type { RefundStatus, ReturnStage } from "@/types/returns";
-import { REFUND_LABELS } from "./returnParams";
+import type { LedgerRow, PhysicalCondition } from "@/types/returns";
+import type { DrawerKind } from "./returnParams";
 
-const STAGE_TONE: Record<ReturnStage, string> = {
-  requested: "bg-blue-50 text-blue-700 border-blue-200",
-  approved: "bg-indigo-50 text-indigo-700 border-indigo-200",
-  in_transit: "bg-sky-50 text-sky-700 border-sky-200",
-  received: "bg-amber-50 text-amber-700 border-amber-200",
-  inspecting: "bg-amber-50 text-amber-700 border-amber-200",
-  resolution: "bg-purple-50 text-purple-700 border-purple-200",
-  refunded: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  closed: "bg-slate-100 text-slate-700 border-slate-200",
-  rejected: "bg-rose-50 text-rose-700 border-rose-200",
-  cancelled: "bg-slate-100 text-slate-500 border-slate-200",
-};
-
-const REFUND_TONE: Record<RefundStatus, string> = {
-  not_applicable: "text-muted-foreground",
-  pending: "text-amber-700",
-  ready: "text-amber-700",
-  processing: "text-sky-700",
-  processed: "text-emerald-700",
-  failed: "text-rose-700",
-};
-
-const PILL = "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold";
-
-export function StagePill({ stage, label }: { stage: ReturnStage; label: string }) {
-  return <span className={cn(PILL, STAGE_TONE[stage])}>{label}</span>;
+/** what a row's action button says and which drawer it opens (from the ledger's own `action`) */
+export function rowAction(row: Pick<LedgerRow, "action" | "refund" | "inspection" | "status">): { label: string; drawer: DrawerKind } {
+  switch (row.action?.key) {
+    case "inspect":
+      return { label: row.inspection.status === "in_progress" ? "Resume →" : "Inspect →", drawer: "inspect" };
+    case "review":
+      return { label: "Review →", drawer: "inspect" };
+    case "refund":
+      return { label: row.refund.status === "failed" ? "Review failure →" : "Review refund →", drawer: "refund" };
+    case "track":
+      return { label: "Track →", drawer: "return" };
+    default:
+      return { label: "View →", drawer: "return" };
+  }
 }
 
-export function RefundStatusText({ status }: { status: RefundStatus }) {
-  return <span className={cn("text-[11px] font-semibold", REFUND_TONE[status])}>{REFUND_LABELS[status]}</span>;
+export const PHYSICAL_LABEL: Record<PhysicalCondition, string> = {
+  usable: "Usable · intact",
+  damaged: "Damaged / defect",
+  wrong_product: "Wrong product",
+  incomplete: "Incomplete",
+};
+
+export const PHYSICAL_COLOR: Record<PhysicalCondition, string> = {
+  usable: "text-[#16A34A]",
+  damaged: "text-[#DC2626]",
+  wrong_product: "text-[#DC2626]",
+  incomplete: "text-[#D97706]",
+};
+
+/** what the receipt says: matched, or fewer units than requested (only known once the goods are in) */
+export function systemCondition(row: Pick<LedgerRow, "quantity" | "receivedQuantity" | "receivedAt">): { label: string; color: string } {
+  if (!row.receivedAt) return { label: "Awaiting receipt", color: "text-[#666666]" };
+  return row.receivedQuantity < row.quantity ? { label: "Quantity mismatch", color: "text-[#D97706]" } : { label: "Receipt matched", color: "text-[#666666]" };
+}
+
+/** the suggestion of the Inspection table, by the same rule the API uses for the decision card (suggested only, never applied) */
+export function recommendedDisposition(row: Pick<LedgerRow, "inspection" | "quantity" | "receivedQuantity" | "receivedAt">): { label: string; color: string } {
+  if (row.receivedAt && row.receivedQuantity < row.quantity) return { label: "Quarantine - Suggested", color: "text-[#D97706]" };
+  switch (row.inspection.status) {
+    case "passed":
+      return { label: "Sellable", color: "text-[#16A34A]" };
+    case "failed":
+      return { label: "Damaged", color: "text-[#DC2626]" };
+    case "requires_review":
+      return { label: "Quarantine - Suggested", color: "text-[#D97706]" };
+    default:
+      return { label: "Pending inspection", color: "text-[#2563EB]" };
+  }
 }

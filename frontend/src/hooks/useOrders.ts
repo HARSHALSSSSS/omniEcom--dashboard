@@ -9,6 +9,7 @@ import type {
   LedgerQuery,
   OrderFilters,
   OrderAccount,
+  OrderSavedView,
   OrderSort,
   SyncJob,
   TransitionInput,
@@ -19,6 +20,8 @@ export const ORDER_KEYS = {
   summary: (businessId: string | undefined) => ["orders", "summary", businessId] as const,
   workspace: (businessId: string | undefined) => ["orders", "workspace", businessId] as const,
   ledger: (businessId: string | undefined, query: LedgerQuery) => ["orders", "ledger", businessId, query] as const,
+  activity: (businessId: string | undefined, limit: number) => ["orders", "activity", businessId, limit] as const,
+  views: (businessId: string | undefined) => ["orders", "views", businessId] as const,
   drawer: (id: string) => ["orders", "drawer", id] as const,
   detail: (id: string) => ["orders", "detail", id] as const,
   timeline: (id: string) => ["orders", "timeline", id] as const,
@@ -50,6 +53,33 @@ export function useOrdersLedger(query: LedgerQuery) {
     queryFn: ({ signal }) => ordersApi.ledger(query, signal),
     staleTime: 15_000,
     placeholderData: keepPreviousData,
+  });
+}
+
+/** "Recent Order Activity": the newest events across the marketplaces */
+export function useOrdersActivity(limit = 5) {
+  const businessId = useBusinessId();
+  return useQuery({ queryKey: ORDER_KEYS.activity(businessId, limit), queryFn: ({ signal }) => ordersApi.activity(limit, signal), staleTime: 30_000 });
+}
+
+export function useOrderViews() {
+  const businessId = useBusinessId();
+  return useQuery({ queryKey: ORDER_KEYS.views(businessId), queryFn: ordersApi.views, staleTime: 60_000 });
+}
+
+export function useCreateOrderView() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: Parameters<typeof ordersApi.createView>[0]) => ordersApi.createView(input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["orders", "views"] }),
+  });
+}
+
+export function useDeleteOrderView() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (view: OrderSavedView) => ordersApi.deleteView(view.id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["orders", "views"] }),
   });
 }
 

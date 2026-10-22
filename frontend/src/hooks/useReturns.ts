@@ -2,7 +2,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { returnsApi } from "@/api/returns.api";
 import { refreshShell } from "@/lib/session";
 import { useWorkspaceStore } from "@/store/workspace.store";
-import type { CreateReturnInput, LedgerQuery, ReturnFilters, RunActionInput } from "@/types/returns";
+import { SYNC_JOB_DONE, type CreateReturnInput, type InspectionResult, type LedgerQuery, type RefundQuery, type ReturnFilters, type RunActionInput, type SaveInspectionInput, type SyncAccountReport, type SyncReport } from "@/types/returns";
 
 export const RETURN_KEYS = {
   all: ["returns"] as const,
@@ -17,6 +17,13 @@ export const RETURN_KEYS = {
   reasons: ["returns", "reasons"] as const,
   warehouses: (businessId: string | undefined) => ["returns", "warehouses", businessId] as const,
   marketplaces: ["returns", "marketplaces"] as const,
+  analytics: (businessId: string | undefined, days: number) => ["returns", "analytics", businessId, days] as const,
+  attention: (businessId: string | undefined) => ["returns", "attention", businessId] as const,
+  refunds: (businessId: string | undefined, query: RefundQuery) => ["returns", "refunds", businessId, query] as const,
+  refundView: (id: string) => ["returns", "refund-view", id] as const,
+  inspection: (id: string) => ["returns", "inspection", id] as const,
+  dispositionOptions: (id: string) => ["returns", "disposition-options", id] as const,
+  members: (businessId: string | undefined) => ["returns", "members", businessId] as const,
 };
 
 const useBusinessId = () => useWorkspaceStore((s) => s.shell?.business.id);
@@ -106,4 +113,112 @@ export function useExportReturns() {
 /** looks an order up by number and says which units can still come back */
 export function useFindEligibleOrder() {
   return useMutation({ mutationFn: (order: string) => returnsApi.eligibility(order) });
+}
+
+/** why products come back (reason shares, concentration, recommendation-only notes) */
+export function useReturnsAnalytics(days: number) {
+  const businessId = useBusinessId();
+  return useQuery({ queryKey: RETURN_KEYS.analytics(businessId, days), queryFn: ({ signal }) => returnsApi.analytics(days, signal), staleTime: 60_000, placeholderData: keepPreviousData });
+}
+
+/** the returns that need attention, one row each */
+export function useReturnsAttention() {
+  const businessId = useBusinessId();
+  return useQuery({ queryKey: RETURN_KEYS.attention(businessId), queryFn: ({ signal }) => returnsApi.attention(signal), staleTime: 15_000, placeholderData: keepPreviousData });
+}
+
+export function useReturnsRefunds(query: RefundQuery, enabled = true) {
+  const businessId = useBusinessId();
+  return useQuery({ queryKey: RETURN_KEYS.refunds(businessId, query), queryFn: ({ signal }) => returnsApi.refunds(query, signal), enabled, staleTime: 15_000, placeholderData: keepPreviousData });
+}
+
+export function useRefundView(id: string | null) {
+  return useQuery({ queryKey: RETURN_KEYS.refundView(id ?? ""), queryFn: ({ signal }) => returnsApi.refundView(id as string, signal), enabled: Boolean(id) });
+}
+
+export function useReturnInspection(id: string | null) {
+  return useQuery({ queryKey: RETURN_KEYS.inspection(id ?? ""), queryFn: ({ signal }) => returnsApi.inspection(id as string, signal), enabled: Boolean(id) });
+}
+
+export function useDispositionOptions(id: string | null) {
+  return useQuery({ queryKey: RETURN_KEYS.dispositionOptions(id ?? ""), queryFn: ({ signal }) => returnsApi.dispositionOptions(id as string, signal), enabled: Boolean(id) });
+}
+
+/** active members as inspector choices; only asked for when the role may list members */
+export function useReturnMembers(enabled: boolean) {
+  const businessId = useBusinessId();
+  return useQuery({ queryKey: RETURN_KEYS.members(businessId), queryFn: returnsApi.members, enabled, staleTime: 5 * 60_000, retry: false });
+}
+
+/** saves an inspection (checklist + result) */
+export function useSaveInspection() {
+  const afterWrite = useAfterWrite();
+  return useMutation({ mutationFn: (input: SaveInspectionInput) => returnsApi.saveInspection(input), onSuccess: afterWrite, onError: afterWrite });
+}
+
+export function useAssignInspection() {
+  const afterWrite = useAfterWrite();
+  return useMutation({ mutationFn: ({ ids, userId }: { ids: string[]; userId: string }) => returnsApi.assignInspection(ids, userId), onSuccess: afterWrite });
+}
+
+/** how often the running sync jobs are looked at, and how long we wait before leaving them to finish in the background */
+export const SYNC_POLL_MS = 1000;
+const SYNC_MAX_POLLS = 180;
+const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+export interface SyncReturnsInput {
+  /** called with the report after the jobs were queued and after every poll */
+  onUpdate?: (report: SyncReport) => void;
+  /** re-import everything the marketplace changed after this ISO moment */
+  since?: string;
+}
+
+/**
+ * Starts the returns sync (one job per connected account that can fetch returns), follows every job through /sync/jobs/{id} until it
+ * ends (progress and stats are real), then refreshes the screen. The report is handed to `onUpdate` all along.
+ */
+export function useSyncReturns() {
+  const afterWrite = useAfterWrite();
+  return useMutation({
+    mutationFn: async ({ onUpdate, since }: SyncReturnsInput = {}): Promise<SyncReport> => {
+      const startedAt = Date.now();
+      const started = await returnsApi.sync(since ? { since } : {});
+      const accounts: SyncAccountReport[] = started.jobs.map((j) => ({ accountId: j.accountId, accountName: j.accountName, marketplace: j.marketplace, alreadyQueued: j.alreadyQueued, job: null }));
+      const report = (finished: boolean, stillRunning = false): SyncReport => ({ startedAt, accounts: accounts.map((a) => ({ ...a })), skipped: started.skipped, finished, stillRunning, nothingToSync: started.jobs.length === 0 });
+      onUpdate?.(report(started.jobs.length === 0));
+      if (started.jobs.length === 0) return report(true);
+      let polls = 0;
+      for (;;) {
+        await Promise.all(
+          started.jobs.map(async (j, i) => {
+            const account = accounts[i];
+            if (!account || (account.job && SYNC_JOB_DONE.includes(account.job.status))) return;
+            account.job = await returnsApi.syncJob(j.jobId);
+          }),
+        );
+        const finished = accounts.every((a) => a.job !== null && SYNC_JOB_DONE.includes(a.job.status));
+        const out = report(finished, !finished && polls + 1 >= SYNC_MAX_POLLS);
+        onUpdate?.(out);
+        if (finished || out.stillRunning) return out;
+        polls++;
+        await wait(SYNC_POLL_MS);
+      }
+    },
+    onSettled: afterWrite,
+  });
+}
+
+/** every row of the current filters, for "Select all (N)" */
+export function useSelectAllReturns() {
+  return useMutation({ mutationFn: (query: LedgerQuery) => returnsApi.ledgerAll(query) });
+}
+
+/** pass / fail / needs review on several returns at once (no checklist; never a refund or a disposition) */
+export function useMarkInspection() {
+  const afterWrite = useAfterWrite();
+  return useMutation({ mutationFn: ({ ids, result, note }: { ids: string[]; result: InspectionResult; note?: string }) => returnsApi.markInspection(ids, result, note), onSuccess: afterWrite });
+}
+
+export function useExportAttention() {
+  return useMutation({ mutationFn: () => returnsApi.exportAttention() });
 }

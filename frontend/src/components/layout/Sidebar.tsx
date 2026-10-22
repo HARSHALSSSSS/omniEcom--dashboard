@@ -91,20 +91,20 @@ export const Sidebar: React.FC = () => {
                       title={sidebarCollapsed ? item.label : undefined}
                       className={({ isActive }) =>
                         cn(
-                          "flex h-[34px] items-center gap-2.5 rounded-lg px-2.5 text-[13px] transition-colors",
+                          "flex h-[34px] items-center gap-2.5 rounded-lg px-2.5 text-[12px] leading-[17px] transition-colors",
                           isActive
-                            ? "bg-[#E6F4FF] text-[#1D4ED8] font-semibold"
+                            ? "bg-[#F5F5F5] text-[#000000] font-semibold"
                             : "bg-white text-[#666666] font-normal hover:bg-neutral-50 hover:text-[#0A0A0A]",
                           sidebarCollapsed && "justify-center px-0",
                         )
                       }
                     >
-                      <Icon className="h-4 w-4 shrink-0" />
+                      <Icon className="h-4 w-4 shrink-0 stroke-[1.5px]" />
                       {!sidebarCollapsed && (
                         <span className="flex-1 truncate">{item.label}</span>
                       )}
                       {!sidebarCollapsed && badgeFor(item.href) > 0 && (
-                        <span className="ml-auto rounded-full bg-[#E4E4E7] px-1.5 text-[10px] font-semibold leading-[16px] text-[#18181B]">
+                        <span className="ml-auto text-[11px] font-semibold text-[#000000] tabular-nums">
                           {badgeFor(item.href) > 99 ? "99+" : badgeFor(item.href)}
                         </span>
                       )}
@@ -131,11 +131,11 @@ export const Sidebar: React.FC = () => {
                     onClick={toggleNotificationsPanel}
                     title={sidebarCollapsed ? item.label : undefined}
                     className={cn(
-                      "flex h-[34px] w-full items-center gap-2.5 rounded-lg bg-white px-2.5 text-[13px] font-normal text-[#666666] transition-colors hover:bg-neutral-50 hover:text-[#0A0A0A]",
+                      "flex h-[34px] w-full items-center gap-2.5 rounded-lg bg-white px-2.5 text-[12px] leading-[17px] font-normal text-[#666666] transition-colors hover:bg-neutral-50 hover:text-[#0A0A0A]",
                       sidebarCollapsed && "justify-center px-0",
                     )}
                   >
-                    <Icon className="h-4 w-4 shrink-0" />
+                    <Icon className="h-4 w-4 shrink-0 stroke-[1.5px]" />
                     {!sidebarCollapsed && <span className="flex-1 truncate text-left">{item.label}</span>}
                     {!sidebarCollapsed && unread > 0 && (
                       <span className="ml-auto rounded-full bg-red-100 px-1.5 text-[10px] font-semibold leading-[16px] text-red-700">
@@ -153,15 +153,15 @@ export const Sidebar: React.FC = () => {
                   title={sidebarCollapsed ? item.label : undefined}
                   className={({ isActive }) =>
                     cn(
-                      "flex h-[34px] items-center gap-2.5 rounded-lg px-2.5 text-[13px] transition-colors",
+                      "flex h-[34px] items-center gap-2.5 rounded-lg px-2.5 text-[12px] leading-[17px] transition-colors",
                       isActive
-                        ? "bg-[#E6F4FF] text-[#1D4ED8] font-semibold"
+                        ? "bg-[#F5F5F5] text-[#000000] font-semibold"
                         : "bg-white text-[#666666] font-normal hover:bg-neutral-50 hover:text-[#0A0A0A]",
                       sidebarCollapsed && "justify-center px-0",
                     )
                   }
                 >
-                  <Icon className="h-4 w-4 shrink-0" />
+                  <Icon className="h-4 w-4 shrink-0 stroke-[1.5px]" />
                   {!sidebarCollapsed && (
                     <span className="truncate">{item.label}</span>
                   )}

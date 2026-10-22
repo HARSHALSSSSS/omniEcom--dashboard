@@ -7,7 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { errorMessage } from "@/api/errors";
 import { ROUTES } from "@/constants/routes";
 import { toast } from "@/hooks/useToast";
-import { useCancelShipment, useNdrAction, useNdrCases, useRefreshTracking, useTracking } from "@/hooks/useShipping";
+import { useCancelShipment, useNdrAction, useNdrCases, useRefreshTracking, useShipmentRow, useTracking } from "@/hooks/useShipping";
 import { formatINR } from "@/utils/format";
 import type { NdrAction, NdrCase, ShipmentRow, TrackingEvent } from "@/types/shipping";
 import { ShipmentStatusPill } from "./shippingUi";
@@ -87,7 +87,6 @@ function NdrCard({ ndr, canWrite, busy, onAct }: { ndr: NdrCase; canWrite: boole
 
 interface ShipmentDrawerProps {
   shipmentId: string | null;
-  row: ShipmentRow | undefined;
   canWrite: boolean;
   labelBusy: boolean;
   onClose: () => void;
@@ -95,7 +94,10 @@ interface ShipmentDrawerProps {
 }
 
 /** one shipment: the facts of the row, the tracking timeline, failed-delivery decisions and the actions the API allows */
-export function ShipmentDrawer({ shipmentId, row, canWrite, labelBusy, onClose, onLabel }: ShipmentDrawerProps) {
+export function ShipmentDrawer({ shipmentId, canWrite, labelBusy, onClose, onLabel }: ShipmentDrawerProps) {
+  // the drawer loads its own shipment by id, so it also works from a link or after a reload
+  const rowQuery = useShipmentRow(shipmentId);
+  const row: ShipmentRow | undefined = rowQuery.data;
   const tracking = useTracking(shipmentId);
   const ndr = useNdrCases(shipmentId, row !== undefined && NDR_STATES.includes(row.status));
   const refresh = useRefreshTracking();
@@ -168,6 +170,15 @@ export function ShipmentDrawer({ shipmentId, row, canWrite, labelBusy, onClose, 
         }
       >
         <div className="space-y-5 text-xs">
+          {rowQuery.isLoading && <Skeleton role="status" aria-label="Loading shipment" className="h-24 w-full" />}
+          {rowQuery.isError && (
+            <p role="alert" className="text-rose-700">
+              The shipment could not be loaded. {errorMessage(rowQuery.error)}{" "}
+              <button type="button" className="font-semibold underline" onClick={() => void rowQuery.refetch()}>
+                Retry
+              </button>
+            </p>
+          )}
           {row && (
             <>
               <Section title="Shipment">

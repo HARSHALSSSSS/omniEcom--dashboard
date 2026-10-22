@@ -132,7 +132,8 @@ export interface CarriersOverview {
 }
 
 export interface ProviderCatalogEntry extends AvailableProvider {
-  configFields: Array<{ key: string; description: string; required: boolean }>;
+  capabilities?: { labels: boolean; polling: boolean; cancel: boolean; reattempt: boolean; rto: boolean; manifest: boolean };
+  configFields: Array<{ key: string; description: string; required: boolean; /** a credential: stored, never shown again */ secret?: boolean }>;
 }
 
 export interface AddCarrierInput {
@@ -211,4 +212,418 @@ export interface Manifest {
 export interface DownloadedFile {
   blob: Blob;
   fileName: string;
+}
+
+// ---------------------------------------------------------------------------------------------
+// The shipping workspace: methods, orders to ship, overview, tracking, exceptions, rules
+// ---------------------------------------------------------------------------------------------
+
+export const SHIPPING_VIEWS = ["overview", "orders", "methods", "rules", "tracking", "shipments"] as const;
+export type ShippingView = (typeof SHIPPING_VIEWS)[number];
+
+/** what an order's shipping decision is about */
+export type MethodKind = "marketplace" | "seller" | "third_party";
+/** what a configured method is: "custom" is a logistics provider the seller configured (it is chosen as a third-party method for an order) */
+export type ProviderKind = MethodKind | "custom";
+export type CapValue = "supported" | "requires_configuration" | "not_supported";
+export interface CapSet {
+  label: CapValue;
+  tracking: CapValue;
+  dispatchUpdate: CapValue;
+  statusSync: CapValue;
+}
+
+export interface ShippingMethod {
+  id: string;
+  kind: ProviderKind;
+  name: string;
+  label: string;
+  providerCode: string;
+  channel: { code: string | null; name: string; accountId: string | null; availability: "live" | "coming_soon" } | null;
+  provider: { code: string; label: string } | null;
+  state: "configured" | "requires_configuration" | "disabled";
+  active: boolean;
+  isDefault: boolean;
+  preferredFor: string[];
+  lastSyncAt: string | null;
+  supportedOrderTypes: string[];
+  capabilities: CapSet;
+  verification: { state: "verified" | "unverified"; verifiedAt: string | null };
+  config: Record<string, unknown>;
+  version: number;
+  createdAt: string;
+}
+
+export interface CapabilityMatrixRow extends CapSet {
+  methodId: string | null;
+  method: MethodKind | "unverified_connector";
+  name: string;
+}
+
+export interface MethodsOverview {
+  items: ShippingMethod[];
+  capabilityMatrix: CapabilityMatrixRow[];
+  summary: string;
+  activeMethods: number;
+}
+
+export interface CapabilityDetail {
+  methodId: string;
+  kind: ProviderKind;
+  name: string;
+  verified: boolean;
+  verifiedAt: string | null;
+  source: string;
+  capabilities: Array<{ key: string; value: CapValue; declared: boolean; note: string }>;
+}
+
+export interface AddMethodInput {
+  kind: ProviderKind;
+  providerCode?: string;
+  channelCode?: string;
+  label?: string;
+  config?: Record<string, string>;
+}
+
+export interface MethodPatch {
+  isDefault?: boolean;
+  active?: boolean;
+  label?: string;
+  config?: Record<string, string>;
+  supportedOrderTypes?: string[];
+}
+
+export interface AddMethodResult {
+  method: { id: string; name: string };
+  verify: VerifyResult;
+}
+
+export const DECISION_STATUSES = ["needs_decision", "selected", "label_pending", "ready_to_dispatch", "exception", "dispatched"] as const;
+export type DecisionStatus = (typeof DECISION_STATUSES)[number];
+export const SLA_BANDS = ["safe", "approaching", "at_risk", "breached", "none"] as const;
+export type SlaBand = (typeof SLA_BANDS)[number];
+export const METHOD_FILTERS = ["marketplace", "seller", "third_party", "unassigned"] as const;
+export type MethodFilter = (typeof METHOD_FILTERS)[number];
+
+export interface DecisionFilters {
+  q?: string;
+  marketplace?: string;
+  warehouse?: string;
+  method?: MethodFilter;
+  sla?: SlaBand;
+  status?: DecisionStatus;
+}
+
+export interface DecisionQuery extends DecisionFilters {
+  page: number;
+  pageSize: number;
+}
+
+export interface DecisionItem {
+  fulfillmentId: string;
+  fulfillmentNumber: string;
+  orderId: string;
+  number: string;
+  channel: { code: string; name: string };
+  warehouse: { id: string; code: string; name: string };
+  destination: { city: string | null; state: string | null };
+  valueMinor: number;
+  currency: string;
+  weightGrams: number | null;
+  itemCount: number;
+  availableMethods: Array<{ kind: MethodKind; name: string; available: boolean; reason?: string }>;
+  selectedMethod: { kind: MethodKind; name: string; providerId: string | null } | null;
+  selectionConfirmed: boolean;
+  selectedBy: "rule" | "preference" | "manual" | null;
+  recommendedMethod: { kind: MethodKind; name: string; why: string; source: string } | null;
+  sla: { dueAt: string | null; minutesRemaining: number | null; band: SlaBand };
+  status: DecisionStatus;
+  shipmentId: string | null;
+  action: RowAction;
+  /** a confirmed carrier-collected method awaits a pickup slot until one is booked ("Awaiting slot booking" / "Book slot") */
+  pickup: { state: "not_applicable" | "awaiting" | "booked"; methodId: string | null; warehouseId: string; slot: { id: string; date: string; windowStart: string; windowEnd: string; status: string } | null };
+  /** print_label (labelled), generate_label / enter_awb (method confirmed, no label yet) */
+  secondaryActions: RowAction[];
+}
+
+export interface PickupSlot {
+  id: string;
+  warehouse: { id: string; code: string; name: string };
+  method: { id: string; name: string; kind: string; providerCode: string };
+  /** YYYY-MM-DD */
+  date: string;
+  /** HH:MM */
+  windowStart: string;
+  windowEnd: string;
+  parcelCount: number;
+  /** confirmed: the provider scheduled it; manual: recorded here, arranged with the carrier; failed: the provider refused */
+  status: "requested" | "confirmed" | "manual" | "cancelled" | "failed";
+  mode: "provider" | "manual";
+  reference: string | null;
+  note: string | null;
+  cancellable: boolean;
+  cancelledAt: string | null;
+  createdAt: string;
+}
+
+export interface PickupSlotInput {
+  warehouseId: string;
+  methodId: string;
+  date: string;
+  windowStart: string;
+  windowEnd: string;
+  parcelCount: number;
+  note?: string;
+}
+
+export interface RowAction {
+  key: string;
+  label: string;
+  method: "GET" | "POST";
+  href: string;
+  enabled?: boolean;
+}
+
+export interface DecisionPage {
+  items: DecisionItem[];
+  page: number;
+  pageSize: number;
+  total: number;
+  pages: number;
+  counts: Record<string, number>;
+}
+
+export interface ShippingOption {
+  kind: MethodKind;
+  name: string;
+  recommended: boolean;
+  available: boolean;
+  managedBy: "marketplace" | "merchant" | "provider";
+  providerId: string | null;
+  providers: Array<{ id: string; name: string }>;
+  selected: boolean;
+  reason?: string;
+}
+
+export interface ShippingOptions {
+  fulfillmentId: string;
+  orderId: string;
+  status: DecisionStatus;
+  order: {
+    number: string;
+    marketplace: { code: string; name: string };
+    destination: { city: string | null; state: string | null; pincode: string | null };
+    warehouse: { id: string; code: string; name: string };
+    product: string | null;
+    sku: string | null;
+    skus: string[];
+    itemCount: number;
+    weightGrams: number | null;
+    valueMinor: number;
+    currency: string;
+  };
+  options: ShippingOption[];
+  recommendation: { kind: MethodKind; providerId: string | null; name: string; why: string; source: string; ruleId: string | null } | null;
+  selection: { kind: MethodKind; providerId: string | null; confirmed: boolean; selectedBy: "rule" | "preference" | "manual" | null; confirmedAt: string | null } | null;
+}
+
+export interface SelectionInput {
+  kind: MethodKind;
+  providerId?: string | null;
+  source: "recommended" | "manual_override";
+}
+
+export type BulkOrderAction = "assign_method" | "generate_labels" | "recalculate";
+
+export interface BulkOrdersResult {
+  action: string;
+  requested: number;
+  succeeded: number;
+  failed: number;
+  results: Array<{ fulfillmentId: string; number: string | null; ok: boolean; code?: string; message?: string; shipmentId?: string; awb?: string | null }>;
+}
+
+export interface PulseStage {
+  count: number;
+  /** change against the comparison moment (a stored snapshot, else the status history) */
+  sinceLastSync: number;
+}
+
+export interface ShippingOverview {
+  asOf: string;
+  generatedAt: string;
+  baseline: string;
+  comparison: { source: "snapshot" | "history"; at: string; windowHours: number };
+  statusLine: { connectedChannels: number; activeMethods: number; ordersNeedAttention: number };
+  pulse: {
+    readyToShip: PulseStage & { needDecision: number };
+    shippingSelected: PulseStage & { note: string | null };
+    labelReady: PulseStage & { labelUnavailable: number };
+    dispatched: PulseStage;
+    inTransit: PulseStage & { trackingIssues: number };
+  };
+  decisionField: Array<{
+    fulfillmentId: string;
+    order: { id: string; number: string };
+    channel: { code: string; name: string };
+    warehouse: { id: string; code: string; name: string };
+    itemCount: number;
+    weightGrams: number | null;
+    availableMethods: Array<{ kind: MethodKind; name: string; available: boolean; reason?: string }>;
+    merchantPreference: { kind: MethodKind; name: string; why: string; whyText: string } | null;
+    selected: { kind: MethodKind; name: string; confirmed: boolean } | null;
+  }>;
+  availabilityComparison: Array<{
+    channel: { code: string; name: string };
+    method: MethodKind | "label_generation";
+    provider: string;
+    methodId: string | null;
+    availability: "ready" | "requires_configuration" | "unavailable" | "unsupported";
+    default: "preferred" | "order_specific" | "not_set" | "unavailable";
+    override: "where_supported" | "verify_capability" | "unavailable";
+  }>;
+  attention: { total: number; parts: { undecided: number; label: number; tracking: number; sync: number; slaRisk: number; capability: number } };
+}
+
+export interface SyncResult {
+  orders: number;
+  statuses: number;
+  processed: number;
+  updated: number;
+  requireAttention: number;
+  methods: { checked: number; verified: number; notVerified: number };
+  tracking: { processed: number; updated: number; failed: number; failures: Array<{ shipmentId: string; message: string }> };
+  completedAt: string;
+}
+
+/** Sync Shipping runs as a background job (the shared sync engine): this is the part of it the screen uses */
+export interface SyncJob {
+  id: string;
+  status: "queued" | "running" | "retrying" | "succeeded" | "partially_failed" | "failed" | "dead_lettered" | "cancelled";
+  progress: { total: number; done: number; failed: number };
+  /** orders, statuses, processed, updated, requireAttention, methodsChecked, ... once it is over */
+  stats: Record<string, number>;
+  error: { code: string; message: string } | null;
+  failureDetails: Array<{ ref: string; code?: string; message: string }>;
+  payload: { orders?: number } & Record<string, unknown>;
+  startedAt: string | null;
+  finishedAt: string | null;
+}
+
+export const SYNC_RUNNING: ReadonlyArray<SyncJob["status"]> = ["queued", "running", "retrying"];
+export const SYNC_FAILED: ReadonlyArray<SyncJob["status"]> = ["failed", "dead_lettered", "cancelled"];
+
+export const TRACKING_STATUSES = ["tracking_active", "awaiting_first_scan", "in_transit", "delivery_delayed", "tracking_sync_failed", "delivered"] as const;
+export type TrackingStatus = (typeof TRACKING_STATUSES)[number];
+
+export interface TrackingFilters {
+  q?: string;
+  marketplace?: string;
+  method?: string;
+  status?: TrackingStatus;
+}
+
+export interface TrackingQuery extends TrackingFilters {
+  page: number;
+  pageSize: number;
+}
+
+export interface TrackingItem {
+  shipmentId: string;
+  orderId: string;
+  number: string;
+  channel: { code: string; name: string };
+  method: { kind: MethodKind; name: string; providerCode: string };
+  awb: string | null;
+  carrier: string | null;
+  dispatchedAt: string | null;
+  status: TrackingStatus;
+  shipmentStatus: string;
+  lastUpdateAt: string | null;
+  estimatedDeliveryAt: string | null;
+  attention: "none" | "check_first_scan" | "review_update" | "retry_required" | "completed";
+}
+
+export interface TrackingPage {
+  items: TrackingItem[];
+  page: number;
+  pageSize: number;
+  total: number;
+  pages: number;
+  counters: { stages: { dispatched: number; inTransit: number; delivered: number }; byStatus: Record<string, number> };
+}
+
+export interface TrackingFailure {
+  shipmentId: string;
+  orderId: string;
+  orderNumber: string;
+  awb: string | null;
+  failedAt: string | null;
+  whatFailed: string;
+  possibleReason: string;
+  action: { key: "retry"; label: string; method: "POST"; href: string };
+}
+
+export const EXCEPTION_KEYS = ["no_method_selected", "label_unavailable", "tracking_not_received", "shipping_sync_failed", "sla_risk", "connector_capability_limit"] as const;
+export type ExceptionKey = (typeof EXCEPTION_KEYS)[number];
+
+export interface ExceptionAction {
+  key: string;
+  label: string;
+  method: "GET" | "POST";
+  href: string;
+}
+
+export interface ExceptionCategory {
+  key: ExceptionKey;
+  title: string;
+  count: number;
+  orders: Array<{ orderId: string; number: string; fulfillmentId: string | null; shipmentId: string | null; channel: { code: string; name: string }; detail: string | null; action: ExceptionAction }>;
+  whatHappened: string;
+  why: string;
+  whatCanIDoNow: string;
+  action: ExceptionAction;
+}
+
+export interface ExceptionsReport {
+  categories: ExceptionCategory[];
+  totalOrders: number;
+  categoryCount: number;
+  total: number;
+}
+
+export interface RuleCondition {
+  combinator: "if" | "and";
+  field: string;
+  op: string;
+  value: unknown;
+}
+
+export interface ShippingRule {
+  id: string;
+  name: string;
+  description: string | null;
+  status: "enabled" | "disabled";
+  priority: number;
+  lastUpdatedAt: string;
+  ordersAffected: number | null;
+  conditions: RuleCondition[];
+  then: { prefer: { kind: MethodKind; providerId: string | null; label: string } };
+  version: number;
+}
+
+export interface RulesList {
+  items: ShippingRule[];
+  total: number;
+  max: number;
+  fields: string[];
+  operators: string[];
+}
+
+export interface RuleInput {
+  name: string;
+  description?: string | null;
+  enabled?: boolean;
+  conditions: Array<{ field: string; op: string; value: unknown }>;
+  then: { prefer: { kind: MethodKind; providerId?: string | null } };
 }

@@ -1,6 +1,4 @@
 import { Link } from "react-router-dom";
-import { Lightbulb } from "lucide-react";
-import { Button, buttonVariants } from "@/components/ui/button";
 import { errorMessage } from "@/api/errors";
 import { toAppPath } from "@/lib/links";
 import { useInsightDecision, useInsightList } from "@/hooks/useProductEdit";
@@ -28,50 +26,48 @@ export function InsightsPanel({ productId, editor, canWrite, onReviewSuggestion 
   if (items.length === 0 && dismissed.length === 0) return null;
 
   return (
-    <section aria-labelledby="suggested-improvement" className="space-y-3 rounded-xl border border-border bg-card p-5 text-xs shadow-xs">
-      <h2 id="suggested-improvement" className="flex items-center gap-2 text-sm font-bold text-foreground">
-        <Lightbulb className="h-4 w-4 text-amber-600" aria-hidden="true" />
+    <section aria-labelledby="suggested-improvement" className="flex flex-col gap-2 w-full">
+      <h2 id="suggested-improvement" className="text-[12px] font-semibold text-[#000000] leading-[145%]">
         Suggested improvement
       </h2>
       {decide.isError && (
-        <p role="alert" className="font-medium text-destructive">
+        <p role="alert" className="text-[11px] font-medium text-[#B42318]">
           {errorMessage(decide.error)}
         </p>
       )}
       {items.map((insight) => (
-        <div key={insight.key} className="space-y-2" data-insight={insight.key}>
-          <p className="text-foreground">
-            {insight.message} {insight.detail}
-          </p>
-          <div className="flex flex-wrap gap-2">
+        <div key={insight.key} className="flex flex-col gap-2" data-insight={insight.key}>
+          <p className="text-[12px] font-normal text-[#000000] leading-[145%]">{insight.message}</p>
+          {insight.detail && <p className="text-[11px] font-normal text-[#666666] leading-[145%]">{insight.detail}</p>}
+          <div className="flex flex-row flex-wrap items-center gap-4 pt-1">
             {insight.actions
               .filter((a) => a.key !== "dismiss")
               .map((a) =>
                 a.key === "review_suggestion" ? (
-                  <Button key={a.key} type="button" size="sm" variant="outline" disabled={!canWrite} onClick={onReviewSuggestion}>
+                  <button key={a.key} type="button" disabled={!canWrite} onClick={onReviewSuggestion} className="text-[12px] font-semibold text-[#000000] hover:underline cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 disabled:no-underline">
                     {a.label}
-                  </Button>
+                  </button>
                 ) : (
-                  <Link key={a.key} to={toAppPath(a.href)} className={buttonVariants({ size: "sm", variant: "outline" })}>
+                  <Link key={a.key} to={toAppPath(a.href)} className="text-[12px] font-semibold text-[#000000] hover:underline cursor-pointer">
                     {a.label}
                   </Link>
                 ),
               )}
             {canWrite && (
-              <Button type="button" size="sm" variant="ghost" disabled={decide.isPending} onClick={() => decide.mutate({ key: insight.key, action: "dismiss" })}>
+              <button type="button" disabled={decide.isPending} onClick={() => decide.mutate({ key: insight.key, action: "dismiss" })} className="text-[12px] font-normal text-[#666666] hover:text-[#000000] cursor-pointer disabled:opacity-50">
                 Dismiss
-              </Button>
+              </button>
             )}
           </div>
         </div>
       ))}
       {dismissed.length > 0 && (
-        <ul className="space-y-1 border-t border-border pt-2" aria-label="Dismissed suggestions">
+        <ul className="flex flex-col gap-1 border-t border-[#EAEAEA] pt-2" aria-label="Dismissed suggestions">
           {dismissed.map((d) => (
-            <li key={d.key} className="flex items-center justify-between gap-2 text-muted-foreground">
+            <li key={d.key} className="flex items-center justify-between gap-2 text-[11px] text-[#666666]">
               <span>{DISMISSED_LABEL[d.key]} (dismissed)</span>
               {canWrite && (
-                <button type="button" className="font-medium text-primary hover:underline" disabled={decide.isPending} onClick={() => decide.mutate({ key: d.key, action: "restore" })}>
+                <button type="button" className="font-semibold text-[#000000] hover:underline cursor-pointer" disabled={decide.isPending} onClick={() => decide.mutate({ key: d.key, action: "restore" })}>
                   Restore
                 </button>
               )}

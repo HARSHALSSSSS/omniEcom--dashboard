@@ -1,5 +1,6 @@
-import { PAGE_SIZES } from "./listingParams";
+import { cn } from "@/utils/cn";
 import { formatNumber } from "@/utils/format";
+import { PAGE_SIZES } from "./listingParams";
 
 interface ListingsPaginationProps {
   page: number;
@@ -24,24 +25,27 @@ function windowOf(page: number, pages: number): Array<number | "gap"> {
   return out;
 }
 
-const NAV = "h-8 rounded-lg border border-border bg-card px-3 text-xs font-semibold hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50";
-
 export function ListingsPagination({ page, pages, total, pageSize, shown, noun, onPage, onPageSize }: ListingsPaginationProps) {
   const first = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const last = (page - 1) * pageSize + shown;
   return (
-    <nav aria-label="Pagination" className="flex flex-wrap items-center justify-between gap-2 pt-1">
-      <span className="text-xs text-muted-foreground" aria-live="polite">
+    <nav aria-label="Pagination" className="flex w-full flex-row flex-wrap items-center justify-between gap-2 pt-2.5 text-[12px]">
+      <span className="font-normal text-[#666666]" aria-live="polite">
         Showing {formatNumber(first)}–{formatNumber(last)} of {formatNumber(total)} {noun}
       </span>
-      <div className="flex items-center gap-2">
-        <button type="button" className={NAV} disabled={page <= 1} onClick={() => onPage(page - 1)}>
+      <div className="flex items-center gap-1.5">
+        <button
+          type="button"
+          disabled={page <= 1}
+          onClick={() => onPage(page - 1)}
+          className="h-7 cursor-pointer rounded-md border border-[#BDBDBD] px-2.5 text-[12px] text-[#666666] transition-colors hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40"
+        >
           Previous
         </button>
         {windowOf(page, pages).map((n, i) =>
           n === "gap" ? (
-            <span key={`gap-${i}`} className="text-xs text-muted-foreground" aria-hidden>
-              ...
+            <span key={`gap-${i}`} className="text-[12px] text-[#666666]" aria-hidden>
+              …
             </span>
           ) : (
             <button
@@ -50,16 +54,26 @@ export function ListingsPagination({ page, pages, total, pageSize, shown, noun, 
               aria-label={`Page ${n}`}
               aria-current={n === page ? "page" : undefined}
               onClick={() => onPage(n)}
-              className={`h-7 min-w-[28px] rounded px-1 text-xs font-semibold ${n === page ? "bg-muted" : "hover:bg-muted"}`}
+              className={cn("flex h-7 min-w-7 cursor-pointer items-center justify-center rounded px-1 text-[12px]", n === page ? "bg-[#F5F5F5] font-semibold text-[#000000]" : "text-[#666666] hover:bg-[#F5F5F5]")}
             >
               {n}
             </button>
           ),
         )}
-        <button type="button" className={NAV} disabled={page >= pages} onClick={() => onPage(page + 1)}>
+        <button
+          type="button"
+          disabled={page >= pages}
+          onClick={() => onPage(page + 1)}
+          className="h-7 cursor-pointer rounded-md border border-[#BDBDBD] px-2.5 text-[12px] text-[#000000] transition-colors hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40"
+        >
           Next
         </button>
-        <select aria-label="Listings per page" value={pageSize} onChange={(e) => onPageSize(Number(e.target.value))} className="h-8 rounded-lg border border-border bg-card px-2 text-xs font-medium">
+        <select
+          aria-label="Listings per page"
+          value={pageSize}
+          onChange={(e) => onPageSize(Number(e.target.value))}
+          className="h-7 cursor-pointer rounded-md border border-[#BDBDBD] bg-white px-2 text-[12px] font-medium text-[#000000] focus:outline-none"
+        >
           {PAGE_SIZES.map((n) => (
             <option key={n} value={n}>
               {n} / page

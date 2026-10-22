@@ -48,7 +48,7 @@ export function ProductCard({ product: p, selected, canWrite, canDelete, onToggl
   return (
     <div
       data-testid="product-card"
-      onClick={() => onToggle(p.id)}
+      onClick={() => navigate(`${ROUTES.PRODUCTS}/${p.id}`)}
       className={`group relative box-border flex flex-col justify-between p-4 h-[262px] bg-[#FFFFFF] rounded-[12px] transition-all cursor-pointer ${
         selected ? "border-2 border-[#000000] shadow-[0px_2px_8px_rgba(0,0,0,0.06)]" : "border border-[#EAEAEA] hover:border-[#BDBDBD]"
       }`}

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Sparkles } from "lucide-react";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Button } from "@/components/ui/button";
+import { RefreshButton } from "@/components/common/RefreshButton";
 import { CompetitorsTab } from "@/components/pricing/competitors/CompetitorsTab";
 import { HistoryTab } from "@/components/pricing/history/HistoryTab";
 import { PoliciesTab } from "@/components/pricing/policies/PoliciesTab";
@@ -59,10 +60,13 @@ export default function PricingPage() {
         title="Pricing Control Center"
         description="Review price proposals across your sales channels, set the policies that create them and keep an audit trail of every price change."
         actions={
-          <Button size="sm" className="gap-2" disabled={!canWrite} title={canWrite ? undefined : NO_WRITE_REASON} onClick={() => setGenerating(true)}>
-            <Sparkles className="h-3.5 w-3.5" aria-hidden />
-            Generate proposals
-          </Button>
+          <>
+            <RefreshButton onRefresh={() => void overview.refetch()} spinning={overview.isFetching} />
+            <Button size="sm" className="gap-2" disabled={!canWrite} title={canWrite ? undefined : NO_WRITE_REASON} onClick={() => setGenerating(true)}>
+              <Sparkles className="h-3.5 w-3.5" aria-hidden />
+              Generate proposals
+            </Button>
+          </>
         }
       />
 

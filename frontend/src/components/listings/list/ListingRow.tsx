@@ -1,12 +1,9 @@
 import { Link } from "react-router-dom";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { StatusPill } from "@/components/common/StatusPill";
-import { AuthThumbnail } from "@/components/products/list/AuthThumbnail";
 import { ROUTES } from "@/constants/routes";
 import { cn } from "@/utils/cn";
 import { formatRelativeTime } from "@/utils/format";
 import type { ListingBulkAction, ListingRow as Row } from "@/types/listing";
-import { CONTENT_ALERT, NO_WRITE_REASON, initialsOf, price, rowActionOf } from "./listingFormat";
+import { CONTENT_ALERT, NO_WRITE_REASON, STATUS_COLOR, STATUS_LABEL, price, readinessColor, rowActionOf, secondaryActionOf, statusPathOf, studioPath } from "./listingFormat";
 import { CONTENT_LABELS } from "./listingParams";
 
 interface ListingRowProps {
@@ -19,117 +16,173 @@ interface ListingRowProps {
   onAction: (row: Row, action: ListingBulkAction) => void;
 }
 
-const readinessTone = (percent: number) => (percent >= 90 ? "bg-emerald-500" : percent >= 70 ? "bg-amber-500" : "bg-destructive");
+const LINK = "text-[12px] font-semibold text-[#000000] hover:underline cursor-pointer";
 
 export function ListingRow({ row, selected, canWrite, busy, onToggle, onQuickView, onAction }: ListingRowProps) {
   const t = row.table;
-  const action = rowActionOf(row);
-  const studio = `${ROUTES.LISTINGS}/${row.id}`;
+  const score = t.readiness.percent;
+  const scoreColor = readinessColor(score);
+  const statusColor = STATUS_COLOR[t.screenStatus];
+  const statusPath = statusPathOf(row);
+  const primary = rowActionOf(row);
+  const secondary = secondaryActionOf(row);
   const contentAlert = (CONTENT_ALERT as readonly string[]).includes(row.contentState);
   const onSale = t.mrpMinor !== null && t.priceMinor !== null && t.mrpMinor > t.priceMinor;
+  const where = `${row.productTitle} on ${t.marketplaceName}`;
+
+  // a draft listing carries the design's grey "Draft" pill; what is wrong with it (blocked, needs review) stays visible under it
+  const draft = row.status === "draft";
+  const pillColor = draft ? STATUS_COLOR.draft : statusColor;
+  const status = (
+    <>
+      <span className="h-1.5 w-1.5 shrink-0 rounded-full transition-transform group-hover:scale-125" style={{ backgroundColor: pillColor }} />
+      <span className={cn("truncate text-[12px] font-medium", statusPath && "group-hover:underline")} style={{ color: draft ? "#666666" : statusColor }}>
+        {draft ? "Draft" : STATUS_LABEL[t.screenStatus]}
+      </span>
+    </>
+  );
 
   return (
-    <tr className={cn("transition-colors hover:bg-muted/20", selected && "bg-muted/30")}>
-      <td className="py-3 pl-4 pr-2">
+    <div role="row" className={cn("relative flex min-h-[48px] w-full flex-row items-center px-4 py-1.5 pl-12 text-[12px] transition-colors hover:bg-[#FAFAFA]", selected && "bg-[#F9FAFB]")}>
+      {/* the readiness meter on the left edge */}
+      <div className="pointer-events-none absolute left-[3px] top-1/2 h-7 w-[3px] -translate-y-1/2 rounded-sm bg-[#E5E7EB]" title={`Readiness score: ${score}%`}>
+        <div className="absolute bottom-0 w-full rounded-sm transition-all" style={{ height: `${score}%`, backgroundColor: scoreColor }} />
+      </div>
+      <span className="pointer-events-none absolute left-[10px] top-1/2 mt-[2px] select-none text-[8px] font-medium leading-[10px]" style={{ color: scoreColor }} aria-hidden>
+        {score}%
+      </span>
+
+      <div role="cell" className="w-6 shrink-0">
         <input
           type="checkbox"
-          aria-label={`Select ${row.productTitle} on ${t.marketplaceName}`}
+          aria-label={`Select ${where}`}
           checked={selected}
           disabled={!canWrite}
           title={canWrite ? undefined : NO_WRITE_REASON}
           onChange={() => onToggle(row.id)}
-          className="h-4 w-4 cursor-pointer accent-[#1D4ED8] disabled:cursor-not-allowed"
+          className="h-3.5 w-3.5 cursor-pointer rounded border border-[#BDBDBD] accent-black disabled:cursor-not-allowed"
         />
-      </td>
-      <td className="px-3 py-3">
-        <div className="flex items-center gap-3">
-          <AuthThumbnail url={t.thumbnailUrl} alt="" initials={initialsOf(row.productTitle)} compact />
-          <div className="min-w-0">
-            <Link to={studio} className="block max-w-[280px] truncate font-medium text-foreground hover:underline">
-              {row.productTitle}
-            </Link>
-            <p className="font-mono text-[11px] text-muted-foreground">
-              SKU: {row.sku}
-              {t.externalListingId && (
-                <>
-                  {" · "}
-                  {t.externalUrl ? (
-                    <a href={t.externalUrl} target="_blank" rel="noopener noreferrer" className="hover:underline" aria-label={`Open ${t.externalListingId} on ${t.marketplaceName}`}>
-                      {t.externalListingId}
-                    </a>
-                  ) : (
-                    <span>{t.externalListingId}</span>
-                  )}
-                </>
+      </div>
+
+      <div role="cell" className="w-[240px] shrink-0 pr-3">
+        <Link to={studioPath(row.id)} className="block truncate text-[13px] font-medium text-[#000000] hover:underline" title={row.productTitle}>
+          {row.productTitle}
+        </Link>
+        <p className="truncate text-[10px] text-[#666666]">
+          <span>{price(t.priceMinor)}</span>
+          {onSale && <span className="ml-1 line-through">{price(t.mrpMinor)}</span>}
+          {t.salePriceMinor !== null && <span className="ml-1 text-[#16A34A]">Sale {price(t.salePriceMinor)}</span>}
+          {t.externalListingId && (
+            <>
+              {" · "}
+              {t.externalUrl ? (
+                <a href={t.externalUrl} target="_blank" rel="noopener noreferrer" className="hover:underline" aria-label={`Open ${t.externalListingId} on ${t.marketplaceName}`}>
+                  {t.externalListingId}
+                </a>
+              ) : (
+                <span>{t.externalListingId}</span>
               )}
-            </p>
-            {t.categoryName && <p className="text-[11px] text-muted-foreground">{t.categoryName}</p>}
-          </div>
-        </div>
-      </td>
-      <td className="px-3 py-3">
-        <p className="font-medium text-foreground">{t.marketplaceName}</p>
-        <p className="text-[11px] text-muted-foreground">{t.accountName}</p>
-      </td>
-      <td className="px-3 py-3">
-        <div className="flex flex-col items-start gap-1">
-          <StatusPill status={t.screenStatus} />
-          {contentAlert && (
-            <span className="inline-flex items-center gap-1 text-[11px] text-amber-700">
-              Content: {CONTENT_LABELS[row.contentState]}
-              <Link to={studio} className="font-semibold underline underline-offset-2" aria-label={`Resolve content update for ${row.productTitle}`}>
-                Resolve
-              </Link>
-            </span>
+            </>
           )}
+        </p>
+      </div>
+
+      <div role="cell" className="w-[170px] shrink-0 pr-3">
+        <Link to={`${ROUTES.PRODUCTS}/${row.productId}`} className="block truncate text-[12px] font-normal text-[#000000] hover:underline" title={`Open the master product ${row.productTitle}`} aria-label={`Master product ${row.productTitle}`}>
+          {row.productTitle}
+        </Link>
+        <p className="truncate font-mono text-[10px] font-normal text-[#666666]" title={row.sku}>
+          {row.sku}
+        </p>
+      </div>
+
+      <div role="cell" className="w-[120px] shrink-0 pr-2">
+        <p className="truncate text-[12px] font-normal text-[#000000]">{t.marketplaceName}</p>
+        <p className="truncate text-[10px] text-[#666666]">{t.accountName}</p>
+      </div>
+
+      <div role="cell" className="w-[130px] shrink-0 pr-2" title={t.readiness.topBlocker?.message}>
+        <div className="flex items-center gap-1.5">
+          <div className="h-1.5 w-8 overflow-hidden rounded-full bg-[#F5F5F5]" role="img" aria-label={`Readiness ${score} percent`}>
+            <div className="h-full rounded-full transition-all" style={{ width: `${score}%`, backgroundColor: scoreColor }} />
+          </div>
+          <span className="text-[11px] font-medium" style={{ color: scoreColor }}>
+            {score}%
+          </span>
         </div>
-      </td>
-      <td className="px-3 py-3">
-        <span className="font-semibold text-foreground">{price(t.priceMinor)}</span>
-        {onSale && <span className="ml-1 text-[11px] text-muted-foreground line-through">{price(t.mrpMinor)}</span>}
-        {t.salePriceMinor !== null && <p className="text-[11px] text-emerald-700">Sale {price(t.salePriceMinor)}</p>}
-      </td>
-      <td className="px-3 py-3 font-mono">
-        <span className={t.stock.sellable === 0 ? "font-bold text-destructive" : "text-foreground"}>{t.stock.sellable}</span>
+        {t.readiness.topBlocker && <p className="max-w-[120px] truncate text-[10px] text-[#666666]">{t.readiness.topBlocker.message}</p>}
+      </div>
+
+      <div role="cell" className="w-[90px] shrink-0">
+        <span className={cn("font-mono text-[12px]", t.stock.sellable === 0 ? "font-bold text-[#DC2626]" : "font-normal text-[#000000]")}>{t.stock.sellable}</span>
         {t.stock.dirty && (
-          <p className="font-sans text-[11px] text-muted-foreground" title="The marketplace has not received the latest stock yet">
+          <p className="text-[10px] text-[#666666]" title="The marketplace has not received the latest stock yet">
             Push pending
           </p>
         )}
-      </td>
-      <td className="px-3 py-3">
-        <div className="flex items-center gap-2" title={t.readiness.topBlocker?.message}>
-          <div className="h-1.5 w-14 overflow-hidden rounded-full bg-muted" role="img" aria-label={`Readiness ${t.readiness.percent} percent`}>
-            <div className={cn("h-full", readinessTone(t.readiness.percent))} style={{ width: `${t.readiness.percent}%` }} />
-          </div>
-          <span className="font-mono text-[11px] text-muted-foreground">{t.readiness.percent}%</span>
-        </div>
-        {t.readiness.topBlocker && <p className="mt-0.5 max-w-[180px] truncate text-[11px] text-muted-foreground">{t.readiness.topBlocker.message}</p>}
-      </td>
-      <td className="px-3 py-3 text-muted-foreground">{t.lastSyncAt ? formatRelativeTime(t.lastSyncAt) : "Never"}</td>
-      <td className="py-3 pl-3 pr-4 text-right">
-        <div className="flex items-center justify-end gap-2">
-          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => onQuickView(row)} aria-label={`Quick view of ${row.productTitle}`}>
-            Quick view
-          </Button>
-          {action && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 text-xs"
-              disabled={!canWrite || busy}
-              title={canWrite ? undefined : NO_WRITE_REASON}
-              aria-label={`${action.label} ${row.productTitle} on ${t.marketplaceName}`}
-              onClick={() => onAction(row, action.action)}
-            >
-              {action.label}
-            </Button>
-          )}
-          <Link to={studio} className={buttonVariants({ size: "sm", className: "h-7 bg-primary text-xs text-primary-foreground hover:bg-primary/90" })}>
-            Studio
+      </div>
+
+      <div role="cell" className="w-[120px] shrink-0 truncate text-[12px] font-normal text-[#666666]">
+        {t.lastSyncAt ? formatRelativeTime(t.lastSyncAt) : "Never"}
+      </div>
+
+      <div role="cell" className="min-w-[120px] flex-1">
+        {statusPath ? (
+          <Link to={statusPath} className="group flex items-center gap-1.5 truncate" title={`Open ${STATUS_LABEL[t.screenStatus]} details`}>
+            {status}
           </Link>
-        </div>
-      </td>
-    </tr>
+        ) : (
+          <div className="group flex items-center gap-1.5 truncate">{status}</div>
+        )}
+        {draft && t.screenStatus !== "ready" && (
+          <span className="block truncate text-[10px]" style={{ color: statusColor }}>
+            {STATUS_LABEL[t.screenStatus]}
+          </span>
+        )}
+        {contentAlert && (
+          <span className="flex items-center gap-1 text-[10px] text-[#92400E]">
+            Content: {CONTENT_LABELS[row.contentState]}
+            <Link to={studioPath(row.id)} className="font-semibold underline underline-offset-2" aria-label={`Resolve content update for ${row.productTitle}`}>
+              Resolve
+            </Link>
+          </span>
+        )}
+      </div>
+
+      <div role="cell" className="flex w-[150px] shrink-0 items-center justify-end gap-3">
+        {secondary && (
+          <button
+            type="button"
+            className="cursor-pointer text-[11px] font-medium text-[#666666] hover:text-[#000000] hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={!canWrite || busy}
+            title={canWrite ? undefined : NO_WRITE_REASON}
+            aria-label={`${secondary.label} ${where}`}
+            onClick={() => onAction(row, secondary.action)}
+          >
+            {secondary.label}
+          </button>
+        )}
+        {primary.kind === "link" ? (
+          <Link to={primary.to} className={cn(LINK, (t.screenStatus === "blocked" || t.screenStatus === "failed") && "text-[#DC2626]")} aria-label={`${primary.label.replace(" →", "")} ${where}`}>
+            {primary.label}
+          </Link>
+        ) : primary.kind === "review" ? (
+          <button type="button" className={LINK} onClick={() => onQuickView(row)} aria-label={`Review ${where}`}>
+            {primary.label}
+          </button>
+        ) : (
+          <button
+            type="button"
+            className={cn(LINK, "disabled:cursor-not-allowed disabled:opacity-50")}
+            disabled={!canWrite || busy}
+            title={canWrite ? undefined : NO_WRITE_REASON}
+            aria-label={`Publish ${where}`}
+            onClick={() => onAction(row, "publish")}
+          >
+            {busy ? "Publishing…" : primary.label}
+          </button>
+        )}
+      </div>
+    </div>
   );
 }

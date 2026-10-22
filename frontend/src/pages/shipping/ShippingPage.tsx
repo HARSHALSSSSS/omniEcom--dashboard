@@ -1,221 +1,246 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Layers, Truck, X } from "lucide-react";
-import { PageHeader } from "@/components/common/PageHeader";
-import { Button } from "@/components/ui/button";
-import { CarriersDialog } from "@/components/shipping/CarriersDialog";
-import { LabelsResultsDialog } from "@/components/shipping/LabelsResultsDialog";
+import { useCallback, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
+import { AddProviderDrawer, ConfigureMethodDrawer } from "@/components/shipping/MethodDrawers";
+import { ChooseShippingDrawer } from "@/components/shipping/ChooseShippingDrawer";
 import { ManifestsDialog } from "@/components/shipping/ManifestsDialog";
+import { MethodsSection } from "@/components/shipping/MethodsSection";
+import { OrdersSection } from "@/components/shipping/OrdersSection";
+import { AttentionBand, AvailabilityComparison, DecisionField, ExceptionMatrix, PulseRail } from "@/components/shipping/OverviewSection";
+import { RuleDrawer } from "@/components/shipping/RuleDrawer";
+import { RulesSection } from "@/components/shipping/RulesSection";
+import { PickupSlotDrawer } from "@/components/shipping/PickupSlotDrawer";
 import { ShipmentDrawer } from "@/components/shipping/ShipmentDrawer";
-import { ShipmentsTable, TableSkeleton } from "@/components/shipping/ShipmentsTable";
-import { ShippingFilters } from "@/components/shipping/ShippingFilters";
-import { ShippingPagination } from "@/components/shipping/ShippingPagination";
-import { ShippingRibbon } from "@/components/shipping/ShippingRibbon";
-import { LoadError, NoCarrier, NoMatches, NoShipments } from "@/components/shipping/ShippingStates";
-import { ShippingTabs } from "@/components/shipping/ShippingTabs";
-import { DEFAULT_PAGE_SIZE, LABEL_MAX, isFiltered, shipmentsQueryOf, useShippingUrlState } from "@/components/shipping/shippingParams";
-import { NO_WRITE_REASON } from "@/components/shipping/shippingFormat";
+import { ShipmentsSection } from "@/components/shipping/ShipmentsSection";
+import { ShippingHeader } from "@/components/shipping/ShippingHeader";
+import { ShippingWelcome } from "@/components/shipping/ShippingStates";
+import { TrackingSection } from "@/components/shipping/TrackingSection";
+import { decisionQueryOf, isFiltered, isOrdersFiltered, isTrackingFiltered, shipmentsQueryOf, trackingQueryOf, useShippingUrlState } from "@/components/shipping/shippingParams";
 import { saveBlob } from "@/components/products/list/saveBlob";
-import { base64ToBlob } from "@/api/shipping.api";
+import { shippingApi } from "@/api/shipping.api";
 import { errorMessage } from "@/api/errors";
+import { ROUTES } from "@/constants/routes";
 import { useCan } from "@/hooks/useCan";
-import { useBulkLabels, useCarriers, useShipmentLabel, useShipments, useShippingSummary, useShippingWarehouses } from "@/hooks/useShipping";
+import { SHIPPING_KEYS, useShipmentLabel, useShippingExceptions, useShippingMethods, useShippingOverview, useShippingRules, useShippingSync, useShippingWarehouses, useSyncTracking } from "@/hooks/useShipping";
 import { toast } from "@/hooks/useToast";
-import type { BulkLabelsResponse } from "@/types/shipping";
-
-const pdfOf = (res: BulkLabelsResponse): { blob: Blob; fileName: string } | null =>
-  res.combined.available && res.combined.content ? { blob: base64ToBlob(res.combined.content, "application/pdf"), fileName: res.combined.fileName ?? "shipping-labels.pdf" } : null;
+import type { DecisionItem, ExceptionCategory, ShippingMethod, ShippingRule } from "@/types/shipping";
 
 export default function ShippingPage() {
   const url = useShippingUrlState();
-  const { update, clearFilters, filters, tab, page, pageSize, days, drawerId, panel } = url;
+  const { update, view, drawerId, panel } = url;
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const canWrite = useCan("shipping:write");
   const canConfigure = useCan("shipping:configure");
+  const canReadRules = useCan("rules:read");
 
-  const summary = useShippingSummary(days);
-  const shipments = useShipments(shipmentsQueryOf(url));
-  const carriers = useCarriers();
+  const overview = useShippingOverview();
+  const methods = useShippingMethods();
   const warehouses = useShippingWarehouses();
-  const bulk = useBulkLabels();
+  const exceptions = useShippingExceptions(url.exceptions);
+  const [ruleDrawer, setRuleDrawer] = useState<{ rule: ShippingRule | null } | null>(null);
+  const rules = useShippingRules(ruleDrawer !== null && canReadRules);
+  const sync = useShippingSync();
+  const syncTracking = useSyncTracking();
   const singleLabel = useShipmentLabel();
+  const [exporting, setExporting] = useState(false);
 
-  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
-  const [results, setResults] = useState<BulkLabelsResponse | null>(null);
+  const [chooseId, setChooseId] = useState<string | null>(null);
+  const [bulkIds, setBulkIds] = useState<string[] | null>(null);
+  const [configuring, setConfiguring] = useState<ShippingMethod | null>(null);
+  /** the Book slot drawer: open, with what the row it came from already says */
+  const [slotDrawer, setSlotDrawer] = useState<{ warehouseId: string; methodId: string | null } | "open" | null>(null);
 
-  const rows = useMemo(() => shipments.data?.items ?? [], [shipments.data]);
-  const queryKey = JSON.stringify([filters, page, pageSize]);
-  // a selection belongs to the page it was made on
-  useEffect(() => setSelected(new Set()), [queryKey]);
+  const shipmentsQuery = shipmentsQueryOf(url);
 
-  // a page past the end (a shrinking result set, an old link) falls back to the last page
-  useEffect(() => {
-    const data = shipments.data;
-    if (data && data.total > 0 && data.items.length === 0 && page > data.pages) update({ page: String(data.pages) }, { replace: true });
-  }, [shipments.data, page, update]);
+  const channels = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const row of overview.data?.availabilityComparison ?? []) seen.set(row.channel.code, row.channel.name);
+    return [...seen.entries()].map(([code, name]) => ({ code, name }));
+  }, [overview.data]);
 
-  const carrierNames = useMemo(
-    () => [...new Set([...(carriers.data?.items ?? []).map((c) => c.name), ...(summary.data?.carriers ?? []).map((c) => c.name)])].sort((a, b) => a.localeCompare(b)),
-    [carriers.data, summary.data],
-  );
-  const filtered = isFiltered(filters);
-
-  const toggle = useCallback(
-    (id: string) =>
-      setSelected((prev) => {
-        const next = new Set(prev);
-        if (!next.delete(id)) next.add(id);
-        return next;
-      }),
-    [],
-  );
-  const toggleAll = useCallback(() => setSelected((prev) => (rows.length > 0 && rows.every((r) => prev.has(r.id)) ? new Set() : new Set(rows.map((r) => r.id)))), [rows]);
-
-  const printLabels = () => {
-    bulk.mutate([...selected], {
-      onSuccess: (res) => {
-        setResults(res);
-        const pdf = pdfOf(res);
-        if (pdf) saveBlob(pdf.blob, pdf.fileName);
-        // what failed stays selected so it can be looked at
-        setSelected(new Set(res.results.filter((r) => !r.ok).map((r) => r.shipmentId)));
-      },
-      onError: (e) => toast({ title: "Labels could not be printed", description: errorMessage(e), variant: "destructive" }),
-    });
-  };
+  const hasMethods = (methods.data?.items.length ?? 0) > 0;
+  const noMethodsYet = methods.data !== undefined && !hasMethods;
 
   const printOne = (id: string) =>
     singleLabel.mutate(id, {
       onSuccess: (file) => saveBlob(file.blob, file.fileName),
       onError: (e) => toast({ title: "The label could not be downloaded", description: errorMessage(e), variant: "destructive" }),
     });
+  const labelBusyId = singleLabel.isPending ? (singleLabel.variables ?? null) : null;
 
-  const openPdf = () => {
-    const pdf = results && pdfOf(results);
-    if (!pdf) return;
-    const href = URL.createObjectURL(pdf.blob);
-    window.open(href, "_blank", "noopener");
-    setTimeout(() => URL.revokeObjectURL(href), 60_000);
+  /** the drawer loads the shipment by its id (the second argument is kept for the callers: it is not needed any more) */
+  const openShipment = (id: string, _hint?: string | null) => update({ drawer: `shipment:${id}` }, { keepPage: true });
+
+  const openExceptions = () => {
+    update({ view: "overview", exceptions: "1" }, { keepPage: true });
+    setTimeout(() => document.getElementById("exception-matrix-section")?.scrollIntoView?.({ behavior: "smooth" }), 150);
   };
 
-  const labelBusyId = singleLabel.isPending ? (singleLabel.variables ?? null) : null;
-  const loadingList = shipments.isLoading;
-  const listError = shipments.isError && !shipments.data;
-  const total = shipments.data?.total ?? 0;
-  const tooMany = selected.size > LABEL_MAX;
+  const exportExceptions = async () => {
+    setExporting(true);
+    try {
+      const file = await shippingApi.exportExceptions();
+      saveBlob(file.blob, file.fileName);
+    } catch (e) {
+      toast({ title: "The export failed", description: errorMessage(e), variant: "destructive" });
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const onExceptionAction = (cat: ExceptionCategory, index: number | null) => {
+    const order = index === null ? undefined : cat.orders[index];
+    switch (cat.key) {
+      case "no_method_selected":
+        if (order?.fulfillmentId) setChooseId(order.fulfillmentId);
+        else update({ view: "orders", ostatus: "needs_decision" });
+        break;
+      case "label_unavailable":
+      case "connector_capability_limit":
+        update({ view: "methods" });
+        break;
+      case "tracking_not_received":
+        update({ view: "tracking", ...(order ? { tq: order.number } : {}) });
+        break;
+      case "sla_risk":
+        update({ view: "orders", ...(order ? { oq: order.number } : { osla: cat.orders.some((o) => o.detail === "breached") ? "breached" : "at_risk" }) });
+        break;
+      case "shipping_sync_failed": {
+        const ids = (order ? [order.shipmentId] : cat.orders.map((o) => o.shipmentId)).filter((x): x is string => Boolean(x));
+        syncTracking.mutate(ids.length ? ids : undefined, {
+          onSuccess: (r) => toast({ title: r.failed > 0 ? "Retry finished with failures" : "Tracking retried", description: `${r.processed} checked, ${r.updated} updated${r.failed ? `, ${r.failed} failed` : ""}.`, variant: r.failed > 0 ? "destructive" : "success" }),
+          onError: (e) => toast({ title: "The retry failed", description: errorMessage(e), variant: "destructive" }),
+        });
+        break;
+      }
+    }
+  };
+
+  const closeChoose = useCallback(() => {
+    setChooseId(null);
+    setBulkIds(null);
+  }, []);
+  const closePanel = useCallback(() => update({ panel: null }, { keepPage: true, replace: true }), [update]);
+  const openAddProvider = () => update({ panel: "carriers" }, { keepPage: true });
+
+  const ordersProps = {
+    query: decisionQueryOf(url),
+    filters: url.orders,
+    filtered: isOrdersFiltered(url.orders),
+    channels,
+    warehouses: warehouses.data ?? [],
+    canWrite,
+    hasMethods,
+    onUpdate: update,
+    onClear: url.clearOrderFilters,
+    onChoose: setChooseId,
+    onBulkAssign: setBulkIds,
+    onPrintLabel: printOne,
+    onBookSlot: (item: DecisionItem) => setSlotDrawer({ warehouseId: item.pickup.warehouseId, methodId: item.pickup.methodId }),
+    onTrack: (item: DecisionItem) => update({ view: "tracking", tq: item.number }),
+    onSetupMethods: () => update({ view: "methods" }),
+  };
+  const methodsProps = { canConfigure, onAddProvider: openAddProvider, onConfigure: setConfiguring };
+  const rulesProps = { canRead: canReadRules, canConfigure, onCreate: () => setRuleDrawer({ rule: null }), onEdit: (rule: ShippingRule) => setRuleDrawer({ rule }) };
+  const trackingProps = {
+    query: trackingQueryOf(url),
+    filters: url.tracking,
+    filtered: isTrackingFiltered(url.tracking),
+    channels,
+    canWrite,
+    onUpdate: update,
+    onClear: url.clearTrackingFilters,
+    onOpenShipment: openShipment,
+  };
 
   return (
-    <div className="w-full space-y-6 pb-24">
-      <PageHeader
-        eyebrow="CARRIER LOGISTICS"
-        title="Shipping Workspace"
-        description="Carrier performance, AWBs, labels and transit tracking across the couriers you ship with."
-        actions={
-          <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" className="gap-2" onClick={() => update({ panel: "manifests" }, { keepPage: true })}>
-              <Layers className="h-4 w-4" aria-hidden /> Manifests
-            </Button>
-            <Button size="sm" className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => update({ panel: "carriers" }, { keepPage: true })}>
-              <Truck className="h-4 w-4" aria-hidden /> Carriers
-            </Button>
-          </div>
-        }
+    <div className="w-full space-y-8 pb-32 font-['Inter',sans-serif] text-[#0A0A0A]">
+      <ShippingHeader
+        view={view}
+        onView={(v) => update({ view: v }, { keepPage: true })}
+        canWrite={canWrite}
+        canConfigure={canConfigure}
+        sync={{ job: sync.job, starting: sync.starting, startError: sync.startError ? errorMessage(sync.startError) : null }}
+        refreshing={overview.isFetching && !overview.isLoading && !sync.running}
+        overview={overview.data}
+        onSync={sync.start}
+        onDismissSync={sync.dismiss}
+        onViewExceptions={openExceptions}
+        onRules={() => (canConfigure ? setRuleDrawer({ rule: null }) : update({ view: "rules" }, { keepPage: true }))}
+        onAddProvider={openAddProvider}
+        onManifests={() => update({ panel: "manifests" }, { keepPage: true })}
+        onPickupSlots={() => setSlotDrawer("open")}
+        onRefresh={() => void queryClient.invalidateQueries({ queryKey: SHIPPING_KEYS.all })}
       />
 
-      <ShippingRibbon
-        summary={summary.data}
-        loading={summary.isLoading}
-        error={summary.isError ? errorMessage(summary.error) : null}
-        days={days}
-        onDays={(d) => update({ days: d === 30 ? null : String(d) }, { keepPage: true })}
-        onRetry={() => void summary.refetch()}
-        onExceptions={() => update({ tab: "ndr" })}
-      />
-
-      <div className="space-y-4">
-        <ShippingTabs active={tab} counts={shipments.data?.counts} onChange={(t) => update({ tab: t })} />
-        <ShippingFilters
-          filters={filters}
-          carriers={carrierNames}
-          warehouses={warehouses.data ?? []}
-          filtered={filtered}
-          onSearch={(q) => update({ q }, { replace: true })}
-          onChange={(patch) => update(patch)}
-          onClear={clearFilters}
-        />
-      </div>
-
-      {selected.size > 0 && (
-        <div role="toolbar" aria-label="Bulk actions" className="flex min-h-[44px] flex-wrap items-center gap-2 rounded-lg bg-muted/60 px-3">
-          <span className="min-w-[130px] text-xs font-semibold" aria-live="polite">
-            {selected.size} {selected.size === 1 ? "shipment" : "shipments"} selected
-          </span>
-          <Button size="sm" variant="outline" className="h-[30px] text-xs" disabled={!canWrite || bulk.isPending || tooMany} title={canWrite ? undefined : NO_WRITE_REASON} onClick={printLabels}>
-            {bulk.isPending ? "Preparing labels..." : "Print labels"}
-          </Button>
-          <span className="text-[11px] text-muted-foreground">Up to {LABEL_MAX} shipments at a time</span>
-          <button type="button" onClick={() => setSelected(new Set())} aria-label="Clear selection" title="Clear selection" className="ml-auto rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground">
-            <X className="h-3.5 w-3.5" aria-hidden />
-          </button>
-        </div>
-      )}
-
-      {loadingList ? (
-        <TableSkeleton rows={8} />
-      ) : listError ? (
-        <LoadError message={errorMessage(shipments.error)} onRetry={() => void shipments.refetch()} />
-      ) : rows.length === 0 ? (
-        filtered ? (
-          <NoMatches onClear={clearFilters} />
-        ) : carriers.data && carriers.data.items.length === 0 ? (
-          <NoCarrier canConfigure={canConfigure} onSetup={() => update({ panel: "carriers" }, { keepPage: true })} />
-        ) : (
-          <NoShipments />
-        )
-      ) : (
+      {noMethodsYet && view !== "shipments" ? (
+        <ShippingWelcome canConfigure={canConfigure} onConfigure={openAddProvider} onMarketplaces={() => navigate(ROUTES.MARKETPLACE_HUB)} />
+      ) : view === "overview" ? (
         <>
-          <ShipmentsTable
-            rows={rows}
-            selected={selected}
-            canWrite={canWrite}
-            refreshing={shipments.isFetching && shipments.isPlaceholderData}
-            labelBusyId={labelBusyId}
-            onToggle={toggle}
-            onToggleAll={toggleAll}
-            onOpen={(id) => update({ drawer: `shipment:${id}` }, { keepPage: true })}
-            onLabel={printOne}
-          />
-          <ShippingPagination
-            page={shipments.data?.page ?? page}
-            pages={shipments.data?.pages ?? 1}
-            total={total}
-            pageSize={pageSize}
-            shown={rows.length}
-            onPage={(p) => update({ page: p > 1 ? String(p) : null })}
-            onPageSize={(size) => update({ size: size === DEFAULT_PAGE_SIZE ? null : String(size) })}
-          />
+          <section className="space-y-7" aria-label="Shipping overview">
+            <PulseRail overview={overview} />
+            <DecisionField overview={overview} onReview={() => update({ view: "rules" }, { keepPage: true })} />
+            <AvailabilityComparison overview={overview} />
+            <AttentionBand overview={overview} open={url.exceptions} onToggle={() => update({ exceptions: url.exceptions ? null : "1" }, { keepPage: true })} />
+            {url.exceptions && <ExceptionMatrix attentionTotal={overview.data?.attention.total ?? 0} report={exceptions} exporting={exporting} onExport={() => void exportExceptions()} onAction={onExceptionAction} />}
+          </section>
+          <OrdersSection {...ordersProps} embedded />
+          <MethodsSection {...methodsProps} embedded />
+          <RulesSection {...rulesProps} embedded />
+          <TrackingSection {...trackingProps} embedded />
         </>
+      ) : view === "orders" ? (
+        <OrdersSection {...ordersProps} embedded={false} />
+      ) : view === "methods" ? (
+        <MethodsSection {...methodsProps} embedded={false} />
+      ) : view === "rules" ? (
+        <RulesSection {...rulesProps} embedded={false} />
+      ) : view === "tracking" ? (
+        <TrackingSection {...trackingProps} embedded={false} />
+      ) : (
+        <ShipmentsSection
+          query={shipmentsQuery}
+          filters={url.filters}
+          tab={url.tab}
+          page={url.page}
+          pageSize={url.pageSize}
+          days={url.days}
+          filtered={isFiltered(url.filters)}
+          warehouses={warehouses.data ?? []}
+          canWrite={canWrite}
+          canConfigure={canConfigure}
+          labelBusyId={labelBusyId}
+          onUpdate={update}
+          onClear={url.clearFilters}
+          onOpenShipment={(id) => openShipment(id, null)}
+          onLabel={printOne}
+          onSetupCarrier={openAddProvider}
+        />
       )}
 
+      <ChooseShippingDrawer fulfillmentId={chooseId} bulkIds={bulkIds} canWrite={canWrite} onClose={closeChoose} />
+      <AddProviderDrawer open={panel === "carriers"} canConfigure={canConfigure} channels={channels} methods={methods.data?.items ?? []} onClose={closePanel} />
+      <ConfigureMethodDrawer method={configuring} canConfigure={canConfigure} onClose={() => setConfiguring(null)} />
+      <RuleDrawer
+        open={ruleDrawer !== null}
+        rule={ruleDrawer?.rule ?? null}
+        canConfigure={canConfigure}
+        channels={channels}
+        warehouses={warehouses.data ?? []}
+        methods={methods.data?.items ?? []}
+        count={rules.data?.total ?? 0}
+        onClose={() => setRuleDrawer(null)}
+      />
       <ShipmentDrawer
         shipmentId={drawerId}
-        row={rows.find((r) => r.id === drawerId)}
         canWrite={canWrite}
         labelBusy={singleLabel.isPending}
         onClose={() => update({ drawer: null }, { keepPage: true, replace: true })}
         onLabel={printOne}
       />
-      <LabelsResultsDialog
-        response={results}
-        busyId={labelBusyId}
-        onClose={() => setResults(null)}
-        onDownloadPdf={() => {
-          const pdf = results && pdfOf(results);
-          if (pdf) saveBlob(pdf.blob, pdf.fileName);
-        }}
-        onOpenPdf={openPdf}
-        onLabel={printOne}
-      />
-      <CarriersDialog open={panel === "carriers"} canConfigure={canConfigure} onClose={() => update({ panel: null }, { keepPage: true, replace: true })} />
-      <ManifestsDialog open={panel === "manifests"} onClose={() => update({ panel: null }, { keepPage: true, replace: true })} />
+      <PickupSlotDrawer open={slotDrawer !== null} canWrite={canWrite} preset={slotDrawer === "open" ? null : slotDrawer} methods={methods.data?.items ?? []} warehouses={warehouses.data ?? []} onClose={() => setSlotDrawer(null)} />
+      <ManifestsDialog open={panel === "manifests"} onClose={closePanel} />
     </div>
   );
 }
