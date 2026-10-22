@@ -18,6 +18,7 @@
     "@oms/mod-documents": "workspace:*",
     "@oms/mod-listings": "workspace:*",
     "@oms/mod-marketplace-accounts": "workspace:*",
+    "@oms/mod-marketplace-connectors": "workspace:*",
     "@oms/mod-jobs": "workspace:*",
     "@oms/mod-vendors": "workspace:*"
   }

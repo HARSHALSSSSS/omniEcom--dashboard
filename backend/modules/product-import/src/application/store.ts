@@ -3,6 +3,7 @@ import { Errors } from '@oms/shared';
 import { ISSUE_INFO, LIMITS, type IssueCode } from '../domain/catalogue';
 import type { Plan, RowData } from '../domain/rows';
 import { readSettings } from '../domain/settings';
+import { EMPTY_PLAN, type PlanSummary } from './plan';
 
 export const S = schema.importSessions;
 export const R = schema.importRows;
@@ -23,7 +24,13 @@ export interface RowMeta {
   ignored?: boolean;
   /** at least one suggested or typed fix was applied */
   fixed?: boolean;
-  result?: { action: 'created' | 'updated' | 'variant_added' | 'skipped'; productId?: string; variantId?: string; stock?: 'received' | 'counted' | 'unchanged' | 'none'; listingDrafts?: number; notes?: string[] };
+  /** the seller's answer to a duplicate SKU of this row; beats the global duplicate strategy */
+  decision?: 'use_existing' | 'create_new';
+  /** the row is created as a new product although its SKU exists (decision create_new, or the create_new strategy) */
+  createNew?: boolean;
+  /** an image the seller uploaded to replace a broken URL: attached to the product by the commit */
+  image?: { key: string; mime: string; size: number; fileName: string };
+  result?: { action: 'created' | 'updated' | 'variant_added' | 'skipped'; productId?: string; variantId?: string; sku?: string; stock?: 'received' | 'counted' | 'unchanged' | 'none'; listingDrafts?: number; notes?: string[] };
 }
 export interface StoredRow { data: RowData; fixes: Record<string, string>; meta: RowMeta }
 
@@ -61,11 +68,12 @@ export async function issueTotals(tx: Tx, vendorId: string, sessionId: string): 
   return t;
 }
 
-export function toSessionDto(s: SessionRow, issues: IssueTotals) {
+export function toSessionDto(s: SessionRow, issues: IssueTotals, planned: PlanSummary = EMPTY_PLAN) {
   const total = s.rowCount;
+  const fetching = s.status === 'uploaded' && s.source === 'marketplace';
   const working = s.status === 'committing' ? s.committedRows + (s.stats.failedRows ?? 0) : s.processedRows;
   const target = s.status === 'committing' ? s.stats.commitTotal ?? total : total;
-  const percent = s.status === 'validated' || s.status === 'committed' || s.status === 'partially_committed' ? 100 : target > 0 ? Math.min(100, Math.floor((working / target) * 100)) : 0;
+  const percent = fetching ? ((s.stats.expectedRows ?? 0) > 0 ? Math.min(99, Math.floor((s.processedRows / s.stats.expectedRows!) * 100)) : 0) : s.status === 'validated' || s.status === 'committed' || s.status === 'partially_committed' ? 100 : target > 0 ? Math.min(100, Math.floor((working / target) * 100)) : 0;
   const elapsed = s.startedAt ? Date.now() - s.startedAt.getTime() : 0;
   const busy = s.status === 'validating' || s.status === 'committing';
   const etaSeconds = busy && working > 0 && elapsed > 0 ? Math.max(0, Math.ceil(((target - working) * (elapsed / working)) / 1000)) : null;
@@ -84,7 +92,11 @@ export function toSessionDto(s: SessionRow, issues: IssueTotals) {
     },
     issues: { total: issues.total, open: issues.open, resolved: issues.resolved, ignored: issues.ignored, openErrors: issues.openErrors, openWarnings: issues.openWarnings },
     results: { productsCreated: s.stats.productsCreated ?? 0, productsUpdated: s.stats.productsUpdated ?? 0, variantsCreated: s.stats.variantsCreated ?? 0, variantsUpdated: s.stats.variantsUpdated ?? 0 },
+    scope: planned.scope,
+    products: planned.products,
+    plan: planned.plan,
     failureMessage: s.failureMessage,
+    revalidation: ((s.stats as unknown as Record<string, unknown>).__revalidation as import('./activity').RevalidationState | undefined) ?? null,
     requestedBy: s.requestedBy,
     startedAt: s.startedAt ? s.startedAt.toISOString() : null,
     finishedAt: s.finishedAt ? s.finishedAt.toISOString() : null,

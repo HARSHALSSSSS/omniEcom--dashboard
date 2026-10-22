@@ -1,5 +1,5 @@
 import { normalizeFields, type RawFields } from '@oms/mod-catalog';
-import { ISSUE_INFO, type DuplicateStrategy, type IssueCode, type Suggestion } from './catalogue';
+import { ISSUE_INFO, type DuplicateStrategy, type ExistingInfo, type IssueCode, type Suggestion } from './catalogue';
 import type { CategoryIndex } from './category-index';
 import {
   BARCODE_PATTERN, SKU_PATTERN, cleanBarcode, formatMoney, imageUrlProblem, parseCount, parseGrams, parseMoney, parsePercentBps, sanitizeSku, splitList,
@@ -19,7 +19,23 @@ export function rowValues(raw: Record<string, string>, mapping: Record<string, s
 /** fields that belong to the product, not to one variant: a later row of the same product code inherits them when blank */
 const PRODUCT_FIELDS = ['title', 'description', 'brand', 'manufacturer', 'countryOfOrigin', 'tags', 'category', 'hsn', 'gstRate'] as const;
 
-const isImageOnly = (v: RowValues): boolean => Boolean(v.productCode && !v.sku && !v.title && !v.sellingPrice && v.imageUrl);
+/** every proposal says how sure it is: exact/fuzzy category matches by score, mechanical clean-ups high, defaults low */
+function withConfidence(code: IssueCode, s: Suggestion): Suggestion {
+  if (s.confidence) return s;
+  const set = (confidence: 'high' | 'medium' | 'low', confidenceReason: string): Suggestion => ({ ...s, confidence, confidenceReason });
+  switch (code) {
+    case 'invalid_sku': return set('high', 'Only the unsupported characters were replaced; the rest of the SKU is kept');
+    case 'missing_sku': return set('medium', 'Generated from the product code or title plus the row number');
+    case 'duplicate_sku': return set('medium', 'The next SKU suffix that is free in the file and in your catalogue');
+    case 'invalid_image': return set('high', 'Importing without the image never blocks the product; you can add one later');
+    case 'duplicate_barcode': case 'invalid_barcode': return set('medium', 'Leaving the barcode empty avoids the clash; add the right one later');
+    case 'stock_invalid': return set('low', 'A default of 0; the real quantity is unknown');
+    case 'pricing_invalid': return set('medium', 'The lowest MRP that keeps the selling price valid');
+    default: return set('medium', 'Suggested by the importer');
+  }
+}
+
+const isImageOnly =(v: RowValues): boolean => Boolean(v.productCode && !v.sku && !v.title && !v.sellingPrice && v.imageUrl);
 
 export interface GroupInfo { firstRow: number; values: RowValues; extraImages: string[] }
 export interface FileIndex {
@@ -56,7 +72,7 @@ export function buildFileIndex(rows: Iterable<{ rowNumber: number; values: RowVa
 }
 
 export interface CatalogLookup {
-  variantBySku: Map<string, { id: string; productId: string; productCode: string; barcode: string | null }>;
+  variantBySku: Map<string, { id: string; productId: string; productCode: string; barcode: string | null; sku?: string; title?: string | null; sellingPriceMinor?: number | null }>;
   productByCode: Map<string, { id: string }>;
   barcodeOwner: Map<string, { variantId: string; sku: string }>;
 }
@@ -79,7 +95,12 @@ export interface Derived {
   plan: Plan | null;
   /** why the row is not imported although it is fine (existing product, extra image row) */
   skipReason: string | null;
+  /** the row becomes a new product although its SKU exists (generated SKU suffix at commit time) */
+  createNew: boolean;
 }
+
+/** what the seller decided for a duplicate SKU of this row */
+export type DuplicateDecision = 'use_existing' | 'create_new';
 
 export interface DeriveContext {
   settings: ImportSettings;
@@ -90,23 +111,30 @@ export interface DeriveContext {
 }
 
 const SKIP_BY_STRATEGY = (strategy: DuplicateStrategy, existsVariant: boolean, existsProduct: boolean): { plan: Plan | null; skip: string | null } => {
+  if (strategy === 'ask') return { plan: existsVariant ? 'update' : existsProduct ? 'add_variant' : 'create', skip: null }; // existing SKUs are raised as issues by the caller
+  if (strategy === 'create_new') return { plan: existsProduct ? 'add_variant' : 'create', skip: null }; // existing SKUs are handled by the caller
   if (strategy === 'skip') return existsVariant || existsProduct ? { plan: null, skip: existsVariant ? 'SKU already in the catalogue' : 'Product code already in the catalogue' } : { plan: 'create', skip: null };
   if (strategy === 'create_variant_for_new_sku') return existsVariant ? { plan: null, skip: 'SKU already in the catalogue' } : { plan: existsProduct ? 'add_variant' : 'create', skip: null };
   return { plan: existsVariant ? 'update' : existsProduct ? 'add_variant' : 'create', skip: null };
 };
 
 /** Normalise one row and collect its issues. Pure: everything it needs about the file and the catalogue comes through `ctx`. */
-export function deriveRow(rowNumber: number, input: RowValues, ctx: DeriveContext): Derived {
+export function deriveRow(rowNumber: number, input: RowValues, ctx: DeriveContext, opts: { decision?: DuplicateDecision } = {}): Derived {
   const { settings, index, lookup } = ctx;
   const v: RowValues = { ...input };
   const issues: DraftIssue[] = [];
   const add = (code: IssueCode, field: string | null, message: string, value: string | null, suggestion: Suggestion | null = null, severity?: 'error' | 'warning') => {
     const base = ISSUE_INFO[code].severity;
-    issues.push({ code, severity: severity ?? (base === 'warning' ? 'warning' : 'error'), field, message, value: value === '' ? null : value, suggestion });
+    issues.push({ code, severity: severity ?? (base === 'warning' ? 'warning' : 'error'), field, message, value: value === '' ? null : value, suggestion: suggestion ? withConfidence(code, suggestion) : null });
   };
   const data: RowData = {};
 
-  if (isImageOnly(v)) return { data: { productCode: v.productCode, imageUrl: v.imageUrl }, status: 'skipped', issues, plan: null, skipReason: 'Extra image row: the image is attached to the product above it' };
+  if (isImageOnly(v)) return { data: { productCode: v.productCode, imageUrl: settings.includeImages ? v.imageUrl : undefined }, status: 'skipped', issues, plan: null, skipReason: 'Extra image row: the image is attached to the product above it', createNew: false };
+
+  // import toggles: ignored columns behave as if they were not in the file
+  if (!settings.includeImages) { delete v.imageUrl; delete v.additionalImageUrls; }
+  if (!settings.includeQuantities) delete v.stock;
+  if (!settings.matchVariants) delete v.productCode; // every row is its own product (code = SKU)
 
   const group = v.productCode ? index.groups.get(v.productCode.toLowerCase()) : undefined;
   if (group && group.firstRow !== rowNumber) for (const f of PRODUCT_FIELDS) if (!v[f]) v[f] = group.values[f] ?? '';
@@ -143,14 +171,30 @@ export function deriveRow(rowNumber: number, input: RowValues, ctx: DeriveContex
 
   // ---- what happens to an SKU / product that is already in the catalogue
   let plan: Plan | null = 'create';
+  let createNew = false;
   if (data.sku || productCode) {
     const existing = data.sku ? lookup.variantBySku.get(data.sku.toLowerCase()) : undefined;
-    const existingProduct = productCode ? lookup.productByCode.get(productCode.toLowerCase()) : undefined;
-    const decided = SKIP_BY_STRATEGY(settings.duplicateStrategy, existing !== undefined, existingProduct !== undefined);
-    if (decided.skip) return { data, status: 'skipped', issues: [], plan: null, skipReason: decided.skip };
-    plan = decided.plan;
-    if (existing && explicitCode && existing.productCode.toLowerCase() !== explicitCode.toLowerCase()) {
-      add('duplicate_sku', 'sku', `SKU ${sku} already belongs to product ${existing.productCode}, not ${explicitCode}.`, sku);
+    const existingProduct = settings.matchVariants && productCode ? lookup.productByCode.get(productCode.toLowerCase()) : undefined;
+    const existingInfo: ExistingInfo | undefined = existing ? {
+      id: existing.productId, productId: existing.productId, variantId: existing.id, productCode: existing.productCode, sku: existing.sku ?? data.sku!, title: existing.title ?? null,
+      price: existing.sellingPriceMinor === null || existing.sellingPriceMinor === undefined ? null : Number(formatMoney(existing.sellingPriceMinor, 'rupees')), barcode: existing.barcode,
+    } : undefined;
+    const duplicateFix = (): Suggestion => {
+      const next = uniqueSku(data.sku!);
+      return { kind: 'set_value', field: 'sku', value: next, label: `Create a new product as ${next}`, existing: existingInfo };
+    };
+    if (existing && opts.decision === 'use_existing') plan = 'update'; // the seller chose for this row; it beats the global strategy
+    else if (existing && (opts.decision === 'create_new' || settings.duplicateStrategy === 'create_new')) { plan = 'create'; createNew = true; }
+    else if (existing && settings.duplicateStrategy === 'ask') {
+      plan = 'update';
+      add('duplicate_sku', 'sku', `SKU ${sku} already exists in your catalogue${existing.title ? ` (${existing.title})` : ''}. Update the existing product or create a new one?`, sku, duplicateFix());
+    } else {
+      const decided = SKIP_BY_STRATEGY(settings.duplicateStrategy, existing !== undefined, existingProduct !== undefined);
+      if (decided.skip) return { data, status: 'skipped', issues: [], plan: null, skipReason: decided.skip, createNew: false };
+      plan = decided.plan;
+      if (existing && explicitCode && existing.productCode.toLowerCase() !== explicitCode.toLowerCase()) {
+        add('duplicate_sku', 'sku', `SKU ${sku} already belongs to product ${existing.productCode}, not ${explicitCode}.`, sku, duplicateFix());
+      }
     }
   }
 
@@ -187,7 +231,11 @@ export function deriveRow(rowNumber: number, input: RowValues, ctx: DeriveContex
       const near = ctx.categories.closest(categoryText);
       const fallback = settings.defaultCategoryId;
       add('category_unmapped', 'category', `"${categoryText}" does not match any of your categories${fallback ? '; the default category will be used' : ''}.`, categoryText,
-        near ? { kind: 'map_category', field: 'category', value: near.id, label: near.label } : null);
+        near ? (() => {
+          const score = near.score ?? 0.5;
+          const pct = Math.round(score * 100);
+          return { kind: 'map_category' as const, field: 'category', value: near.id, label: near.label, confidence: score >= 0.85 ? 'high' as const : score >= 0.65 ? 'medium' as const : 'low' as const, confidenceReason: `${pct}% name match with "${near.label}" (fuzzy, not exact)` };
+        })() : null);
       if (fallback) { data.categoryId = fallback; data.categoryLabel = ctx.categories.label(fallback); }
     }
   } else if (settings.defaultCategoryId) { data.categoryId = settings.defaultCategoryId; data.categoryLabel = ctx.categories.label(settings.defaultCategoryId); }
@@ -232,7 +280,7 @@ export function deriveRow(rowNumber: number, input: RowValues, ctx: DeriveContex
     const clear: Suggestion = { kind: 'set_value', field: 'barcode', value: '', label: 'Leave the barcode empty' };
     const first = index.barcodeFirst.get(barcode);
     const owner = lookup.barcodeOwner.get(barcode);
-    const ownVariant = data.sku ? lookup.variantBySku.get(data.sku.toLowerCase()) : undefined;
+    const ownVariant = data.sku && !createNew ? lookup.variantBySku.get(data.sku.toLowerCase()) : undefined;
     if (!BARCODE_PATTERN.test(barcode)) add('invalid_barcode', 'barcode', 'A barcode has 6 to 32 letters, digits or dashes.', barcode, clear, 'error');
     else if (first !== undefined && first !== rowNumber) add('duplicate_barcode', 'barcode', `Barcode ${barcode} is already used by row ${first} of this file.`, barcode, clear);
     else if (owner && owner.variantId !== ownVariant?.id) add('duplicate_barcode', 'barcode', `Barcode ${barcode} already belongs to SKU ${owner.sku} in your catalogue.`, barcode, clear);
@@ -267,5 +315,5 @@ export function deriveRow(rowNumber: number, input: RowValues, ctx: DeriveContex
   data.additionalImageUrls = goodExtras;
 
   const status = issues.some((i) => i.severity === 'error') ? 'error' : issues.length ? 'warning' : 'valid';
-  return { data, status, issues, plan, skipReason: null };
+  return { data, status, issues, plan, skipReason: null, createNew };
 }

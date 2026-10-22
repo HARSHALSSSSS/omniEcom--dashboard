@@ -1,4 +1,4 @@
-import { and, desc, eq, ilike, inArray, isNull, keyset, or, schema, sql, escapeLike, type Tx } from '@oms/database';
+import { and, desc, eq, ilike, inArray, isNull, keyset, or, schema, sql, escapeLike, writeOutboxEvent, type Tx } from '@oms/database';
 import { AppError, Errors, newId } from '@oms/shared';
 import { allocationOrder } from '@oms/mod-warehouses';
 import { applyMovement, assertStockTargets, availableOf, nextCounter, type MovementResult, type StockRow } from './ledger';
@@ -345,6 +345,14 @@ export async function receiveTransfer(tx: Tx, vendorId: string, id: string, rece
     await tx.update(TI).set({ receivedQuantity: qty }).where(eq(TI.id, i.id));
   }
   await tx.update(T).set({ status: 'received', receivedAt: new Date(), version: sql`${T.version} + 1` }).where(eq(T.id, id));
+  const moved = items.reduce((n, { i }) => n + (received ? byVariant.get(i.variantId) ?? 0 : i.quantity), 0);
+  const shipped = items.reduce((n, { i }) => n + i.quantity, 0);
+  const names = await tx.select({ id: W.id, name: W.name }).from(W).where(and(eq(W.vendorId, vendorId), inArray(W.id, [t.fromWarehouseId, t.toWarehouseId])));
+  const nameOf = (wid: string) => names.find((w) => w.id === wid)?.name ?? 'a warehouse';
+  await writeOutboxEvent(tx, {
+    type: 'inventory.transferred', vendorId, aggregateType: 'stock_transfer', aggregateId: t.id,
+    payload: { number: t.number, fromWarehouseId: t.fromWarehouseId, toWarehouseId: t.toWarehouseId, fromName: nameOf(t.fromWarehouseId), toName: nameOf(t.toWarehouseId), units: moved, shortUnits: shipped - moved, lines: items.length },
+  });
   return loadTransfer(tx, vendorId, id);
 }
 

@@ -26075,7 +26075,9 @@
             "enum": [
               "skip",
               "update",
-              "create_variant_for_new_sku"
+              "create_variant_for_new_sku",
+              "ask",
+              "create_new"
             ]
           },
           "assignAllChannels": {
@@ -26127,6 +26129,18 @@
               "paise"
             ],
             "description": "Whether price columns are in rupees (499.50) or paise (49950)"
+          },
+          "includeImages": {
+            "type": "boolean",
+            "description": "false: the image URL columns are ignored (no image issues, no images imported)"
+          },
+          "includeQuantities": {
+            "type": "boolean",
+            "description": "false: the stock column is ignored (no stock is received, no warehouse is needed)"
+          },
+          "matchVariants": {
+            "type": "boolean",
+            "description": "false: rows are never grouped into variants of one product code or merged into an existing product; every row becomes its own product"
           }
         },
         "required": [
@@ -26136,7 +26150,139 @@
           "autoPublish",
           "warehouseId",
           "defaultCategoryId",
-          "currencyUnit"
+          "currencyUnit",
+          "includeImages",
+          "includeQuantities",
+          "matchVariants"
+        ]
+      },
+      "ImportRevalidationProgressInput": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "idle",
+              "running",
+              "complete",
+              "failed"
+            ]
+          },
+          "total": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "checked": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "current": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "rowNumber": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "field": {
+                  "type": "string"
+                },
+                "from": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "to": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "outcome": {
+                  "type": "string",
+                  "enum": [
+                    "passed",
+                    "still_failing"
+                  ]
+                }
+              },
+              "required": [
+                "rowNumber",
+                "field",
+                "from",
+                "to",
+                "outcome"
+              ]
+            }
+          }
+        },
+        "required": [
+          "status",
+          "total",
+          "checked",
+          "current",
+          "changes"
+        ]
+      },
+      "ImportExistingProductInput": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Master product id"
+          },
+          "productId": {
+            "type": "string"
+          },
+          "variantId": {
+            "type": "string"
+          },
+          "productCode": {
+            "type": "string"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "price": {
+            "description": "Selling price in rupees",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "barcode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "productId",
+          "variantId",
+          "productCode",
+          "sku",
+          "title",
+          "price",
+          "barcode"
         ]
       },
       "ImportSessionInput": {
@@ -26352,11 +26498,86 @@
               "variantsUpdated"
             ]
           },
+          "scope": {
+            "type": "object",
+            "properties": {
+              "products": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "newProducts": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "updates": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "products",
+              "newProducts",
+              "updates"
+            ],
+            "description": "Planned effect of committing the ready rows: products touched, new products, existing products updated (zeros before the first validation)"
+          },
+          "products": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Distinct products in the file"
+          },
+          "plan": {
+            "type": "object",
+            "properties": {
+              "create": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "update": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "addVariant": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "skip": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "create",
+              "update",
+              "addVariant",
+              "skip"
+            ],
+            "description": "Rows by what the commit will do with them"
+          },
           "failureMessage": {
             "type": [
               "string",
               "null"
             ]
+          },
+          "revalidation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImportRevalidationProgressInput"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Progress and report of the last (re)validation; null before the first one"
           },
           "requestedBy": {
             "type": [
@@ -26416,7 +26637,11 @@
           "counters",
           "issues",
           "results",
+          "scope",
+          "products",
+          "plan",
           "failureMessage",
+          "revalidation",
           "requestedBy",
           "startedAt",
           "finishedAt",
@@ -26468,6 +26693,13 @@
                     "null"
                   ]
                 },
+                "autoTargetField": {
+                  "description": "The automatic suggestion for this column, whatever the seller changed (for \"Reset to auto matches\")",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
                 "confidence": {
                   "type": "integer",
                   "minimum": -9007199254740991,
@@ -26495,6 +26727,7 @@
               "required": [
                 "sourceColumn",
                 "targetField",
+                "autoTargetField",
                 "confidence",
                 "sampleValues",
                 "isRequired",
@@ -26638,6 +26871,13 @@
                     "null"
                   ]
                 },
+                "autoTargetField": {
+                  "description": "The automatic suggestion for this column, whatever the seller changed (for \"Reset to auto matches\")",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
                 "confidence": {
                   "type": "integer",
                   "minimum": -9007199254740991,
@@ -26665,6 +26905,7 @@
               "required": [
                 "sourceColumn",
                 "targetField",
+                "autoTargetField",
                 "confidence",
                 "sampleValues",
                 "isRequired",
@@ -26773,6 +27014,20 @@
                   },
                   "label": {
                     "type": "string"
+                  },
+                  "existing": {
+                    "$ref": "#/components/schemas/ImportExistingProductInput"
+                  },
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  "confidenceReason": {
+                    "type": "string"
                   }
                 },
                 "required": [
@@ -26783,6 +27038,53 @@
                 "type": "null"
               }
             ]
+          },
+          "whyItMatters": {
+            "type": "string",
+            "description": "Why this issue matters (server-owned copy per issue code)"
+          },
+          "impact": {
+            "type": "string",
+            "description": "What happens to the row if the issue stays open"
+          },
+          "duplicateMatch": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "existingSku": {
+                    "type": "string"
+                  },
+                  "existingTitle": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "exact",
+                      "high",
+                      "medium"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "existingSku",
+                  "existingTitle",
+                  "confidence",
+                  "reason"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set on duplicate SKU issues against the catalogue"
           },
           "suggestedFix": {
             "type": [
@@ -26860,10 +27162,22 @@
                   "type": "string"
                 },
                 "description": "The raw cells of the row, by column header"
+              },
+              "existing": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ImportExistingProductInput"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "duplicate_sku against the catalogue: the existing master product (\"CSV SKU vs existing master product\")"
               }
             },
             "required": [
-              "source"
+              "source",
+              "existing"
             ]
           },
           "unit": {
@@ -26886,6 +27200,9 @@
           "affectedFields",
           "sourceValue",
           "suggestion",
+          "whyItMatters",
+          "impact",
+          "duplicateMatch",
           "suggestedFix",
           "currentFix",
           "status",
@@ -27322,6 +27639,69 @@
               "maximum": 9007199254740991
             },
             "description": "Rows per status"
+          },
+          "products": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Distinct products in the file"
+          },
+          "plan": {
+            "type": "object",
+            "properties": {
+              "create": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "update": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "addVariant": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "skip": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "create",
+              "update",
+              "addVariant",
+              "skip"
+            ],
+            "description": "Rows by what the commit will do with them"
+          },
+          "scope": {
+            "type": "object",
+            "properties": {
+              "products": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "newProducts": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "updates": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "products",
+              "newProducts",
+              "updates"
+            ]
           }
         },
         "required": [
@@ -27333,7 +27713,10 @@
           "warnings",
           "byCode",
           "knownCodes",
-          "rows"
+          "rows",
+          "products",
+          "plan",
+          "scope"
         ]
       },
       "ImportRowInput": {
@@ -27412,6 +27795,10 @@
                     "type": "string"
                   },
                   "variantId": {
+                    "type": "string"
+                  },
+                  "sku": {
+                    "description": "Set when the SKU had to be changed (create_new decision): the SKU the product got",
                     "type": "string"
                   },
                   "stock": {
@@ -27522,6 +27909,16 @@
           },
           "session": {
             "$ref": "#/components/schemas/ImportSessionInput"
+          },
+          "revalidation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImportRevalidationProgressInput"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -27530,7 +27927,169 @@
           "revalidatedCount",
           "resolvedCount",
           "remainingIssuesCount",
-          "session"
+          "session",
+          "revalidation"
+        ]
+      },
+      "ImportActivityInput": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "at": {
+                  "type": "string",
+                  "format": "date-time",
+                  "example": "2026-01-31T10:15:30.000Z"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "row_validated",
+                    "row_warning",
+                    "row_error",
+                    "row_created",
+                    "row_updated",
+                    "row_skipped",
+                    "row_failed",
+                    "issue_resolved",
+                    "stage"
+                  ]
+                },
+                "rowNumber": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "sku": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "title": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "at",
+                "kind",
+                "rowNumber",
+                "sku",
+                "title",
+                "message"
+              ]
+            }
+          },
+          "nextBefore": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "nextBefore"
+        ]
+      },
+      "ImportMarketplaceSourcesInput": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "accountId": {
+                  "type": "string"
+                },
+                "marketplace": {
+                  "type": "string"
+                },
+                "displayName": {
+                  "type": "string"
+                },
+                "mode": {
+                  "type": "string"
+                },
+                "connection": {
+                  "type": "string",
+                  "enum": [
+                    "connected",
+                    "attention",
+                    "disconnected"
+                  ]
+                },
+                "productsAvailable": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "null until counted (POST /onboarding/products/refresh-counts)"
+                },
+                "importedProducts": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "lastImportAt": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-01-31T10:15:30.000Z"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "canImport": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "accountId",
+                "marketplace",
+                "displayName",
+                "mode",
+                "connection",
+                "productsAvailable",
+                "importedProducts",
+                "lastImportAt",
+                "canImport"
+              ]
+            }
+          }
+        },
+        "required": [
+          "items"
         ]
       },
       "ImportCommitStartInput": {
@@ -62396,7 +62955,9 @@
             "enum": [
               "skip",
               "update",
-              "create_variant_for_new_sku"
+              "create_variant_for_new_sku",
+              "ask",
+              "create_new"
             ]
           },
           "assignAllChannels": {
@@ -62448,6 +63009,18 @@
               "paise"
             ],
             "description": "Whether price columns are in rupees (499.50) or paise (49950)"
+          },
+          "includeImages": {
+            "type": "boolean",
+            "description": "false: the image URL columns are ignored (no image issues, no images imported)"
+          },
+          "includeQuantities": {
+            "type": "boolean",
+            "description": "false: the stock column is ignored (no stock is received, no warehouse is needed)"
+          },
+          "matchVariants": {
+            "type": "boolean",
+            "description": "false: rows are never grouped into variants of one product code or merged into an existing product; every row becomes its own product"
           }
         },
         "required": [
@@ -62457,7 +63030,142 @@
           "autoPublish",
           "warehouseId",
           "defaultCategoryId",
-          "currencyUnit"
+          "currencyUnit",
+          "includeImages",
+          "includeQuantities",
+          "matchVariants"
+        ],
+        "additionalProperties": false
+      },
+      "ImportRevalidationProgress": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "idle",
+              "running",
+              "complete",
+              "failed"
+            ]
+          },
+          "total": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "checked": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "current": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "rowNumber": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "field": {
+                  "type": "string"
+                },
+                "from": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "to": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "outcome": {
+                  "type": "string",
+                  "enum": [
+                    "passed",
+                    "still_failing"
+                  ]
+                }
+              },
+              "required": [
+                "rowNumber",
+                "field",
+                "from",
+                "to",
+                "outcome"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "status",
+          "total",
+          "checked",
+          "current",
+          "changes"
+        ],
+        "additionalProperties": false
+      },
+      "ImportExistingProduct": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Master product id"
+          },
+          "productId": {
+            "type": "string"
+          },
+          "variantId": {
+            "type": "string"
+          },
+          "productCode": {
+            "type": "string"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "price": {
+            "description": "Selling price in rupees",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "barcode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "productId",
+          "variantId",
+          "productCode",
+          "sku",
+          "title",
+          "price",
+          "barcode"
         ],
         "additionalProperties": false
       },
@@ -62677,11 +63385,88 @@
             ],
             "additionalProperties": false
           },
+          "scope": {
+            "type": "object",
+            "properties": {
+              "products": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "newProducts": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "updates": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "products",
+              "newProducts",
+              "updates"
+            ],
+            "additionalProperties": false,
+            "description": "Planned effect of committing the ready rows: products touched, new products, existing products updated (zeros before the first validation)"
+          },
+          "products": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Distinct products in the file"
+          },
+          "plan": {
+            "type": "object",
+            "properties": {
+              "create": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "update": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "addVariant": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "skip": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "create",
+              "update",
+              "addVariant",
+              "skip"
+            ],
+            "additionalProperties": false,
+            "description": "Rows by what the commit will do with them"
+          },
           "failureMessage": {
             "type": [
               "string",
               "null"
             ]
+          },
+          "revalidation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImportRevalidationProgress"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Progress and report of the last (re)validation; null before the first one"
           },
           "requestedBy": {
             "type": [
@@ -62741,7 +63526,11 @@
           "counters",
           "issues",
           "results",
+          "scope",
+          "products",
+          "plan",
           "failureMessage",
+          "revalidation",
           "requestedBy",
           "startedAt",
           "finishedAt",
@@ -62795,6 +63584,13 @@
                     "null"
                   ]
                 },
+                "autoTargetField": {
+                  "description": "The automatic suggestion for this column, whatever the seller changed (for \"Reset to auto matches\")",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
                 "confidence": {
                   "type": "integer",
                   "minimum": -9007199254740991,
@@ -62822,6 +63618,7 @@
               "required": [
                 "sourceColumn",
                 "targetField",
+                "autoTargetField",
                 "confidence",
                 "sampleValues",
                 "isRequired",
@@ -62970,6 +63767,13 @@
                     "null"
                   ]
                 },
+                "autoTargetField": {
+                  "description": "The automatic suggestion for this column, whatever the seller changed (for \"Reset to auto matches\")",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
                 "confidence": {
                   "type": "integer",
                   "minimum": -9007199254740991,
@@ -62997,6 +63801,7 @@
               "required": [
                 "sourceColumn",
                 "targetField",
+                "autoTargetField",
                 "confidence",
                 "sampleValues",
                 "isRequired",
@@ -63108,6 +63913,20 @@
                   },
                   "label": {
                     "type": "string"
+                  },
+                  "existing": {
+                    "$ref": "#/components/schemas/ImportExistingProduct"
+                  },
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  "confidenceReason": {
+                    "type": "string"
                   }
                 },
                 "required": [
@@ -63119,6 +63938,54 @@
                 "type": "null"
               }
             ]
+          },
+          "whyItMatters": {
+            "type": "string",
+            "description": "Why this issue matters (server-owned copy per issue code)"
+          },
+          "impact": {
+            "type": "string",
+            "description": "What happens to the row if the issue stays open"
+          },
+          "duplicateMatch": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "existingSku": {
+                    "type": "string"
+                  },
+                  "existingTitle": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "exact",
+                      "high",
+                      "medium"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "existingSku",
+                  "existingTitle",
+                  "confidence",
+                  "reason"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set on duplicate SKU issues against the catalogue"
           },
           "suggestedFix": {
             "type": [
@@ -63196,10 +64063,22 @@
                   "type": "string"
                 },
                 "description": "The raw cells of the row, by column header"
+              },
+              "existing": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ImportExistingProduct"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "duplicate_sku against the catalogue: the existing master product (\"CSV SKU vs existing master product\")"
               }
             },
             "required": [
-              "source"
+              "source",
+              "existing"
             ],
             "additionalProperties": false
           },
@@ -63223,6 +64102,9 @@
           "affectedFields",
           "sourceValue",
           "suggestion",
+          "whyItMatters",
+          "impact",
+          "duplicateMatch",
           "suggestedFix",
           "currentFix",
           "status",
@@ -63669,6 +64551,71 @@
               "maximum": 9007199254740991
             },
             "description": "Rows per status"
+          },
+          "products": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Distinct products in the file"
+          },
+          "plan": {
+            "type": "object",
+            "properties": {
+              "create": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "update": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "addVariant": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "skip": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "create",
+              "update",
+              "addVariant",
+              "skip"
+            ],
+            "additionalProperties": false,
+            "description": "Rows by what the commit will do with them"
+          },
+          "scope": {
+            "type": "object",
+            "properties": {
+              "products": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "newProducts": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "updates": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "products",
+              "newProducts",
+              "updates"
+            ],
+            "additionalProperties": false
           }
         },
         "required": [
@@ -63680,7 +64627,10 @@
           "warnings",
           "byCode",
           "knownCodes",
-          "rows"
+          "rows",
+          "products",
+          "plan",
+          "scope"
         ],
         "additionalProperties": false
       },
@@ -63760,6 +64710,10 @@
                     "type": "string"
                   },
                   "variantId": {
+                    "type": "string"
+                  },
+                  "sku": {
+                    "description": "Set when the SKU had to be changed (create_new decision): the SKU the product got",
                     "type": "string"
                   },
                   "stock": {
@@ -63872,6 +64826,16 @@
           },
           "session": {
             "$ref": "#/components/schemas/ImportSession"
+          },
+          "revalidation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImportRevalidationProgress"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -63880,7 +64844,173 @@
           "revalidatedCount",
           "resolvedCount",
           "remainingIssuesCount",
-          "session"
+          "session",
+          "revalidation"
+        ],
+        "additionalProperties": false
+      },
+      "ImportActivity": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "at": {
+                  "type": "string",
+                  "format": "date-time",
+                  "example": "2026-01-31T10:15:30.000Z"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "row_validated",
+                    "row_warning",
+                    "row_error",
+                    "row_created",
+                    "row_updated",
+                    "row_skipped",
+                    "row_failed",
+                    "issue_resolved",
+                    "stage"
+                  ]
+                },
+                "rowNumber": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "sku": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "title": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "at",
+                "kind",
+                "rowNumber",
+                "sku",
+                "title",
+                "message"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "nextBefore": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "nextBefore"
+        ],
+        "additionalProperties": false
+      },
+      "ImportMarketplaceSources": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "accountId": {
+                  "type": "string"
+                },
+                "marketplace": {
+                  "type": "string"
+                },
+                "displayName": {
+                  "type": "string"
+                },
+                "mode": {
+                  "type": "string"
+                },
+                "connection": {
+                  "type": "string",
+                  "enum": [
+                    "connected",
+                    "attention",
+                    "disconnected"
+                  ]
+                },
+                "productsAvailable": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "null until counted (POST /onboarding/products/refresh-counts)"
+                },
+                "importedProducts": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "lastImportAt": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-01-31T10:15:30.000Z"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "canImport": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "accountId",
+                "marketplace",
+                "displayName",
+                "mode",
+                "connection",
+                "productsAvailable",
+                "importedProducts",
+                "lastImportAt",
+                "canImport"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "items"
         ],
         "additionalProperties": false
       },
@@ -181513,6 +182643,240 @@
         }
       }
     },
+    "/api/v1/imports/marketplace-sources": {
+      "get": {
+        "summary": "Marketplace accounts a catalogue can be imported from",
+        "tags": [
+          "Product Import"
+        ],
+        "description": "One row per marketplace account: connection state, products available (null until counted), products already imported, last import and whether it can be imported.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "imports:read",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ImportMarketplaceSources"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "requestId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/imports/from-marketplace": {
+      "post": {
+        "summary": "Start an import from a connected marketplace catalogue",
+        "tags": [
+          "Product Import"
+        ],
+        "description": "Reads the catalogue of the account through its connector and builds the import rows from it (standard fields; prices in paise). Up to 100 products are read inside the request: 201 with the session in status \"analyzed\". Larger catalogues are read by a job: 202 with the session in status \"uploaded\" (uiStatus \"analyzing\", counters.processed grows); poll GET /imports/{id} until it is \"analyzed\". Calling again while a session of the account is still running returns that session. Mapping, settings, validation, issues and commit work as for a file.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "accountId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  }
+                },
+                "required": [
+                  "accountId"
+                ]
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "imports:write",
+        "responses": {
+          "201": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ImportSession"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "requestId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ImportSession"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "requestId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/imports": {
       "post": {
         "summary": "Start an import (step 1)",
@@ -181875,6 +183239,136 @@
                     },
                     "data": {
                       "$ref": "#/components/schemas/ImportSession"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "requestId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/imports/{id}/activity": {
+      "get": {
+        "summary": "Live activity feed of an import (newest first)",
+        "tags": [
+          "Product Import"
+        ],
+        "description": "Events recorded while validating, committing and resolving issues (the newest 300 are kept). Page backwards with `before` = the previous `nextBefore`.",
+        "parameters": [
+          {
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 20
+            },
+            "in": "query",
+            "name": "before",
+            "required": false,
+            "description": "`nextBefore` of the previous page"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "imports:read",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ImportActivity"
                     },
                     "requestId": {
                       "type": "string"
@@ -182342,7 +183836,9 @@
                     "enum": [
                       "skip",
                       "update",
-                      "create_variant_for_new_sku"
+                      "create_variant_for_new_sku",
+                      "ask",
+                      "create_new"
                     ]
                   },
                   "assignAllChannels": {
@@ -182394,6 +183890,18 @@
                       "paise"
                     ],
                     "description": "Whether price columns are in rupees (499.50) or paise (49950)"
+                  },
+                  "includeImages": {
+                    "type": "boolean",
+                    "description": "false: the image URL columns are ignored (no image issues, no images imported)"
+                  },
+                  "includeQuantities": {
+                    "type": "boolean",
+                    "description": "false: the stock column is ignored (no stock is received, no warehouse is needed)"
+                  },
+                  "matchVariants": {
+                    "type": "boolean",
+                    "description": "false: rows are never grouped into variants of one product code or merged into an existing product; every row becomes its own product"
                   },
                   "version": {
                     "description": "Optimistic lock: send the version you read",
@@ -182870,6 +184378,7 @@
         "tags": [
           "Product Import"
         ],
+        "description": "Filter by code, severity, status and target field (`filter[field]`); `sort` is severity (default: errors first, then row), row or code, prefix - for descending. The applied sort is echoed in the response.",
         "parameters": [
           {
             "schema": {
@@ -182926,6 +184435,34 @@
             "in": "query",
             "name": "filter[status]",
             "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 40
+            },
+            "in": "query",
+            "name": "filter[field]",
+            "required": false,
+            "description": "Target field the issue is about (sku, title, category, imageUrl, sellingPrice, ...)"
+          },
+          {
+            "schema": {
+              "default": "severity",
+              "type": "string",
+              "enum": [
+                "severity",
+                "-severity",
+                "row",
+                "-row",
+                "code",
+                "-code"
+              ]
+            },
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "description": "Prefix - for descending. severity (default) lists errors first, then by row"
           },
           {
             "schema": {
@@ -182996,6 +184533,10 @@
                           "type": "integer",
                           "minimum": -9007199254740991,
                           "maximum": 9007199254740991
+                        },
+                        "sort": {
+                          "type": "string",
+                          "description": "The sort that was applied"
                         }
                       },
                       "required": [
@@ -183003,7 +184544,8 @@
                         "page",
                         "pageSize",
                         "total",
-                        "pages"
+                        "pages",
+                        "sort"
                       ],
                       "additionalProperties": false
                     },
@@ -183379,7 +184921,9 @@
                     "enum": [
                       "accept_suggestion",
                       "custom_value",
-                      "ignore"
+                      "ignore",
+                      "use_existing",
+                      "create_new"
                     ]
                   },
                   "customValue": {
@@ -183520,7 +185064,9 @@
                     "enum": [
                       "accept_suggestion",
                       "custom_value",
-                      "ignore"
+                      "ignore",
+                      "use_existing",
+                      "create_new"
                     ]
                   },
                   "customValue": {
@@ -183536,6 +185082,125 @@
             }
           }
         },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "path",
+            "name": "issueId",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "imports:write",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ImportIssueResolution"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "requestId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/imports/{id}/issues/{issueId}/image": {
+      "post": {
+        "summary": "Upload an image for an invalid image issue",
+        "tags": [
+          "Product Import"
+        ],
+        "description": "Raw body: a PNG, JPEG or WebP (Content-Type), at most 5 MB (413 above, 415 for other types or when the bytes are not the declared image, 400 for an issue that is not an invalid image issue). The file is stored under the tenant's import prefix, becomes the row's image (the commit attaches it to the product as a product image), and the issue is resolved. Like every fix it needs a revalidation before the commit.",
         "parameters": [
           {
             "schema": {

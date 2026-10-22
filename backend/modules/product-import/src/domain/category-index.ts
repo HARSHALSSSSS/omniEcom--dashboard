@@ -1,7 +1,7 @@
 import { similarity } from './mapping';
 
 export interface CategoryNode { id: string; parentId: string | null; name: string; slug: string; path: string }
-export interface CategoryMatch { id: string; label: string }
+export interface CategoryMatch { id: string; label: string; /** 0-1, only set by closest() */ score?: number }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SEPARATORS = /\s*(?:>|\/|\||›|»)\s*/;
@@ -54,7 +54,7 @@ export class CategoryIndex {
       const score = Math.max(similarity(text, n.name), similarity(text, this.labels.get(n.id) ?? n.name), containment(text, n.name));
       if (!best || score > best.score) best = { n, score };
     }
-    return best && best.score >= minScore ? { id: best.n.id, label: this.labels.get(best.n.id) ?? best.n.name } : null;
+    return best && best.score >= minScore ? { id: best.n.id, label: this.labels.get(best.n.id) ?? best.n.name, score: best.score } : null;
   }
 }
 

@@ -1115,6 +1115,9 @@ importers:
       '@oms/mod-marketplace-accounts':
         specifier: workspace:*
         version: link:../marketplace-accounts
+      '@oms/mod-marketplace-connectors':
+        specifier: workspace:*
+        version: link:../marketplace-connectors
       '@oms/mod-vendors':
         specifier: workspace:*
         version: link:../vendors

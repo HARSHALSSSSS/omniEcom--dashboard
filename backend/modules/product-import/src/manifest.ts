@@ -6,9 +6,9 @@ export const manifest = defineModule({
   title: "Product Import",
   responsibility: "Guided product import wizard: upload a CSV or XLSX file, auto-detect and edit the column mapping, validate every row into reviewable issues with suggested fixes, resolve or ignore issues, then commit through the catalog and inventory services in the background.",
   owns: ["import_sessions", "import_rows", "import_issues"],
-  dependsOn: ["catalog", "categories", "inventory", "warehouses", "documents", "listings", "marketplace-accounts", "jobs", "vendors"],
+  dependsOn: ["catalog", "categories", "inventory", "warehouses", "documents", "listings", "marketplace-accounts", "marketplace-connectors", "jobs", "vendors"],
   api: ["/api/v1/imports"],
-  publishes: ["import.committed"],
+  publishes: ["import.committed", "import.failed"],
   consumes: [],
   extraction: "later",
 });

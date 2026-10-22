@@ -2,6 +2,7 @@ import { manifest } from './manifest';
 import { productImportRoutes } from './http/routes';
 import { commitHandler } from './application/commit';
 import { validateHandler } from './application/validation';
+import { marketplaceFetchHandler } from './application/marketplace';
 
 export { manifest };
 
@@ -10,4 +11,4 @@ export { manifest };
  * fixes, resolve or ignore them, then commit in the background through the catalogue, inventory and listings modules.
  * Nothing in here is exported for other modules: the wizard is reached over HTTP (`/api/v1/imports`).
  */
-export const productImportModule = { manifest, routes: productImportRoutes, jobs: [validateHandler, commitHandler] };
+export const productImportModule = { manifest, routes: productImportRoutes, jobs: [validateHandler, commitHandler, marketplaceFetchHandler] };

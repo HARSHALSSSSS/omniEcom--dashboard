@@ -11,9 +11,16 @@ export const LIMITS = {
   previewRows: 10,
   /** a re-validation of at most this many rows runs inside the request instead of a job */
   inlineRevalidateRows: 1_000,
+  /** a marketplace catalogue of at most this many products is read inside the request; larger ones run as a job */
+  marketplaceInlineProducts: 100,
+  /** the activity feed keeps the newest events of a session only */
+  activityEvents: 300,
+  /** at most this many per-row events are recorded by one validation / commit run */
+  activityRowEventsPerRun: 150,
+  revalidationChanges: 200,
 } as const;
 
-export const DUPLICATE_STRATEGIES = ['skip', 'update', 'create_variant_for_new_sku'] as const;
+export const DUPLICATE_STRATEGIES = ['skip', 'update', 'create_variant_for_new_sku', 'ask', 'create_new'] as const;
 export type DuplicateStrategy = (typeof DUPLICATE_STRATEGIES)[number];
 export const CURRENCY_UNITS = ['rupees', 'paise'] as const;
 export type CurrencyUnit = (typeof CURRENCY_UNITS)[number];
@@ -22,6 +29,8 @@ export const DUPLICATE_STRATEGY_INFO: Record<DuplicateStrategy, { label: string;
   skip: { label: 'Skip existing', description: 'Rows whose SKU or product code already exists in the catalogue are left untouched.' },
   update: { label: 'Update existing', description: 'Existing products and SKUs are updated with the non-empty values of the file; new SKUs of an existing product become new variants. A stock column is applied as a stock count.' },
   create_variant_for_new_sku: { label: 'Add new variants', description: 'A new SKU under an existing product code becomes a variant of that product; SKUs that already exist are left untouched.' },
+  ask: { label: 'Ask me for each duplicate', description: 'Every row whose SKU already exists becomes a "Duplicate SKU" issue showing the existing product; you choose "use existing" (update it) or "create new" (a new product with a unique SKU) per row.' },
+  create_new: { label: 'Create new products', description: 'Rows whose SKU already exists are created as new products with a generated unique SKU suffix; nothing existing is touched.' },
 };
 
 export type FieldGroup = 'identity' | 'content' | 'pricing' | 'inventory' | 'media' | 'taxonomy' | 'variants';
@@ -138,7 +147,7 @@ export const ISSUE_INFO: Record<IssueCode, { title: string; severity: 'error' | 
   commit_failed: { title: 'Row could not be imported', severity: 'error' },
 };
 
-export const ISSUE_ACTIONS = ['accept_suggestion', 'custom_value', 'ignore'] as const;
+export const ISSUE_ACTIONS = ['accept_suggestion', 'custom_value', 'ignore', 'use_existing', 'create_new'] as const;
 export type IssueAction = (typeof ISSUE_ACTIONS)[number];
 export type SuggestionKind = 'set_value' | 'map_category' | 'skip_row';
 
@@ -150,4 +159,48 @@ export interface Suggestion {
   value?: string;
   /** human readable form of the fix, e.g. the category path */
   label?: string;
+  /** duplicate_sku against the catalogue: the master product/variant the row collides with */
+  existing?: ExistingInfo;
+  /** how sure the importer is that the proposal is what the seller wants */
+  confidence?: 'high' | 'medium' | 'low';
+  confidenceReason?: string;
+}
+
+/** server-owned copy of the review screen: why an issue matters and what happens to the row if it is left open */
+export function issueCopy(code: string, field: string | null): { whyItMatters: string; impact: string } {
+  switch (code) {
+    case 'missing_sku': return { whyItMatters: 'The SKU is the key that stock, orders and marketplace listings use to find this product. Without one it cannot be created.', impact: 'The row is not imported until it has a unique SKU.' };
+    case 'invalid_sku': return { whyItMatters: 'Marketplaces and warehouse labels reject SKUs with spaces or special characters, so the product could not be listed or picked.', impact: 'The row is not imported until the SKU only uses letters, digits and . _ - /.' };
+    case 'duplicate_sku': return { whyItMatters: 'Two products with one SKU would share stock and orders, so the wrong item could be shipped or oversold.', impact: 'The row is held back until you update the existing product or create a new one with a unique SKU.' };
+    case 'missing_title': return { whyItMatters: 'The title is what customers read on every marketplace; listings without one are rejected.', impact: 'The row is not imported until it has a product title.' };
+    case 'category_unmapped': return { whyItMatters: 'Category drives marketplace attributes, GST defaults and reports. An unknown category leaves the product uncategorised.', impact: 'The row can still be imported; it uses the default category, or none, and will need a category before it can be listed.' };
+    case 'invalid_image': return { whyItMatters: 'Listings with a broken image link show a blank picture or are rejected by marketplaces, which hurts conversion.', impact: 'The row can be imported without this image; the product will wait for an image before it is listed.' };
+    case 'duplicate_barcode': return { whyItMatters: 'A barcode identifies one item at the packing bench and on marketplaces; a shared barcode makes scans pick the wrong product.', impact: 'The row is held back until the barcode is unique or left empty.' };
+    case 'invalid_barcode': return { whyItMatters: 'Scanners and marketplace catalogues only accept valid EAN/UPC style codes, so this value would never match.', impact: 'The row is not imported until the barcode is valid or left empty.' };
+    case 'pricing_invalid':
+      if (field === 'mrp') return { whyItMatters: 'The MRP is the legal ceiling for the selling price in India; a price above it can get listings blocked.', impact: 'The row is not imported until the MRP is at least the selling price.' };
+      if (field === 'costPrice') return { whyItMatters: 'Cost price feeds margin reports; a cost above the selling price means every sale loses money.', impact: 'The row can be imported, but margin reports will show a loss for it.' };
+      return { whyItMatters: 'A missing or zero selling price would list the product for free or not at all.', impact: 'The row is not imported until it has a valid selling price.' };
+    case 'stock_invalid': return { whyItMatters: 'Opening stock sets what you can sell. A wrong number oversells or hides stock on every channel.', impact: 'Stock for this row is not received until the quantity is a whole number of zero or more.' };
+    case 'missing_warehouse': return { whyItMatters: 'Stock has to be received into a warehouse so it can be reserved for orders.', impact: 'Rows with stock cannot be imported until a warehouse is chosen.' };
+    case 'commit_failed': return { whyItMatters: 'The catalogue rejected this row while it was being created, so nothing of it was saved.', impact: 'The row stays out of the catalogue; fix the cause and import it again.' };
+    case 'invalid_field':
+      if (field === 'title') return { whyItMatters: 'The title is shown on every marketplace and has length and character rules.', impact: 'The row is not imported until the title is valid.' };
+      if (field === 'gstRate' || field === 'hsn') return { whyItMatters: 'HSN and GST rate go on every tax invoice; wrong values cause filing errors.', impact: 'The row is not imported until the tax value is valid.' };
+      return { whyItMatters: `The value in "${field ?? 'this column'}" does not follow the catalogue rules, so it cannot be saved as it is.`, impact: 'The row is not imported until the value is corrected.' };
+    default: return { whyItMatters: 'This value does not meet the catalogue rules.', impact: 'The row may be held back until it is fixed.' };
+  }
+}
+
+/** the catalogue side of a "CSV SKU vs existing master product" comparison */
+export interface ExistingInfo {
+  id: string;
+  productId: string;
+  variantId: string;
+  productCode: string;
+  sku: string;
+  title: string | null;
+  /** selling price in rupees */
+  price: number | null;
+  barcode: string | null;
 }

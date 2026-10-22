@@ -8,7 +8,7 @@ export const manifest = defineModule({
   owns: ["inventory", "inventory_movements", "inventory_reservations", "stock_transfers", "stock_transfer_items", "vendor_counters", "bin_stock", "inbound_shipments", "inbound_shipment_items", "inventory_groups", "inventory_group_items"],
   dependsOn: ["catalog", "warehouses"],
   api: ["/api/v1/inventory", "/api/v1/inbound-shipments", "/api/v1/bin-stock"],
-  publishes: ["inventory.adjusted", "inventory.reserved", "inventory.released", "inventory.low_stock", "inventory.transferred", "inbound.created", "inbound.received"],
+  publishes: ["inventory.adjusted", "inventory.stock_adjusted", "inventory.reserved", "inventory.released", "inventory.low_stock", "inventory.transferred", "inbound.created", "inbound.received"],
   consumes: [],
   extraction: "early",
 });

@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, schema, sql, type SQL, type Tx } from '@oms/database';
+import { and, asc, eq, inArray, schema, sql, writeOutboxEvent, type SQL, type Tx } from '@oms/database';
 import { AppError, Errors } from '@oms/shared';
 import type { MovementResult } from './ledger';
 import { adjustStock, availabilityFor, createTransfer, markDamaged, receiveReturn, writeOffShrinkage } from './service';
@@ -46,6 +46,19 @@ const reasonText = (a: Pick<AdjustmentInput, 'reason' | 'note'>): string => (a.n
 
 /** maps the UI adjustment type to the ledger operation (one movement) */
 export async function applyAdjustment(tx: Tx, vendorId: string, actor: Actor, a: AdjustmentInput): Promise<MovementResult> {
+  const result = await applyAdjustmentCore(tx, vendorId, actor, a);
+  if (!result.duplicate && result.availableAfter !== result.availableBefore) {
+    const [v] = await tx.select({ sku: schema.productVariants.sku }).from(schema.productVariants).where(and(eq(schema.productVariants.vendorId, vendorId), eq(schema.productVariants.id, a.variantId)));
+    const [w] = await tx.select({ name: schema.warehouses.name }).from(schema.warehouses).where(and(eq(schema.warehouses.vendorId, vendorId), eq(schema.warehouses.id, a.warehouseId)));
+    await writeOutboxEvent(tx, {
+      type: 'inventory.stock_adjusted', vendorId, aggregateType: 'inventory', aggregateId: result.stock.id,
+      payload: { adjustmentType: a.type, variantId: a.variantId, sku: v?.sku ?? null, warehouseId: a.warehouseId, warehouseName: w?.name ?? null, availableBefore: result.availableBefore, availableAfter: result.availableAfter, reason: a.reason },
+    });
+  }
+  return result;
+}
+
+async function applyAdjustmentCore(tx: Tx, vendorId: string, actor: Actor, a: AdjustmentInput): Promise<MovementResult> {
   validateAdjustment(a);
   const base = { vendorId, variantId: a.variantId, warehouseId: a.warehouseId, reason: reasonText(a), idempotencyKey: a.idempotencyKey ?? null, actor };
   if (a.setOnHand !== undefined) return adjustStock(tx, { ...base, setOnHand: a.setOnHand });

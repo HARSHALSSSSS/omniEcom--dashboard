@@ -223,7 +223,7 @@ describe('the wizard: upload, mapping, issues, commit (screen walkthrough)', () 
     const o = r.body.data;
     expect(o.limits).toMatchObject({ maxFileBytes: 25 * 1024 * 1024, maxRows: 10000 });
     expect(o.targetFields.filter((f: any) => f.required).map((f: any) => f.key)).toEqual(['sku', 'title', 'sellingPrice']);
-    expect(o.duplicateStrategies.map((s: any) => s.value)).toEqual(['skip', 'update', 'create_variant_for_new_sku']);
+    expect(o.duplicateStrategies.map((s: any) => s.value)).toEqual(['skip', 'update', 'create_variant_for_new_sku', 'ask', 'create_new']);
     expect(o.presets.map((p: any) => p.code)).toContain('shopify');
   });
 
@@ -348,7 +348,7 @@ describe('the wizard: upload, mapping, issues, commit (screen walkthrough)', () 
     expect(accepted.body.data.issue).toMatchObject({ status: 'resolved', currentFix: 'ROY-SIL-EMB-3' });
     expect(accepted.body.data.issues).toMatchObject({ total: 6, open: 5, resolved: 1 });
 
-    expect((await c.post(api(`/${id}/issues/${of('missing_sku').id}`), { action: 'ignore' }, admin)).status).toBe(409); // already handled
+    expect((await c.post(api(`/${id}/issues/${of('missing_sku').id}`), { action: 'accept_suggestion' }, admin)).status).toBe(409); // the same answer again: already handled (a different answer changes it, see import-design.test.ts)
 
     // a custom value, validated where it can be (category must exist)
     const badCat = await c.post(api(`/${id}/issues/${of('category_unmapped').id}`), { action: 'custom_value', customValue: 'Toys' }, admin);

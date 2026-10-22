@@ -4,10 +4,12 @@ import type { Container, JobHandler } from '@oms/module-kit';
 import type { JobEnvelope } from '@oms/messaging';
 import { createProduct, createVariant, jobEffects, updateProduct, updateVariant, type ProductInput, type VariantInput } from '@oms/mod-catalog';
 import { adjustStock, receiveStock } from '@oms/mod-inventory';
+import { createDocument, isRejection, uploadContent } from '@oms/mod-documents';
 import { readSettings, type ImportSettings } from '../domain/settings';
 import type { RowData } from '../domain/rows';
 import { draftListings } from './listing-drafts';
 import { recount } from './issues';
+import { appendActivity, type NewActivity } from './activity';
 import { I, JOBS, R, S, getSession, pack, unpack, type RowRecord, type RowMeta, type SessionRow } from './store';
 
 const V = schema.productVariants;
@@ -51,7 +53,7 @@ export async function beginCommit(tx: Tx, vendorId: string, sessionId: string, m
   if (n === 0) throw new AppError('CONFLICT', 'There are no rows to import with this choice', { details: { rule: 'nothing_to_commit' } });
   const settings = readSettings(s.settings);
   const [withStock] = await tx.select({ n: sql<number>`count(*)::int` }).from(R).where(and(eligible(vendorId, sessionId, includeResolved), sql`coalesce((${R.data}->>'stock')::int, 0) > 0`));
-  if ((withStock?.n ?? 0) > 0 && !(await importWarehouse(tx, vendorId, settings))) {
+  if (settings.includeQuantities && (withStock?.n ?? 0) > 0 && !(await importWarehouse(tx, vendorId, settings))) {
     throw new AppError('CONFLICT', 'Choose a warehouse for the stock column (or create a default warehouse) before importing', { details: { rule: 'no_warehouse' } });
   }
   const [row] = await tx.update(S).set({
@@ -104,17 +106,32 @@ const errorMessage = (e: unknown): string | null => {
 };
 
 /** One row, one transaction: the product, variant, stock, draft listings and the row's own status commit together or not at all. */
-async function commitRow(tx: Tx, c: Container, vendorId: string, env: { correlationId: string }, session: SessionRow, settings: ImportSettings, row: RowRecord, tally: Tally): Promise<void> {
+/** the first free `base-N` (N >= 2) for a SKU or product code; the base itself when it is free */
+async function freeValue(tx: Tx, vendorId: string, kind: 'sku' | 'code', base: string): Promise<string> {
+  const taken = async (value: string): Promise<boolean> => {
+    const rows = kind === 'sku'
+      ? await tx.select({ id: V.id }).from(V).where(and(eq(V.vendorId, vendorId), isNull(V.deletedAt), sql`lower(${V.sku}) = ${value.toLowerCase()}`)).limit(1)
+      : await tx.select({ id: P.id }).from(P).where(and(eq(P.vendorId, vendorId), isNull(P.deletedAt), sql`lower(${P.productCode}) = ${value.toLowerCase()}`)).limit(1);
+    return rows.length > 0;
+  };
+  if (!(await taken(base))) return base;
+  for (let n = 2; n < 1000; n++) { const candidate = `${base.slice(0, 58)}-${n}`; if (!(await taken(candidate))) return candidate; }
+  return `${base.slice(0, 50)}-${Date.now() % 100000}`;
+}
+
+async function commitRow(tx: Tx, c: Container, vendorId: string, env: { correlationId: string }, session: SessionRow, settings: ImportSettings, row: RowRecord, tally: Tally, events: NewActivity[]): Promise<void> {
   const stored = unpack(row);
   const d = stored.data;
   const fx = jobEffects(tx, { vendorId, correlationId: env.correlationId, actorId: session.requestedBy, jobId: session.id });
-  const sku = d.sku!;
-  const code = d.productCode ?? sku;
+  const forceNew = stored.meta.createNew === true; // decision "create new" (or the create_new strategy): never match the existing product
+  const sku = forceNew ? await freeValue(tx, vendorId, 'sku', d.sku!) : d.sku!;
+  const code = forceNew ? await freeValue(tx, vendorId, 'code', d.productCode ?? d.sku!) : d.productCode ?? sku;
   const plan = stored.meta.plan ?? 'create';
 
-  const [existingVariant] = await tx.select({ id: V.id, productId: V.productId }).from(V).where(and(eq(V.vendorId, vendorId), isNull(V.deletedAt), sql`lower(${V.sku}) = ${sku.toLowerCase()}`));
-  const [existingProduct] = await tx.select({ id: P.id }).from(P).where(and(eq(P.vendorId, vendorId), isNull(P.deletedAt), sql`lower(${P.productCode}) = ${code.toLowerCase()}`));
+  const [existingVariant] = forceNew ? [] : await tx.select({ id: V.id, productId: V.productId }).from(V).where(and(eq(V.vendorId, vendorId), isNull(V.deletedAt), sql`lower(${V.sku}) = ${sku.toLowerCase()}`));
+  const [existingProduct] = forceNew || !settings.matchVariants ? [] : await tx.select({ id: P.id }).from(P).where(and(eq(P.vendorId, vendorId), isNull(P.deletedAt), sql`lower(${P.productCode}) = ${code.toLowerCase()}`));
   const result: NonNullable<RowMeta['result']> = { action: 'created', notes: [] };
+  if (sku !== d.sku) { result.sku = sku; result.notes!.push(`SKU ${d.sku} was already taken; created as ${sku}`); }
   let productId: string;
   let variantId: string;
   let isNewVariant = true;
@@ -149,9 +166,26 @@ async function commitRow(tx: Tx, c: Container, vendorId: string, env: { correlat
     tally.productsCreated++; tally.variantsCreated++;
   }
 
+  // an image the seller uploaded for this row becomes a product image (a failure is a note, never a lost row)
+  const image = settings.includeImages ? stored.meta.image : undefined;
+  if (image) {
+    try {
+      const bytes = await c.storage.get(image.key);
+      if (!bytes) result.notes!.push('The uploaded image is no longer in storage; add it from the product page');
+      else {
+        const doc = await createDocument(tx, c, vendorId, productId, { fileName: image.fileName, mimeType: image.mime, sizeBytes: bytes.length, purpose: 'product_image' });
+        const up = await uploadContent(tx, c, vendorId, doc.row.id, bytes, image.mime, false);
+        result.notes!.push(isRejection(up) ? `The uploaded image was rejected: ${up.rejected.message}` : 'Uploaded image attached to the product');
+      }
+    } catch (e) {
+      if (!(e instanceof AppError)) throw e;
+      result.notes!.push(`The uploaded image could not be attached: ${e.message}`);
+    }
+  }
+
   // stock: opening stock for a new variant, a stock count for an existing one (both idempotent per row)
   result.stock = 'none';
-  if (d.stock !== null && d.stock !== undefined) {
+  if (settings.includeQuantities && d.stock !== null && d.stock !== undefined) {
     const warehouseId = await importWarehouse(tx, vendorId, settings);
     if (!warehouseId) throw new AppError('CONFLICT', 'No warehouse to receive the stock');
     const base = { vendorId, variantId, warehouseId, reason: 'Product import', referenceType: 'import' as const, referenceId: session.id, idempotencyKey: `product-import:${session.id}:${row.rowNumber}`, actor: { type: 'user' as const, id: session.requestedBy } };
@@ -172,6 +206,8 @@ async function commitRow(tx: Tx, c: Container, vendorId: string, env: { correlat
 
   await tx.update(R).set({ status: 'committed', productId, variantId, issueCount: 0, data: pack({ data: d, fixes: stored.fixes, meta: { ...stored.meta, result } }) }).where(eq(R.id, row.id));
   tally.committed++;
+  const verb = result.action === 'updated' ? 'Updated existing product' : result.action === 'variant_added' ? 'Added variant to existing product' : 'Created product';
+  events.push({ kind: result.action === 'updated' ? 'row_updated' : 'row_created', rowNumber: row.rowNumber, sku, title: d.title ?? null, message: `${verb}${sku !== d.sku ? ` (SKU ${sku})` : ''}` });
 }
 
 async function failRow(tx: Tx, vendorId: string, sessionId: string, row: RowRecord, message: string): Promise<void> {
@@ -199,21 +235,24 @@ export async function runCommit(db: Db, c: Container, vendorId: string, env: { c
     });
     if (!batch || batch.length === 0) { if (batch === null) return; break; }
     const tally = zero();
+    const events: NewActivity[] = [];
     for (const row of batch) {
       const rowTally = zero();
       try {
-        await withVendor(db, vendorId, (tx) => commitRow(tx, c, vendorId, env, session, settings, row, rowTally));
+        await withVendor(db, vendorId, (tx) => commitRow(tx, c, vendorId, env, session, settings, row, rowTally, events));
         for (const k of Object.keys(tally) as Array<keyof Tally>) tally[k] += rowTally[k];
       } catch (e) {
         const message = errorMessage(e);
         if (message === null) throw e; // infrastructure failure: let the queue retry the job
         await withVendor(db, vendorId, (tx) => failRow(tx, vendorId, sessionId, row, message));
         tally.failed++;
+        events.push({ kind: 'row_failed', rowNumber: row.rowNumber, sku: row.sku, title: (unpack(row).data.title ?? null), message });
       }
     }
     last = batch[batch.length - 1]!.rowNumber;
     for (const k of Object.keys(total) as Array<keyof Tally>) total[k] += tally[k];
     await withVendor(db, vendorId, async (tx) => {
+      await appendActivity(tx, sessionId, events);
       const [s] = await tx.select({ stats: S.stats }).from(S).where(eq(S.id, sessionId));
       const st = s?.stats ?? {};
       await tx.update(S).set({ processedRows: (st.processedInCommit ?? 0) + batch.length }).where(eq(S.id, sessionId));
@@ -235,7 +274,14 @@ export async function runCommit(db: Db, c: Container, vendorId: string, env: { c
       status, finishedAt: new Date(), failureMessage: status === 'failed' ? 'No row could be imported. Open the issues list for the reason of each row.' : null,
     }).where(and(eq(S.id, sessionId), eq(S.status, 'committing')));
     const fx = jobEffects(tx, { vendorId, correlationId: env.correlationId, actorId: session.requestedBy, jobId: sessionId });
-    await fx.event({ type: 'import.committed', aggregateType: 'import_session', aggregateId: sessionId, payload: { status, committed: total.committed, failed: total.failed, productsCreated: total.productsCreated, variantsCreated: total.variantsCreated } });
+    const st = fresh?.stats ?? {};
+    const payload = {
+      status, committed: total.committed, failed: st.failedRows ?? total.failed, created: st.productsCreated ?? total.productsCreated, updated: st.productsUpdated ?? total.productsUpdated,
+      productsCreated: st.productsCreated ?? total.productsCreated, productsUpdated: st.productsUpdated ?? total.productsUpdated, variantsCreated: total.variantsCreated,
+    };
+    await appendActivity(tx, sessionId, [{ kind: 'stage', message: `Import finished: ${payload.created} created, ${payload.updated} updated, ${payload.failed} failed` }]);
+    if (status === 'failed') await fx.event({ type: 'import.failed', aggregateType: 'import_session', aggregateId: sessionId, payload: { ...payload, stage: 'commit', message: 'No row could be imported.' } });
+    else await fx.event({ type: 'import.committed', aggregateType: 'import_session', aggregateId: sessionId, payload });
     await fx.audit({ action: 'import.commit', resourceType: 'import_session', resourceId: sessionId, metadata: { status, ...total } });
   });
 }

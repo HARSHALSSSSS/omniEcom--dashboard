@@ -7,6 +7,7 @@ import { autoMap, detectPreset, toMapping, type PresetMatch } from '../domain/ma
 import { DEFAULT_SETTINGS, readSettings, type ImportSettings } from '../domain/settings';
 import { buildXlsx } from '../domain/xlsx';
 import { toCsv } from '../domain/tabular';
+import { planSummary } from './plan';
 import { EDITABLE_STATUSES, R, S, isBusy, issueTotals, toSessionDto, type SessionRow } from './store';
 
 export type SettingsPatch = Partial<ImportSettings> & { version?: number };
@@ -25,7 +26,8 @@ export async function createSession(tx: Tx, vendorId: string, actorId: string | 
 }
 
 export async function sessionDto(tx: Tx, vendorId: string, row: SessionRow) {
-  return toSessionDto(row, await issueTotals(tx, vendorId, row.id));
+  const planned = ['validated', 'committing', 'committed', 'partially_committed', 'failed'].includes(row.status) ? await planSummary(tx, vendorId, row.id) : undefined;
+  return toSessionDto(row, await issueTotals(tx, vendorId, row.id), planned);
 }
 
 export async function listSessions(tx: Tx, vendorId: string, q: { page: number; pageSize: number; status?: string; q?: string }) {
@@ -45,7 +47,7 @@ export async function touchSession(tx: Tx, s: SessionRow, patch: Partial<typeof 
 }
 
 // ---------------------------------------------------------------- mapping
-export interface MappingColumn { sourceColumn: string; targetField: string | null; confidence: number; sampleValues: string[]; isRequired: boolean; status: 'matched' | 'unmatched' | 'manual' }
+export interface MappingColumn { sourceColumn: string; targetField: string | null; autoTargetField: string | null; confidence: number; sampleValues: string[]; isRequired: boolean; status: 'matched' | 'unmatched' | 'manual' }
 
 export function presetOf(headers: string[], source: string): PresetMatch {
   const detected = detectPreset(headers);
@@ -65,7 +67,7 @@ export async function mappingView(tx: Tx, vendorId: string, s: SessionRow) {
     const guess = auto.get(header);
     const samples = [...new Set(sample.map((r) => r.raw[header] ?? '').filter(Boolean))].slice(0, 3);
     return {
-      sourceColumn: header, targetField: target, sampleValues: samples, isRequired: target ? TARGET_BY_KEY.get(target)?.required ?? false : false,
+      sourceColumn: header, targetField: target, autoTargetField: guess?.target ?? null, sampleValues: samples, isRequired: target ? TARGET_BY_KEY.get(target)?.required ?? false : false,
       confidence: !target ? 0 : guess?.target === target ? guess.confidence : 100,
       status: !target ? 'unmatched' : guess?.target === target ? 'matched' : 'manual',
     };
@@ -135,7 +137,8 @@ export async function applySettings(tx: Tx, vendorId: string, s: SessionRow, pat
     const missing = next.accountIds.find((id) => !found.some((f) => f.id === id));
     if (missing) throw Errors.notFound('Marketplace account', missing);
   }
-  const invalidates = next.duplicateStrategy !== current.duplicateStrategy || next.defaultCategoryId !== current.defaultCategoryId || next.currencyUnit !== current.currencyUnit;
+  const invalidates = next.duplicateStrategy !== current.duplicateStrategy || next.defaultCategoryId !== current.defaultCategoryId || next.currencyUnit !== current.currencyUnit
+    || next.includeImages !== current.includeImages || next.includeQuantities !== current.includeQuantities || next.matchVariants !== current.matchVariants;
   return touchSession(tx, s, { settings: next }, { invalidates });
 }
 

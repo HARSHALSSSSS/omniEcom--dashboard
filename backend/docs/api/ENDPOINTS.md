@@ -974,6 +974,7 @@ Audit trail
 | GET | `/api/v1/imports` | `imports:read` | Import history |
 | POST | `/api/v1/imports` | `imports:write` | Start an import (step 1) |
 | GET | `/api/v1/imports/{id}` | `imports:read` | Status and counters of an import (poll this for progress) |
+| GET | `/api/v1/imports/{id}/activity` | `imports:read` | Live activity feed of an import (newest first) |
 | POST | `/api/v1/imports/{id}/cancel` | `imports:write` | Cancel an import (a running validation or commit stops; rows already imported stay) |
 | POST | `/api/v1/imports/{id}/commit` | `imports:write` | Import the validated rows (background job) |
 | GET | `/api/v1/imports/{id}/commit-preview` | `imports:read` | Exact row counts for each commit choice |
@@ -981,6 +982,7 @@ Audit trail
 | POST | `/api/v1/imports/{id}/file` | `imports:write` | Upload the file (step 2) and analyse it |
 | GET | `/api/v1/imports/{id}/issues` | `imports:read` | Issues with the row they belong to |
 | POST | `/api/v1/imports/{id}/issues/{issueId}` | `imports:write` | Resolve one issue (accept the suggestion, type a value, or ignore it) |
+| POST | `/api/v1/imports/{id}/issues/{issueId}/image` | `imports:write` | Upload an image for an invalid image issue |
 | POST | `/api/v1/imports/{id}/issues/bulk` | `imports:write` | Apply one decision to every open issue of a code |
 | GET | `/api/v1/imports/{id}/mapping` | `imports:read` | Column mapping with confidence and sample values |
 | PUT | `/api/v1/imports/{id}/mapping` | `imports:write` | Change the column mapping |
@@ -989,6 +991,8 @@ Audit trail
 | PUT | `/api/v1/imports/{id}/settings` | `imports:write` | Import settings (duplicates, channels, warehouse, default category, price unit) |
 | GET | `/api/v1/imports/{id}/summary` | `imports:read` | Issue counts per code and severity (the tabs of the issues screen) |
 | POST | `/api/v1/imports/{id}/validate` | `imports:write` | Validate the file (step 4, background job) |
+| POST | `/api/v1/imports/from-marketplace` | `imports:write` | Start an import from a connected marketplace catalogue |
+| GET | `/api/v1/imports/marketplace-sources` | `imports:read` | Marketplace accounts a catalogue can be imported from |
 | GET | `/api/v1/imports/options` | `imports:read` | Wizard options: target fields, duplicate strategies, limits, presets |
 | GET | `/api/v1/imports/template` | `imports:read` | Download the import template (all columns plus an example row) |
 

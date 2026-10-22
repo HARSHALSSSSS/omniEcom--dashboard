@@ -1,18 +1,21 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { audit, created, ok, paged, vendorTx } from '@oms/module-kit';
+import { audit, created, ok, paged, requireVendor, vendorTx } from '@oms/module-kit';
+import { readActivity } from '../application/activity';
+import { marketplaceSources, startFromMarketplace } from '../application/marketplace';
 import { IdParamSchema, pagedEnvelope, successEnvelope } from '@oms/contracts';
 import { z } from 'zod';
 import { AppError } from '@oms/shared';
 import { LIMITS, REQUIRED_TARGETS, TARGET_BY_KEY } from '../domain/catalogue';
 import { beginCommit, commitEnvelope, commitPreview } from '../application/commit';
-import { errorsCsv, issueSummary, listIssues, listRows, recount, resolveBulk, resolveIssue } from '../application/issues';
+import { MAX_ISSUE_IMAGE_BYTES, errorsCsv, issueSummary, listIssues, listRows, recount, resolveBulk, resolveIssue, storeIssueImage } from '../application/issues';
 import { applyMappingChange, applySettings, createSession, importOptions, listSessions, mappingView, sessionDto, templateFile, touchSession } from '../application/sessions';
 import { EDITABLE_STATUSES, JOBS, getSession, isBusy, issueTotals, toSessionDto, type SessionRow } from '../application/store';
 import { analysisView, analyse, assertUploadable, saveUpload } from '../application/upload';
 import { beginValidation, runValidation } from '../application/validation';
 import {
-  BulkResolveBodySchema, BulkResultSchema, CommitBodySchema, CommitResultSchema, CreateBodySchema, IssueListQuerySchema, IssueSchema, ListQuerySchema, MappingBodySchema,
+  ActivityQuerySchema, ActivitySchema, IssuePageSchema, FromMarketplaceBodySchema, MarketplaceSourceSchema,
+  BulkResolveBodySchema, BulkResultSchema, CommitBodySchema, CommitResultSchema, CreateBodySchema, IssueListQuerySchema, ListQuerySchema, MappingBodySchema,
   MappingViewSchema, OptionsSchema, ResolveBodySchema, ResolveResultSchema, RevalidateResultSchema, RowListQuerySchema, RowSchema, SessionSchema, SettingsBodySchema, SummarySchema, TemplateQuerySchema,
   UploadResultSchema,
 } from './schemas';
@@ -31,6 +34,7 @@ export const productImportRoutes: FastifyPluginAsync = async (app) => {
 
   // raw file bodies (csv / tsv / xlsx) only inside this plugin
   app.addContentTypeParser(FILE_TYPES, { parseAs: 'buffer', bodyLimit: LIMITS.maxBytes + 64 * 1024 }, (_req, body, done) => done(null, body));
+  app.addContentTypeParser(['image/png', 'image/jpeg', 'image/webp'], { parseAs: 'buffer', bodyLimit: MAX_ISSUE_IMAGE_BYTES + 64 * 1024 }, (_req, body, done) => done(null, body));
 
   const enqueue = (name: string, vendorId: string, correlationId: string, s: SessionRow) =>
     c.queues.enqueue('heavy', name, { vendorId, correlationId, idempotencyKey: `${name}-${s.id}-${s.version}`, data: { sessionId: s.id } });
@@ -47,6 +51,28 @@ export const productImportRoutes: FastifyPluginAsync = async (app) => {
   }, async (req, reply) => {
     const file = templateFile(req.query.format);
     return reply.header('Content-Disposition', `attachment; filename="${file.fileName}"`).type(file.contentType).send(file.body);
+  });
+
+  // ---------------------------------------------------------------- marketplace source
+  r.get('/imports/marketplace-sources', {
+    config: { access: { permission: 'imports:read' } },
+    schema: { tags: TAGS, summary: 'Marketplace accounts a catalogue can be imported from', description: 'One row per marketplace account: connection state, products available (null until counted), products already imported, last import and whether it can be imported.', response: { 200: successEnvelope(MarketplaceSourceSchema) } },
+  }, async (req) => ok(req, await vendorTx(req, (tx, vendorId) => marketplaceSources(tx, c, vendorId))));
+
+  r.post('/imports/from-marketplace', {
+    config: { access: { permission: 'imports:write' } },
+    schema: {
+      tags: TAGS, summary: 'Start an import from a connected marketplace catalogue', body: FromMarketplaceBodySchema,
+      description: `Reads the catalogue of the account through its connector and builds the import rows from it (standard fields; prices in paise). Up to ${LIMITS.marketplaceInlineProducts} products are read inside the request: 201 with the session in status "analyzed". Larger catalogues are read by a job: 202 with the session in status "uploaded" (uiStatus "analyzing", counters.processed grows); poll GET /imports/{id} until it is "analyzed". Calling again while a session of the account is still running returns that session. Mapping, settings, validation, issues and commit work as for a file.`,
+      response: { 201: successEnvelope(SessionSchema), 202: successEnvelope(SessionSchema) },
+    },
+  }, async (req, reply) => {
+    const vendorId = requireVendor(req);
+    const res = await startFromMarketplace(c.database.db, c, vendorId, req.ctx.principal?.actorId ?? null, req.ctx.correlationId, req.body.accountId);
+    await vendorTx(req, (tx) => audit(tx, req, { action: 'import.from_marketplace', resourceType: 'import_session', resourceId: res.session.id, metadata: { accountId: req.body.accountId, created: res.created, queued: res.queued } }));
+    const dto = await vendorTx(req, async (tx, v) => sessionDto(tx, v, await getSession(tx, v, res.session.id)));
+    if (res.queued) { reply.code(202); return ok(req, dto); }
+    return created(req, reply, dto, `/api/v1/imports/${dto.id}`);
   });
 
   // ---------------------------------------------------------------- sessions
@@ -75,6 +101,11 @@ export const productImportRoutes: FastifyPluginAsync = async (app) => {
     config: { access: { permission: 'imports:read' } },
     schema: { tags: TAGS, summary: 'Status and counters of an import (poll this for progress)', params: IdParamSchema, response: { 200: successEnvelope(SessionSchema) } },
   }, async (req) => ok(req, await vendorTx(req, async (tx, vendorId) => sessionDto(tx, vendorId, await getSession(tx, vendorId, req.params.id)))));
+
+  r.get('/imports/:id/activity', {
+    config: { access: { permission: 'imports:read' } },
+    schema: { tags: TAGS, summary: 'Live activity feed of an import (newest first)', description: 'Events recorded while validating, committing and resolving issues (the newest 300 are kept). Page backwards with `before` = the previous `nextBefore`.', params: IdParamSchema, querystring: ActivityQuerySchema, response: { 200: successEnvelope(ActivitySchema) } },
+  }, async (req) => ok(req, await vendorTx(req, async (tx, vendorId) => readActivity((await getSession(tx, vendorId, req.params.id)).stats, req.query))));
 
   r.post('/imports/:id/file', {
     config: { access: { permission: 'imports:write' }, idempotent: false },
@@ -168,11 +199,11 @@ export const productImportRoutes: FastifyPluginAsync = async (app) => {
       await enqueue(JOBS.validate, vendorId, req.ctx.correlationId, session);
       reply.code(202);
       const dto = await vendorTx(req, (tx, v) => sessionDto(tx, v, session));
-      return ok(req, { queued: true, status: 'queued' as const, revalidatedCount: 0, resolvedCount: dto.issues.resolved, remainingIssuesCount: dto.issues.open, session: dto });
+      return ok(req, { queued: true, status: 'queued' as const, revalidatedCount: 0, resolvedCount: dto.issues.resolved, remainingIssuesCount: dto.issues.open, session: dto, revalidation: dto.revalidation });
     }
     const outcome = await runValidation(c.database.db, vendorId, session.id);
     const dto = await vendorTx(req, async (tx, v) => sessionDto(tx, v, await getSession(tx, v, session.id)));
-    return ok(req, { queued: false, status: outcome.openIssues === 0 ? ('clean' as const) : ('issues_remain' as const), revalidatedCount: outcome.rows, resolvedCount: outcome.resolvedIssues, remainingIssuesCount: outcome.openIssues, session: dto });
+    return ok(req, { queued: false, status: outcome.openIssues === 0 ? ('clean' as const) : ('issues_remain' as const), revalidatedCount: outcome.rows, resolvedCount: outcome.resolvedIssues, remainingIssuesCount: outcome.openIssues, session: dto, revalidation: dto.revalidation });
   });
 
   r.get('/imports/:id/summary', {
@@ -182,11 +213,11 @@ export const productImportRoutes: FastifyPluginAsync = async (app) => {
 
   r.get('/imports/:id/issues', {
     config: { access: { permission: 'imports:read' } },
-    schema: { tags: TAGS, summary: 'Issues with the row they belong to', params: IdParamSchema, querystring: IssueListQuerySchema, response: { 200: pagedEnvelope(IssueSchema) } },
+    schema: { tags: TAGS, summary: 'Issues with the row they belong to', description: 'Filter by code, severity, status and target field (`filter[field]`); `sort` is severity (default: errors first, then row), row or code, prefix - for descending. The applied sort is echoed in the response.', params: IdParamSchema, querystring: IssueListQuerySchema, response: { 200: successEnvelope(IssuePageSchema) } },
   }, async (req) => {
     const q = req.query;
-    const page = await vendorTx(req, async (tx, vendorId) => listIssues(tx, vendorId, await getSession(tx, vendorId, req.params.id), { code: q['filter[code]'], severity: q['filter[severity]'], status: q['filter[status]'], q: q.q }, q));
-    return paged(req, page.items, q, page.total);
+    const page = await vendorTx(req, async (tx, vendorId) => listIssues(tx, vendorId, await getSession(tx, vendorId, req.params.id), { code: q['filter[code]'], severity: q['filter[severity]'], status: q['filter[status]'], field: q['filter[field]'], q: q.q, sort: q.sort }, q));
+    return ok(req, { items: page.items, page: q.page, pageSize: q.pageSize, total: page.total, pages: Math.max(1, Math.ceil(page.total / q.pageSize)), sort: q.sort });
   });
 
   r.get('/imports/:id/rows', {
@@ -233,6 +264,26 @@ export const productImportRoutes: FastifyPluginAsync = async (app) => {
     const dto = toSessionDto(s, await issueTotals(tx, vendorId, s.id));
     return { issue: res.issue, issues: dto.issues, counters: dto.counters };
   })));
+
+  r.post('/imports/:id/issues/:issueId/image', {
+    config: { access: { permission: 'imports:write' }, idempotent: false },
+    schema: {
+      tags: TAGS, summary: 'Upload an image for an invalid image issue', params: IssueParamsSchema, response: { 200: successEnvelope(ResolveResultSchema) },
+      description: `Raw body: a PNG, JPEG or WebP (Content-Type), at most ${MAX_ISSUE_IMAGE_BYTES / 1024 / 1024} MB (413 above, 415 for other types or when the bytes are not the declared image, 400 for an issue that is not an invalid image issue). The file is stored under the tenant's import prefix, becomes the row's image (the commit attaches it to the product as a product image), and the issue is resolved. Like every fix it needs a revalidation before the commit.`,
+    },
+  }, async (req) => {
+    if (!Buffer.isBuffer(req.body)) throw new AppError('UNSUPPORTED_MEDIA_TYPE', 'Send the image as the raw request body (Content-Type: image/png, image/jpeg or image/webp)');
+    const body = req.body;
+    const contentType = String(req.headers['content-type'] ?? '');
+    return ok(req, await vendorTx(req, async (tx, vendorId) => {
+      const image = await storeIssueImage(tx, c, vendorId, req.params.id, req.params.issueId, body, contentType);
+      const res = await resolveIssue(tx, vendorId, req.ctx.principal?.actorId ?? null, req.params.id, req.params.issueId, { action: 'custom_value', image });
+      await audit(tx, req, { action: 'import.issue_image', resourceType: 'import_session', resourceId: req.params.id, metadata: { issueId: req.params.issueId, bytes: body.length, mime: image.mime } });
+      const s = await getSession(tx, vendorId, req.params.id);
+      const dto = toSessionDto(s, await issueTotals(tx, vendorId, s.id));
+      return { issue: res.issue, issues: dto.issues, counters: dto.counters };
+    }));
+  });
 
   // ---------------------------------------------------------------- commit / cancel
   r.get('/imports/:id/commit-preview', {

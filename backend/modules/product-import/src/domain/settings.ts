@@ -9,12 +9,16 @@ export const ImportSettingsSchema = z.object({
   warehouseId: z.uuid().nullable().describe('Warehouse that receives the stock column; the default warehouse when empty'),
   defaultCategoryId: z.uuid().nullable().describe('Used for rows without a (recognised) category'),
   currencyUnit: z.enum(CURRENCY_UNITS).describe('Whether price columns are in rupees (499.50) or paise (49950)'),
+  includeImages: z.boolean().describe('false: the image URL columns are ignored (no image issues, no images imported)'),
+  includeQuantities: z.boolean().describe('false: the stock column is ignored (no stock is received, no warehouse is needed)'),
+  matchVariants: z.boolean().describe('false: rows are never grouped into variants of one product code or merged into an existing product; every row becomes its own product'),
 }).meta({ id: 'ImportSettings' });
 
 export type ImportSettings = z.infer<typeof ImportSettingsSchema>;
 
 export const DEFAULT_SETTINGS: ImportSettings = {
   duplicateStrategy: 'skip', assignAllChannels: false, accountIds: [], autoPublish: false, warehouseId: null, defaultCategoryId: null, currencyUnit: 'rupees',
+  includeImages: true, includeQuantities: true, matchVariants: true,
 };
 
 /** stored settings (a partial jsonb) with the defaults filled in */

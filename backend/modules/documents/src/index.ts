@@ -3,6 +3,8 @@ import { documentRoutes } from './routes';
 
 export { manifest };
 export { documentRoutes };
+/** media use-cases other modules may call (the product import attaches uploaded images to the products it creates) */
+export { createDocument, uploadContent, isRejection, validateImageBytes, ImageRejected } from './service';
 
 /**
  * Documents & Media: product images, documents and listing documents. Bytes live in object storage behind the
