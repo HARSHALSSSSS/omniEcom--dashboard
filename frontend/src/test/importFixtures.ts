@@ -20,6 +20,9 @@ export function session(over: Partial<ImportSession> = {}): ImportSession {
     counters: { total: 120, processed: 0, valid: 0, warning: 0, error: 0, ignored: 0, skipped: 0, committed: 0, failed: 0, percent: 0, etaSeconds: null },
     issues: { total: 0, open: 0, resolved: 0, ignored: 0, openErrors: 0, openWarnings: 0 },
     results: { productsCreated: 0, productsUpdated: 0, variantsCreated: 0, variantsUpdated: 0 },
+    products: 0,
+    plan: { create: 0, update: 0, addVariant: 0, skip: 0 },
+    scope: { products: 0, newProducts: 0, updates: 0 },
     failureMessage: null,
     requestedBy: null,
     startedAt: null,
@@ -77,9 +80,9 @@ export function mapping(over: Partial<MappingView> = {}): MappingView {
   return {
     preset: { code: "generic", label: "Generic CSV / Excel", confidence: 0 },
     columns: [
-      { sourceColumn: "SKU_CODE", targetField: "sku", confidence: 95, sampleValues: ["TRV-1", "TRV-2"], isRequired: true, status: "matched" },
-      { sourceColumn: "PRODUCT_NAME", targetField: "title", confidence: 90, sampleValues: ["Jacket"], isRequired: true, status: "matched" },
-      { sourceColumn: "PRICE", targetField: null, confidence: 0, sampleValues: ["3499"], isRequired: false, status: "unmatched" },
+      { sourceColumn: "SKU_CODE", targetField: "sku", confidence: 95, sampleValues: ["TRV-1", "TRV-2"], isRequired: true, status: "matched", autoTargetField: "sku" },
+      { sourceColumn: "PRODUCT_NAME", targetField: "title", confidence: 90, sampleValues: ["Jacket"], isRequired: true, status: "matched", autoTargetField: "title" },
+      { sourceColumn: "PRICE", targetField: null, confidence: 0, sampleValues: ["3499"], isRequired: false, status: "unmatched", autoTargetField: null },
     ],
     mapping: { sku: "SKU_CODE", title: "PRODUCT_NAME" },
     missingRequired: [
@@ -103,13 +106,16 @@ export function issue(over: Partial<ImportIssue> = {}): ImportIssue {
     field: "category",
     affectedFields: ["category"],
     sourceValue: "Kurtis",
-    suggestion: { kind: "map_category", field: "category", value: CATEGORY_ID, label: "Women > Kurtas" },
+    suggestion: { kind: "map_category", field: "category", value: CATEGORY_ID, label: "Women > Kurtas", confidence: "medium", confidenceReason: "Fuzzy match on the category name." },
     suggestedFix: "Women > Kurtas",
     currentFix: null,
     status: "open",
     resolution: null,
     resolvedAt: null,
-    productData: { sku: "KUR-7", title: "Cotton Kurti", category: "Kurtis", price: 799, barcode: "8901234567890", source: { SKU_CODE: "KUR-7", PRODUCT_NAME: "Cotton Kurti" } },
+    productData: { sku: "KUR-7", title: "Cotton Kurti", category: "Kurtis", price: 799, barcode: "8901234567890", existing: null, source: { SKU_CODE: "KUR-7", PRODUCT_NAME: "Cotton Kurti" } },
+    duplicateMatch: null,
+    whyItMatters: "Products without a category cannot be listed.",
+    impact: "The row is imported once its category is mapped.",
     unit: "rupees",
     ...over,
   };
@@ -129,7 +135,7 @@ export const ISSUE_B = issue({
   sourceValue: null,
   suggestion: null,
   suggestedFix: null,
-  productData: { title: "Silk Saree", source: { PRODUCT_NAME: "Silk Saree" } },
+  productData: { title: "Silk Saree", existing: null, source: { PRODUCT_NAME: "Silk Saree" } },
 });
 
 export function summary(over: Partial<ImportSummary> = {}): ImportSummary {
@@ -146,6 +152,9 @@ export function summary(over: Partial<ImportSummary> = {}): ImportSummary {
     ],
     knownCodes: [],
     rows: { valid: 100, warning: 8, error: 12 },
+    products: 0,
+    plan: { create: 0, update: 0, addVariant: 0, skip: 0 },
+    scope: { products: 0, newProducts: 0, updates: 0 },
     ...over,
   };
 }

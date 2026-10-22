@@ -19,6 +19,7 @@ import type {
   IssuesQuery,
   MappingChange,
   MappingView,
+  MarketplaceSource,
   Paged,
   ResolveInput,
   ResolveResult,
@@ -135,6 +136,8 @@ export const importApi = {
   issues: async (id: string, query: IssuesQuery, signal?: AbortSignal) => {
     const params = numbered(query);
     if (query.code) params["filter[code]"] = query.code;
+    if (query.field) params["filter[field]"] = query.field;
+    if (query.sort) params.sort = query.sort;
     if (query.severity) params["filter[severity]"] = query.severity;
     if (query.status) params["filter[status]"] = query.status;
     return unwrap<Paged<ImportIssue>>(await client.get(ENDPOINTS.IMPORT_ISSUES(id), { params, signal }));
@@ -172,6 +175,15 @@ export const importApi = {
     const res = await client.get<{ data: AccountChoice[] }>(ENDPOINTS.MARKETPLACE_ACCOUNTS, { params: { limit: 100 } });
     return res.data.data.map((a) => ({ id: a.id, marketplace: a.marketplace, displayName: a.displayName, status: a.status }));
   },
+
+  /** connected marketplace accounts the catalogue can be pulled from */
+  marketplaceSources: async (signal?: AbortSignal): Promise<MarketplaceSource[]> => {
+    const data = unwrap<{ items: MarketplaceSource[] }>(await client.get(ENDPOINTS.IMPORT_MARKETPLACE_SOURCES, { signal }));
+    return data.items;
+  },
+
+  /** 201 (analysed) or 202 (rows are still being pulled: follow `get`) */
+  fromMarketplace: async (accountId: string) => unwrap<ImportSession>(await client.post(ENDPOINTS.IMPORT_FROM_MARKETPLACE, { accountId })),
 
   /** generic job record, only for `useJobPolling` */
   getJobStatus: async (jobId: string): Promise<JobStatusResponse> => unwrap<JobStatusResponse>(await client.get(ENDPOINTS.JOB(jobId))),

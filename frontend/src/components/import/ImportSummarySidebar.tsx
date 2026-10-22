@@ -1,6 +1,9 @@
 import { cn } from "@/utils/cn";
+import { num } from "./importFormat";
+import type { ExceptionBucket } from "./wizard/exceptions";
 
 export interface ImportSummarySidebarProps {
+  /** products (or rows, when the API does not count products) found in the file; undefined while unknown */
   totalProducts?: number;
   readyCount?: number;
   attentionCount?: number;
@@ -9,28 +12,39 @@ export interface ImportSummarySidebarProps {
   matchedCount?: number;
   updatedCount?: number;
   readinessPercent?: number;
+  /** what the totals count ("products" unless the API only knows rows) */
+  unit?: string;
   isConfirmationStep?: boolean;
+  /** the kinds of exception that still need a decision, with their side panel wording */
+  issueGroups?: Array<{ type: ExceptionBucket; label: string }>;
   onReviewIssues?: () => void;
-  onSelectIssueType?: (type: "categories" | "skus" | "duplicates" | "images") => void;
+  onSelectIssueType?: (type: ExceptionBucket) => void;
   onImportReady?: () => void;
+  /** the buttons wait for something (no write permission, or nothing to import) */
+  actionsDisabled?: boolean;
   className?: string;
 }
 
 export function ImportSummarySidebar({
-  totalProducts = 247,
-  readyCount = 231,
-  attentionCount = 16,
-  rowsCount = 1024,
-  newCount = 812,
-  matchedCount = 128,
-  updatedCount = 84,
-  readinessPercent = 93,
+  totalProducts,
+  readyCount,
+  attentionCount,
+  rowsCount,
+  newCount,
+  matchedCount,
+  updatedCount,
+  readinessPercent,
+  unit = "products",
   isConfirmationStep = false,
+  issueGroups = [],
   onReviewIssues,
   onSelectIssueType,
   onImportReady,
+  actionsDisabled = false,
   className,
 }: ImportSummarySidebarProps) {
+  const attention = attentionCount ?? 0;
+  const percent = isConfirmationStep ? 100 : (readinessPercent ?? 0);
   return (
     <div
       className={cn(
@@ -45,18 +59,18 @@ export function ImportSummarySidebar({
 
       {/* Main product count */}
       <div className="text-[21px] leading-[32px] font-semibold text-[#000000] dark:text-white mt-3.5">
-        {totalProducts} products detected
+        {num(totalProducts)} {unit} detected
       </div>
 
       {/* Ready count */}
       <p className="text-[13px] leading-[20px] font-medium text-[#000000] dark:text-white mt-1">
-        {isConfirmationStep ? totalProducts : readyCount} ready
+        {num(isConfirmationStep ? totalProducts : readyCount)} ready
       </p>
 
       {/* Attention Pill */}
       <div className="mt-2.5">
         <span className="inline-flex items-center px-2 py-0.5 rounded-[3px] bg-white dark:bg-card border border-[#E3E3E3] dark:border-border text-[11px] leading-[17px] font-medium text-[#000000] dark:text-white shadow-xs">
-          {isConfirmationStep ? "0 require attention" : `${attentionCount} require attention`}
+          {isConfirmationStep ? "0 require attention" : `${num(attentionCount)} require attention`}
         </span>
       </div>
 
@@ -72,25 +86,25 @@ export function ImportSummarySidebar({
           <div className="flex items-center justify-between">
             <span className="text-[#666666] font-normal">Rows</span>
             <span className="font-medium text-[#000000] dark:text-white text-right">
-              {rowsCount.toLocaleString()}
+              {num(rowsCount)}
             </span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-[#666666] font-normal">New</span>
             <span className="font-medium text-[#000000] dark:text-white text-right">
-              {newCount.toLocaleString()}
+              {num(newCount)}
             </span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-[#666666] font-normal">Matched</span>
             <span className="font-medium text-[#000000] dark:text-white text-right">
-              {matchedCount.toLocaleString()}
+              {num(matchedCount)}
             </span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-[#666666] font-normal">Updated</span>
             <span className="font-medium text-[#000000] dark:text-white text-right">
-              {updatedCount.toLocaleString()}
+              {num(updatedCount)}
             </span>
           </div>
         </div>
@@ -101,7 +115,7 @@ export function ImportSummarySidebar({
 
       {/* Requires attention */}
       <div>
-        {isConfirmationStep || attentionCount === 0 ? (
+        {isConfirmationStep || (attentionCount !== undefined && attention === 0) ? (
           <div className="space-y-1">
             <div className="text-[13px] leading-[20px] font-semibold text-[#000000] dark:text-white">
               Review complete
@@ -110,20 +124,24 @@ export function ImportSummarySidebar({
               All mappings confirmed. No blocking issues remain.
             </p>
           </div>
+        ) : attentionCount === undefined ? (
+          <div className="space-y-1">
+            <div className="text-[13px] leading-[20px] font-semibold text-[#000000] dark:text-white">
+              Analysis pending
+            </div>
+            <p className="text-[11px] leading-[17px] text-[#666666]">
+              Exceptions appear here once the file has been analysed.
+            </p>
+          </div>
         ) : (
           <div>
             <div className="text-[13px] leading-[20px] font-semibold text-[#000000] dark:text-white mb-2">
-              Requires attention · {attentionCount} items
+              Requires attention · {num(attention)} items
             </div>
             <div className="space-y-1">
-              {[
-                { label: "8 category mappings", type: "categories" as const },
-                { label: "4 missing SKUs", type: "skus" as const },
-                { label: "3 duplicate products", type: "duplicates" as const },
-                { label: "1 invalid image URL", type: "images" as const },
-              ].map((item, idx) => (
+              {issueGroups.map((item) => (
                 <button
-                  key={idx}
+                  key={item.type}
                   type="button"
                   onClick={() => {
                     if (onSelectIssueType) {
@@ -157,26 +175,35 @@ export function ImportSummarySidebar({
             Import readiness
           </span>
           <span className="font-semibold text-[#000000] dark:text-white">
-            {isConfirmationStep ? "100% ready" : `${readinessPercent}% ready`}
+            {readinessPercent === undefined && !isConfirmationStep ? "–" : `${percent}% ready`}
           </span>
         </div>
 
         {/* Readiness track matching Figma: 3px track #E0E0E0, 3px fill #000000 */}
-        <div className="w-full h-[3px] bg-[#E0E0E0] dark:bg-muted relative my-2 overflow-hidden">
+        <div
+          className="w-full h-[3px] bg-[#E0E0E0] dark:bg-muted relative my-2 overflow-hidden"
+          role="progressbar"
+          aria-label="Import readiness"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={percent}
+        >
           <div
             className="h-[3px] bg-[#000000] dark:bg-white transition-all duration-300"
-            style={{ width: `${isConfirmationStep ? 100 : readinessPercent}%` }}
+            style={{ width: `${percent}%` }}
           />
         </div>
 
         <div className="text-[11px] leading-[17px] text-[#666666] font-normal mt-2">
           {isConfirmationStep ? (
-            `${totalProducts} products can be imported now.`
+            `${num(totalProducts)} ${unit} can be imported now.`
+          ) : readyCount === undefined ? (
+            "Readiness is calculated once the file has been analysed."
           ) : (
             <>
-              {readyCount} products can be imported now.
+              {num(readyCount)} {unit} can be imported now.
               <br />
-              {attentionCount} products need review.
+              {num(attentionCount)} {unit} need review.
             </>
           )}
         </div>
@@ -189,18 +216,20 @@ export function ImportSummarySidebar({
             <button
               type="button"
               onClick={onReviewIssues}
-              className="w-full h-[36px] bg-[#000000] text-white hover:bg-[#000000]/90 dark:bg-white dark:text-black dark:hover:bg-white/90 rounded-[5px] text-[12px] leading-[18px] font-medium transition-colors flex items-center justify-center cursor-pointer"
+              disabled={actionsDisabled}
+              className="w-full h-[36px] bg-[#000000] text-white hover:bg-[#000000]/90 dark:bg-white dark:text-black dark:hover:bg-white/90 rounded-[5px] text-[12px] leading-[18px] font-medium transition-colors flex items-center justify-center cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Review {attentionCount} issues
+              Review {num(attention)} issues
             </button>
           )}
           {onImportReady && (
             <button
               type="button"
               onClick={onImportReady}
-              className="w-full h-[36px] bg-[#FFFFFF] border border-[#E3E3E3] hover:bg-neutral-50 dark:bg-card dark:border-border text-[#000000] dark:text-white rounded-[5px] text-[12px] leading-[18px] font-medium transition-colors flex items-center justify-center cursor-pointer"
+              disabled={actionsDisabled}
+              className="w-full h-[36px] bg-[#FFFFFF] border border-[#E3E3E3] hover:bg-neutral-50 dark:bg-card dark:border-border text-[#000000] dark:text-white rounded-[5px] text-[12px] leading-[18px] font-medium transition-colors flex items-center justify-center cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Import {readyCount} ready products
+              Import {num(readyCount)} ready {unit}
             </button>
           )}
         </div>

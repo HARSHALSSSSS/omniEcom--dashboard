@@ -17,6 +17,7 @@ export const ROUTES = {
   PRODUCTS: "/products",
   PRODUCTS_NEW: "/products/new",
   PRODUCTS_IMPORT: "/products/import",
+  PRODUCTS_IMPORT_PROCESSING: "/products/import/:importId/processing",
   INVENTORY: "/inventory",
   ORDERS: "/orders",
   FULFILLMENT: "/fulfillment",

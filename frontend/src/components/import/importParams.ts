@@ -20,30 +20,37 @@ export const DEFAULT_PAGE_SIZE = 25;
 // ---------------------------------------------------------------- wizard
 
 export const WIZARD_STEPS = [
-  { id: "source", label: "Source & file" },
-  { id: "mapping", label: "Column mapping" },
-  { id: "settings", label: "Settings" },
-  { id: "validate", label: "Validate" },
-  { id: "review", label: "Review & import" },
+  { id: "source", label: "Source" },
+  { id: "upload", label: "Upload" },
+  { id: "mapping", label: "Mapping" },
+  { id: "review", label: "Review" },
+  { id: "import", label: "Import" },
 ] as const;
 export type WizardStepId = (typeof WIZARD_STEPS)[number]["id"];
 const STEP_IDS = WIZARD_STEPS.map((s) => s.id);
 
-/** the furthest step an import may be on, and the one a seller continues on (by status) */
+/**
+ * the furthest step an import may be on, and the one a seller continues on (by status):
+ * source, upload, mapping (analysed), review (validating / exceptions), import (confirmation, commit)
+ */
 export function stepBounds(session: ImportSession | undefined): { max: number; natural: number } {
-  if (!session || !hasFile(session)) return { max: 0, natural: 0 };
+  if (!session) return { max: 1, natural: 0 };
+  if (!hasFile(session)) return { max: 1, natural: session.status === "created" ? 1 : 0 };
   switch (session.status) {
     case "created":
-      return { max: 0, natural: 0 };
+      return { max: 1, natural: 1 };
     case "uploaded":
     case "analyzed":
-      return { max: 2, natural: 1 };
+      return { max: 2, natural: 2 };
     case "validating":
     case "failed":
       return { max: 3, natural: 3 };
+    case "validated":
+      return { max: 4, natural: 3 };
     case "cancelled":
       return { max: 0, natural: 0 };
     default:
+      // committing, committed, partially_committed
       return { max: 4, natural: 4 };
   }
 }
@@ -111,6 +118,10 @@ export interface IssuesUrl {
   status: IssueStatus | "all";
   q?: string;
   rowStatus?: RowStatus;
+  /** a target field key: the server's `filter[field]` */
+  field?: string;
+  /** `severity` unless the URL says otherwise; a leading `-` is descending */
+  sort: "severity" | "-severity" | "row" | "-row" | "code" | "-code";
   issueId?: string;
   page: number;
   pageSize: number;
@@ -128,14 +139,16 @@ export function readIssuesUrl(params: URLSearchParams): IssuesUrl {
     status: rawStatus === "all" ? "all" : (oneOf(rawStatus, ["open", "resolved", "ignored"] as const) ?? "open"),
     q: params.get("q")?.trim() || undefined,
     rowStatus: oneOf(params.get("rows"), ROW_STATUSES),
+    field: /^[A-Za-z0-9_.]{1,60}$/.test(params.get("field") ?? "") ? (params.get("field") ?? undefined) : undefined,
+    sort: oneOf(params.get("sort"), ["severity", "-severity", "row", "-row", "code", "-code"] as const) ?? "severity",
     issueId: UUID.test(issue) ? issue : undefined,
     page: positive(params.get("page"), 1),
     pageSize: (PAGE_SIZES as readonly number[]).includes(size) ? size : DEFAULT_PAGE_SIZE,
   };
 }
 
-type IssuesPatch = Partial<Record<"view" | "code" | "severity" | "status" | "q" | "rows" | "issue" | "page" | "size", string | null>>;
-const DEFAULTS: Partial<Record<keyof IssuesPatch, string>> = { view: "issues", status: "open" };
+type IssuesPatch = Partial<Record<"view" | "code" | "severity" | "status" | "q" | "rows" | "field" | "sort" | "issue" | "page" | "size", string | null>>;
+const DEFAULTS: Partial<Record<keyof IssuesPatch, string>> = { view: "issues", status: "open", sort: "severity" };
 
 /** Filters, search, page, view and the selected issue live in the URL (reload, back and deep links work). */
 export function useIssuesUrl() {
@@ -163,8 +176,8 @@ export function useIssuesUrl() {
     [setParams],
   );
 
-  const clearFilters = useCallback(() => update({ code: null, severity: null, status: null, q: null, rows: null }), [update]);
+  const clearFilters = useCallback(() => update({ code: null, severity: null, status: null, q: null, rows: null, field: null }), [update]);
   return { ...state, update, clearFilters };
 }
 
-export const isIssueFiltered = (u: IssuesUrl): boolean => Boolean(u.code || u.severity || u.q || u.status !== "open");
+export const isIssueFiltered = (u: IssuesUrl): boolean => Boolean(u.code || u.severity || u.q || u.field || u.status !== "open");

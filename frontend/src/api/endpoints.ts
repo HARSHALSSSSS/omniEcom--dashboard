@@ -144,6 +144,9 @@ export const ENDPOINTS = {
   IMPORT_ERRORS_CSV: (id: string) => `${BASE}/imports/${id}/errors.csv`,
   IMPORT_ISSUES_BULK: (id: string) => `${BASE}/imports/${id}/issues/bulk`,
   IMPORT_CANCEL: (id: string) => `${BASE}/imports/${id}/cancel`,
+  IMPORT_MARKETPLACE_SOURCES: `${BASE}/imports/marketplace-sources`,
+  IMPORT_FROM_MARKETPLACE: `${BASE}/imports/from-marketplace`,
+  IMPORT_ACTIVITY: (id: string) => `${BASE}/imports/${id}/activity`,
 
   // Connectors / Connections
   CONNECTORS: `${BASE}/connectors`,

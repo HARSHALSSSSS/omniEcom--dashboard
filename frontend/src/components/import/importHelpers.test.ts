@@ -27,14 +27,17 @@ describe("import helpers", () => {
   });
 
   it("keeps the wizard step inside what the status allows", () => {
-    expect(stepBounds(undefined)).toEqual({ max: 0, natural: 0 });
-    expect(stepBounds(session({ status: "created", headers: [] }))).toEqual({ max: 0, natural: 0 });
-    expect(stepBounds(session())).toEqual({ max: 2, natural: 1 });
+    expect(stepBounds(undefined)).toEqual({ max: 1, natural: 0 });
+    expect(stepBounds(session({ status: "created", headers: [] }))).toEqual({ max: 1, natural: 1 });
+    expect(stepBounds(session())).toEqual({ max: 2, natural: 2 });
     expect(stepBounds(session({ status: "validating" }))).toEqual({ max: 3, natural: 3 });
-    expect(stepBounds(validated())).toEqual({ max: 4, natural: 4 });
+    expect(stepBounds(validated())).toEqual({ max: 4, natural: 3 });
+    expect(stepBounds(validated({ status: "committed" }))).toEqual({ max: 4, natural: 4 });
     expect(resolveStep("review", session())).toBe(2);
+    expect(resolveStep("upload", undefined)).toBe(1);
+    expect(resolveStep("import", undefined)).toBe(1);
     expect(resolveStep("source", validated())).toBe(0);
-    expect(resolveStep(null, validated())).toBe(4);
+    expect(resolveStep(null, validated())).toBe(3);
   });
 
   it("reads only well-formed URL state", () => {

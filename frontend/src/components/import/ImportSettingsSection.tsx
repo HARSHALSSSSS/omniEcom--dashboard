@@ -1,10 +1,12 @@
+import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
+import type { DuplicateChoice } from "./wizard/settingsDraft";
 
 interface ImportSettingsSectionProps {
-  duplicateStrategy: "update" | "create_only" | "ask";
-  onDuplicateStrategyChange: (val: "update" | "create_only" | "ask") => void;
+  duplicateStrategy: DuplicateChoice | null;
+  onDuplicateStrategyChange: (val: DuplicateChoice) => void;
   importImageUrls: boolean;
   onImportImageUrlsChange: (val: boolean) => void;
   matchVariants: boolean;
@@ -12,6 +14,10 @@ interface ImportSettingsSectionProps {
   importQuantities: boolean;
   onImportQuantitiesChange: (val: boolean) => void;
   onBackToUpload: () => void;
+  /** the settings cannot be changed (no write permission, or a validation is running) */
+  disabled?: boolean;
+  /** more settings of the import, shown in the same card under the switches */
+  children?: ReactNode;
 }
 
 export function ImportSettingsSection({
@@ -24,6 +30,8 @@ export function ImportSettingsSection({
   importQuantities,
   onImportQuantitiesChange,
   onBackToUpload,
+  disabled = false,
+  children,
 }: ImportSettingsSectionProps) {
   return (
     <div className="flex flex-col lg:flex-row gap-12 items-start w-full pt-1">
@@ -45,10 +53,10 @@ export function ImportSettingsSection({
               Duplicate handling
             </h4>
             <RadioGroup
-              value={duplicateStrategy}
-              onValueChange={(val) =>
-                onDuplicateStrategyChange(val as "update" | "create_only" | "ask")
-              }
+              value={duplicateStrategy ?? ""}
+              onValueChange={(val) => onDuplicateStrategyChange(val as DuplicateChoice)}
+              disabled={disabled}
+              aria-label="Duplicate handling"
               className="space-y-3"
             >
               <div className="flex items-center space-x-3">
@@ -89,6 +97,7 @@ export function ImportSettingsSection({
               <Checkbox
                 id="import-images"
                 checked={importImageUrls}
+                disabled={disabled}
                 onCheckedChange={(checked) =>
                   onImportImageUrlsChange(checked === true)
                 }
@@ -104,6 +113,7 @@ export function ImportSettingsSection({
               <Checkbox
                 id="match-variants"
                 checked={matchVariants}
+                disabled={disabled}
                 onCheckedChange={(checked) =>
                   onMatchVariantsChange(checked === true)
                 }
@@ -119,6 +129,7 @@ export function ImportSettingsSection({
               <Checkbox
                 id="import-quantities"
                 checked={importQuantities}
+                disabled={disabled}
                 onCheckedChange={(checked) =>
                   onImportQuantitiesChange(checked === true)
                 }
@@ -131,6 +142,8 @@ export function ImportSettingsSection({
               </label>
             </div>
           </div>
+
+          {children}
         </div>
 
         <div>

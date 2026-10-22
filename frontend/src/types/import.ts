@@ -33,7 +33,7 @@ export const IMPORT_STATUSES: readonly ImportStatus[] = [
 /** the status vocabulary of the wizard screens (`uiStatus`) */
 export type ImportUiStatus = "pending" | "uploading" | "analyzing" | "mapping" | "processing" | "completed" | "needs_attention" | "failed";
 
-export type DuplicateStrategy = "skip" | "update" | "create_variant_for_new_sku";
+export type DuplicateStrategy = "skip" | "update" | "ask" | "create_new" | "create_variant_for_new_sku";
 export type CurrencyUnit = "rupees" | "paise";
 export type CommitMode = "clean_only" | "include_resolved";
 
@@ -46,6 +46,12 @@ export interface ImportSettings {
   warehouseId: string | null;
   defaultCategoryId: string | null;
   currencyUnit: CurrencyUnit;
+  /** import the image URL column (default true when the API does not say) */
+  includeImages?: boolean;
+  /** import the stock column (default true) */
+  includeQuantities?: boolean;
+  /** group rows of the same product into variants (default true) */
+  matchVariants?: boolean;
 }
 
 export interface ImportCounters {
@@ -78,6 +84,21 @@ export interface ImportResults {
   variantsUpdated: number;
 }
 
+/** rows by what the commit will do (all zeros before the first validation) */
+export interface ImportPlan {
+  create: number;
+  update: number;
+  addVariant: number;
+  skip: number;
+}
+
+/** planned effect of committing the ready rows */
+export interface ImportScope {
+  products: number;
+  newProducts: number;
+  updates: number;
+}
+
 export interface ImportSession {
   id: string;
   source: string;
@@ -90,6 +111,10 @@ export interface ImportSession {
   counters: ImportCounters;
   issues: ImportIssueTotals;
   results: ImportResults;
+  /** distinct products in the file */
+  products: number;
+  plan: ImportPlan;
+  scope: ImportScope;
   failureMessage: string | null;
   requestedBy: string | null;
   startedAt: string | null;
@@ -146,6 +171,8 @@ export interface MappingColumn {
   sampleValues: string[];
   isRequired: boolean;
   status: "matched" | "unmatched" | "manual";
+  /** what the automatic matching proposed (for "Reset to auto matches") */
+  autoTargetField: string | null;
 }
 
 export interface MissingField {
@@ -190,13 +217,35 @@ export type SettingsPatch = Partial<ImportSettings>;
 
 export type IssueSeverity = "error" | "warning";
 export type IssueStatus = "open" | "resolved" | "ignored";
-export type IssueAction = "accept_suggestion" | "custom_value" | "ignore";
+export type IssueAction = "accept_suggestion" | "custom_value" | "ignore" | "use_existing" | "create_new";
+
+/** the product that already exists in the catalogue, for a duplicate decision (price in rupees) */
+export interface ExistingProduct {
+  id: string;
+  productId: string;
+  variantId: string;
+  productCode: string;
+  sku: string;
+  title: string;
+  price: number;
+  barcode: string | null;
+}
+
+export interface DuplicateMatch {
+  existingSku: string;
+  existingTitle: string;
+  confidence: "exact" | "high" | "medium";
+  reason: string;
+}
 
 export interface IssueSuggestion {
   kind: "set_value" | "map_category" | "skip_row";
   field?: string;
   value?: string;
   label?: string;
+  existing?: ExistingProduct | null;
+  confidence: "high" | "medium" | "low";
+  confidenceReason: string;
 }
 
 export interface ImportIssue {
@@ -223,12 +272,24 @@ export interface ImportIssue {
     price?: number;
     barcode?: string;
     imageUrl?: string;
+    /** set on duplicate issues: the catalogue product the row matches; null on every other issue */
+    existing: ExistingProduct | null;
     source: Record<string, string>;
   };
+  /** duplicate issues: how the row matches the existing product */
+  duplicateMatch: DuplicateMatch | null;
+  /** server copy: why this matters, and what happens to the row */
+  whyItMatters: string;
+  impact: string;
   unit: CurrencyUnit;
 }
 
+export type IssueSort = "severity" | "row" | "code" | "-severity" | "-row" | "-code";
+
 export interface IssuesQuery {
+  /** a target field key */
+  field?: string;
+  sort?: IssueSort;
   code?: string;
   severity?: IssueSeverity;
   status?: IssueStatus;
@@ -247,6 +308,9 @@ export interface ImportSummary {
   byCode: Array<{ code: string; title: string; total: number; open: number; resolved: number; ignored: number; errors: number; warnings: number }>;
   knownCodes: Array<{ code: string; title: string }>;
   rows: Record<string, number>;
+  products: number;
+  plan: ImportPlan;
+  scope: ImportScope;
 }
 
 export interface ResolveInput {
@@ -352,6 +416,19 @@ export interface AccountChoice {
   marketplace: string;
   displayName: string;
   status: string;
+}
+
+/** GET /imports/marketplace-sources: a connected account the catalogue can be pulled from */
+export interface MarketplaceSource {
+  accountId: string;
+  marketplace: string;
+  displayName: string;
+  mode: string;
+  connection: "connected" | "attention" | "disconnected";
+  productsAvailable: number | null;
+  importedProducts: number;
+  lastImportAt: string | null;
+  canImport: boolean;
 }
 
 export interface DownloadedFile {

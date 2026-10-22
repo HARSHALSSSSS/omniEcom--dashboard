@@ -1,219 +1,346 @@
-import { useMemo } from "react";
-import { ArrowLeft, ArrowRight, CheckCircle2, CircleAlert } from "lucide-react";
-import type { UseQueryResult } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
 import { errorMessage } from "@/api/errors";
 import { Button } from "@/components/ui/button";
-import { useImportMapping, useImportRows, useUpdateMapping } from "@/hooks/useImport";
-import type { ImportOptions, ImportSession, MappingColumn, TargetField } from "@/types/import";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { toast } from "@/hooks/useToast";
+import { useCommitPreview, useImportMapping, useImportSummary, useUpdateMapping, useValidateImport } from "@/hooks/useImport";
+import { cn } from "@/utils/cn";
+import type { ImportSession, MappingColumn, MappingView, TargetField } from "@/types/import";
+import { ImportSummarySidebar } from "../ImportSummarySidebar";
 import { Alert, LoadError, PanelSkeleton } from "../ImportStates";
-import { importErrorMessage, num } from "../importFormat";
+import { canReview, importErrorMessage, num } from "../importFormat";
+import { SIDEBAR_LABEL, bucketsOf, planNumbers, type ExceptionBucket } from "./exceptions";
+import { FileIcon } from "./FileIcon";
+import type { StepProps } from "./stepTypes";
+import { BAR_PRIMARY, BTN_BLACK, BTN_OUTLINE } from "./styles";
+import { WizardBar } from "./WizardBar";
 
 const IGNORE = "";
-const GROUP_LABELS: Record<string, string> = {
-  identity: "Identity",
-  content: "Content",
-  taxonomy: "Category",
-  pricing: "Pricing and tax",
-  inventory: "Stock and shipping",
-  media: "Images",
-  variants: "Variant options",
-};
+/** a match below this confidence is shown as "Needs review" */
+const REVIEW_BELOW = 80;
 
-function Confidence({ column }: { column: MappingColumn }) {
-  if (!column.targetField) return <span className="text-[11px] text-muted-foreground">Not imported</span>;
-  const label = column.status === "manual" ? "Set by you" : `${column.confidence}%`;
-  return (
-    <div className="flex items-center gap-2">
-      <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted" aria-hidden>
-        <div className={column.status === "manual" ? "h-full bg-blue-500" : "h-full bg-emerald-500"} style={{ width: `${column.confidence}%` }} />
-      </div>
-      <span className="font-mono text-[11px] text-muted-foreground">{label}</span>
-    </div>
-  );
-}
-
-function groupFields(fields: TargetField[]): Array<[string, TargetField[]]> {
-  const groups = new Map<string, TargetField[]>();
-  for (const f of fields) groups.set(f.group, [...(groups.get(f.group) ?? []), f]);
-  return [...groups.entries()];
-}
-
-interface Props {
+interface Props extends StepProps {
   session: ImportSession;
-  options: UseQueryResult<ImportOptions>;
-  canWrite: boolean;
-  onBack: () => void;
-  onNext: () => void;
+  /** the side panel's "Import N ready" */
+  onImportReady: () => void;
+  /** a kind of exception was picked in the side panel */
+  onSelectIssueType: (type: ExceptionBucket) => void;
 }
 
-/** Step 2: the columns of the file against the product fields, auto-detected by the API and changeable one by one. */
-export function MappingStep({ session, options, canWrite, onBack, onNext }: Props) {
+interface Bar {
+  label: string;
+  /** field keys (or groups) that answer this bar */
+  match: (f: TargetField | undefined) => boolean;
+}
+
+const BARS: Bar[] = [
+  { label: "Product match", match: (f) => f?.key === "title" },
+  { label: "SKU match", match: (f) => f?.key === "sku" },
+  { label: "Variant match", match: (f) => f?.group === "variants" },
+  { label: "Category mapping", match: (f) => f?.key === "category" },
+  { label: "Image mapping", match: (f) => f?.group === "media" },
+];
+
+/** the design's "Automatic matching" lines, answered by the real mapping: how sure the API is about each kind of column */
+function matchingBars(view: MappingView, fields: TargetField[]) {
+  const byKey = new Map(fields.map((f) => [f.key, f]));
+  return BARS.map((bar) => {
+    const cols = view.columns.filter((c) => c.targetField && bar.match(byKey.get(c.targetField)));
+    const best = cols.reduce<MappingColumn | null>((a, c) => (!a || c.confidence > a.confidence ? c : a), null);
+    return {
+      label: bar.label,
+      width: best ? Math.max(4, Math.min(100, best.confidence)) : 0,
+      text: best ? `${cols.length} ${cols.length === 1 ? "column" : "columns"} · ${best.confidence}% match` : "Not mapped",
+    };
+  });
+}
+
+function statusOf(col: MappingColumn): "review" | "ignored" | "matched" {
+  if (!col.targetField) return "ignored";
+  if (col.status === "matched" && col.confidence < REVIEW_BELOW) return "review";
+  return "matched";
+}
+
+/** Step 3: the file's columns against the product fields (auto-detected by the API), then the analysis of the whole file. */
+export function MappingStep({ session, options, canWrite, goTo, onCancel, onSaveDraft, onImportReady, onSelectIssueType }: Props) {
   const mapping = useImportMapping(session.id);
-  const preview = useImportRows(session.id, { page: 1, pageSize: 5 });
   const update = useUpdateMapping(session.id);
+  const validate = useValidateImport(session.id);
+  const validated = canReview(session.status);
+  const summary = useImportSummary(session.id, validated);
+  const preview = useCommitPreview(session.id, validated);
+  const [editing, setEditing] = useState<MappingColumn | null>(null);
+  const [draft, setDraft] = useState(IGNORE);
+  const [error, setError] = useState<string | null>(null);
   const fields = useMemo(() => options.data?.targetFields ?? [], [options.data]);
-  const groups = useMemo(() => groupFields(fields), [fields]);
 
   if (mapping.isLoading || options.isLoading) return <PanelSkeleton rows={6} />;
   if (mapping.isError || !mapping.data) return <LoadError title="The column mapping could not be loaded." message={errorMessage(mapping.error)} onRetry={() => void mapping.refetch()} />;
   if (options.isError || !options.data) return <LoadError title="Import options could not be loaded." message={errorMessage(options.error)} onRetry={() => void options.refetch()} />;
 
   const view = mapping.data;
-  const mapped = view.columns.filter((c) => c.targetField).length;
   const blocked = view.missingRequired.length > 0;
-  const usedBy = new Map(view.columns.filter((c) => c.targetField).map((c) => [c.targetField as string, c.sourceColumn]));
-  const requiredFields = fields.filter((f) => f.required);
-  const rows = preview.data?.items ?? [];
+  const label = (key: string | null) => (key ? (fields.find((f) => f.key === key)?.label ?? key) : "Not imported");
+  const total = session.counters.total;
+  const buckets = bucketsOf(summary.data);
+  const attention = validated ? session.issues.open : undefined;
+  const ready = validated ? (preview.data?.cleanOnly ?? (summary.data ? (summary.data.rows.valid ?? 0) : session.counters.valid)) : undefined;
+  const nums = planNumbers(session);
+  const products = session.products > 0 ? session.products : undefined;
+
+  const openDialog = (col: MappingColumn) => {
+    setEditing(col);
+    setDraft(col.targetField ?? IGNORE);
+  };
+
+  const saveMapping = () => {
+    if (!editing) return;
+    const col = editing;
+    update.mutate(
+      { sourceColumn: col.sourceColumn, targetField: draft === IGNORE ? null : draft },
+      {
+        onSuccess: () => {
+          toast({ title: "Column mapping saved", description: `Mapped "${col.sourceColumn}" to "${label(draft === IGNORE ? null : draft)}".` });
+          setEditing(null);
+        },
+      },
+    );
+  };
+
+  const reset = async () => {
+    const changed = view.columns.filter((c) => c.autoTargetField !== c.targetField);
+    if (changed.length === 0) {
+      toast({ title: "Nothing to reset", description: "Every column already has its automatic match." });
+      return;
+    }
+    try {
+      for (const c of changed) await update.mutateAsync({ sourceColumn: c.sourceColumn, targetField: c.autoTargetField });
+      toast({ title: "Mappings reset", description: "Restored default automatic column matches." });
+    } catch {
+      /* the failed change is shown by the error alert */
+    }
+  };
+
+  const analyze = () => {
+    setError(null);
+    if (validated) {
+      goTo("review");
+      return;
+    }
+    validate.mutate(undefined, {
+      onSuccess: () => goTo("review"),
+      onError: (e) => setError(importErrorMessage(e, "The analysis could not be started.")),
+    });
+  };
+
+  const selected = fields.find((f) => f.key === draft);
+  const issueGroups = buckets.filter((b) => b.open > 0).map((b) => ({ type: b.bucket, label: SIDEBAR_LABEL[b.bucket](b.open) }));
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-xl border border-border bg-card p-6 shadow-sm" aria-labelledby="mapping-title">
-        <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className="flex flex-col lg:flex-row gap-12 items-start w-full pt-1">
+      {/* Left Column: Analysis, Bars & Mapping Table (takes full available width) */}
+      <div className="flex-1 min-w-0 w-full space-y-4">
+        {/* Detected File Header */}
+        <div className="flex items-start gap-3.5">
+          <FileIcon />
           <div>
-            <h2 id="mapping-title" className="text-base font-semibold text-foreground">
-              Match your columns
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              <span className="font-medium text-foreground">{session.fileName}</span> has {num(view.columns.length)} columns and {num(session.counters.total)} rows. Detected layout:{" "}
-              <span className="font-medium text-foreground">{view.preset.label}</span>.
+            <h3 className="text-[15px] leading-[23px] font-semibold text-[#000000] dark:text-white">{session.fileName ?? "Marketplace catalog"}</h3>
+            <p className="text-[12px] leading-[18px] text-[#666666] font-normal">
+              File detected · {products !== undefined ? `${num(products)} products · ` : ""}
+              {num(total)} rows
             </p>
           </div>
-          <div className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium ${blocked ? "bg-amber-50 text-amber-800" : "bg-emerald-50 text-emerald-700"}`}>
-            {blocked ? <CircleAlert className="h-4 w-4" aria-hidden /> : <CheckCircle2 className="h-4 w-4" aria-hidden />}
-            {num(mapped)} of {num(view.columns.length)} columns mapped
+        </div>
+
+        {/* Automatic Matching Section */}
+        <div className="space-y-3">
+          <h3 className="text-[14px] leading-[21px] font-semibold text-[#000000] dark:text-white">Automatic matching</h3>
+          <div className="space-y-2 pt-1">
+            {matchingBars(view, fields).map((item) => (
+              <div key={item.label} className="flex items-center text-[12px] leading-[18px]">
+                <span className="w-[160px] text-[#666666] font-normal shrink-0">{item.label}</span>
+                <div className="w-[301px] max-w-[40%] sm:max-w-none h-[3px] bg-[#EBEBEB] dark:bg-neutral-800 shrink-0 relative overflow-hidden">
+                  <div className="h-[3px] bg-[#4D4D4D] dark:bg-neutral-300" style={{ width: `${item.width}%` }} />
+                </div>
+                <span className="text-[#000000] dark:text-white font-medium pl-6 shrink-0">{item.text}</span>
+              </div>
+            ))}
           </div>
         </div>
 
-        <ul className="mt-4 flex flex-wrap gap-2" aria-label="Required fields">
-          {requiredFields.map((f) => {
-            const missing = view.missingRequired.some((m) => m.key === f.key);
-            return (
-              <li key={f.key} className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium ${missing ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>
-                {missing ? <CircleAlert className="h-3 w-3" aria-hidden /> : <CheckCircle2 className="h-3 w-3" aria-hidden />}
-                {f.label}
-                <span className="sr-only">{missing ? " is not mapped" : " is mapped"}</span>
-              </li>
-            );
-          })}
-        </ul>
-
-        {update.isError && (
-          <div className="mt-4">
-            <Alert>{importErrorMessage(update.error, "The mapping could not be saved.")}</Alert>
+        {/* Banner: "Only exceptions need you" */}
+        <div className="w-full min-h-[77px] bg-[#F6F6F6] dark:bg-card/40 rounded-[4px] px-4 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h4 className="text-[14px] leading-[21px] font-semibold text-[#000000] dark:text-white">Most of your catalog can be handled automatically.</h4>
+            <p className="text-[11px] leading-[17px] text-[#666666] font-normal mt-0.5">We&apos;ll identify matches, map common fields and bring only uncertain rows to your attention.</p>
           </div>
-        )}
-
-        <div className="mt-5 overflow-x-auto rounded-lg border border-border">
-          <table className="w-full min-w-[640px] text-left text-xs">
-            <thead className="border-b border-border bg-muted/50 font-medium text-muted-foreground">
-              <tr>
-                <th className="py-3 pl-4 pr-3">Column in your file</th>
-                <th className="px-3 py-3">Sample values</th>
-                <th className="px-3 py-3">Match</th>
-                <th className="py-3 pl-3 pr-4">Import it as</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {view.columns.map((col) => {
-                const saving = update.isPending && update.variables?.sourceColumn === col.sourceColumn;
-                return (
-                  <tr key={col.sourceColumn} className="hover:bg-muted/20">
-                    <td className="py-3 pl-4 pr-3 font-mono font-medium text-foreground">
-                      {col.sourceColumn}
-                      {col.isRequired && <span className="ml-1 text-destructive">*</span>}
-                    </td>
-                    <td className="max-w-[220px] truncate px-3 py-3 text-muted-foreground" title={col.sampleValues.join(", ")}>
-                      {col.sampleValues.length ? col.sampleValues.join(", ") : "—"}
-                    </td>
-                    <td className="px-3 py-3">
-                      <Confidence column={col} />
-                    </td>
-                    <td className="py-3 pl-3 pr-4">
-                      <select
-                        aria-label={`Import column ${col.sourceColumn} as`}
-                        className="h-8 w-full rounded-md border border-input bg-background px-2.5 text-xs disabled:opacity-60"
-                        value={col.targetField ?? IGNORE}
-                        disabled={!canWrite || saving}
-                        onChange={(e) => update.mutate({ sourceColumn: col.sourceColumn, targetField: e.target.value === IGNORE ? null : e.target.value })}
-                      >
-                        <option value={IGNORE}>Do not import this column</option>
-                        {groups.map(([group, list]) => (
-                          <optgroup key={group} label={GROUP_LABELS[group] ?? group}>
-                            {list.map((f) => {
-                              const other = usedBy.get(f.key);
-                              return (
-                                <option key={f.key} value={f.key}>
-                                  {f.label}
-                                  {f.required ? " (required)" : ""}
-                                  {other && other !== col.sourceColumn ? ` - replaces "${other}"` : ""}
-                                </option>
-                              );
-                            })}
-                          </optgroup>
-                        ))}
-                      </select>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <div className="shrink-0">
+            <span className="inline-flex items-center px-2 py-0.5 rounded-[3px] bg-[#F6F6F6] dark:bg-card border border-[#E3E3E3]/60 dark:border-border text-[11px] leading-[17px] font-medium text-[#000000] dark:text-white">
+              {attention === undefined ? "Analysis runs when you continue" : `${num(attention)} require attention`}
+            </span>
+          </div>
         </div>
-      </section>
 
-      <section className="rounded-xl border border-border bg-card p-6 shadow-sm" aria-labelledby="preview-title">
-        <h2 id="preview-title" className="text-sm font-semibold text-foreground">
-          First rows of your file
-        </h2>
-        {preview.isLoading ? (
-          <div className="mt-3 h-24 animate-pulse rounded-md bg-muted" aria-busy="true" />
-        ) : preview.isError ? (
-          <p className="mt-2 text-xs text-muted-foreground">The preview could not be loaded: {errorMessage(preview.error)}</p>
-        ) : (
-          <div className="mt-3 overflow-x-auto rounded-lg border border-border">
-            <table className="w-full text-left text-[11px]">
-              <thead className="border-b border-border bg-muted/50 font-medium text-muted-foreground">
-                <tr>
-                  <th className="px-3 py-2">Row</th>
-                  {session.headers.map((h) => (
-                    <th key={h} className="whitespace-nowrap px-3 py-2">
-                      {h}
-                    </th>
-                  ))}
+        {/* Review Field Mapping Section */}
+        <div className="space-y-2 pt-1">
+          <div className="flex items-baseline justify-between">
+            <div>
+              <h3 className="text-[17px] leading-[26px] font-semibold text-[#000000] dark:text-white">Review field mapping</h3>
+              <p className="text-[12px] leading-[18px] text-[#666666] font-normal mt-0.5">We matched your spreadsheet columns to master product fields.</p>
+            </div>
+            <button
+              type="button"
+              disabled={!canWrite || update.isPending}
+              onClick={() => void reset()}
+              className="text-[11px] text-[#666666] hover:text-black dark:hover:text-white font-normal underline-offset-2 hover:underline transition-colors cursor-pointer disabled:opacity-50"
+            >
+              Reset to auto matches
+            </button>
+          </div>
+
+          {blocked && (
+            <Alert tone="warning">Map the required columns first: {view.missingRequired.map((m) => m.label).join(", ")}</Alert>
+          )}
+          {update.isError && !editing && <Alert>{importErrorMessage(update.error, "The mapping could not be saved.")}</Alert>}
+
+          {/* Mapping Preview Table */}
+          <div className="border border-[#E3E3E3] dark:border-border rounded-[4px] bg-[#FFFFFF] dark:bg-card overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="h-[27px] bg-[#F6F6F6] dark:bg-muted/40 border-b border-[#E3E3E3] dark:border-border">
+                  <th className="px-3 text-[11px] leading-[16px] font-medium text-[#666666] w-[30%]">Your column</th>
+                  <th className="px-3 text-[11px] leading-[16px] font-medium text-[#666666] w-[28%]">Product field</th>
+                  <th className="px-3 text-[11px] leading-[16px] font-medium text-[#666666] w-[22%]">Status</th>
+                  <th className="px-3 text-[11px] leading-[16px] font-medium text-[#666666] text-right w-[20%]">
+                    <span className="sr-only">Action</span>
+                  </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
-                {rows.map((r) => (
-                  <tr key={r.rowNumber}>
-                    <td className="px-3 py-2 font-mono text-muted-foreground">{r.rowNumber}</td>
-                    {session.headers.map((h) => (
-                      <td key={h} className="max-w-[180px] truncate px-3 py-2 text-foreground" title={r.raw[h]}>
-                        {r.raw[h] || <span className="text-muted-foreground">—</span>}
+              <tbody>
+                {view.columns.map((row, idx) => {
+                  const st = statusOf(row);
+                  const needsReview = st === "review";
+                  const isLast = idx === view.columns.length - 1;
+                  return (
+                    <tr
+                      key={row.sourceColumn}
+                      className={cn(
+                        "h-[24px] sm:h-[26px] transition-colors",
+                        !isLast && "border-b border-[#E3E3E3] dark:border-border",
+                        needsReview ? "bg-[#F4F4F4] dark:bg-muted/60" : "bg-[#FFFFFF] dark:bg-card hover:bg-neutral-50/50",
+                      )}
+                    >
+                      <td className={cn("px-3 py-1 text-[11px] leading-[16px] text-[#000000] dark:text-white", needsReview ? "font-semibold" : "font-normal")}>
+                        {row.sourceColumn}
+                        {row.isRequired && <span className="ml-1 text-destructive">*</span>}
                       </td>
-                    ))}
-                  </tr>
-                ))}
+                      <td className={cn("px-3 py-1 text-[11px] leading-[16px] text-[#000000] dark:text-white", needsReview ? "font-semibold" : "font-normal")}>{label(row.targetField)}</td>
+                      <td className={cn("px-3 py-1 text-[11px] leading-[16px]", needsReview ? "font-semibold text-[#666666] dark:text-neutral-300" : "font-normal text-[#666666]")}>
+                        {st === "review" ? "Needs review" : st === "ignored" ? "Ignored" : "Matched"}
+                      </td>
+                      <td className="px-3 py-1 text-right">
+                        <button
+                          type="button"
+                          disabled={!canWrite}
+                          aria-label={`Change mapping of ${row.sourceColumn}`}
+                          onClick={() => openDialog(row)}
+                          className="text-[11px] leading-[16px] font-medium text-[#000000] dark:text-white hover:underline underline-offset-2 transition-opacity cursor-pointer disabled:opacity-50"
+                        >
+                          Change mapping
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
-        )}
-      </section>
-
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <Button variant="outline" onClick={onBack} className="gap-2">
-          <ArrowLeft className="h-4 w-4" /> Back
-        </Button>
-        <div className="flex items-center gap-3">
-          {blocked && (
-            <p className="text-xs text-amber-800" role="status">
-              Map the required columns first: {view.missingRequired.map((m) => m.label).join(", ")}
-            </p>
-          )}
-          <Button className="gap-2" disabled={blocked || update.isPending} onClick={onNext}>
-            Continue to settings <ArrowRight className="h-4 w-4" />
-          </Button>
         </div>
+        {error && <Alert>{error}</Alert>}
       </div>
+
+      {/* Right Rail: Import Summary Contextual Panel */}
+      <ImportSummarySidebar
+        totalProducts={products ?? total}
+        unit={products !== undefined ? "products" : "rows"}
+        readyCount={ready}
+        attentionCount={attention}
+        rowsCount={total}
+        newCount={nums.created}
+        matchedCount={nums.matched}
+        updatedCount={nums.updated}
+        readinessPercent={ready !== undefined && total > 0 ? Math.floor((ready / total) * 100) : undefined}
+        issueGroups={issueGroups}
+        actionsDisabled={blocked || !canWrite}
+        onReviewIssues={validated ? () => goTo("review") : undefined}
+        onSelectIssueType={validated ? onSelectIssueType : undefined}
+        onImportReady={validated ? onImportReady : undefined}
+      />
+
+      {/* Change Column Mapping Dialog */}
+      <Dialog open={!!editing} onOpenChange={(open) => !open && setEditing(null)}>
+        <DialogContent className="max-w-md bg-white dark:bg-card border border-[#E3E3E3] dark:border-border rounded-[8px] p-6 shadow-xl">
+          <DialogHeader className="space-y-1">
+            <DialogTitle className="text-[16px] leading-[24px] font-semibold text-[#000000] dark:text-white">Change column mapping</DialogTitle>
+            <DialogDescription className="text-[12px] leading-[18px] text-[#666666]">
+              Map spreadsheet column <span className="font-semibold text-black dark:text-white">&quot;{editing?.sourceColumn}&quot;</span> to a catalog master product field.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 my-2">
+            {editing && editing.sampleValues.length > 0 && (
+              <div className="bg-[#F6F6F6] dark:bg-muted/40 rounded-[4px] p-3 border border-[#E3E3E3] dark:border-border">
+                <div className="text-[10px] uppercase font-semibold text-[#666666] tracking-wider mb-1">Sample values in your file</div>
+                <div className="text-[12px] text-[#000000] dark:text-white font-mono break-words">{editing.sampleValues.join(" · ")}</div>
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <label htmlFor="mapping-target" className="text-[12px] font-medium text-[#000000] dark:text-white">
+                Destination product field
+              </label>
+              <select
+                id="mapping-target"
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                className="w-full h-[38px] px-3 bg-white dark:bg-card border border-[#E3E3E3] dark:border-border rounded-[5px] text-[13px] text-[#000000] dark:text-white focus:outline-none focus:border-black dark:focus:border-white transition-colors cursor-pointer"
+              >
+                {fields.map((f) => {
+                  const other = view.columns.find((c) => c.targetField === f.key && c.sourceColumn !== editing?.sourceColumn);
+                  return (
+                    <option key={f.key} value={f.key}>
+                      {f.label} {f.required ? "(Required)" : ""}
+                      {other ? ` - replaces "${other.sourceColumn}"` : ""}
+                    </option>
+                  );
+                })}
+                <option value={IGNORE}>Do not import (Ignore)</option>
+              </select>
+              <p className="text-[11px] text-[#666666]">{selected?.description || "Select how this column should be stored in master products."}</p>
+            </div>
+            {update.isError && <Alert>{importErrorMessage(update.error, "The mapping could not be saved.")}</Alert>}
+          </div>
+
+          <DialogFooter className="flex items-center justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setEditing(null)} className={`${BTN_OUTLINE} px-4`}>
+              Cancel
+            </Button>
+            <Button disabled={update.isPending} onClick={saveMapping} className={BTN_BLACK}>
+              {update.isPending ? "Saving..." : "Save mapping"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <WizardBar
+        status={attention === undefined ? `${num(total)} rows detected` : `${num(products ?? total)} ${products !== undefined ? "products" : "rows"} detected · ${num(attention)} require attention`}
+        onCancel={onCancel}
+        onSaveDraft={onSaveDraft}
+      >
+        <Button disabled={!canWrite || blocked || update.isPending} loading={validate.isPending} onClick={analyze} className={`${BAR_PRIMARY} w-[140px]`}>
+          Continue →
+        </Button>
+      </WizardBar>
     </div>
   );
 }

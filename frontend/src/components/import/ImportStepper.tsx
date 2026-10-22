@@ -7,7 +7,7 @@ export interface ImportStep {
   label: string;
 }
 
-export const IMPORT_STEPS: ImportStep[] = [
+const IMPORT_STEPS: ImportStep[] = [
   { number: 1, label: "Source" },
   { number: 2, label: "Upload" },
   { number: 3, label: "Mapping" },

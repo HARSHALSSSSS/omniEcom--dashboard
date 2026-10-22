@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQueries, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { importApi } from "@/api/import.api";
 import { isBusy, isNotFound } from "@/components/import/importFormat";
 import { saveBlob } from "@/components/products/list/saveBlob";
@@ -33,6 +33,7 @@ export const importKeys = {
   commitPreview: (b: string | undefined, id: string) => ["imports", "commit-preview", b, id] as const,
   warehouses: (b: string | undefined) => ["imports", "warehouses", b] as const,
   accounts: (b: string | undefined) => ["imports", "accounts", b] as const,
+  marketplaceSources: (b: string | undefined) => ["imports", "marketplace-sources", b] as const,
 };
 
 /** how often a running validation or commit is asked for its progress */
@@ -56,6 +57,10 @@ export function useImportHistory(query: HistoryQuery, enabled = true) {
   });
 }
 
+/** a marketplace import whose rows are still being pulled: it has no columns yet and is neither failed nor cancelled */
+export const isPulling = (s: Pick<ImportSession, "source" | "headers" | "status">): boolean =>
+  s.source === "marketplace" && s.headers.length === 0 && (s.status === "created" || s.status === "uploaded");
+
 /** things a finished import changes elsewhere in the app */
 const AFFECTED = new Set(["products", "productDetail", "listings", "inventory", "variants", "needs-attention", "dashboard"]);
 function refreshCatalogue(qc: QueryClient) {
@@ -74,7 +79,7 @@ export function useImportSession(id: string | null) {
     queryKey: importKeys.session(b, id ?? ""),
     queryFn: ({ signal }) => importApi.get(id as string, signal),
     enabled: Boolean(id),
-    refetchInterval: (q) => (q.state.data && isBusy(q.state.data.status) ? IMPORT_POLL_MS : false),
+    refetchInterval: (q) => (q.state.data && (isBusy(q.state.data.status) || isPulling(q.state.data)) ? IMPORT_POLL_MS : false),
     retry: (count, e) => !isNotFound(e) && count < 2,
   });
 
@@ -144,6 +149,41 @@ export function useAccountChoices(enabled = true) {
   return useQuery({ queryKey: importKeys.accounts(b), queryFn: importApi.accounts, staleTime: 5 * 60_000, retry: false, enabled });
 }
 
+/** connected marketplaces the catalogue can be pulled from (empty list when none, or when the API has no such source) */
+export function useMarketplaceSources(enabled = true) {
+  const b = useBusinessId();
+  return useQuery({ queryKey: importKeys.marketplaceSources(b), queryFn: ({ signal }) => importApi.marketplaceSources(signal), staleTime: 60_000, retry: false, enabled });
+}
+
+/**
+ * The open issues of several kinds at once (the wizard groups issue codes into a few kinds): one request per code, merged by row.
+ * `limit` is the page size of each request.
+ */
+export function useImportIssuesByCodes(id: string | null, codes: string[], limit: number, enabled = true) {
+  const b = useBusinessId();
+  const results = useQueries({
+    queries: codes.map((code) => {
+      const query: IssuesQuery = { code, status: "open", page: 1, pageSize: limit };
+      return {
+        queryKey: importKeys.issues(b, id ?? "", query),
+        queryFn: ({ signal }: { signal: AbortSignal }) => importApi.issues(id as string, query, signal),
+        enabled: Boolean(id) && enabled,
+        placeholderData: keepPreviousData,
+      };
+    }),
+  });
+  const items = results.flatMap((r) => r.data?.items ?? []).sort((a, z) => a.rowNumber - z.rowNumber);
+  const total = results.reduce((n, r) => n + (r.data?.total ?? 0), 0);
+  return {
+    items,
+    total,
+    isLoading: results.some((r) => r.isLoading),
+    isError: results.some((r) => r.isError),
+    error: results.find((r) => r.error)?.error ?? null,
+    refetch: () => results.forEach((r) => void r.refetch()),
+  };
+}
+
 // ---------------------------------------------------------------- writes
 
 /** keeps the cached session in step with what a write returned, so counters move without waiting for a refetch */
@@ -168,6 +208,18 @@ export function useCreateImport() {
   const cache = useSessionCache();
   return useMutation({
     mutationFn: (input: { source: ImportSource; fileName: string; fileSizeBytes: number }) => importApi.create(input),
+    onSuccess: (session) => {
+      cache.put(session);
+      cache.refreshHistory();
+    },
+  });
+}
+
+/** starts an import from a connected marketplace account (the rows are pulled by the server) */
+export function useImportFromMarketplace() {
+  const cache = useSessionCache();
+  return useMutation({
+    mutationFn: (accountId: string) => importApi.fromMarketplace(accountId),
     onSuccess: (session) => {
       cache.put(session);
       cache.refreshHistory();
@@ -209,6 +261,12 @@ export function useUpdateMapping(id: string) {
 export function useUpdateSettings(id: string) {
   const cache = useSessionCache();
   return useMutation({ mutationFn: (patch: SettingsPatch) => importApi.updateSettings(id, patch), onSuccess: cache.put });
+}
+
+/** saves settings of an import that may have only just been created (the id comes with the call) */
+export function useSaveSettings() {
+  const cache = useSessionCache();
+  return useMutation({ mutationFn: ({ id, patch }: { id: string; patch: SettingsPatch }) => importApi.updateSettings(id, patch), onSuccess: cache.put });
 }
 
 export function useValidateImport(id: string) {

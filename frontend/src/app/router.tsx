@@ -33,6 +33,9 @@ const EditProductPage = lazy(() => import("@/pages/products/EditProductPage"));
 const VariantsPage = lazy(() => import("@/pages/products/VariantsPage"));
 const ImportWizardPage = lazy(() => import("@/pages/import/ImportWizardPage"));
 const ImportIssuesPage = lazy(() => import("@/pages/import/ImportIssuesPage"));
+const ImportProcessingPage = lazy(
+  () => import("@/pages/import/ImportProcessingPage"),
+);
 const InventoryPage = lazy(() => import("@/pages/inventory/InventoryPage"));
 const OrdersPage = lazy(() => import("@/pages/orders/OrdersPage"));
 const FulfillmentPage = lazy(
@@ -184,6 +187,10 @@ export const router = createBrowserRouter([
       {
         path: `${ROUTES.PRODUCTS_IMPORT}/:importId/issues`,
         element: withSuspense(ImportIssuesPage),
+      },
+      {
+        path: ROUTES.PRODUCTS_IMPORT_PROCESSING,
+        element: withSuspense(ImportProcessingPage),
       },
       {
         path: `${ROUTES.PRODUCTS}/:id`,
