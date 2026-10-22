@@ -1,7 +1,24 @@
 /** Types of the Edit product screen (GET /products/{id}/edit, change-impact, edit/save, insights, AI description). */
 
-export type ProductType = "physical" | "digital" | "service";
+export type ProductType = "physical" | "digital" | "service" | "bundle";
 export type ProductStatus = "draft" | "active" | "archived";
+
+export type AttributeDataType = "text" | "number" | "boolean" | "date" | "enum";
+
+/** a category-specific attribute (Capacity, Fabric composition...) with the product's value (null = not supplied) */
+export interface CategoryAttribute {
+  attributeId: string;
+  code: string;
+  name: string;
+  dataType: AttributeDataType;
+  unit: string | null;
+  isRequired: boolean;
+  options: Array<{ value: string; label: string }>;
+  value: string | number | boolean | null;
+}
+
+/** a category's attribute without a product value (GET /categories/{id}/attributes) */
+export type CategoryAttributeDef = Omit<CategoryAttribute, "value">;
 
 export interface CustomAttribute {
   name: string;
@@ -28,6 +45,8 @@ export interface EditorProduct {
   material: string | null;
   standardCategory: string | null;
   customAttributes: CustomAttribute[];
+  /** the product-level attributes of the product's category with its values; absent from older responses */
+  categoryAttributes?: CategoryAttribute[];
   productType: ProductType;
   status: ProductStatus;
   productCodeLocked: boolean;
@@ -92,6 +111,7 @@ export interface EditorView {
     configured: number;
     customConfirmed: number;
     slots: Array<{ key: "material" | "dimensions" | "weight" | "countryOfOrigin" | "hsnCode" | "taxInformation"; label: string; supplied: boolean }>;
+    categorySlots?: Array<{ attributeId: string; label: string; supplied: boolean; isRequired: boolean }>;
     note: string | null;
   };
   media: {
@@ -128,6 +148,8 @@ export interface EditChanges {
   dimensions?: { length: number; width: number; height: number; unit?: "cm" | "mm" | "in" } | null;
   weight?: { value: number; unit?: "kg" | "g" | "lb" } | null;
   customAttributes?: CustomAttribute[] | null;
+  /** values of the category-specific attributes; an empty string / null clears one */
+  categoryAttributes?: Array<{ attributeId: string; value: string | number | boolean | null }>;
 }
 
 export type ImpactEffect =

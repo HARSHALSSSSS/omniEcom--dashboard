@@ -25,7 +25,7 @@ import { SelectField, TextField } from "@/components/products/create/fields";
 import { ghostButton, outlineButton } from "@/components/products/create/fieldStyles";
 
 const INDENT = String.fromCharCode(160, 160);
-const TYPE_LABELS: Record<string, string> = { physical: "Physical product", digital: "Digital product", service: "Service / Warranty" };
+const TYPE_LABELS: Record<string, string> = { physical: "Physical product", digital: "Digital product", service: "Service / Warranty", bundle: "Bundle / Kit" };
 
 /** the category tree as indented select options */
 function flattenTree(nodes: CategoryNode[], depth = 0): Array<{ id: string; label: string }> {

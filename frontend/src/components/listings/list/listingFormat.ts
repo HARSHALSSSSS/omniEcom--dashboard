@@ -1,26 +1,91 @@
+import { ROUTES } from "@/constants/routes";
 import { formatINR } from "@/utils/format";
-import type { BulkListingsResponse, CreateOutcome, ListingBulkAction, ListingRow, NotListedRow } from "@/types/listing";
+import type { BulkListingsResponse, CreateOutcome, ListingBulkAction, ListingRow, MatrixCell, MatrixStatus, NotListedRow } from "@/types/listing";
 
 export const NO_WRITE_REASON = "Your role can view listings but not change them.";
 
 export const price = (minor: number | null): string => (minor === null ? "—" : formatINR(minor));
 
-/** initials for the image placeholder ("Cotton Kurta Set" to "CK") */
-export const initialsOf = (title: string): string =>
-  title
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase() ?? "")
-    .join("");
+/** the dot and text colour of every status (the design's palette) */
+export const STATUS_COLOR: Record<MatrixStatus | "draft", string> = {
+  draft: "#BDBDBD",
+  live: "#16A34A",
+  ready: "#16A34A",
+  needs_review: "#D97706",
+  blocked: "#DC2626",
+  failed: "#DC2626",
+  syncing: "#2563EB",
+  not_listed: "#BDBDBD",
+};
 
-/** the one lifecycle action a row offers next to "Studio"; null when nothing can be done from the list */
-export type RowAction = { action: Extract<ListingBulkAction, "publish" | "retry" | "unpublish">; label: string } | null;
+export const STATUS_LABEL: Record<MatrixStatus, string> = {
+  live: "Live",
+  ready: "Ready",
+  needs_review: "Needs review",
+  blocked: "Blocked",
+  failed: "Failed",
+  syncing: "Syncing",
+  not_listed: "Not listed",
+};
+
+export const readinessColor = (percent: number): string => (percent >= 95 ? "#16A34A" : percent >= 70 ? "#D97706" : percent >= 50 ? "#2563EB" : "#DC2626");
+
+/** the label under a status in a matrix cell: how much of the product is on that marketplace */
+export function cellSublabel(cell: MatrixCell, variantsCount: number): string {
+  if (cell.listedVariants === 0) return "Not published";
+  return variantsCount > 1 ? `${cell.listedVariants} of ${variantsCount} variants` : "1 variant";
+}
+
+// ------------------------------------------------------------------------------------------------
+// where a row leads (the routes of the listing workflow screens)
+// ------------------------------------------------------------------------------------------------
+export const studioPath = (listingId: string): string => `${ROUTES.LISTINGS}/${listingId}`;
+export const blockedPath = (listingId: string): string => `${ROUTES.LISTINGS}/${listingId}/blocked`;
+export const syncPath = (listingId: string): string => `${ROUTES.LISTINGS}/${listingId}/sync`;
+export const unlistedPath = (variantId: string, accountId: string): string => `${ROUTES.LISTINGS}/${variantId}/unlisted?account=${accountId}`;
+export const bulkReviewPath = (ids: string[]): string => `${ROUTES.LISTINGS_BULK}?ids=${ids.join(",")}`;
+
+/** the screen a click on a row's status opens; null for a listing that is simply live or ready */
+export function statusPathOf(row: ListingRow): string | null {
+  switch (row.table.screenStatus) {
+    case "blocked":
+    case "failed":
+    case "needs_review":
+      return blockedPath(row.id);
+    case "syncing":
+      return syncPath(row.id);
+    default:
+      return null;
+  }
+}
+
+/** the one button at the end of a row (the design's "Manage / Review / Fix / View / Publish") */
+export type RowAction =
+  | { kind: "publish"; label: string }
+  | { kind: "review"; label: string }
+  | { kind: "link"; label: string; to: string };
 
 export function rowActionOf(row: ListingRow): RowAction {
   switch (row.table.screenStatus) {
     case "ready":
-      return { action: "publish", label: "Publish" };
+      return { kind: "publish", label: "Publish →" };
+    case "needs_review":
+      return { kind: "review", label: "Review →" };
+    case "blocked":
+    case "failed":
+      return { kind: "link", label: "Fix →", to: blockedPath(row.id) };
+    case "syncing":
+      return { kind: "link", label: "View →", to: syncPath(row.id) };
+    default:
+      return { kind: "link", label: "Manage →", to: studioPath(row.id) };
+  }
+}
+
+/** the lifecycle action a row offers next to its main button; null when there is none */
+export type SecondaryAction = { action: Extract<ListingBulkAction, "retry" | "unpublish">; label: string } | null;
+
+export function secondaryActionOf(row: ListingRow): SecondaryAction {
+  switch (row.table.screenStatus) {
     case "failed":
       return { action: "retry", label: "Retry" };
     case "live":
@@ -51,6 +116,37 @@ export const CONTENT_ALERT = ["needs_review", "needs_republish", "failed"] as co
 
 export const notListedKey = (r: Pick<NotListedRow, "variantId" | "accountId">): string => `${r.variantId}:${r.accountId}`;
 
+// ------------------------------------------------------------------------------------------------
+// CSV export of the listings on screen
+// ------------------------------------------------------------------------------------------------
+/** one CSV field: always quoted; a leading = + - @ is defused so a spreadsheet never runs it as a formula */
+const csvField = (value: string | number): string => {
+  const text = String(value);
+  return `"${(/^[=+\-@]/.test(text) ? `'${text}` : text).replace(/"/g, '""')}"`;
+};
+
+export function csvOfListings(rows: ListingRow[]): string {
+  const head = ["Listing", "SKU", "Marketplace", "Account", "Readiness", "Status", "Price", "Stock"];
+  const lines = rows.map((r) =>
+    [r.productTitle, r.sku, r.table.marketplaceName, r.table.accountName, `${r.table.readiness.percent}%`, STATUS_LABEL[r.table.screenStatus], price(r.table.priceMinor), r.table.stock.sellable].map(csvField).join(","),
+  );
+  return [head.map(csvField).join(","), ...lines].join("\r\n");
+}
+
+export function downloadCsv(filename: string, csv: string): void {
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+// ------------------------------------------------------------------------------------------------
+// results dialog
+// ------------------------------------------------------------------------------------------------
 export interface ResultRow {
   key: string;
   label: string;
@@ -93,4 +189,3 @@ export function viewOfCreate(outcomes: CreateOutcome[]): ResultsView {
     rows: outcomes.map((o) => ({ key: o.key, label: o.label, status: o.ok ? "done" : "failed", message: o.message, jobId: null })),
   };
 }
-

@@ -1,10 +1,24 @@
 import { errorMessage, isApiError } from "@/api/errors";
-import { formatCurrency } from "@/utils/format";
+import { formatCurrency, formatInZone } from "@/utils/format";
+import type { LedgerSla, OrderStatus } from "@/types/orders";
 
 /** money in the order's currency; paise stay exact */
 export function formatMoney(minor: number, currency = "INR"): string {
   return formatCurrency(minor, currency);
 }
+
+const DAY = { year: "numeric", month: "2-digit", day: "2-digit" } as const;
+
+/** when the order came in, the way the ledger writes it: the time today, "Yesterday", or the day (business time zone) */
+export function createdLabel(iso: string, now: Date = new Date()): string {
+  const day = formatInZone(iso, DAY);
+  if (day === formatInZone(now.toISOString(), DAY)) return formatInZone(iso, { hour: "2-digit", minute: "2-digit", hour12: true }).toUpperCase();
+  if (day === formatInZone(new Date(now.getTime() - 86_400_000).toISOString(), DAY)) return "Yesterday";
+  return formatInZone(iso, { day: "2-digit", month: "short" });
+}
+
+/** "ready_to_dispatch" to "Ready to dispatch" */
+export const sentenceCase = (s: string): string => (s ? s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, " ") : s);
 
 export const NO_WRITE_REASON = "Your role can view orders but not change them.";
 
@@ -38,3 +52,20 @@ export function addressLines(address: Record<string, unknown>): string[] {
 
 export const textOf = (obj: Record<string, unknown>, key: string): string | null =>
   typeof obj[key] === "string" && (obj[key] as string).trim() ? (obj[key] as string).trim() : null;
+
+/** the colour of a dispatch-SLA text (design palette: green healthy, amber approaching, red at risk or breached) */
+export const SLA_TEXT: Record<LedgerSla["state"], string> = {
+  safe: "text-[#16A34A]",
+  approaching: "text-[#D97706]",
+  at_risk: "text-[#DC2626]",
+  breached: "text-[#DC2626]",
+  none: "text-[#666666]",
+};
+
+/** the left rail of a ledger row: the SLA tone the API gives, blue for a fresh order that has none */
+export function railColor(tone: "red" | "amber" | "green" | "none", status: OrderStatus): string | null {
+  if (tone === "red") return "#DC2626";
+  if (tone === "amber") return "#D97706";
+  if (tone === "green") return "#16A34A";
+  return status === "new" ? "#2563EB" : null;
+}

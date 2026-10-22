@@ -1,4 +1,3 @@
-import { cn } from "@/utils/cn";
 import { formatNumber } from "@/utils/format";
 import { ORDER_TABS, type OrderTab, type OrdersSummary } from "@/types/orders";
 import { TAB_LABELS } from "./orderParams";
@@ -22,9 +21,11 @@ interface OrderTabsProps {
 /** lifecycle tabs; the counts use the same definitions as the list filter, so a tab never shows a different number than its list */
 export function OrderTabs({ active, summary, onChange }: OrderTabsProps) {
   return (
-    <div role="tablist" aria-label="Order lifecycle" className="flex flex-wrap gap-1 border-b border-border">
+    <div role="tablist" aria-label="Order lifecycle" className="w-full flex flex-row items-start gap-6 min-h-[34px] border-b border-[#EAEAEA] overflow-x-auto">
       {ORDER_TABS.map((tab) => {
         const selected = tab === active;
+        const attention = tab === "needs_attention";
+        const count = summary ? formatNumber(COUNT_OF[tab](summary.tabs)) : "—";
         return (
           <button
             key={tab}
@@ -32,13 +33,30 @@ export function OrderTabs({ active, summary, onChange }: OrderTabsProps) {
             role="tab"
             aria-selected={selected}
             onClick={() => onChange(tab)}
-            className={cn(
-              "-mb-px flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-medium transition-colors",
-              selected ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground",
-            )}
+            className={`flex flex-row items-center h-[34px] px-0 gap-1.5 shrink-0 transition-colors cursor-pointer ${
+              selected ? (attention ? "border-b-2 border-[#D97706]" : "border-b-2 border-[#000000]") : ""
+            }`}
           >
-            {TAB_LABELS[tab]}
-            <span className="rounded-full bg-muted px-1.5 py-0.5 font-mono text-[10px]">{summary ? formatNumber(COUNT_OF[tab](summary.tabs)) : "—"}</span>
+            <span
+              className={`text-[12px] leading-[145%] ${
+                attention ? "font-semibold text-[#D97706]" : selected ? "font-semibold text-[#000000]" : "font-normal text-[#666666]"
+              }`}
+            >
+              {TAB_LABELS[tab]}
+            </span>
+            {attention ? (
+              <div className="flex flex-row items-center px-[5px] py-[1px] h-[15px] bg-[#FFFBF5] border border-[#FDE68A]/60 rounded">
+                <span className="text-[10px] font-semibold leading-[12px] text-[#D97706]">{count}</span>
+              </div>
+            ) : (
+              <div
+                className={`flex flex-row items-center px-[5px] py-[1px] h-[15px] rounded ${
+                  selected ? "bg-[#000000] text-white" : "bg-[#F5F5F5] text-[#666666]"
+                }`}
+              >
+                <span className="text-[10px] font-semibold leading-[12px]">{count}</span>
+              </div>
+            )}
           </button>
         );
       })}

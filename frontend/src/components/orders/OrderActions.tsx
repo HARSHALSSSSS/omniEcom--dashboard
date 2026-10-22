@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ROUTES } from "@/constants/routes";
@@ -18,8 +17,9 @@ const statusOf = (a: NextAction): OrderStatus | null => {
 };
 
 /**
- * The steps the API allows from the order's status (GET /orders/{id}/next-actions). A step the warehouse flow owns is shown
- * disabled with the reason and a link to Fulfillment instead of a manual transition.
+ * The pinned bottom of the order drawer: the steps the API allows from the order's status (GET /orders/{id}/next-actions), then
+ * "Open fulfillment" and "Cancel order". A step the warehouse flow owns is shown disabled with the reason and a link to
+ * Fulfillment instead of a manual transition.
  */
 export function OrderActions({ orderId, orderNumber }: { orderId: string; orderNumber: string }) {
   const canWrite = useCan("orders:write");
@@ -36,11 +36,11 @@ export function OrderActions({ orderId, orderNumber }: { orderId: string; orderN
   if (isLoading) return <Skeleton className="h-24 w-full" role="status" aria-label="Loading actions" />;
   if (isError || !data) {
     return (
-      <div role="alert" className="space-y-2 rounded-lg border border-border p-3 text-xs">
-        <p className="text-muted-foreground">Actions could not be loaded. {errorMessage(error)}</p>
-        <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => void refetch()}>
+      <div role="alert" className="w-full space-y-2 rounded-lg border border-[#EAEAEA] p-3 text-[12px]">
+        <p className="text-[#666666]">Actions could not be loaded. {errorMessage(error)}</p>
+        <button type="button" onClick={() => void refetch()} className="h-[28px] px-3 rounded-lg border border-[#EAEAEA] text-[12px] font-medium text-[#000000] hover:bg-neutral-50 cursor-pointer">
           Retry
-        </Button>
+        </button>
       </div>
     );
   }
@@ -73,24 +73,25 @@ export function OrderActions({ orderId, orderNumber }: { orderId: string; orderN
     }
   };
 
-  const steps = data.actions.filter((a) => a.kind !== "fulfillment");
+  const cancelAction = data.actions.find((a) => a.kind === "cancel");
+  const steps = data.actions.filter((a) => a.kind !== "fulfillment" && a.kind !== "cancel");
   const fulfillmentLink = data.actions.find((a) => a.kind === "fulfillment");
   const showsTracking = steps.some((a) => a.kind === "transition" && statusOf(a) === "dispatched" && a.enabled && canWrite);
+  const cancelAllowed = Boolean(cancelAction?.enabled) && canWrite;
+  const cancelReason = cancelAction && !cancelAllowed ? (!canWrite ? NO_WRITE_REASON : reasonText(cancelAction.disabledReason, cancelAction.message)) : undefined;
+  const fulfillmentLabel = fulfillmentLink?.label ?? "Open fulfillment";
 
   return (
-    <section aria-label="Order actions" className="max-h-[40vh] space-y-3 overflow-y-auto">
+    <section aria-label="Order actions" className="w-full max-h-[45vh] overflow-y-auto flex flex-col gap-3">
       {data.managedByFulfillment && (
-        <div className="rounded-lg border border-indigo-200 bg-indigo-50/60 p-3 text-xs text-indigo-950">
+        <div className="rounded-lg border border-indigo-200 bg-indigo-50/60 p-3 text-[12px] text-indigo-950">
           <p className="font-semibold">Managed by Fulfillment{data.fulfillment ? ` (${data.fulfillment.number})` : ""}</p>
           <p className="mt-0.5 text-indigo-900">This order follows the warehouse work (pick, pack, ship), so its status cannot be moved by hand here.</p>
-          <Link to={ROUTES.FULFILLMENT} className="mt-1 inline-block font-semibold underline">
-            Open Fulfillment
-          </Link>
         </div>
       )}
 
       {showsTracking && (
-        <div className="grid grid-cols-2 gap-2 text-xs">
+        <div className="grid grid-cols-2 gap-2 text-[12px]">
           <label className="space-y-1">
             <span className="font-semibold">Carrier (optional)</span>
             <Input value={carrier} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCarrier(e.target.value)} maxLength={100} className="h-8 text-xs" />
@@ -102,35 +103,57 @@ export function OrderActions({ orderId, orderNumber }: { orderId: string; orderN
         </div>
       )}
 
-      {steps.length === 0 && <p className="text-xs text-muted-foreground">No further steps: this order is {data.status.replace(/_/g, " ")}.</p>}
-      <ul className="space-y-2">
-        {steps.map((a) => {
-          const allowed = a.enabled && canWrite;
-          const reason = !canWrite ? NO_WRITE_REASON : reasonText(a.disabledReason, a.message);
-          return (
-            <li key={a.key} className="space-y-1">
-              <Button
-                size="sm"
-                variant={a.kind === "cancel" ? "outline" : a.key === data.primaryAction ? "default" : "outline"}
-                className={`h-8 w-full text-xs ${a.kind === "cancel" ? "text-rose-700" : ""}`}
-                disabled={!allowed || busy}
-                title={allowed ? undefined : reason}
-                onClick={() => run(a)}
-              >
-                {a.label}
-              </Button>
-              {!allowed && reason && (
-                <p className="text-[11px] text-muted-foreground">{reason}</p>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-      {fulfillmentLink && !data.managedByFulfillment && (
-        <Link to={ROUTES.FULFILLMENT} className="inline-block text-xs font-semibold underline">
-          {fulfillmentLink.label}
-        </Link>
+      {steps.length === 0 && !cancelAction && <p className="text-[12px] text-[#666666]">No further steps: this order is {data.status.replace(/_/g, " ")}.</p>}
+      {steps.length > 0 && (
+        <ul className="space-y-2 m-0 p-0 list-none">
+          {steps.map((a) => {
+            const allowed = a.enabled && canWrite;
+            const reason = !canWrite ? NO_WRITE_REASON : reasonText(a.disabledReason, a.message);
+            const primary = a.key === data.primaryAction;
+            return (
+              <li key={a.key} className="space-y-1">
+                <button
+                  type="button"
+                  className={`w-full flex flex-row justify-center items-center h-[38px] px-3 rounded-lg border text-[13px] font-medium leading-[145%] transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 ${
+                    primary ? "bg-[#000000] border-[#000000] text-white hover:bg-neutral-800" : "bg-white border-[#EAEAEA] text-[#000000] hover:bg-neutral-50"
+                  }`}
+                  disabled={!allowed || busy}
+                  title={allowed ? undefined : reason}
+                  onClick={() => run(a)}
+                >
+                  {a.label}
+                </button>
+                {!allowed && reason && <p className="text-[11px] text-[#666666]">{reason}</p>}
+              </li>
+            );
+          })}
+        </ul>
       )}
+
+      {(fulfillmentLink || data.managedByFulfillment || cancelAction) && (
+        <div className="w-full flex flex-row items-center gap-2.5 min-h-[42px] pt-4 border-t border-[#EAEAEA]">
+          {(fulfillmentLink || data.managedByFulfillment) && (
+            <Link
+              to={ROUTES.FULFILLMENT}
+              className="flex-1 flex flex-row justify-center items-center h-[38px] px-3 bg-[#000000] border border-[#000000] rounded-lg hover:bg-neutral-800 transition-colors text-[13px] font-medium leading-[145%] text-[#FFFFFF]"
+            >
+              {fulfillmentLabel}
+            </Link>
+          )}
+          {cancelAction && (
+            <button
+              type="button"
+              disabled={!cancelAllowed || busy}
+              title={cancelAllowed ? undefined : cancelReason}
+              onClick={() => run(cancelAction)}
+              className="flex-1 flex flex-row justify-center items-center h-[38px] px-3 bg-white border border-[#EAEAEA] rounded-lg hover:bg-neutral-50 transition-colors text-[13px] font-medium leading-[145%] text-[#DC2626] text-center cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {cancelAction.label}
+            </button>
+          )}
+        </div>
+      )}
+      {cancelReason && <p className="text-[11px] text-[#666666]">{cancelReason}</p>}
 
       <CancelOrderDialog
         open={cancelOpen}

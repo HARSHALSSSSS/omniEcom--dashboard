@@ -24,6 +24,22 @@ describe("orders api requests", () => {
     });
   });
 
+  it("writes the fulfillment, attention and date filters under the API's names", () => {
+    expect(filterParams({ fulfillment: ["picking", "none"], attention: ["sla_risk", "delayed"], date: "today" })).toEqual({
+      "filter[fulfillmentStatus]": "picking,none",
+      "filter[attention]": "sla_risk,delayed",
+      "filter[date]": "today",
+    });
+  });
+
+  it("reads the recent activity with a limit and the saved views of the orders screen", async () => {
+    get.mockResolvedValue({ data: { data: [] } });
+    await ordersApi.activity(5);
+    expect(get).toHaveBeenCalledWith("/api/v1/orders/activity", expect.objectContaining({ params: { limit: 5 } }));
+    await ordersApi.views();
+    expect(get).toHaveBeenLastCalledWith("/api/v1/views", { params: { screen: "orders" } });
+  });
+
   it("asks the ledger for a numbered page with sort, and only sends page 1 implicitly", async () => {
     get.mockResolvedValue({ data: { data: { items: [], page: 2, pageSize: 50, total: 0, pages: 0 } } });
     await ordersApi.ledger({ marketplace: ["flipkart"], sort: "-value", page: 2, pageSize: 50 });

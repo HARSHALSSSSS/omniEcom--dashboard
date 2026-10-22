@@ -27,7 +27,8 @@ export const INVENTORY_OPTIONS: ReadonlyArray<{ id: CatalogInventoryStatus; labe
 export const TYPE_OPTIONS: ReadonlyArray<{ id: CatalogProductType; label: string }> = [
   { id: "physical", label: "Physical" },
   { id: "digital", label: "Digital" },
-  { id: "service", label: "Service" },
+  { id: "service", label: "Service / Warranty" },
+  { id: "bundle", label: "Bundle / Kit" },
 ];
 
 /** `sort` values the API understands (a leading "-" is descending); "" is its default, newest update first */

@@ -4,6 +4,7 @@ import type {
   AiApplied,
   AiMode,
   AiSuggestion,
+  CategoryAttributeDef,
   CategoryOption,
   ChangeImpact,
   EditChanges,
@@ -43,6 +44,24 @@ export const productEditApi = {
     unwrap(await client.post(`${product(id)}/ai/description/${suggestionId}/apply`, { persist: false })),
   dismissDescription: async (id: string, suggestionId: string): Promise<AiSuggestion> =>
     unwrap(await client.post(`${product(id)}/ai/description/${suggestionId}/dismiss`)),
+
+  /** GET /categories/{id}/attributes: the product-level attributes a category expects (the "Additional attributes" of the edit screen follow the chosen category) */
+  listCategoryAttributes: async (categoryId: string): Promise<CategoryAttributeDef[]> => {
+    const rows = unwrap<
+      Array<{ isRequired: boolean; attribute: { id: string; code: string; name: string; dataType: CategoryAttributeDef["dataType"]; appliesTo: "product" | "variant"; unit: string | null; values: Array<{ value: string; label: string }> } }>
+    >(await client.get(`${API_BASE}/categories/${categoryId}/attributes`));
+    return rows
+      .filter((r) => r.attribute.appliesTo === "product")
+      .map((r) => ({
+        attributeId: r.attribute.id,
+        code: r.attribute.code,
+        name: r.attribute.name,
+        dataType: r.attribute.dataType,
+        unit: r.attribute.unit,
+        isRequired: r.isRequired,
+        options: r.attribute.values.map((v) => ({ value: v.value, label: v.label })),
+      }));
+  },
 
   /** GET /categories (all pages, the picker needs the whole tree) */
   listCategories: async (): Promise<CategoryOption[]> => {

@@ -3,8 +3,11 @@
 export const SCREEN_STATUSES = ["live", "ready", "needs_review", "syncing", "failed", "blocked"] as const;
 export type ScreenStatus = (typeof SCREEN_STATUSES)[number];
 
-/** the tab strip: every listing, one screen status, or the variants that have no listing yet */
-export const LISTING_TABS = ["all", ...SCREEN_STATUSES, "not_listed"] as const;
+/**
+ * the tab strip: every listing, one screen status, the draft listings (lifecycle status `draft`, whatever their screen status is),
+ * or the variants that have no listing yet
+ */
+export const LISTING_TABS = ["all", ...SCREEN_STATUSES, "draft", "not_listed"] as const;
 export type ListingTab = (typeof LISTING_TABS)[number];
 
 export const LISTING_STATUSES = ["draft", "ready", "approved", "pending", "active", "rejected", "correction_required", "unpublished"] as const;
@@ -15,6 +18,24 @@ export type ContentState = (typeof CONTENT_STATES)[number];
 
 export const LISTING_SOURCES = ["created", "imported"] as const;
 export type ListingSource = (typeof LISTING_SOURCES)[number];
+
+/** "why not ready" causes: each one filters the table to the listings it affects */
+export const LISTING_ISSUES = ["missing_attributes", "missing_images", "category_mismatch", "variant_issues"] as const;
+export type ListingIssueKey = (typeof LISTING_ISSUES)[number];
+
+/** readiness bands: 100 = 100% | high = 80-99% | medium = 50-79% | low = below 50% */
+export const READINESS_BANDS = ["100", "high", "medium", "low"] as const;
+export type ReadinessBand = (typeof READINESS_BANDS)[number];
+
+export const INVENTORY_FILTERS = ["in_stock", "out_of_stock"] as const;
+export type InventoryFilter = (typeof INVENTORY_FILTERS)[number];
+
+/** high_velocity = sold at least 5 units in the last 30 days | missing_channel = could still be listed on a connected account */
+export const POTENTIALS = ["high_velocity", "missing_channel"] as const;
+export type Potential = (typeof POTENTIALS)[number];
+
+export const PRODUCT_STATUSES = ["active", "draft", "archived"] as const;
+export type ProductStatus = (typeof PRODUCT_STATUSES)[number];
 
 export const LISTING_SORTS = ["-updatedAt", "updatedAt", "title", "-title", "sku", "-sku", "price", "-price", "status", "-status"] as const;
 export type ListingSort = (typeof LISTING_SORTS)[number];
@@ -87,7 +108,8 @@ export interface ListingsTablePage {
   pageSize: number;
   total: number;
   pages: number;
-  counts: TabCounts;
+  /** per tab; `draft` only comes with the one-product view (the numbered table's overview has the draft count) */
+  counts: TabCounts & { draft?: number };
 }
 
 export interface ListingsOverview {
@@ -132,6 +154,13 @@ export interface ListingFilters {
   attention?: boolean;
   /** only the listings of this product */
   productId?: string;
+  issue?: ListingIssueKey;
+  /** master category (its sub-categories included) */
+  categoryId?: string;
+  productStatus?: ProductStatus;
+  readiness?: ReadinessBand;
+  inventory?: InventoryFilter;
+  potential?: Potential;
 }
 
 export interface ListingsQuery extends ListingFilters {
@@ -196,4 +225,101 @@ export interface SyncJobView {
   id: string;
   status: JobStatus;
   error: { code: string; message: string } | null;
+}
+
+/** GET /listings/matrix: master products x marketplaces */
+export type MatrixStatus = ScreenStatus | "not_listed";
+
+export interface MatrixCell {
+  status: MatrixStatus;
+  listings: number;
+  /** variants of the product that have a listing on this marketplace */
+  listedVariants: number;
+  byStatus: Partial<Record<ScreenStatus, number>>;
+}
+
+export interface ListingsMatrix {
+  /** active master products */
+  total: number;
+  channels: Array<{ code: string; name: string; accounts: number; connected: boolean }>;
+  items: Array<{ productId: string; title: string; sku: string; variantsCount: number; signal: MatrixStatus; channels: Record<string, MatrixCell> }>;
+}
+
+/** GET /listings/insights: catalogue reach and why listings are not ready */
+export interface ListingsInsights {
+  masterProducts: number;
+  connectedChannels: number;
+  activeListings: number;
+  readyToPublish: number;
+  needReview: number;
+  issues: { notReady: number; missingAttributes: number; missingImages: number; categoryMismatch: number; variantIssues: number };
+}
+
+/** GET /listings/channel-summary: one row per marketplace of the connector registry */
+export interface ChannelSummaryRow {
+  code: string;
+  name: string;
+  implementation: string | null;
+  /** the connector accepts listings through the API */
+  listable: boolean;
+  /** the channel group the marketplace belongs to (social) */
+  group: string | null;
+  accounts: number;
+  activeAccounts: number;
+  connected: boolean;
+  listings: number;
+  live: number;
+  needsAttention: number;
+  drafts: number;
+  notListed: number;
+}
+
+export interface ChannelGroupRow extends Omit<ChannelSummaryRow, "implementation" | "listable" | "group"> {
+  marketplaces: string[];
+}
+
+export interface ChannelSummary {
+  channels: ChannelSummaryRow[];
+  groups: ChannelGroupRow[];
+}
+
+/** GET /listings/filter-options */
+export interface ListingFilterOptions {
+  categories: Array<{ id: string; name: string; path: string; listings: number }>;
+}
+
+/** POST /listings/bulk-create */
+export interface BulkCreateItem {
+  index: number;
+  variantId: string;
+  accountId: string;
+  sku: string | null;
+  productTitle: string | null;
+  accountName: string | null;
+  marketplace: string | null;
+  ok: boolean;
+  status: "created" | "exists" | "failed";
+  listingId: string | null;
+  message: string;
+  error: { code: string; message: string } | null;
+}
+
+export interface BulkCreateResponse {
+  summary: { total: number; created: number; existing: number; failed: number };
+  marketplaces: Array<{ code: string; name: string }>;
+  results: BulkCreateItem[];
+}
+
+export interface BulkCreateInput {
+  productIds: string[];
+  accountIds: string[];
+}
+
+/** a master product found by the create dialog's search */
+export interface ProductChoice {
+  id: string;
+  title: string;
+  sku: string;
+  variantCount: number;
+  thumbnailUrl: string | null;
 }

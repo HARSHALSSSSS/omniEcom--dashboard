@@ -20,23 +20,26 @@ function hrefFor(key: string, id: string): string {
 export function EditSidebar({ editor }: { editor: EditorView }) {
   const id = editor.product.id;
   return (
-    <aside aria-label="Product sections" className="space-y-5 text-xs">
-      <nav aria-label="Product">
-        <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Product</p>
-        <ul className="space-y-0.5">
+    <aside aria-label="Product sections" className="flex flex-col gap-5 w-[120px] shrink-0">
+      <nav aria-label="Product" className="flex flex-col gap-5">
+        <span className="text-[12px] font-semibold text-[#000000] leading-[145%]">Product</span>
+        <ul className="flex flex-col gap-1 w-full">
           {editor.nav.map((n) => {
             const current = n.key === "overview";
-            const cls = cn("flex items-center justify-between rounded-md px-3 py-1.5", current ? "bg-muted font-semibold text-foreground" : "text-muted-foreground hover:bg-muted/60 hover:text-foreground");
+            const cls = cn(
+              "flex items-center justify-between gap-1 h-8 px-2.5 rounded-[4px] text-left transition-colors w-full text-[12px] leading-[145%]",
+              current ? "bg-[#F5F5F5] font-semibold text-[#000000]" : "bg-white font-normal text-[#666666] hover:text-[#000000] hover:bg-neutral-50 cursor-pointer",
+            );
             return (
               <li key={n.key}>
                 {current ? (
                   <span aria-current="page" className={cls}>
-                    {n.label}
+                    <span className="truncate">{n.label}</span>
                   </span>
                 ) : (
                   <Link to={hrefFor(n.key, id)} className={cls}>
-                    {n.label}
-                    {n.count !== undefined && <span className="text-[11px]">{n.count}</span>}
+                    <span className="truncate">{n.label}</span>
+                    {n.count !== undefined && <span className="text-[11px] shrink-0">{n.count}</span>}
                   </Link>
                 )}
               </li>
@@ -44,20 +47,21 @@ export function EditSidebar({ editor }: { editor: EditorView }) {
           })}
         </ul>
       </nav>
-      <dl className="space-y-2 border-t border-border pt-4">
-        <div>
-          <dt className="text-muted-foreground">Product ID</dt>
-          <dd className="font-mono font-medium text-foreground">{editor.meta.productId}</dd>
+      <div className="w-full h-[1px] bg-[#EAEAEA]" />
+      <dl className="flex flex-col gap-4 w-full">
+        <div className="flex flex-col gap-1">
+          <dt className="text-[11px] font-normal text-[#666666] leading-[145%]">Product ID</dt>
+          <dd className="text-[11px] font-normal text-[#000000] leading-[145%] break-all">{editor.meta.productId}</dd>
         </div>
-        <div>
-          <dt className="text-muted-foreground">Created</dt>
-          <dd className="font-medium text-foreground">{fmt(editor.meta.createdAt)}</dd>
+        <div className="flex flex-col gap-1">
+          <dt className="text-[11px] font-normal text-[#666666] leading-[145%]">Created</dt>
+          <dd className="text-[11px] font-normal text-[#000000] leading-[145%]">{fmt(editor.meta.createdAt)}</dd>
         </div>
-        <div>
-          <dt className="text-muted-foreground">Last updated</dt>
-          <dd className="font-medium text-foreground">
+        <div className="flex flex-col gap-1">
+          <dt className="text-[11px] font-normal text-[#666666] leading-[145%]">Last updated</dt>
+          <dd className="text-[11px] font-normal text-[#000000] leading-[145%]">
             {fmt(editor.meta.updatedAt)}
-            {editor.meta.updatedBy ? <span className="block text-muted-foreground">by {editor.meta.updatedBy.name}</span> : null}
+            {editor.meta.updatedBy ? <span className="block text-[#666666]">by {editor.meta.updatedBy.name}</span> : null}
           </dd>
         </div>
       </dl>

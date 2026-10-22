@@ -1,23 +1,30 @@
-import { useEffect, useMemo, useState } from "react";
-import { PageHeader } from "@/components/common/PageHeader";
-import { Button } from "@/components/ui/button";
-import { CreateReturnDialog } from "@/components/returns/CreateReturnDialog";
-import { ReturnDrawer } from "@/components/returns/ReturnDrawer";
-import { ReturnFilters } from "@/components/returns/ReturnFilters";
-import { ReturnInsights } from "@/components/returns/ReturnInsights";
-import { ReturnKpiTiles } from "@/components/returns/ReturnKpiTiles";
-import { ReturnTabs } from "@/components/returns/ReturnTabs";
-import { ReturnsPagination } from "@/components/returns/ReturnsPagination";
-import { EmptyReturns, LoadError, NoMatches } from "@/components/returns/ReturnsStates";
-import { ReturnsTable, TableSkeleton } from "@/components/returns/ReturnsTable";
-import { NO_WRITE_REASON } from "@/components/returns/returnFormat";
-import { DEFAULT_DAYS, DEFAULT_PAGE_SIZE, isFiltered, ledgerQueryOf, useReturnsUrlState } from "@/components/returns/returnParams";
+import { useCallback, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Download, Plus, RefreshCw } from "lucide-react";
 import { saveBlob } from "@/components/products/list/saveBlob";
 import { errorMessage } from "@/api/errors";
+import { AnalyticsSection } from "@/components/returns/AnalyticsSection";
+import { AttentionSection } from "@/components/returns/AttentionSection";
+import { BTN_DARK, BTN_LIGHT, Notice, SELECT_MD } from "@/components/returns/design";
+import { InspectionView } from "@/components/returns/InspectionView";
+import { GlanceTiles, LifecycleRail, SignalRail } from "@/components/returns/LifecycleRail";
+import { LedgerSection } from "@/components/returns/LedgerSection";
+import { RefundsView } from "@/components/returns/RefundsView";
+import { ReturnsView } from "@/components/returns/ReturnsView";
+import { NO_WRITE_REASON } from "@/components/returns/returnFormat";
+import { DEFAULT_DAYS, VIEWS, VIEW_LABELS, ledgerQueryOf, useReturnsUrlState, type DrawerKind, type ReturnsView as ViewKey } from "@/components/returns/returnParams";
 import { useCan } from "@/hooks/useCan";
-import { useExportReturns, useReturnCounts, useReturnMarketplaces, useReturnsInsights, useReturnsLedger, useReturnsOverview, useReturnsSummary } from "@/hooks/useReturns";
+import { RETURN_KEYS, useExportAttention, useExportReturns, useReturnMarketplaces, useReturnsInsights, useReturnsOverview, useReturnsSummary, useSyncReturns } from "@/hooks/useReturns";
 import { toast } from "@/hooks/useToast";
-import { SUMMARY_WINDOWS } from "@/types/returns";
+import { cn } from "@/utils/cn";
+import { MoreMenu } from "@/components/returns/MoreMenu";
+import { SyncReportPanel } from "@/components/returns/SyncReport";
+import { syncHeadline } from "@/components/returns/returnFormat";
+import { SUMMARY_WINDOWS, type ReturnOrder, type SyncReport } from "@/types/returns";
+import { CreateReturnModal } from "./CreateReturnModal";
+import { InspectionDrawer } from "./InspectionDrawer";
+import { RefundDetailDrawer } from "./RefundDetailDrawer";
+import { ReturnDetailDrawer } from "./ReturnDetailDrawer";
 
 const CREATE_UNAVAILABLE: Record<string, string> = {
   shopify_only: "Returns can only be created for orders from a connected Shopify store.",
@@ -25,35 +32,39 @@ const CREATE_UNAVAILABLE: Record<string, string> = {
 
 export default function ReturnsPage() {
   const url = useReturnsUrlState();
-  const { update, clearFilters, filters, sort, page, pageSize, tab, days, drawerId } = url;
+  const { update, filters, days, drawer, view } = url;
   const canWrite = useCan("returns:write");
 
   const query = ledgerQueryOf(url);
   const summary = useReturnsSummary(days);
-  const insights = useReturnsInsights(days);
   const overview = useReturnsOverview();
-  const ledger = useReturnsLedger(query);
-  const counts = useReturnCounts(filters);
+  const insights = useReturnsInsights(days);
   const marketplaces = useReturnMarketplaces();
   const exporter = useExportReturns();
+  const sync = useSyncReturns();
+  const attentionExport = useExportAttention();
+  const queryClient = useQueryClient();
   const [creating, setCreating] = useState(false);
-
-  const rows = useMemo(() => ledger.data?.items ?? [], [ledger.data]);
-  const filtered = isFiltered(filters);
-
-  // a page past the end (a shrinking result set, an old link) falls back to the last page
-  useEffect(() => {
-    const data = ledger.data;
-    if (data && data.total > 0 && data.items.length === 0 && page > data.pages) update({ page: String(data.pages) }, { replace: true });
-  }, [ledger.data, page, update]);
+  const [report, setReport] = useState<SyncReport | null>(null);
+  const [reviewIds, setReviewIds] = useState<string[]>([]);
 
   const channelNames = useMemo(() => new Map((marketplaces.data ?? []).map((m) => [m.code, m.name])), [marketplaces.data]);
-  const channelName = (code: string) => channelNames.get(code) ?? code;
+  const channelName = useCallback((code: string) => channelNames.get(code) ?? code, [channelNames]);
   // the connected channels are the ones that have returns; the full marketplace list names them
   const channelOptions = useMemo(
     () => (marketplaces.data ?? []).concat((insights.data?.channels ?? []).filter((c) => !channelNames.has(c.code)).map((c) => ({ code: c.code, name: c.code }))),
     [marketplaces.data, insights.data, channelNames],
   );
+
+  const create = overview.data?.createReturn;
+  const createReason = !canWrite ? NO_WRITE_REASON : create && !create.available ? (CREATE_UNAVAILABLE[create.reason ?? ""] ?? "Creating a return is not available right now.") : undefined;
+  const createChannels = (create?.allowedChannels ?? []).map(channelName);
+  const statusLine = overview.data?.statusLine;
+
+  const openDrawer = useCallback((kind: DrawerKind, id: string) => update({ drawer: `${kind}:${id}` }, { keepPage: true }), [update]);
+  /** from one drawer to another (inspection from the detail, ...) replaces the entry, so back leaves the drawers in one step */
+  const switchDrawer = useCallback((kind: DrawerKind, id: string) => update({ drawer: `${kind}:${id}` }, { keepPage: true, replace: true }), [update]);
+  const closeDrawer = useCallback(() => update({ drawer: null }, { keepPage: true, replace: true }), [update]);
 
   const onExport = () =>
     exporter.mutate(query, {
@@ -61,25 +72,89 @@ export default function ReturnsPage() {
       onError: (e) => toast({ title: "Export failed", description: errorMessage(e), variant: "destructive" }),
     });
 
-  const create = overview.data?.createReturn;
-  const createReason = !canWrite ? NO_WRITE_REASON : create && !create.available ? (CREATE_UNAVAILABLE[create.reason ?? ""] ?? "Creating a return is not available right now.") : undefined;
+  const onSync = () => {
+    setReport(null);
+    sync.mutate(
+      { onUpdate: setReport },
+      {
+        onSuccess: (done) => {
+          const failed = done.accounts.some((a) => a.job && a.job.status !== "succeeded");
+          toast({ title: done.nothingToSync ? "Nothing to sync" : done.stillRunning ? "Sync still running" : failed ? "Returns synced, with problems" : "Returns synced", description: syncHeadline(done), variant: done.nothingToSync || failed ? "default" : "success" });
+        },
+        onError: (e) => {
+          setReport(null);
+          toast({ title: "Sync failed", description: errorMessage(e), variant: "destructive" });
+        },
+      },
+    );
+  };
 
-  const loadingList = ledger.isLoading;
-  const listError = ledger.isError && !ledger.data;
+  const onRefresh = () => void queryClient.invalidateQueries({ queryKey: RETURN_KEYS.all });
+  const onExportAttention = () =>
+    attentionExport.mutate(undefined, {
+      onSuccess: (file) => saveBlob(file.blob, file.fileName),
+      onError: (e) => toast({ title: "Export failed", description: errorMessage(e), variant: "destructive" }),
+    });
+
+  /** "Review selected": the drawer opens the first picked return and steps through the rest */
+  const startReview = (ids: string[]) => {
+    const first = ids[0];
+    if (!first) return;
+    setReviewIds(ids);
+    openDrawer("return", first);
+  };
+  const stepTo = (id: string | undefined) => (id ? () => switchDrawer("return", id) : null);
+  const reviewIndex = drawer?.kind === "return" ? reviewIds.indexOf(drawer.id) : -1;
+  const review =
+    reviewIndex >= 0
+      ? {
+          index: reviewIndex,
+          total: reviewIds.length,
+          onPrev: stepTo(reviewIds[reviewIndex - 1]),
+          onNext: stepTo(reviewIds[reviewIndex + 1]),
+          onStop: () => setReviewIds([]),
+        }
+      : null;
+
+  const onCreated = (created: ReturnOrder) => {
+    setCreating(false);
+    toast({ title: `Return ${created.number} created`, description: "No refund has been issued yet.", variant: "success" });
+    openDrawer("return", created.id);
+  };
+
+  const pickView = (next: ViewKey) => update({ view: next === "overview" ? null : next });
 
   return (
-    <div className="w-full space-y-6 pb-24">
-      <PageHeader
-        eyebrow="REVERSE LOGISTICS & RTO"
-        title="Returns & Reverse Logistics"
-        description="Inspect return deliveries, disposition damaged or sellable stock, and issue multi-channel customer refunds."
-        actions={
-          <div className="flex items-center gap-2">
+    <div className="w-full space-y-9 pb-32 font-['Inter',sans-serif] text-[#0A0A0A]">
+      <div className="flex flex-col gap-2">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-[#707070]">RETURNS OPERATIONS</span>
+
+        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+          <h1 className="text-[30px] font-semibold leading-[44px] text-[#000000]">Returns</h1>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {create && (
+              <button type="button" onClick={() => setCreating(true)} disabled={createReason !== undefined} title={createReason} className={cn(BTN_LIGHT, "cursor-pointer")}>
+                <Plus className="h-4 w-4 stroke-[2] text-[#000000]" />
+                <span>Create Return</span>
+              </button>
+            )}
+
+            <button type="button" onClick={onSync} disabled={sync.isPending || !canWrite} title={canWrite ? undefined : NO_WRITE_REASON} className={BTN_DARK}>
+              <RefreshCw className={cn("h-3.5 w-3.5 stroke-[2] text-white", sync.isPending && "animate-spin")} />
+              <span>{sync.isPending ? "Syncing..." : "Sync Returns"}</span>
+            </button>
+
+            <button type="button" onClick={onExport} disabled={exporter.isPending} className={BTN_LIGHT}>
+              <Download className="h-3.5 w-3.5 stroke-[2] text-[#000000]" />
+              <span>{exporter.isPending ? "Exporting..." : "Export"}</span>
+            </button>
+
             <select
               aria-label="Summary window"
               value={days}
               onChange={(e) => update({ days: Number(e.target.value) === DEFAULT_DAYS ? null : e.target.value }, { keepPage: true })}
-              className="h-9 rounded-lg border border-border bg-card px-2.5 text-xs font-medium"
+              className={cn(SELECT_MD, "cursor-pointer")}
             >
               {SUMMARY_WINDOWS.map((d) => (
                 <option key={d} value={d}>
@@ -87,85 +162,103 @@ export default function ReturnsPage() {
                 </option>
               ))}
             </select>
-            {create && (
-              <Button size="sm" className="gap-2" disabled={createReason !== undefined} title={createReason} onClick={() => setCreating(true)}>
-                Create return
-              </Button>
-            )}
+
+            <MoreMenu onExportAttention={onExportAttention} exportingAttention={attentionExport.isPending} onRefresh={onRefresh} onShowSyncReport={sync.data && !report ? () => setReport(sync.data) : null} />
           </div>
-        }
-      />
+        </div>
 
-      <ReturnKpiTiles
-        summary={summary.data}
-        loading={summary.isLoading}
-        error={summary.isError ? errorMessage(summary.error) : null}
-        onRetry={() => void summary.refetch()}
-        activeStage={filters.stage}
-        onPickStage={(stage) => update({ stage, tab: null })}
-      />
+        <p className="text-[13px] leading-[19px] text-[#666666]">Centralize returns, inspect returned products, process refunds and decide the next inventory disposition.</p>
 
-      <div className="space-y-4">
-        <ReturnTabs active={tab} counts={counts.data} onChange={(t) => update({ tab: t, stage: null })} />
-        <ReturnFilters
-          filters={filters}
-          sort={sort}
-          channels={channelOptions}
-          filtered={filtered}
-          exporting={exporter.isPending}
-          onSearch={(q) => update({ q }, { replace: true })}
-          onChannel={(code) => update({ marketplace: code })}
-          onSignal={(signal) => update({ signal })}
-          onInspection={(status) => update({ inspection: status })}
-          onRefund={(status) => update({ refund: status })}
-          onDisposition={(kind) => update({ disposition: kind })}
-          onSort={(s) => update({ sort: s === "-requestedAt" ? null : s })}
-          onClear={clearFilters}
-          onExport={onExport}
-        />
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5 text-[12px] text-[#666666]">
+          <span>
+            {statusLine ? `${statusLine.open} open returns · ${statusLine.awaitingInspection} awaiting inspection · ${statusLine.refundsPending} refunds pending` : overview.isError ? "The status line could not be loaded." : "Loading returns..."}
+          </span>
+          <span className="text-[11px] text-[#666666]">{create && !create.available ? (createReason ?? "") : createChannels.length > 0 ? `Create Return: ${createChannels.join(", ")} connection only` : ""}</span>
+        </div>
+
+        {report && <SyncReportPanel report={report} running={sync.isPending} canRetry={canWrite} onRetry={onSync} onDismiss={() => setReport(null)} />}
+
+        <div role="tablist" aria-label="Returns workspace" className="mt-3 flex items-center gap-7 border-b border-[#EAEAEA]">
+          {VIEWS.map((v) => (
+            <button
+              key={v}
+              type="button"
+              role="tab"
+              aria-selected={view === v}
+              onClick={() => pickView(v)}
+              className={cn(
+                "relative cursor-pointer pb-2.5 text-[12px] transition-colors",
+                view === v ? "font-semibold text-black after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-black" : "font-normal text-[#666666] hover:text-black",
+              )}
+            >
+              {VIEW_LABELS[v]}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {loadingList ? (
-        <TableSkeleton rows={8} />
-      ) : listError ? (
-        <LoadError message={errorMessage(ledger.error)} onRetry={() => void ledger.refetch()} />
-      ) : rows.length === 0 ? (
-        filtered ? <NoMatches onClear={clearFilters} /> : <EmptyReturns onCreate={create?.available && canWrite ? () => setCreating(true) : null} />
-      ) : (
+      {view === "overview" && (
         <>
-          <ReturnsTable rows={rows} refreshing={ledger.isFetching && ledger.isPlaceholderData} onOpen={(id) => update({ drawer: `return:${id}` }, { keepPage: true })} />
-          <ReturnsPagination
-            page={ledger.data?.page ?? page}
-            pages={ledger.data?.pages ?? 1}
-            total={ledger.data?.total ?? 0}
-            pageSize={pageSize}
-            shown={rows.length}
-            onPage={(p) => update({ page: p > 1 ? String(p) : null }, { keepPage: true })}
-            onPageSize={(size) => update({ size: size === DEFAULT_PAGE_SIZE ? null : String(size) })}
+          {summary.isError && !summary.data ? (
+            <Notice
+              role="alert"
+              tone="error"
+              title="Return numbers could not be loaded."
+              description={errorMessage(summary.error)}
+              action={
+                <button type="button" onClick={() => void summary.refetch()} className="rounded-lg border border-[#FCA5A5] bg-white px-3 py-1.5 text-[12px] font-semibold text-[#991B1B] hover:bg-[#FEF2F2]">
+                  Retry
+                </button>
+              }
+            />
+          ) : summary.data ? (
+            <GlanceTiles summary={summary.data} />
+          ) : (
+            <div role="status" aria-label="Loading return numbers" className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {Array.from({ length: 4 }, (_, i) => (
+                <div key={i} className="h-[98px] animate-pulse rounded-xl bg-[#F5F5F5]" />
+              ))}
+            </div>
+          )}
+
+          <LifecycleRail
+            overview={overview.data}
+            summary={summary.data}
+            loading={overview.isLoading}
+            error={overview.isError ? errorMessage(overview.error) : null}
+            onRetry={() => void overview.refetch()}
+            activeStage={filters.stage}
+            onPickStage={(stage) => update({ stage, tab: null })}
           />
+
+          <SignalRail overview={overview.data} activeSignal={filters.signal} onPick={(signal) => update({ signal })} />
+
+          <LedgerSection
+            url={url}
+            overview={overview.data}
+            channelOptions={channelOptions}
+            canWrite={canWrite}
+            onCreate={create?.available && canWrite ? () => setCreating(true) : null}
+            onOpen={openDrawer}
+            onReview={startReview}
+            onExport={onExport}
+            exporting={exporter.isPending}
+          />
+
+          <AnalyticsSection days={days} channelName={channelName} />
+
+          <AttentionSection onOpen={openDrawer} />
         </>
       )}
 
-      <ReturnInsights
-        data={insights.data}
-        loading={insights.isLoading}
-        error={insights.isError ? errorMessage(insights.error) : null}
-        days={days}
-        onRetry={() => void insights.refetch()}
-        channelName={channelName}
-      />
+      {view === "returns" && <ReturnsView url={url} onOpen={openDrawer} />}
+      {view === "inspection" && <InspectionView url={url} canWrite={canWrite} onOpen={openDrawer} />}
+      {view === "refunds" && <RefundsView url={url} onOpen={openDrawer} />}
 
-      <ReturnDrawer returnId={drawerId} onClose={() => update({ drawer: null }, { keepPage: true, replace: true })} />
-
-      <CreateReturnDialog
-        open={creating}
-        onClose={() => setCreating(false)}
-        onCreated={(created) => {
-          setCreating(false);
-          toast({ title: `Return ${created.number} created`, description: "No refund has been issued yet.", variant: "success" });
-          update({ drawer: `return:${created.id}` }, { keepPage: true });
-        }}
-      />
+      <ReturnDetailDrawer returnId={drawer?.kind === "return" ? drawer.id : null} onClose={closeDrawer} onStartInspection={(id) => switchDrawer("inspect", id)} onOpenRefund={(id) => switchDrawer("refund", id)} review={review} />
+      <InspectionDrawer returnId={drawer?.kind === "inspect" ? drawer.id : null} onClose={closeDrawer} />
+      <RefundDetailDrawer returnId={drawer?.kind === "refund" ? drawer.id : null} onClose={closeDrawer} onViewInspection={(id) => switchDrawer("inspect", id)} />
+      <CreateReturnModal isOpen={creating} onClose={() => setCreating(false)} onCreated={onCreated} channelNames={createChannels} />
     </div>
   );
 }

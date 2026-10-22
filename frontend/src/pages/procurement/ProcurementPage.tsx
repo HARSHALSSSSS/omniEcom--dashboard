@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Plus } from "lucide-react";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Button } from "@/components/ui/button";
+import { RefreshButton } from "@/components/common/RefreshButton";
 import { PoDrawer } from "@/components/procurement/PoDrawer";
 import { PoFilters, PoStatusTabs } from "@/components/procurement/PoFilters";
 import { PoFormDialog, type PoFormTarget } from "@/components/procurement/PoFormDialog";
@@ -97,7 +98,18 @@ export default function ProcurementPage() {
         eyebrow="COMMERCE OPERATIONS"
         title="Procurement and Inbound"
         description="Manage suppliers and their price lists, raise purchase orders, and receive stock into your warehouses before products run out."
-        actions={headerAction}
+        actions={
+          <>
+            <RefreshButton
+              onRefresh={() => {
+                void overview.refetch();
+                if (tab !== "reorder") void list.refetch();
+              }}
+              spinning={overview.isFetching || (tab !== "reorder" && list.isFetching)}
+            />
+            {headerAction}
+          </>
+        }
       />
 
       <ProcurementKpis overview={overview.data} loading={overview.isLoading} failed={overview.isError} />

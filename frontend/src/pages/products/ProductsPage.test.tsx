@@ -261,7 +261,7 @@ describe("ProductsPage list", () => {
   });
 
   it("ignores values the API would reject", async () => {
-    renderPage("/products?tab=bogus&inventory=lots&type=bundle&category=not-a-uuid&sort=price&page=-4&size=7");
+    renderPage("/products?tab=bogus&inventory=lots&type=kit&category=not-a-uuid&sort=price&page=-4&size=7");
     await screen.findByText("Premium Travel Bag");
     expect(lastList()).toEqual({ page: 1, pageSize: 24 });
   });
@@ -298,7 +298,8 @@ describe("ProductsPage list", () => {
     await waitFor(() => expect(lastList()).toMatchObject({ inventory: "out" }));
 
     await user.click(screen.getByRole("button", { name: "Product type" }));
-    expect(screen.queryByRole("menuitemradio", { name: /bundle|simple|variable/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("menuitemradio", { name: "Bundle / Kit" })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitemradio", { name: /simple|variable/i })).not.toBeInTheDocument();
     await user.click(screen.getByRole("menuitemradio", { name: "Digital" }));
     await waitFor(() => expect(lastList()).toMatchObject({ productType: "digital" }));
 
@@ -422,6 +423,17 @@ describe("ProductsPage bulk actions", () => {
     expect(within(dialog).getByText("Ready to publish")).toBeInTheDocument();
     expect(within(dialog).getByText("Add at least one image")).toBeInTheDocument();
     expect(api.bulk).toHaveBeenCalledWith([ID.bag, ID.organizer], "check_publish_readiness");
+  });
+
+  it("opens the product detail when a card is clicked, selection stays on the checkbox", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText("Premium Travel Bag");
+    await user.click(screen.getByRole("checkbox", { name: "Select Classic Backpack" }));
+    expect(where()).toBe("/products");
+    expect(screen.getByText("1 product selected")).toBeInTheDocument();
+    await user.click(screen.getByText("Premium Travel Bag"));
+    expect(where()).toBe(`/products/${ID.bag}`);
   });
 
   it("edits a single selected product", async () => {

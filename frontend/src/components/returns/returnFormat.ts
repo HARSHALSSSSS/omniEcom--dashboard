@@ -1,5 +1,17 @@
 import { errorMessage, isApiError } from "@/api/errors";
-import { formatCurrency } from "@/utils/format";
+import { formatCurrency, formatInZone } from "@/utils/format";
+import type { LedgerRow, SyncJob, SyncReport, SyncSkipReason } from "@/types/returns";
+
+const TIME: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit", hour12: false };
+
+/** "07 Oct" */
+export const fmtShortDay = (iso: string): string => formatInZone(iso, { day: "2-digit", month: "short" });
+/** "07 Oct 2026" */
+export const fmtDay = (iso: string): string => formatInZone(iso, { day: "2-digit", month: "short", year: "numeric" });
+/** "07 Oct · 14:20" */
+export const fmtStamp = (iso: string): string => `${fmtShortDay(iso)} · ${formatInZone(iso, TIME)}`;
+/** "07 Oct 2026 · 14:20" */
+export const fmtFullStamp = (iso: string): string => `${fmtDay(iso)} · ${formatInZone(iso, TIME)}`;
 
 /** money in the return's currency; paise stay exact */
 export function formatMoney(minor: number, currency: string | null | undefined = "INR"): string {
@@ -33,3 +45,80 @@ export function toMinor(text: string): number | null {
 
 /** an amount in minor units as an editable text in major units: 123450 to "1234.50" */
 export const fromMinor = (minor: number): string => (minor / 100).toFixed(2);
+
+/** a cell that a spreadsheet would run as a formula is neutralised, quotes are doubled */
+const csvCell = (value: string | number | null | undefined): string => {
+  const text = value === null || value === undefined ? "" : String(value);
+  const safe = /^[=+\-@]/.test(text) ? `'${text}` : text;
+  return /[",\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
+};
+
+const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
+
+/** the counts of the sync jobs added up */
+export function syncTotals(report: SyncReport): { fetched: number; created: number; duplicates: number; cancelled: number; rejected: number; failed: number } {
+  const t = { fetched: 0, created: 0, duplicates: 0, cancelled: 0, rejected: 0, failed: 0 };
+  for (const a of report.accounts) {
+    const s = a.job?.stats ?? {};
+    t.fetched += s.fetched ?? 0;
+    t.created += s.created ?? 0;
+    t.duplicates += s.duplicates ?? 0;
+    t.cancelled += s.cancelled ?? 0;
+    t.rejected += s.rejected ?? 0;
+    t.failed += s.failed ?? 0;
+  }
+  return t;
+}
+
+/** what one finished sync job did: "2 new, 1 already in the ledger, 1 withdrawn" */
+export function syncJobLine(job: SyncJob): string {
+  const s = job.stats;
+  const parts: string[] = [];
+  if ((s.created ?? 0) > 0) parts.push(`${s.created} new`);
+  if ((s.duplicates ?? 0) > 0) parts.push(`${s.duplicates} already in the ledger`);
+  if ((s.cancelled ?? 0) > 0) parts.push(`${s.cancelled} withdrawn`);
+  if ((s.rejected ?? 0) > 0) parts.push(`${s.rejected} rejected by the marketplace`);
+  if ((s.failed ?? 0) > 0) parts.push(`${s.failed} could not be imported`);
+  return parts.length > 0 ? parts.join(", ") : "No new or changed returns";
+}
+
+export const SYNC_SKIP_TEXT: Record<SyncSkipReason, string> = {
+  returns_fetch_not_supported: "This marketplace does not send returns through its connector.",
+  connector_not_ready: "The connector for this marketplace is not live yet.",
+  connector_unavailable: "The connector for this marketplace is not available.",
+};
+
+/** the one-line outcome of a finished sync, for the toast */
+export function syncHeadline(report: SyncReport): string {
+  const t = syncTotals(report);
+  if (report.nothingToSync) return "No connected marketplace can send returns yet.";
+  const bits = [plural(t.created, "new return", "new returns")];
+  if (t.duplicates > 0) bits.push(`${t.duplicates} already in the ledger`);
+  if (t.cancelled > 0) bits.push(`${t.cancelled} withdrawn`);
+  if (t.failed > 0) bits.push(`${plural(t.failed, "return", "returns")} could not be imported`);
+  return `${plural(report.accounts.length, "account", "accounts")} checked: ${bits.join(", ")}.`;
+}
+
+/** the rows picked on the screen as a CSV (the server export covers a whole filtered list) */
+export function rowsToCsv(rows: LedgerRow[]): string {
+  const header = ["Return", "Order", "Product", "SKU", "Marketplace", "Reason", "Quantity", "Received quantity", "Status", "Requested", "Received", "Inspection", "Refund", "Refund amount", "Currency", "Disposition"];
+  const lines = rows.map((r) => [
+    r.number,
+    r.orderNumber,
+    r.product.title,
+    r.product.sku,
+    r.channel.code,
+    r.reason.label,
+    r.quantity,
+    r.receivedQuantity,
+    r.stageLabel,
+    r.requestedAt,
+    r.receivedAt,
+    r.inspection.status,
+    r.refund.status,
+    r.refund.amountMinor === null ? "" : (r.refund.amountMinor / 100).toFixed(2),
+    r.refund.currency,
+    r.disposition,
+  ]);
+  return [header, ...lines].map((line) => line.map(csvCell).join(",")).join("\r\n");
+}

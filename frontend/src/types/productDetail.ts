@@ -52,7 +52,7 @@ export interface OverviewProduct {
   title: string;
   description: string | null;
   brand: string | null;
-  productType: "physical" | "digital" | "service";
+  productType: "physical" | "digital" | "service" | "bundle";
   status: ProductStatus;
   variantCount: number;
   version: number;

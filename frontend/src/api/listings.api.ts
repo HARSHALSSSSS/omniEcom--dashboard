@@ -1,18 +1,26 @@
 import { client, toApiError, unwrap } from "./client";
 import { ENDPOINTS } from "./endpoints";
+import { catalogApi } from "./products";
 import type {
+  BulkCreateInput,
+  BulkCreateResponse,
   BulkListingsResponse,
+  ChannelSummary,
   CreateOutcome,
   CreateTarget,
   ListingAccount,
   ListingBulkAction,
   ListingChannels,
+  ListingFilterOptions,
   ListingFilters,
+  ListingsInsights,
+  ListingsMatrix,
   ListingRow,
   ListingsOverview,
   ListingsQuery,
   ListingsTablePage,
   NotListedPage,
+  ProductChoice,
   SyncJobView,
   TabCounts,
 } from "@/types/listing";
@@ -31,8 +39,16 @@ function commonParams(f: Pick<ListingFilters, "q" | "marketplace" | "accountId">
 
 export function tableParams(query: ListingsQuery): Record<string, string | number> {
   const params: Record<string, string | number> = commonParams(query);
-  if (query.tab !== "all" && query.tab !== "not_listed") params["filter[screenStatus]"] = query.tab;
-  if (query.status) params["filter[status]"] = query.status;
+  // Draft is a lifecycle status, not a screen status: its tab is the lifecycle filter
+  if (query.tab === "draft") params["filter[status]"] = "draft";
+  else if (query.tab !== "all" && query.tab !== "not_listed") params["filter[screenStatus]"] = query.tab;
+  if (query.status && query.tab !== "draft") params["filter[status]"] = query.status;
+  if (query.issue) params["filter[issue]"] = query.issue;
+  if (query.categoryId) params["filter[categoryId]"] = query.categoryId;
+  if (query.productStatus) params["filter[productStatus]"] = query.productStatus;
+  if (query.readiness) params["filter[readiness]"] = query.readiness;
+  if (query.inventory) params["filter[inventory]"] = query.inventory;
+  if (query.potential) params["filter[potential]"] = query.potential;
   if (query.contentState) params["filter[contentState]"] = query.contentState;
   if (query.source) params["filter[source]"] = query.source;
   if (query.attention) params["filter[attention]"] = "true";
@@ -42,8 +58,8 @@ export function tableParams(query: ListingsQuery): Record<string, string | numbe
   return params;
 }
 
-function countsOf(items: ListingRow[]): TabCounts {
-  const counts = { all: items.length } as TabCounts;
+function countsOf(items: ListingRow[]): TabCounts & { draft: number } {
+  const counts = { all: items.length, draft: items.filter((i) => i.status === "draft").length } as TabCounts & { draft: number };
   for (const s of SCREEN_STATUSES) counts[s] = items.filter((i) => i.table.screenStatus === s).length;
   return counts;
 }
@@ -60,8 +76,9 @@ export const listingsApi = {
     unwrap<ListingsTablePage>(await client.get(ENDPOINTS.LISTINGS_TABLE, { params: tableParams(query), signal })),
 
   /** active variants x connected accounts that have no listing yet (rows are variants, not listings) */
-  notListed: async (query: Pick<ListingsQuery, "q" | "marketplace" | "accountId" | "page" | "pageSize">, signal?: AbortSignal) => {
+  notListed: async (query: Pick<ListingsQuery, "q" | "marketplace" | "accountId" | "categoryId" | "page" | "pageSize">, signal?: AbortSignal) => {
     const params: Record<string, string | number> = commonParams(query);
+    if (query.categoryId) params["filter[categoryId]"] = query.categoryId;
     if (query.page > 1) params.page = query.page;
     params.pageSize = query.pageSize;
     return unwrap<NotListedPage>(await client.get(ENDPOINTS.LISTINGS_NOT_LISTED, { params, signal }));
@@ -78,9 +95,16 @@ export const listingsApi = {
     if (query.source) params["filter[source]"] = query.source;
     const res = await client.get<{ data: ListingRow[] }>(ENDPOINTS.LISTINGS, { params, signal });
     const all = res.data.data;
-    const items = all.filter((i) => (query.tab === "all" || query.tab === "not_listed" || i.table.screenStatus === query.tab) && (!query.attention || ATTENTION.includes(i.table.screenStatus)));
+    const inTab = (i: ListingRow) => (query.tab === "draft" ? i.status === "draft" : query.tab === "all" || query.tab === "not_listed" || i.table.screenStatus === query.tab);
+    const items = all.filter((i) => inTab(i) && (!query.attention || ATTENTION.includes(i.table.screenStatus)));
     return { items, page: 1, pageSize: Math.max(items.length, 1), total: items.length, pages: 1, counts: countsOf(all) };
   },
+
+  /** master products x marketplaces (the matrix on top of the screen) */
+  matrix: async (limit: number, signal?: AbortSignal) => unwrap<ListingsMatrix>(await client.get(ENDPOINTS.LISTINGS_MATRIX, { params: { limit }, signal })),
+
+  /** catalogue reach and the reasons listings are not ready */
+  insights: async (signal?: AbortSignal) => unwrap<ListingsInsights>(await client.get(ENDPOINTS.LISTINGS_INSIGHTS, { signal })),
 
   /** a 200 with a result per listing, even when some failed; publish and retry answer with a sync job id per listing */
   bulk: async (action: ListingBulkAction, ids: string[]) =>
@@ -95,6 +119,21 @@ export const listingsApi = {
     } catch (e) {
       return { key, label: target.label, ok: false, message: toApiError(e).message, listingId: null };
     }
+  },
+
+  /** every marketplace of the registry with its accounts and listing counts (the channel tabs) */
+  channelSummary: async (signal?: AbortSignal) => unwrap<ChannelSummary>(await client.get(ENDPOINTS.LISTINGS_CHANNEL_SUMMARY, { signal })),
+
+  /** the categories that have listings (the category filter) */
+  filterOptions: async (signal?: AbortSignal) => unwrap<ListingFilterOptions>(await client.get(ENDPOINTS.LISTINGS_FILTER_OPTIONS, { signal })),
+
+  /** master products x marketplace accounts: a draft listing for every pair that has none (200 with a result per pair) */
+  bulkCreate: async (input: BulkCreateInput) => unwrap<BulkCreateResponse>(await client.post(ENDPOINTS.LISTINGS_BULK_CREATE, input)),
+
+  /** active master products matching a text (the create dialog's search) */
+  searchProducts: async (q: string, signal?: AbortSignal): Promise<ProductChoice[]> => {
+    const page = await catalogApi.list({ q: q || undefined, status: "active", page: 1, pageSize: 12, sort: "title" }, signal);
+    return page.items.map((p) => ({ id: p.id, title: p.title, sku: p.productCode, variantCount: p.variantCount, thumbnailUrl: p.summary.thumbnailUrl }));
   },
 
   syncJob: async (jobId: string) => unwrap<SyncJobView>(await client.get(ENDPOINTS.SYNC_JOB(jobId))),

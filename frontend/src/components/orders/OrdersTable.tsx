@@ -1,7 +1,7 @@
 import { Skeleton } from "@/components/ui/skeleton";
 import type { LedgerOrder } from "@/types/orders";
 import { NO_WRITE_REASON } from "./orderFormat";
-import { OrderRow } from "./OrderRow";
+import { ORDER_GRID, OrderRow } from "./OrderRow";
 
 interface OrdersTableProps {
   orders: LedgerOrder[];
@@ -13,49 +13,51 @@ interface OrdersTableProps {
   onOpen: (id: string) => void;
 }
 
-const COLUMNS = ["Order / Channel", "Customer & Destination", "Items & SKU", "Amount", "SLA timer", "Status", "Carrier & warehouse"];
+const COLUMNS = ["Order", "Marketplace", "Customer", "Items", "Value", "Payment", "Fulfillment", "SLA", "Status", "Created"];
 
 export function OrdersTable({ orders, selected, canWrite, refreshing, onToggle, onToggleAll, onOpen }: OrdersTableProps) {
   const allSelected = orders.length > 0 && orders.every((o) => selected.has(o.id));
   return (
-    <div className={`overflow-x-auto rounded-xl border border-border bg-card shadow-sm transition-opacity ${refreshing ? "opacity-60" : ""}`} aria-busy={refreshing}>
-      <table className="w-full min-w-[980px] text-left text-xs">
-        <thead className="border-b border-border bg-muted/40 font-medium text-muted-foreground">
-          <tr>
-            <th className="w-10 py-3 pl-4 pr-2">
-              <input
-                type="checkbox"
-                aria-label="Select all orders on this page"
-                checked={allSelected}
-                disabled={!canWrite}
-                title={canWrite ? undefined : NO_WRITE_REASON}
-                onChange={onToggleAll}
-                className="h-4 w-4 cursor-pointer accent-[#1D4ED8] disabled:cursor-not-allowed"
-              />
-            </th>
-            {COLUMNS.map((c) => (
-              <th key={c} scope="col" className="px-3 py-3">
-                {c}
-              </th>
-            ))}
-            <th scope="col" className="py-3 pl-3 pr-4 text-right">
-              Action
-            </th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-border">
-          {orders.map((order) => (
-            <OrderRow key={order.id} order={order} selected={selected.has(order.id)} canWrite={canWrite} onToggle={onToggle} onOpen={onOpen} />
+    <div className="w-full overflow-x-auto">
+      <div
+        role="table"
+        aria-label="Orders"
+        aria-busy={refreshing}
+        className={`box-border w-full min-w-[1040px] flex flex-col items-start border-t border-[#EAEAEA] mt-1 transition-opacity ${refreshing ? "opacity-60" : ""}`}
+      >
+        <div role="row" className={`w-full ${ORDER_GRID} items-center h-[32px] bg-[#F5F5F5] text-[11px] font-medium leading-[14px] text-[#666666] px-1`}>
+          <div role="columnheader" className="flex items-center justify-center">
+            <input
+              type="checkbox"
+              aria-label="Select all orders on this page"
+              checked={allSelected}
+              disabled={!canWrite}
+              title={canWrite ? undefined : NO_WRITE_REASON}
+              onChange={onToggleAll}
+              className="w-3.5 h-3.5 rounded-[2px] border border-[#BDBDBD] text-black focus:ring-0 cursor-pointer disabled:cursor-not-allowed"
+            />
+          </div>
+          {COLUMNS.map((c) => (
+            <div key={c} role="columnheader" className="px-2">
+              <span>{c}</span>
+            </div>
           ))}
-        </tbody>
-      </table>
+          <div role="columnheader" className="px-2 text-center">
+            <span>Action</span>
+          </div>
+        </div>
+
+        {orders.map((order) => (
+          <OrderRow key={order.id} order={order} selected={selected.has(order.id)} canWrite={canWrite} onToggle={onToggle} onOpen={onOpen} />
+        ))}
+      </div>
     </div>
   );
 }
 
 export function TableSkeleton({ rows }: { rows: number }) {
   return (
-    <div role="status" aria-label="Loading orders" className="space-y-px overflow-hidden rounded-xl border border-border bg-card p-4">
+    <div role="status" aria-label="Loading orders" className="w-full space-y-px overflow-hidden border-t border-[#EAEAEA] p-2">
       {Array.from({ length: rows }, (_, i) => (
         <Skeleton key={i} className="my-2 h-10 w-full" />
       ))}

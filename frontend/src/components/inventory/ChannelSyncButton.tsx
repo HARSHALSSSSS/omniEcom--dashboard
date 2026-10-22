@@ -55,10 +55,15 @@ export function ChannelSyncButton({ allowed, disabledReason }: ChannelSyncButton
   return (
     <>
       <span title={allowed ? undefined : disabledReason}>
-        <Button variant="outline" size="sm" className="gap-2" disabled={!allowed || running} onClick={begin}>
-          <RefreshCw className={`h-3.5 w-3.5 ${running ? "animate-spin" : ""}`} aria-hidden />
-          Sync All Channels
-        </Button>
+        <button
+          type="button"
+          disabled={!allowed || running}
+          onClick={begin}
+          className="box-border flex h-[34px] cursor-pointer flex-row items-center gap-[7px] rounded-lg border border-[#EAEAEA] bg-white px-3 py-0 text-[#000000] transition-colors hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 stroke-[1.5px] text-[#666666] ${running ? "animate-spin" : ""}`} aria-hidden />
+          <span className="text-[12px] font-normal leading-[145%]">{running ? "Syncing..." : "Sync all"}</span>
+        </button>
       </span>
 
       <Dialog open={open} onOpenChange={setOpen}>

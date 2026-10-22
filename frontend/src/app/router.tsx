@@ -35,10 +35,19 @@ const ImportWizardPage = lazy(() => import("@/pages/import/ImportWizardPage"));
 const ImportIssuesPage = lazy(() => import("@/pages/import/ImportIssuesPage"));
 const InventoryPage = lazy(() => import("@/pages/inventory/InventoryPage"));
 const OrdersPage = lazy(() => import("@/pages/orders/OrdersPage"));
+const FulfillmentPage = lazy(
+  () => import("@/pages/fulfillment/FulfillmentPage"),
+);
 const ShippingPage = lazy(() => import("@/pages/shipping/ShippingPage"));
 const ReturnsPage = lazy(() => import("@/pages/returns/ReturnsPage"));
 // Commerce
 const ListingsPage = lazy(() => import("@/pages/listings/ListingsPage"));
+const BulkSelectedListingsPage = lazy(() => import("@/pages/listings/BulkSelectedListingsPage"));
+const PublishingPreparationPage = lazy(() => import("@/pages/listings/PublishingPreparationPage"));
+const ListingReadinessPage = lazy(() => import("@/pages/listings/ListingReadinessPage"));
+const ListingBlockerPage = lazy(() => import("@/pages/listings/ListingBlockerPage"));
+const ListingSyncPage = lazy(() => import("@/pages/listings/ListingSyncPage"));
+const ListingUnlistedPage = lazy(() => import("@/pages/listings/ListingUnlistedPage"));
 const ListingStudioPage = lazy(
   () => import("@/pages/listings/ListingStudioPage"),
 );
@@ -193,11 +202,19 @@ export const router = createBrowserRouter([
       // Orders
       { path: ROUTES.ORDERS, element: withSuspense(OrdersPage) },
       // Shipping
+      // Fulfillment
+      { path: ROUTES.FULFILLMENT, element: withSuspense(FulfillmentPage) },
       { path: ROUTES.SHIPPING, element: withSuspense(ShippingPage) },
       // Returns
       { path: ROUTES.RETURNS, element: withSuspense(ReturnsPage) },
       // Listings
       { path: ROUTES.LISTINGS, element: withSuspense(ListingsPage) },
+      { path: ROUTES.LISTINGS_BULK, element: withSuspense(BulkSelectedListingsPage) },
+      { path: ROUTES.LISTINGS_PUBLISH, element: withSuspense(PublishingPreparationPage) },
+      { path: ROUTES.LISTINGS_READINESS, element: withSuspense(ListingReadinessPage) },
+      { path: ROUTES.LISTING_BLOCKED, element: withSuspense(ListingBlockerPage) },
+      { path: ROUTES.LISTING_SYNC, element: withSuspense(ListingSyncPage) },
+      { path: ROUTES.LISTING_UNLISTED, element: withSuspense(ListingUnlistedPage) },
       {
         path: `${ROUTES.LISTINGS}/:id`,
         element: withSuspense(ListingStudioPage),

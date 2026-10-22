@@ -19,18 +19,41 @@ import {
   type ReturnTab,
 } from "@/types/returns";
 
-export const PAGE_SIZES = [25, 50, 100] as const;
+export const PAGE_SIZES = [10, 25, 50, 100] as const;
 export const DEFAULT_PAGE_SIZE = 25;
 export const DEFAULT_DAYS = 30;
 
 export const TAB_LABELS: Record<ReturnTab, string> = {
-  all: "All returns",
-  needs_attention: "Needs attention",
-  awaiting_receipt: "Awaiting receipt",
-  awaiting_inspection: "Awaiting inspection",
-  refund_pending: "Refund pending",
+  all: "All",
+  needs_attention: "Needs Attention",
+  awaiting_receipt: "Awaiting Receipt",
+  awaiting_inspection: "Awaiting Inspection",
+  refund_pending: "Refund Pending",
   completed: "Completed",
 };
+
+/** the four workspace tabs of the screen */
+export const VIEWS = ["overview", "returns", "inspection", "refunds"] as const;
+export type ReturnsView = (typeof VIEWS)[number];
+export const VIEW_LABELS: Record<ReturnsView, string> = { overview: "Overview", returns: "Returns", inspection: "Inspection", refunds: "Refunds" };
+
+/** the queues of the Inspection tab: each is one ledger tab or inspection status the API already filters by */
+export const INSPECTION_QUEUES = ["awaiting", "review", "passed", "failed"] as const;
+export type InspectionQueue = (typeof INSPECTION_QUEUES)[number];
+export const INSPECTION_QUEUE_LABELS: Record<InspectionQueue, string> = { awaiting: "Awaiting inspection", review: "Needs review", passed: "Passed", failed: "Failed" };
+
+/** the queues of the Refunds tab: every refund in the queue, or one refund status */
+export const REFUND_QUEUES = ["all", "pending", "ready", "processing", "failed", "processed"] as const;
+export type RefundQueueKey = (typeof REFUND_QUEUES)[number];
+export const REFUND_QUEUE_LABELS: Record<RefundQueueKey, string> = { all: "All", pending: "Pending", ready: "Ready", processing: "Processing", failed: "Failed", processed: "Refunded" };
+
+/** the drawer in the URL: `?drawer=return:<id>` (detail), `inspect:<id>` or `refund:<id>` */
+export type DrawerKind = "return" | "inspect" | "refund";
+export interface DrawerRef {
+  kind: DrawerKind;
+  id: string;
+}
+const DRAWER_KINDS: readonly DrawerKind[] = ["return", "inspect", "refund"];
 
 export const SIGNAL_LABELS: Record<ReturnSignal, string> = {
   awaiting_inspection: "Awaiting inspection",
@@ -48,12 +71,22 @@ export const INSPECTION_LABELS: Record<InspectionStatus, string> = {
 };
 
 export const REFUND_LABELS: Record<RefundStatus, string> = {
-  not_applicable: "No refund due",
+  not_applicable: "N/A",
   pending: "Pending",
   ready: "Ready",
   processing: "Processing",
   processed: "Refunded",
   failed: "Failed",
+};
+
+/** the words of the refund drawer and the Refunds tab */
+export const REFUND_DESIGN_LABELS: Record<RefundStatus, string> = {
+  pending: "Pending",
+  ready: "Ready for Refund",
+  processing: "Processing",
+  processed: "Refunded",
+  failed: "Refund Failed",
+  not_applicable: "Not Applicable",
 };
 
 export const DISPOSITION_LABELS: Record<DispositionFilter, string> = {
@@ -82,8 +115,13 @@ export interface ReturnsUrlState {
   pageSize: number;
   /** the window of the tiles and insights, in days */
   days: number;
-  /** return id of the open drawer (`?drawer=return:<id>`) */
-  drawerId: string | null;
+  /** the open drawer (`?drawer=return:<id>`, `inspect:<id>`, `refund:<id>`) */
+  drawer: DrawerRef | null;
+  view: ReturnsView;
+  /** the return picked in the Returns and Inspection tabs (`?focus=<id>`) */
+  focus: string | null;
+  inspectionQueue: InspectionQueue;
+  refundQueue: RefundQueueKey;
 }
 
 const oneOf = <T extends string>(value: string | null | undefined, allowed: readonly T[]): T | undefined => allowed.find((a) => a === value);
@@ -116,7 +154,10 @@ export function readUrlState(params: URLSearchParams): ReturnsUrlState {
   const page = Number(params.get("page"));
   const size = Number(params.get("size"));
   const days = Number(params.get("days"));
-  const drawer = params.get("drawer") ?? "";
+  const drawerParam = params.get("drawer") ?? "";
+  const sep = drawerParam.indexOf(":");
+  const drawerKind = DRAWER_KINDS.find((k) => k === drawerParam.slice(0, Math.max(sep, 0)));
+  const drawerId = sep > 0 ? drawerParam.slice(sep + 1) : "";
   return {
     tab,
     filters: {
@@ -133,7 +174,11 @@ export function readUrlState(params: URLSearchParams): ReturnsUrlState {
     page: Number.isInteger(page) && page > 1 ? page : 1,
     pageSize: (PAGE_SIZES as readonly number[]).includes(size) ? size : DEFAULT_PAGE_SIZE,
     days: (SUMMARY_WINDOWS as readonly number[]).includes(days) ? days : DEFAULT_DAYS,
-    drawerId: drawer.startsWith("return:") && drawer.length > 7 ? drawer.slice(7) : null,
+    drawer: drawerKind && drawerId ? { kind: drawerKind, id: drawerId } : null,
+    view: oneOf(params.get("view"), VIEWS) ?? "overview",
+    focus: params.get("focus") || null,
+    inspectionQueue: oneOf(params.get("iq"), INSPECTION_QUEUES) ?? "awaiting",
+    refundQueue: oneOf(params.get("rq"), REFUND_QUEUES) ?? "all",
   };
 }
 
@@ -143,7 +188,7 @@ export const ledgerQueryOf = (s: ReturnsUrlState): LedgerQuery => ({ ...s.filter
 export const isFiltered = (f: ReturnFilters): boolean =>
   Boolean(f.q || f.tab || f.stage || f.marketplace || f.signal || f.inspectionStatus || f.refundStatus || f.disposition);
 
-type Patch = Partial<Record<Key | "q" | "sort" | "page" | "size" | "days" | "drawer", string | null>>;
+type Patch = Partial<Record<Key | "q" | "sort" | "page" | "size" | "days" | "drawer" | "view" | "iq" | "rq" | "focus", string | null>>;
 
 /** The Returns screen keeps tab, stage, search, filters, sort, page, window and the open drawer in the URL, so reload, back and deep links work. */
 export function useReturnsUrlState() {

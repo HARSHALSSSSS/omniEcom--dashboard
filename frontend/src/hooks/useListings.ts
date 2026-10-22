@@ -2,14 +2,19 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { listingsApi } from "@/api/listings.api";
 import { refreshShell } from "@/lib/session";
 import { useWorkspaceStore } from "@/store/workspace.store";
-import type { CreateOutcome, CreateTarget, JobStatus, ListingBulkAction, ListingFilters, ListingsQuery } from "@/types/listing";
+import type { BulkCreateInput, CreateOutcome, CreateTarget, JobStatus, ListingBulkAction, ListingFilters, ListingsQuery } from "@/types/listing";
 
 export const listingKeys = {
   all: ["listings"] as const,
   overview: (businessId: string | undefined, f: Pick<ListingFilters, "marketplace" | "accountId">) => ["listings", "overview", businessId, f] as const,
   table: (businessId: string | undefined, q: ListingsQuery) => ["listings", "table", businessId, q] as const,
-  notListed: (businessId: string | undefined, q: Pick<ListingsQuery, "q" | "marketplace" | "accountId" | "page" | "pageSize">) => ["listings", "not-listed", businessId, q] as const,
+  notListed: (businessId: string | undefined, q: Pick<ListingsQuery, "q" | "marketplace" | "accountId" | "categoryId" | "page" | "pageSize">) => ["listings", "not-listed", businessId, q] as const,
   channels: (businessId: string | undefined) => ["listings", "channels", businessId] as const,
+  matrix: (businessId: string | undefined, limit: number) => ["listings", "matrix", businessId, limit] as const,
+  insights: (businessId: string | undefined) => ["listings", "insights", businessId] as const,
+  channelSummary: (businessId: string | undefined) => ["listings", "channel-summary", businessId] as const,
+  filterOptions: (businessId: string | undefined) => ["listings", "filter-options", businessId] as const,
+  productSearch: (businessId: string | undefined, q: string) => ["listings", "product-search", businessId, q] as const,
   job: (id: string) => ["listings", "job", id] as const,
 };
 
@@ -37,7 +42,7 @@ export function useListingsTable(query: ListingsQuery, enabled = true) {
 /** the "Not listed" tab: variants that could be listed on a connected account */
 export function useNotListed(query: ListingsQuery, enabled: boolean) {
   const businessId = useBusinessId();
-  const key = { q: query.q, marketplace: query.marketplace, accountId: query.accountId, page: query.page, pageSize: query.pageSize };
+  const key = { q: query.q, marketplace: query.marketplace, accountId: query.accountId, categoryId: query.categoryId, page: query.page, pageSize: query.pageSize };
   return useQuery({
     queryKey: listingKeys.notListed(businessId, key),
     queryFn: ({ signal }) => listingsApi.notListed(key, signal),
@@ -51,6 +56,36 @@ export function useNotListed(query: ListingsQuery, enabled: boolean) {
 export function useListingChannels() {
   const businessId = useBusinessId();
   return useQuery({ queryKey: listingKeys.channels(businessId), queryFn: listingsApi.channels, staleTime: 5 * 60_000, retry: false });
+}
+
+/** the master-catalogue x marketplace matrix: the products that need a look first */
+export function useListingsMatrix(limit = 5, enabled = true) {
+  const businessId = useBusinessId();
+  return useQuery({ queryKey: listingKeys.matrix(businessId, limit), queryFn: ({ signal }) => listingsApi.matrix(limit, signal), staleTime: 30_000, placeholderData: keepPreviousData, enabled });
+}
+
+/** catalogue reach figures and the "why not ready" summary */
+export function useListingsInsights(enabled = true) {
+  const businessId = useBusinessId();
+  return useQuery({ queryKey: listingKeys.insights(businessId), queryFn: ({ signal }) => listingsApi.insights(signal), staleTime: 30_000, enabled });
+}
+
+/** every marketplace of the registry with its accounts and listing counts: the numbers on the channel tabs */
+export function useChannelSummary(enabled = true) {
+  const businessId = useBusinessId();
+  return useQuery({ queryKey: listingKeys.channelSummary(businessId), queryFn: ({ signal }) => listingsApi.channelSummary(signal), staleTime: 30_000, enabled });
+}
+
+/** the options of the category filter */
+export function useListingFilterOptions(enabled = true) {
+  const businessId = useBusinessId();
+  return useQuery({ queryKey: listingKeys.filterOptions(businessId), queryFn: ({ signal }) => listingsApi.filterOptions(signal), staleTime: 60_000, enabled });
+}
+
+/** active master products matching a text (the create dialog) */
+export function useProductSearch(q: string, enabled: boolean) {
+  const businessId = useBusinessId();
+  return useQuery({ queryKey: listingKeys.productSearch(businessId, q), queryFn: ({ signal }) => listingsApi.searchProducts(q, signal), staleTime: 15_000, placeholderData: keepPreviousData, enabled });
 }
 
 const TERMINAL: readonly JobStatus[] = ["succeeded", "partially_failed", "failed", "dead_lettered", "cancelled"];
@@ -86,6 +121,12 @@ export function useBulkListings() {
     mutationFn: (input: { action: ListingBulkAction; ids: string[] }) => listingsApi.bulk(input.action, input.ids),
     onSuccess: afterWrite,
   });
+}
+
+/** master products x marketplace accounts in one call: a draft listing for every pair that has none (idempotent) */
+export function useBulkCreateListings() {
+  const afterWrite = useAfterWrite();
+  return useMutation({ mutationFn: (input: BulkCreateInput) => listingsApi.bulkCreate(input), onSettled: afterWrite });
 }
 
 const CREATE_CONCURRENCY = 5;

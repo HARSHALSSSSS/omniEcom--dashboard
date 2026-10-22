@@ -22,7 +22,15 @@ export interface FormValues {
   dimHeight: string;
   weight: string;
   customAttributes: CustomAttribute[];
+  /** category-specific attributes: attribute id -> the input text (yes/no as "true" / "false") */
+  categoryAttrs: Record<string, string>;
 }
+
+/** the attributes of the category the product will have: only these are compared and sent (null = every attribute held by the form) */
+export type AttrScope = ReadonlySet<string> | null;
+
+/** a stored attribute value as input text */
+export const attrText = (v: string | number | boolean | null | undefined): string => (v === null || v === undefined ? "" : String(v));
 
 /** field groups that modified markers and Revert work on (dimensions are one field of three inputs) */
 export type FormKey =
@@ -41,7 +49,8 @@ export type FormKey =
   | "tags"
   | "dimensions"
   | "weight"
-  | "customAttributes";
+  | "customAttributes"
+  | "categoryAttributes";
 
 export const FORM_KEYS: FormKey[] = [
   "productCode",
@@ -60,6 +69,7 @@ export const FORM_KEYS: FormKey[] = [
   "dimensions",
   "weight",
   "customAttributes",
+  "categoryAttributes",
 ];
 
 export const FIELD_LABEL: Record<FormKey, string> = {
@@ -79,6 +89,7 @@ export const FIELD_LABEL: Record<FormKey, string> = {
   dimensions: "Dimensions",
   weight: "Weight",
   customAttributes: "Custom attributes",
+  categoryAttributes: "Category attributes",
 };
 
 export const DESCRIPTION_MAX = 2000;
@@ -132,6 +143,7 @@ export function toFormValues(p: EditorProduct): FormValues {
     dimHeight: p.dimensions ? num(p.dimensions.height) : "",
     weight: p.weight ? num(p.weight.value) : "",
     customAttributes: p.customAttributes.map((a) => ({ ...a })),
+    categoryAttrs: Object.fromEntries((p.categoryAttributes ?? []).map((a) => [a.attributeId, attrText(a.value)])),
   };
 }
 
@@ -142,6 +154,9 @@ const numOrNull = (s: string): number | null => {
   const n = Number(t);
   return Number.isFinite(n) ? n : Number.NaN;
 };
+
+const attrIds = (a: FormValues, b: FormValues, scope: AttrScope): string[] => (scope ? [...scope] : [...new Set([...Object.keys(a.categoryAttrs), ...Object.keys(b.categoryAttrs)])]).sort();
+const attrDiffers = (base: FormValues, cur: FormValues, id: string): boolean => (base.categoryAttrs[id] ?? "").trim() !== (cur.categoryAttrs[id] ?? "").trim();
 
 const canonical = (v: FormValues, key: FormKey): string => {
   switch (key) {
@@ -157,13 +172,16 @@ const canonical = (v: FormValues, key: FormKey): string => {
       return JSON.stringify(numOrNull(v.gstPercent));
     case "customAttributes":
       return JSON.stringify(v.customAttributes.map((a) => [a.name.trim(), a.value.trim(), a.confirmed]));
+    case "categoryAttributes":
+      return JSON.stringify(Object.entries(v.categoryAttrs).sort(([a], [b]) => a.localeCompare(b)));
     default:
       return String(v[key]).trim();
   }
 };
 
-export const isModified = (base: FormValues, cur: FormValues, key: FormKey): boolean => canonical(base, key) !== canonical(cur, key);
-export const modifiedKeys = (base: FormValues, cur: FormValues): FormKey[] => FORM_KEYS.filter((k) => isModified(base, cur, k));
+export const isModified = (base: FormValues, cur: FormValues, key: FormKey, scope: AttrScope = null): boolean =>
+  key === "categoryAttributes" ? attrIds(base, cur, scope).some((id) => attrDiffers(base, cur, id)) : canonical(base, key) !== canonical(cur, key);
+export const modifiedKeys = (base: FormValues, cur: FormValues, scope: AttrScope = null): FormKey[] => FORM_KEYS.filter((k) => isModified(base, cur, k, scope));
 
 /** put one field (or all of its inputs) back to the baseline */
 export function revertField(cur: FormValues, base: FormValues, key: FormKey): FormValues {
@@ -174,9 +192,17 @@ export function revertField(cur: FormValues, base: FormValues, key: FormKey): Fo
       return { ...cur, tags: [...base.tags] };
     case "customAttributes":
       return { ...cur, customAttributes: base.customAttributes.map((a) => ({ ...a })) };
+    case "categoryAttributes":
+      return { ...cur, categoryAttrs: { ...base.categoryAttrs } };
     default:
       return { ...cur, [key]: base[key as keyof FormValues] } as FormValues;
   }
+}
+
+/** put one category attribute back to the baseline */
+export function revertAttribute(cur: FormValues, base: FormValues, id: string): FormValues {
+  const rest = Object.fromEntries(Object.entries(cur.categoryAttrs).filter(([k]) => k !== id));
+  return { ...cur, categoryAttrs: id in base.categoryAttrs ? { ...rest, [id]: base.categoryAttrs[id] ?? "" } : rest };
 }
 
 // ------------------------------------------------------------------------------------------------ payload
@@ -185,10 +211,10 @@ export type FieldProblems = Partial<Record<FormKey, string>>;
 const orNull = (s: string): string | null => (s.trim() === "" ? null : s.trim());
 
 /** the request body: only fields that differ from the baseline; `problems` are input mistakes the server would reject anyway */
-export function buildChanges(base: FormValues, cur: FormValues): { changes: EditChanges; problems: FieldProblems } {
+export function buildChanges(base: FormValues, cur: FormValues, scope: AttrScope = null): { changes: EditChanges; problems: FieldProblems } {
   const changes: EditChanges = {};
   const problems: FieldProblems = {};
-  for (const key of modifiedKeys(base, cur)) {
+  for (const key of modifiedKeys(base, cur, scope)) {
     switch (key) {
       case "productCode":
         changes.productCode = cur.productCode.trim();
@@ -244,6 +270,11 @@ export function buildChanges(base: FormValues, cur: FormValues): { changes: Edit
         else changes.customAttributes = list;
         break;
       }
+      case "categoryAttributes":
+        changes.categoryAttributes = attrIds(base, cur, scope)
+          .filter((id) => attrDiffers(base, cur, id))
+          .map((id) => ({ attributeId: id, value: orNull(cur.categoryAttrs[id] ?? "") }));
+        break;
     }
   }
   return { changes, problems };
@@ -274,6 +305,7 @@ export function formKeyOf(path: string): FormKey | null {
     weight: "weight",
     weightGrams: "weight",
     customAttributes: "customAttributes",
+    categoryAttributes: "categoryAttributes",
   };
   return map[root] ?? null;
 }
@@ -309,6 +341,10 @@ export function previousText(base: FormValues, key: FormKey, categoryName: (id: 
       return base.tags.length ? base.tags.join(", ") : "(none)";
     case "customAttributes":
       return base.customAttributes.length ? base.customAttributes.map((a) => `${a.name}: ${a.value}`).join(", ") : "(none)";
+    case "categoryAttributes": {
+      const n = Object.values(base.categoryAttrs).filter((v) => v.trim() !== "").length;
+      return n === 0 ? "(none)" : `${n} supplied`;
+    }
     default: {
       const v = String(base[key]).trim();
       return v === "" ? "(empty)" : v;

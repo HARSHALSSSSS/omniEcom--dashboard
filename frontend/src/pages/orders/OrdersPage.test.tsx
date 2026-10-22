@@ -6,7 +6,7 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { ApiError } from "@/api/errors";
 import { useToastStore } from "@/hooks/useToast";
 import { useWorkspaceStore } from "@/store/workspace.store";
-import { detail, drawer, ledgerPage, managedActions, nextActions, row, summary, timeline, workspace } from "@/test/ordersFixtures";
+import { activity, detail, drawer, ledgerPage, managedActions, nextActions, row, summary, timeline, workspace } from "@/test/ordersFixtures";
 
 const api = vi.hoisted(() => ({
   summary: vi.fn(),
@@ -26,6 +26,10 @@ const api = vi.hoisted(() => ({
   warehouses: vi.fn(),
   syncOrders: vi.fn(),
   syncJob: vi.fn(),
+  activity: vi.fn(),
+  views: vi.fn(),
+  createView: vi.fn(),
+  deleteView: vi.fn(),
 }));
 const refreshShell = vi.hoisted(() => vi.fn());
 const saveBlob = vi.hoisted(() => vi.fn());
@@ -69,6 +73,10 @@ const grant = (...permissions: string[]) => useWorkspaceStore.setState({ permiss
 const loc = () => screen.getByTestId("loc").textContent;
 const toasts = () => useToastStore.getState().toasts;
 const lastLedgerQuery = () => api.ledger.mock.calls.at(-1)?.[0];
+const syncItem = async () => {
+  await userEvent.click(await screen.findByRole("button", { name: "More" }));
+  return screen.findByRole("menuitem", { name: "Sync orders" });
+};
 
 const O1 = row();
 const O2 = row({ id: "o2", number: "ORD-1002", marketplace: { code: "flipkart", name: "Flipkart" }, customerName: "Vikram Shah", status: "confirmed", statusLabel: "Confirmed", priority: true });
@@ -80,6 +88,8 @@ beforeEach(() => {
   refreshShell.mockResolvedValue(undefined);
   api.summary.mockResolvedValue(summary());
   api.workspace.mockResolvedValue(workspace());
+  api.activity.mockResolvedValue(activity());
+  api.views.mockResolvedValue([]);
   api.ledger.mockResolvedValue(ledgerPage([O1, O2], { total: 71, pages: 3 }));
   api.channels.mockResolvedValue({
     accounts: [{ id: "a1", marketplace: "amazon_in", displayName: "Amazon store", status: "active" }],
@@ -94,66 +104,110 @@ beforeEach(() => {
   api.exportCsv.mockResolvedValue({ blob: new Blob(["a"]), fileName: "orders-2026-10-20.csv" });
 });
 
-describe("tiles, banner and tabs from the API", () => {
-  it("shows today's numbers, stage counts and the lifecycle tab counts", async () => {
+describe("pulse, needs attention, sources, SLA pressure and tabs from the API", () => {
+  it("shows today's pulse, the headline numbers and the lifecycle tab counts", async () => {
     renderPage();
-    expect(await screen.findByText("Orders today")).toBeInTheDocument();
-    expect(screen.getByText("12")).toBeInTheDocument();
-    expect(screen.getByText(/1,23,456/)).toBeInTheDocument(); // revenue 12345600 paise
-    expect(screen.getByText("20.5 h")).toBeInTheDocument();
-    expect(screen.getByText("2.8%")).toBeInTheDocument();
-    const stages = screen.getByRole("group", { name: "Orders by stage" });
-    expect(within(stages).getByRole("button", { name: /Total orders\s*71/ })).toBeInTheDocument();
-    expect(within(stages).getByRole("button", { name: /Packed \/ ready\s*3/ })).toBeInTheDocument(); // packed 2 + ready_to_dispatch 1
-    expect(within(stages).getByRole("button", { name: /Dispatched \/ in transit\s*10/ })).toBeInTheDocument(); // 4 + 6
-    expect(screen.getByRole("tab", { name: /Needs attention\s*9/ })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: /Returns & disputes\s*3/ })).toBeInTheDocument();
+    const pulse = await screen.findByRole("group", { name: "Today's orders by stage" });
+    expect(within(pulse).getByRole("button", { name: /12\s*Today orders/ })).toBeInTheDocument();
+    expect(within(pulse).getByRole("button", { name: /4\s*New/ })).toBeInTheDocument();
+    expect(within(pulse).getByRole("button", { name: /1\s*Ready to Dispatch/ })).toBeInTheDocument();
+    const numbers = screen.getByLabelText("Today's numbers");
+    expect(numbers).toHaveTextContent(/1,23,456/); // revenue 12345600 paise
+    expect(numbers).toHaveTextContent("18 pending dispatch");
+    expect(numbers).toHaveTextContent("Avg fulfilment 20.5 h");
+    expect(numbers).toHaveTextContent("Cancellation rate 2.8%");
+    expect(screen.getByRole("tab", { name: /Needs Attention\s*9/ })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /Returns \/ Disputes\s*3/ })).toBeInTheDocument();
   });
 
-  it("shows the SLA banner with the API's own text and reviews at-risk orders on click", async () => {
+  it("a pulse stage filters the list to today's orders in that status and the tab resets", async () => {
+    renderPage("/orders?tab=shipped");
+    const pulse = await screen.findByRole("group", { name: "Today's orders by stage" });
+    await userEvent.click(within(pulse).getByRole("button", { name: /Picking/ }));
+    expect(loc()).toContain("status=picking");
+    expect(loc()).toContain("date=today");
+    expect(loc()).not.toContain("tab=");
+    await waitFor(() => expect(lastLedgerQuery()).toMatchObject({ status: ["picking"], date: "today" }));
+    expect(lastLedgerQuery().tab).toBeUndefined();
+    await userEvent.click(within(pulse).getByRole("button", { name: /Today orders/ }));
+    expect(loc()).toContain("date=today");
+    expect(loc()).not.toContain("status=");
+  });
+
+  it("counts what needs attention and filters the list by it", async () => {
     renderPage();
-    const banner = await screen.findByRole("alert");
-    expect(banner).toHaveTextContent("2 orders at risk, 1 order past the deadline");
-    expect(banner).toHaveTextContent("2 orders may breach dispatch SLA within the next 60 minutes.");
-    await userEvent.click(within(banner).getByRole("button", { name: "Review these orders" }));
+    const strip = await screen.findByRole("group", { name: "Needs attention" });
+    expect(within(strip).getByRole("button", { name: /7\s*Unprocessed/ })).toBeInTheDocument();
+    expect(within(strip).getByRole("button", { name: /2\s*SLA risk/ })).toBeInTheDocument();
+    await userEvent.click(within(strip).getByRole("button", { name: /Inventory issue/ }));
+    expect(loc()).toContain("chip=inventory_issue");
+    await waitFor(() => expect(lastLedgerQuery()).toMatchObject({ attention: ["inventory_issue"] }));
+    expect(screen.getByText(/Filtered by Inventory Issue/)).toBeInTheDocument();
+    await userEvent.click(within(strip).getByRole("button", { name: /Inventory issue/ }));
+    expect(loc()).not.toContain("chip");
+  });
+
+  it("shows the order sources of the last day and the SLA bands with their thresholds", async () => {
+    renderPage();
+    expect(await screen.findByText("Order sources")).toBeInTheDocument();
+    expect(screen.getByText("10 orders · last 24 h")).toBeInTheDocument();
+    expect(screen.getByText("6 · 60%")).toBeInTheDocument();
+    expect(screen.getByText("6 · 60%").parentElement).toHaveTextContent("Amazon India");
+    expect(screen.getByText("20 orders")).toBeInTheDocument();
+    expect(screen.getByText("More than 3 h")).toBeInTheDocument();
+    expect(screen.getByText("Less than 60 min")).toBeInTheDocument();
+  });
+
+  it("shows the SLA pressure text from the API and reviews at-risk orders on click", async () => {
+    renderPage();
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("2 orders may breach dispatch SLA within the next 60 minutes.");
+    expect(alert).toHaveTextContent("1 order is already past the deadline");
+    await userEvent.click(within(alert).getByRole("button", { name: /Review at-risk orders/ }));
     expect(loc()).toContain("sla=at_risk%2Cbreached");
     expect(loc()).toContain("sort=sla");
     await waitFor(() => expect(lastLedgerQuery()).toMatchObject({ slaState: ["at_risk", "breached"], sort: "sla" }));
   });
 
-  it("has no banner when nothing is at risk", async () => {
-    api.summary.mockResolvedValue(summary({ sla: { safe: 5, approaching: 0, atRisk: 0, breached: 0, atRiskMinutes: 60, approachingMinutes: 180 } }));
+  it("has no SLA warning when nothing is at risk", async () => {
+    const w = workspace();
+    api.workspace.mockResolvedValue(workspace({ slaPressure: { ...w.slaPressure, atRisk: { ...w.slaPressure.atRisk, orders: 0 }, breached: { ...w.slaPressure.breached, orders: 0 } } }));
     renderPage();
-    await screen.findByText("Orders today");
-    expect(screen.queryByText(/SLA pressure/)).not.toBeInTheDocument();
-  });
-
-  it("a stage tile filters the list by those statuses and the tab resets", async () => {
-    renderPage("/orders?tab=shipped");
-    await screen.findByText("Orders today");
-    await userEvent.click(screen.getByRole("button", { name: /Dispatched \/ in transit/ }));
-    expect(loc()).toContain("status=dispatched%2Cin_transit");
-    expect(loc()).not.toContain("tab=");
-    await waitFor(() => expect(lastLedgerQuery()).toMatchObject({ status: ["dispatched", "in_transit"] }));
-    expect(lastLedgerQuery().tab).toBeUndefined();
+    await screen.findByText("SLA Pressure");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Review at-risk orders/)).not.toBeInTheDocument();
   });
 
   it("shows a retry when the numbers cannot be loaded", async () => {
-    api.summary.mockRejectedValueOnce(new ApiError({ code: "INTERNAL", message: "boom", status: 500 }));
+    api.workspace.mockRejectedValueOnce(new ApiError({ code: "INTERNAL", message: "boom", status: 500 }));
     renderPage();
-    const alert = await screen.findByText(/Order numbers could not be loaded/);
-    expect(alert).toBeInTheDocument();
+    expect(await screen.findByText(/Order numbers could not be loaded/)).toBeInTheDocument();
     await userEvent.click(screen.getAllByRole("button", { name: "Retry" })[0] as HTMLElement);
-    expect(await screen.findByText("Orders today")).toBeInTheDocument();
+    expect(await screen.findByRole("group", { name: "Today's orders by stage" })).toBeInTheDocument();
+  });
+
+  it("lists the recent order activity and opens the order from it", async () => {
+    renderPage();
+    const section = await screen.findByRole("region", { name: "Recent order activity" });
+    expect(await within(section).findByText("Payment confirmed")).toBeInTheDocument();
+    expect(within(section).getByText("SLA risk detected")).toBeInTheDocument();
+    await userEvent.click(within(section).getByRole("button", { name: "ORD-1002" }));
+    expect(loc()).toContain("drawer=order%3Ao2");
+  });
+
+  it("says when there is no activity yet", async () => {
+    api.activity.mockResolvedValue([]);
+    renderPage();
+    expect(await screen.findByText("No order activity yet.")).toBeInTheDocument();
   });
 });
 
 describe("the ledger", () => {
-  it("renders a row per order with customer, destination, item, amount, SLA and status", async () => {
+  it("renders a row per order with customer, destination, items, value, payment, fulfillment, SLA and status", async () => {
     api.ledger.mockResolvedValue(
       ledgerPage([
         row({ sla: { state: "at_risk", dueAt: null, minutesRemaining: 25, label: "Due in 25 min" }, rowTone: "red" }),
-        row({ id: "o3", number: "ORD-1003", sla: { state: "breached", dueAt: null, minutesRemaining: -130, label: "Overdue 2 h 10 min" }, status: "picking", statusLabel: "Picking", fulfillmentStatus: "picking", carrier: { name: "Delhivery", trackingNumber: "DLV123" }, inventoryIssue: { productTitle: "Cotton Tote Bag", sku: "TOTE-1", required: 3, available: 1, action: "restock" }, lineCount: 1, firstItem: { title: "Cotton Tote Bag", sku: "TOTE-1", imageUrl: "/api/v1/documents/d1/content" } }),
+        row({ id: "o3", number: "ORD-1003", sla: { state: "breached", dueAt: null, minutesRemaining: -130, label: "Overdue 2 h 10 min" }, status: "picking", statusLabel: "Picking", fulfillmentStatus: "picking", carrier: { name: "Delhivery", trackingNumber: "DLV123" }, inventoryIssue: { productTitle: "Cotton Tote Bag", sku: "TOTE-1", required: 3, available: 1, action: "restock" }, lineCount: 1, firstItem: { title: "Cotton Tote Bag", sku: "TOTE-1", imageUrl: null }, payment: { status: "pending", method: "cod" }, paymentLabel: "Cash on delivery - Pending" }),
         row({ id: "o4", number: "ORD-1004", status: "delivered", statusLabel: "Delivered", sla: { state: "none", dueAt: null, minutesRemaining: null, label: null } }),
       ]),
     );
@@ -162,25 +216,28 @@ describe("the ledger", () => {
     expect(rows).toHaveLength(3);
     const first = within(rows[0] as HTMLElement);
     expect(first.getByText("ORD-1001")).toBeInTheDocument();
-    expect(first.getByText(/Amazon India/)).toBeInTheDocument();
+    expect(first.getByText("Amazon India")).toBeInTheDocument();
     expect(first.getByText("Asha Rao")).toBeInTheDocument();
-    expect(first.getByText("Pune, MH (411001)")).toBeInTheDocument();
-    expect(first.getByText("Cotton Tote Bag")).toBeInTheDocument();
-    expect(first.getByText(/\+1 more line/)).toBeInTheDocument();
-    expect(first.getByText(/3 units/)).toBeInTheDocument();
+    expect(first.getByText("Pune, MH")).toBeInTheDocument();
+    expect(first.getByText("3 items")).toBeInTheDocument();
     expect(first.getByText(/2,499\.50/)).toBeInTheDocument();
-    expect(first.getByText("Prepaid - Paid")).toBeInTheDocument();
+    expect(first.getByText("Paid")).toBeInTheDocument();
+    expect(first.getByText("Not started")).toBeInTheDocument();
     expect(first.getByText("Due in 25 min")).toHaveAttribute("data-sla", "at_risk");
-    expect(first.getByText("Not shipped")).toBeInTheDocument();
-    expect(first.getByText("Pune Hub")).toBeInTheDocument();
+    expect(first.getByText("New")).toBeInTheDocument();
     const second = within(rows[1] as HTMLElement);
     expect(second.getByText("Overdue 2 h 10 min")).toHaveAttribute("data-sla", "breached");
-    expect(second.getByText("DLV123")).toBeInTheDocument();
-    expect(second.getByText("Delhivery")).toBeInTheDocument();
-    expect(second.getByText(/Restock needed: needs 3, 1 available/)).toBeInTheDocument();
-    expect(second.getByText(/Fulfillment: picking/)).toBeInTheDocument();
-    expect(second.getByTestId("thumb")).toBeInTheDocument();
+    expect(second.getByText(/Delhivery · DLV123/)).toBeInTheDocument();
+    expect(second.getByText("Inventory Issue")).toBeInTheDocument();
+    expect(second.getByText(/Pending · COD/)).toBeInTheDocument();
     expect(within(rows[2] as HTMLElement).getByText("No deadline")).toHaveAttribute("data-sla", "none");
+    // the lines under the rows that need a person
+    const banners = screen.getAllByTestId("order-banner");
+    expect(banners).toHaveLength(2);
+    expect(banners[0]).toHaveTextContent("SLA critical");
+    expect(banners[1]).toHaveTextContent("Inventory issue");
+    expect(banners[1]).toHaveTextContent("Required: 3 · Available: 1");
+    expect(within(banners[1] as HTMLElement).getByRole("link", { name: /Review inventory/ })).toHaveAttribute("href", "/inventory");
   });
 
   it("flags priority orders", async () => {
@@ -211,8 +268,28 @@ describe("the ledger", () => {
       pageSize: 50,
     });
     expect(screen.getByRole("tab", { name: /Shipped/ })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("button", { name: "Flipkart" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByLabelText("Marketplace")).toHaveValue("flipkart");
     expect(screen.getByLabelText("Search orders")).toHaveValue("asha");
+  });
+
+  it("reads fulfillment, date and the quick filter from the URL and sends them as filters", async () => {
+    renderPage("/orders?fulfillment=picking,none&date=yesterday&chip=delayed");
+    await screen.findAllByTestId("order-row");
+    expect(lastLedgerQuery()).toMatchObject({ fulfillment: ["picking", "none"], date: "yesterday", attention: ["delayed"] });
+    expect(screen.getByLabelText("Date")).toHaveValue("yesterday");
+    expect(screen.getByRole("button", { name: "Delayed" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("filters by fulfillment, date and a quick filter", async () => {
+    renderPage();
+    await screen.findAllByTestId("order-row");
+    await userEvent.selectOptions(screen.getByLabelText("Fulfillment"), "packed");
+    await userEvent.selectOptions(screen.getByLabelText("Date"), "today");
+    await userEvent.click(screen.getByRole("button", { name: "Payment Issue" }));
+    await waitFor(() => expect(lastLedgerQuery()).toMatchObject({ fulfillment: ["packed"], date: "today", attention: ["payment_issue"] }));
+    expect(loc()).toContain("fulfillment=packed");
+    expect(loc()).toContain("date=today");
+    expect(loc()).toContain("chip=payment_issue");
   });
 
   it("understands the API's deep links: filter[slaState] and ?attention=true", async () => {
@@ -230,10 +307,10 @@ describe("the ledger", () => {
   it("filters by marketplace (names from the connected accounts) and keeps it in the URL", async () => {
     renderPage();
     await screen.findAllByTestId("order-row");
-    await userEvent.click(await screen.findByRole("button", { name: "Flipkart" }));
+    await userEvent.selectOptions(await screen.findByLabelText("Marketplace"), "flipkart");
     expect(loc()).toContain("marketplace=flipkart");
     await waitFor(() => expect(lastLedgerQuery()).toMatchObject({ marketplace: ["flipkart"] }));
-    await userEvent.click(screen.getByRole("button", { name: "All channels" }));
+    await userEvent.selectOptions(screen.getByLabelText("Marketplace"), "All channels");
     expect(loc()).not.toContain("marketplace");
   });
 
@@ -395,11 +472,53 @@ describe("bulk actions", () => {
   });
 });
 
+describe("saved views", () => {
+  const view = { id: "v1", name: "Amazon at risk", filters: { marketplace: ["amazon_in"], slaState: ["at_risk"], attention: ["sla_risk"] }, sort: "sla", shared: false, mine: true, canEdit: true };
+
+  it("lists the views of the orders screen and applies one to the URL", async () => {
+    api.views.mockResolvedValue([view]);
+    renderPage("/orders?q=old&status=new");
+    await screen.findAllByTestId("order-row");
+    await userEvent.click(screen.getByRole("button", { name: /Saved views/ }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: /Amazon at risk/ }));
+    expect(loc()).toContain("marketplace=amazon_in");
+    expect(loc()).toContain("sla=at_risk");
+    expect(loc()).toContain("chip=sla_risk");
+    expect(loc()).toContain("sort=sla");
+    expect(loc()).not.toContain("q=old");
+    expect(loc()).not.toContain("status=");
+    await waitFor(() => expect(lastLedgerQuery()).toMatchObject({ marketplace: ["amazon_in"], slaState: ["at_risk"], attention: ["sla_risk"], sort: "sla" }));
+  });
+
+  it("saves the current filters and sort under a name", async () => {
+    grant("orders:read", "views:write");
+    api.createView.mockResolvedValue({ ...view, id: "v2", name: "COD only" });
+    renderPage("/orders?payment=cod&sort=value");
+    await screen.findAllByTestId("order-row");
+    await userEvent.click(screen.getByRole("button", { name: /Saved views/ }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: /Save current view/ }));
+    const form = await screen.findByRole("dialog", { name: "Save current view" });
+    await userEvent.type(within(form).getByLabelText("View name"), "COD only");
+    await userEvent.click(within(form).getByRole("button", { name: "Save view" }));
+    await waitFor(() => expect(api.createView).toHaveBeenCalledWith({ name: "COD only", filters: { payment: "cod" }, sort: "value", shared: false }));
+  });
+
+  it("deletes a view", async () => {
+    api.views.mockResolvedValue([view]);
+    api.deleteView.mockResolvedValue(undefined);
+    renderPage();
+    await screen.findAllByTestId("order-row");
+    await userEvent.click(screen.getByRole("button", { name: /Saved views/ }));
+    await userEvent.click(await screen.findByRole("button", { name: "Delete view Amazon at risk" }));
+    await waitFor(() => expect(api.deleteView).toHaveBeenCalledWith("v1"));
+  });
+});
+
 describe("export and sync", () => {
   it("exports the CSV with the page's filters and sort and saves it", async () => {
     renderPage("/orders?tab=shipped&marketplace=flipkart&sort=value");
     await screen.findAllByTestId("order-row");
-    await userEvent.click(screen.getByRole("button", { name: "Export CSV" }));
+    await userEvent.click(screen.getByRole("button", { name: "Export" }));
     await waitFor(() => expect(api.exportCsv).toHaveBeenCalledWith({ tab: "shipped", marketplace: ["flipkart"] }, "value"));
     await waitFor(() => expect(saveBlob).toHaveBeenCalledWith(expect.any(Blob), "orders-2026-10-20.csv"));
   });
@@ -408,7 +527,7 @@ describe("export and sync", () => {
     api.exportCsv.mockRejectedValue(new ApiError({ code: "PAYLOAD_TOO_LARGE", message: "Too many rows: narrow the filters", status: 413 }));
     renderPage();
     await screen.findAllByTestId("order-row");
-    await userEvent.click(screen.getByRole("button", { name: "Export CSV" }));
+    await userEvent.click(screen.getByRole("button", { name: "Export" }));
     await waitFor(() => expect(toasts().some((t) => t.title === "Export failed" && t.description === "Too many rows: narrow the filters")).toBe(true));
     expect(saveBlob).not.toHaveBeenCalled();
   });
@@ -419,7 +538,7 @@ describe("export and sync", () => {
     renderPage();
     await screen.findAllByTestId("order-row");
     const before = api.ledger.mock.calls.length;
-    await userEvent.click(await screen.findByRole("button", { name: "Sync orders" }));
+    await userEvent.click(await syncItem());
     await waitFor(() => expect(api.syncOrders).toHaveBeenCalledWith("a1"));
     await waitFor(() => expect(api.syncJob).toHaveBeenCalledWith("j1"), { timeout: 4000 });
     await waitFor(() => expect(toasts().some((t) => t.title === "Orders synced")).toBe(true), { timeout: 4000 });
@@ -430,7 +549,7 @@ describe("export and sync", () => {
     api.syncOrders.mockResolvedValue({ job: { id: "j1", status: "failed", error: { code: "AUTH", message: "Token expired" } }, alreadyQueued: false });
     renderPage();
     await screen.findAllByTestId("order-row");
-    await userEvent.click(await screen.findByRole("button", { name: "Sync orders" }));
+    await userEvent.click(await syncItem());
     await waitFor(() => expect(toasts().some((t) => t.title === "Order sync had problems" && /Token expired/.test(t.description ?? ""))).toBe(true));
   });
 
@@ -438,7 +557,7 @@ describe("export and sync", () => {
     api.channels.mockResolvedValue({ accounts: [], options: [] });
     renderPage();
     await screen.findAllByTestId("order-row");
-    expect(screen.queryByRole("button", { name: "Sync orders" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "More" })).not.toBeInTheDocument();
   });
 });
 
@@ -451,8 +570,9 @@ describe("a viewer", () => {
     const box = within(rows[0] as HTMLElement).getByLabelText("Select order ORD-1001");
     expect(box).toBeDisabled();
     expect(box).toHaveAttribute("title", expect.stringContaining("view orders"));
-    expect(await screen.findByRole("button", { name: "Sync orders" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Export CSV" })).toBeEnabled();
+    await userEvent.click(await screen.findByRole("button", { name: "More" }));
+    expect(await screen.findByRole("menuitem", { name: "Sync orders" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Export" })).toBeEnabled();
   });
 });
 
@@ -544,7 +664,7 @@ describe("the order drawer", () => {
     renderPage("/orders?drawer=order:o1");
     const region = await screen.findByRole("region", { name: "Order actions" });
     expect(within(region).getByText(/Managed by Fulfillment \(FUL-1\)/)).toBeInTheDocument();
-    expect(within(region).getByRole("link", { name: "Open Fulfillment" })).toHaveAttribute("href", "/fulfillment");
+    expect(within(region).getByRole("link", { name: "Open fulfillment" })).toHaveAttribute("href", "/fulfillment");
     expect(within(region).getByRole("button", { name: "Mark as packed" })).toBeDisabled();
     expect(within(region).getByText(/Use the fulfillment actions instead/)).toBeInTheDocument();
     expect(within(region).getByRole("button", { name: "Cancel order" })).toBeEnabled();

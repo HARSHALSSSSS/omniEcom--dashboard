@@ -1,21 +1,36 @@
 import { client, unwrap } from "./client";
 import { ENDPOINTS } from "./endpoints";
 import type {
+  AssignResult,
+  AttentionList,
   CreateReturnInput,
+  DispositionOptions,
   DownloadedFile,
   Eligibility,
   InsightsData,
+  InspectionResult,
+  InspectionView,
   LedgerPage,
   LedgerQuery,
+  LedgerRow,
+  MarkResult,
   MarketplaceOption,
+  MemberOption,
   NextActions,
+  RefundQuery,
+  RefundQueue,
+  RefundView,
   ReturnDetail,
   ReturnFilters,
   ReturnOrder,
   ReturnReason,
+  ReturnsAnalytics,
   ReturnsOverview,
   ReturnsSummary,
   RunActionInput,
+  SaveInspectionInput,
+  SyncJob,
+  SyncResult,
   TabCounts,
   WarehouseOption,
 } from "@/types/returns";
@@ -47,6 +62,16 @@ function fileNameOf(disposition: unknown, fallback: string): string {
   return match?.[1] ? decodeURIComponent(match[1]) : fallback;
 }
 
+function refundParams(query: RefundQuery): Record<string, string | number> {
+  const params: Record<string, string | number> = {};
+  if (query.q) params.q = query.q;
+  if (query.status) params["filter[status]"] = query.status;
+  if (query.marketplace) params["filter[marketplace]"] = query.marketplace;
+  if (query.page && query.page > 1) params.page = query.page;
+  if (query.pageSize) params.pageSize = query.pageSize;
+  return params;
+}
+
 export const returnsApi = {
   summary: async (days: number, signal?: AbortSignal) => unwrap<ReturnsSummary>(await client.get(ENDPOINTS.RETURNS_SUMMARY, { params: { days }, signal })),
 
@@ -65,6 +90,60 @@ export const returnsApi = {
     if (query.sort) params.sort = query.sort;
     const res = await client.get<Blob>(ENDPOINTS.RETURNS_EXPORT, { params, responseType: "blob" });
     return { blob: res.data, fileName: fileNameOf(res.headers["content-disposition"], "returns.csv") };
+  },
+
+  /** why products come back: reason shares of the last returns, concentration and the recommendation-only notes */
+  analytics: async (days: number, signal?: AbortSignal) => unwrap<ReturnsAnalytics>(await client.get(ENDPOINTS.RETURNS_ANALYTICS, { params: { days }, signal })),
+
+  /** one row per return that needs attention (computed live) */
+  attention: async (signal?: AbortSignal) => unwrap<AttentionList>(await client.get(ENDPOINTS.RETURNS_ATTENTION, { signal })),
+
+  exportAttention: async (): Promise<DownloadedFile> => {
+    const res = await client.get<Blob>(ENDPOINTS.RETURNS_ATTENTION_EXPORT, { responseType: "blob" });
+    return { blob: res.data, fileName: fileNameOf(res.headers["content-disposition"], "returns-attention.csv") };
+  },
+
+  /** the refund queue: actionable refunds plus processed ones, with the footer counts */
+  refunds: async (query: RefundQuery, signal?: AbortSignal) => unwrap<RefundQueue>(await client.get(ENDPOINTS.RETURNS_REFUNDS, { params: refundParams(query), signal })),
+
+  refundView: async (id: string, signal?: AbortSignal) => unwrap<RefundView>(await client.get(ENDPOINTS.RETURN_REFUND(id), { signal })),
+
+  inspection: async (id: string, signal?: AbortSignal) => unwrap<InspectionView>(await client.get(ENDPOINTS.RETURN_INSPECTION(id), { signal })),
+
+  /** saves the checklist and result; it never approves a refund or picks a disposition */
+  saveInspection: async ({ id, ...body }: SaveInspectionInput) => unwrap<InspectionView>(await client.post(ENDPOINTS.RETURN_INSPECTION(id), body)),
+
+  dispositionOptions: async (id: string, signal?: AbortSignal) => unwrap<DispositionOptions>(await client.get(ENDPOINTS.RETURN_DISPOSITION_OPTIONS(id), { signal })),
+
+  /** names the inspector (an active member) and starts the inspection; several returns at once through the bulk path */
+  assignInspection: async (ids: string[], userId: string) => unwrap<AssignResult>(await client.post(`${ENDPOINTS.RETURNS}/inspection/assign`, { ids, userId })),
+
+  /** queues one returns sync job per connected account that can fetch returns (202), or says why nothing was queued */
+  sync: async (body: { accountId?: string; since?: string } = {}) => unwrap<SyncResult>(await client.post(ENDPOINTS.RETURNS_SYNC, body)),
+
+  /** one sync job: status, progress, stats and the per-item failures */
+  syncJob: async (jobId: string, signal?: AbortSignal) => unwrap<SyncJob>(await client.get(ENDPOINTS.SYNC_JOB(jobId), { signal })),
+
+  /** every return of a ledger query, page by page (for "Select all"); stops at `max` rows and says whether there were more */
+  ledgerAll: async (query: LedgerQuery, max = 1000, signal?: AbortSignal): Promise<{ rows: LedgerRow[]; truncated: boolean }> => {
+    const rows: LedgerRow[] = [];
+    let page = 1;
+    for (;;) {
+      const res = await returnsApi.ledger({ ...query, page, pageSize: 100 }, signal);
+      rows.push(...res.items);
+      if (page >= res.pages || rows.length >= max) return { rows: rows.slice(0, max), truncated: res.total > max };
+      page++;
+    }
+  },
+
+  /** sets pass / fail / needs review on several returns without a checklist; never approves a refund or picks a disposition */
+  markInspection: async (ids: string[], result: InspectionResult, note?: string) =>
+    unwrap<MarkResult>(await client.post(`${ENDPOINTS.RETURNS}/inspection/mark`, { ids, result, ...(note ? { note } : {}) })),
+
+  /** active members, to pick an inspector (needs users:read) */
+  members: async (): Promise<MemberOption[]> => {
+    const res = await client.get<{ data: Array<{ id: string; fullName: string }> }>(ENDPOINTS.USERS, { params: { limit: 100, "filter[status]": "active" } });
+    return res.data.data.map((m) => ({ id: m.id, name: m.fullName }));
   },
 
   detail: async (id: string, signal?: AbortSignal) => unwrap<ReturnDetail>(await client.get(ENDPOINTS.RETURN_DETAIL(id), { signal })),

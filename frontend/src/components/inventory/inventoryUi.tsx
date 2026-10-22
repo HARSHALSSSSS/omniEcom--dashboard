@@ -44,7 +44,7 @@ const initialsOf = (title: string) =>
  * Product images are served through the API with a bearer token, so a plain <img src> cannot load them. Same approach as
  * the Products list (and the same cache entry): fetched through the API client, shown from an object URL.
  */
-export function InventoryThumb({ url, title, size = 40 }: { url: string | null; title: string; size?: number }) {
+export function InventoryThumb({ url, title, size = 40, className }: { url: string | null; title: string; size?: number; className?: string }) {
   const { data: blob, isError } = useQuery({
     queryKey: ["products", "thumbnail", url],
     queryFn: async () => (await client.get<Blob>((url ?? "").replace(/^\/api\/v1/, ""), { responseType: "blob" })).data,
@@ -64,14 +64,14 @@ export function InventoryThumb({ url, title, size = 40 }: { url: string | null; 
   }, [blob]);
 
   const style = { width: size, height: size };
-  if (src) return <img src={src} alt={title} style={style} className="shrink-0 rounded-md border border-border bg-muted object-cover" />;
+  if (src) return <img src={src} alt={title} style={style} className={cn("shrink-0 rounded-lg border border-[#EAEAEA] bg-neutral-100 object-cover", className)} />;
   const loading = Boolean(url) && !isError;
   return (
     <div
       style={style}
       role="img"
       aria-label={loading ? "Loading image" : "No image"}
-      className={cn("flex shrink-0 items-center justify-center rounded-md border border-border bg-muted text-[11px] font-medium text-muted-foreground", loading && "animate-pulse")}
+      className={cn("flex shrink-0 items-center justify-center rounded-lg border border-[#EAEAEA] bg-neutral-100 text-[11px] font-medium text-[#737373]", loading && "animate-pulse", className)}
     >
       {!loading && initialsOf(title)}
     </div>

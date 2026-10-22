@@ -9,6 +9,8 @@ interface ShippingPaginationProps {
   shown: number;
   onPage: (page: number) => void;
   onPageSize: (size: number) => void;
+  /** what is listed, plural ("shipments", "orders") */
+  noun?: string;
 }
 
 /** the pages around the current one: 1 ... 4 5 [6] 7 8 ... 20 */
@@ -25,13 +27,13 @@ function windowOf(page: number, pages: number): Array<number | "gap"> {
 
 const NAV = "h-8 rounded-lg border border-border bg-card px-3 text-xs font-semibold hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50";
 
-export function ShippingPagination({ page, pages, total, pageSize, shown, onPage, onPageSize }: ShippingPaginationProps) {
+export function ShippingPagination({ page, pages, total, pageSize, shown, onPage, onPageSize, noun = "shipments" }: ShippingPaginationProps) {
   const first = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const last = (page - 1) * pageSize + shown;
   return (
     <nav aria-label="Pagination" className="flex flex-wrap items-center justify-between gap-2 pt-1">
       <span className="text-xs text-muted-foreground" aria-live="polite">
-        Showing {formatNumber(first)}–{formatNumber(last)} of {formatNumber(total)} shipments
+        Showing {formatNumber(first)}–{formatNumber(last)} of {formatNumber(total)} {noun}
       </span>
       <div className="flex items-center gap-2">
         <button type="button" className={NAV} disabled={page <= 1} onClick={() => onPage(page - 1)}>
@@ -58,7 +60,7 @@ export function ShippingPagination({ page, pages, total, pageSize, shown, onPage
         <button type="button" className={NAV} disabled={page >= pages} onClick={() => onPage(page + 1)}>
           Next
         </button>
-        <select aria-label="Shipments per page" value={pageSize} onChange={(e) => onPageSize(Number(e.target.value))} className="h-8 rounded-lg border border-border bg-card px-2 text-xs font-medium">
+        <select aria-label={`${noun.charAt(0).toUpperCase()}${noun.slice(1)} per page`} value={pageSize} onChange={(e) => onPageSize(Number(e.target.value))} className="h-8 rounded-lg border border-border bg-card px-2 text-xs font-medium">
           {PAGE_SIZES.map((n) => (
             <option key={n} value={n}>
               {n} / page

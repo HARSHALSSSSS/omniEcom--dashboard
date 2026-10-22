@@ -1,5 +1,6 @@
-import { PAGE_SIZES } from "./orderParams";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { formatNumber } from "@/utils/format";
+import { PAGE_SIZES } from "./orderParams";
 
 interface OrdersPaginationProps {
   page: number;
@@ -23,23 +24,27 @@ function windowOf(page: number, pages: number): Array<number | "gap"> {
   return out;
 }
 
-const NAV = "h-8 rounded-lg border border-border bg-card px-3 text-xs font-semibold hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50";
-
 export function OrdersPagination({ page, pages, total, pageSize, shown, onPage, onPageSize }: OrdersPaginationProps) {
   const first = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const last = (page - 1) * pageSize + shown;
   return (
-    <nav aria-label="Pagination" className="flex flex-wrap items-center justify-between gap-2 pt-1">
-      <span className="text-xs text-muted-foreground" aria-live="polite">
+    <nav aria-label="Pagination" className="w-full flex flex-row flex-wrap justify-between items-center gap-2 min-h-[16px] pt-1">
+      <span className="text-[10px] font-normal leading-[12px] text-[#666666]" aria-live="polite">
         Showing {formatNumber(first)}–{formatNumber(last)} of {formatNumber(total)} orders
       </span>
-      <div className="flex items-center gap-2">
-        <button type="button" className={NAV} disabled={page <= 1} onClick={() => onPage(page - 1)}>
-          Previous
+      <div className="flex flex-row items-center gap-[10px]">
+        <button
+          type="button"
+          aria-label="Previous"
+          disabled={page <= 1}
+          onClick={() => onPage(page - 1)}
+          className="text-[11px] font-normal leading-[13px] text-[#666666] hover:text-[#000000] disabled:text-[#BDBDBD] disabled:cursor-not-allowed cursor-pointer"
+        >
+          <ChevronLeft className="w-3 h-3 inline" aria-hidden />
         </button>
         {windowOf(page, pages).map((n, i) =>
           n === "gap" ? (
-            <span key={`gap-${i}`} className="text-xs text-muted-foreground" aria-hidden>
+            <span key={`gap-${i}`} className="text-[11px] text-[#666666]" aria-hidden>
               ...
             </span>
           ) : (
@@ -49,20 +54,26 @@ export function OrdersPagination({ page, pages, total, pageSize, shown, onPage, 
               aria-label={`Page ${n}`}
               aria-current={n === page ? "page" : undefined}
               onClick={() => onPage(n)}
-              className={`h-7 min-w-[28px] rounded px-1 text-xs font-semibold ${n === page ? "bg-muted" : "hover:bg-muted"}`}
+              className={`text-[11px] leading-[13px] cursor-pointer ${n === page ? "font-semibold text-[#000000]" : "font-normal text-[#666666] hover:text-[#000000]"}`}
             >
               {n}
             </button>
           ),
         )}
-        <button type="button" className={NAV} disabled={page >= pages} onClick={() => onPage(page + 1)}>
-          Next
+        <button
+          type="button"
+          aria-label="Next"
+          disabled={page >= pages}
+          onClick={() => onPage(page + 1)}
+          className="text-[11px] font-normal leading-[13px] text-[#666666] hover:text-[#000000] disabled:text-[#BDBDBD] disabled:cursor-not-allowed cursor-pointer"
+        >
+          <ChevronRight className="w-3 h-3 inline" aria-hidden />
         </button>
         <select
           aria-label="Orders per page"
           value={pageSize}
           onChange={(e) => onPageSize(Number(e.target.value))}
-          className="h-8 rounded-lg border border-border bg-card px-2 text-xs font-medium"
+          className="h-[24px] rounded-lg border border-[#EAEAEA] bg-white px-1 text-[11px] font-normal text-[#666666] cursor-pointer"
         >
           {PAGE_SIZES.map((n) => (
             <option key={n} value={n}>

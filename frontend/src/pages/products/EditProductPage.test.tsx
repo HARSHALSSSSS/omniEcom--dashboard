@@ -18,8 +18,13 @@ const api = vi.hoisted(() => ({
   acceptDescription: vi.fn(),
   dismissDescription: vi.fn(),
   listCategories: vi.fn(),
+  listCategoryAttributes: vi.fn(),
 }));
 vi.mock("@/api/productEdit.api", () => ({ productEditApi: api }));
+const brandsApi = vi.hoisted(() => ({ brands: vi.fn() }));
+vi.mock("@/api/productCreation.api", () => ({ productCreationApi: brandsApi }));
+// product images sit behind the bearer token: a missing image shows the neutral box
+vi.mock("@/api/productDetail.api", () => ({ productDetailApi: { imageBlob: vi.fn().mockRejectedValue(new Error("no image")) } }));
 
 import EditProductPage from "./EditProductPage";
 
@@ -247,7 +252,19 @@ function renderPage() {
 }
 
 const titleInput = () => screen.getByLabelText("Product name") as HTMLInputElement;
-const saveButton = () => screen.getByRole("button", { name: "Save changes" });
+// the design has the actions in the header and in the bottom bar: both behave the same
+const saveButton = () => screen.getAllByRole("button", { name: /^(Save changes|Saving\.\.\.)$/ })[0] as HTMLElement;
+/** Save opens the design's impact dialog on every save; "Save and continue" posts the save */
+async function clickSave(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(saveButton());
+  await user.click(await screen.findByRole("button", { name: "Save and continue" }));
+}
+const discardButtons = () => screen.getAllByRole("button", { name: "Discard" });
+
+async function pickCategory(user: ReturnType<typeof userEvent.setup>, name: string) {
+  await user.click(await screen.findByLabelText("Category"));
+  await user.click(await screen.findByRole("option", { name }));
+}
 
 async function editTitle(user: ReturnType<typeof userEvent.setup>, text = " Extra") {
   await screen.findByLabelText("Product name");
@@ -264,6 +281,11 @@ beforeEach(() => {
     { id: CAT_B, parentId: null, name: "Luggage & Travel Bags", path: "luggage" },
   ]);
   api.changeImpact.mockResolvedValue(impact());
+  brandsApi.brands.mockReset();
+  brandsApi.brands.mockResolvedValue([
+    { id: "b1", name: "Urban Carry", confirmed: true },
+    { id: "b2", name: "Nova Living", confirmed: true },
+  ]);
   useWorkspaceStore.getState().clearWorkspace();
   signIn(["products:read", "products:write"]);
 });
@@ -281,13 +303,16 @@ describe("EditProductPage", () => {
     expect(sku).toHaveAttribute("readonly");
     expect(screen.getByText(/Locked\. Used as the primary internal product identifier\./)).toBeInTheDocument();
     expect((screen.getByLabelText("Brand") as HTMLInputElement).value).toBe("Urban Carry");
-    expect(await screen.findByRole("option", { name: "Luggage & Travel Bags" })).toBeInTheDocument();
-    expect((screen.getByLabelText("Category") as HTMLSelectElement).value).toBe(CAT_A);
+    expect(screen.getByLabelText("Category")).toHaveTextContent("Travel Accessories");
+    expect(screen.getByLabelText("Product type")).toHaveTextContent("Physical product");
+    expect(screen.getByText("Active", { selector: "span" })).toBeInTheDocument();
 
-    expect(screen.getByText("Saved")).toBeInTheDocument();
+    // nothing was saved yet: no "Saved" marker, the bottom bar says so
+    expect(screen.queryByText("Saved")).not.toBeInTheDocument();
     expect(screen.getByText("All changes saved")).toBeInTheDocument();
     expect(saveButton()).toBeDisabled();
-    expect(screen.getByText("No changes yet")).toBeInTheDocument();
+    expect(screen.getByText("No changes made")).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "Breadcrumb" })).toHaveTextContent("Products/Premium Travel Bag");
 
     const nav = screen.getByRole("navigation", { name: "Product" });
     expect(within(nav).getByRole("link", { name: /Variants/ })).toHaveAttribute("href", `/products/${ID}/variants`);
@@ -306,7 +331,7 @@ describe("EditProductPage", () => {
 
     await user.click(screen.getByRole("button", { name: /Additional attributes/ }));
     expect(screen.getByText(/Attribute values were not supplied in the existing product record/)).toBeInTheDocument();
-    expect(within(screen.getByRole("list", { name: "Attribute status" })).getAllByText("Not supplied")).toHaveLength(6);
+    expect(screen.getAllByPlaceholderText("Not supplied")).toHaveLength(7);
     expect(api.getEditor).toHaveBeenCalledWith(ID);
   });
 
@@ -339,8 +364,62 @@ describe("EditProductPage", () => {
     expect((screen.getByLabelText("Brand") as HTMLInputElement).value).toBe("Urban Carry");
 
     await user.type(titleInput(), "!");
-    await user.click(screen.getByRole("button", { name: "Discard" }));
+    await user.click(discardButtons()[0] as HTMLElement);
     expect(titleInput().value).toBe("Premium Travel Bag");
+  });
+
+  it("offers the four product types of the design and sends the chosen one (Bundle / Kit)", async () => {
+    const user = userEvent.setup();
+    api.save.mockResolvedValue(saved("Premium Travel Bag", { productType: "bundle" }));
+    renderPage();
+    await user.click(await screen.findByLabelText("Product type"));
+    expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual(["Physical product", "Digital product", "Service / Warranty", "Bundle / Kit"]);
+    await user.click(screen.getByRole("option", { name: "Bundle / Kit" }));
+    expect(screen.getByLabelText("Product type")).toHaveTextContent("Bundle / Kit");
+    await clickSave(user);
+    await waitFor(() => expect(api.save).toHaveBeenCalledWith(ID, { version: 3, changes: { productType: "bundle" } }));
+  });
+
+  it("shows the attributes of the product category with Supplied / Not supplied, edits them and swaps them on a category change", async () => {
+    const user = userEvent.setup();
+    const cap = { attributeId: "at-1", code: "capacity", name: "Capacity (Volume)", dataType: "number" as const, unit: "L", isRequired: false, options: [] };
+    const care = { attributeId: "at-2", code: "care", name: "Care instructions", dataType: "enum" as const, unit: null, isRequired: true, options: [{ value: "wash", label: "Machine wash" }] };
+    api.getEditor.mockResolvedValue(editor({}, { categoryAttributes: [{ ...cap, value: 35 }, { ...care, value: null }] }));
+    api.listCategoryAttributes.mockResolvedValue([{ attributeId: "at-3", code: "fabric", name: "Fabric composition", dataType: "text", unit: null, isRequired: false, options: [] }]);
+    api.save.mockResolvedValue(saved());
+    renderPage();
+    await screen.findByLabelText("Product name");
+    await user.click(screen.getByRole("button", { name: /Additional attributes/ }));
+
+    const status = within(screen.getByRole("region", { name: "Attribute status" }));
+    expect(status.getByText("Capacity (Volume)").closest("li")).toHaveAttribute("data-supplied", "true");
+    expect(status.getByText(/Care instructions/).closest("li")).toHaveAttribute("data-supplied", "false");
+    expect((screen.getByLabelText("Capacity (Volume)") as HTMLInputElement).value).toBe("35");
+    expect(screen.getByText("Required for this category")).toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText("Capacity (Volume)"));
+    await user.type(screen.getByLabelText("Capacity (Volume)"), "40");
+    expect(screen.getByText("Previously: 35 L")).toBeInTheDocument();
+    await clickSave(user);
+    await waitFor(() => expect(api.save).toHaveBeenCalledWith(ID, { version: 3, changes: { categoryAttributes: [{ attributeId: "at-1", value: "40" }] } }));
+  });
+
+  it("swaps the attribute fields when another category is picked and sends only the new category's values", async () => {
+    const user = userEvent.setup();
+    const cap = { attributeId: "at-1", code: "capacity", name: "Capacity (Volume)", dataType: "number" as const, unit: "L", isRequired: false, options: [] };
+    api.getEditor.mockResolvedValue(editor({}, { categoryAttributes: [{ ...cap, value: 35 }] }));
+    api.listCategoryAttributes.mockResolvedValue([{ attributeId: "at-3", code: "fabric", name: "Fabric composition", dataType: "text", unit: null, isRequired: false, options: [] }]);
+    renderPage();
+    await screen.findByLabelText("Product name");
+    await user.click(screen.getByRole("button", { name: /Additional attributes/ }));
+    await user.clear(screen.getByLabelText("Capacity (Volume)"));
+    await pickCategory(user, "Luggage & Travel Bags");
+    expect(await screen.findByLabelText("Fabric composition")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Capacity (Volume)")).not.toBeInTheDocument();
+    expect(api.listCategoryAttributes).toHaveBeenCalledWith(CAT_B);
+    await user.type(screen.getByLabelText("Fabric composition"), "Wool");
+    await waitFor(() => expect(api.changeImpact).toHaveBeenCalled());
+    expect(api.changeImpact.mock.calls.at(-1)?.[1]).toEqual({ categoryId: CAT_B, categoryAttributes: [{ attributeId: "at-3", value: "Wool" }] });
   });
 
   it("previews the change impact (debounced, one request) and renders channels and notes", async () => {
@@ -348,7 +427,7 @@ describe("EditProductPage", () => {
     renderPage();
     await editTitle(user, " Plus");
 
-    expect(await screen.findByText("Product name changed", { selector: "p" })).toBeInTheDocument();
+    expect(await screen.findByText("Product name changed", { selector: "span" })).toBeInTheDocument();
     expect(api.changeImpact).toHaveBeenCalledTimes(1);
     expect(api.changeImpact.mock.calls[0]?.[0]).toBe(ID);
     expect(api.changeImpact.mock.calls[0]?.[1]).toEqual({ title: "Premium Travel Bag Plus" });
@@ -359,7 +438,7 @@ describe("EditProductPage", () => {
     expect(rows.getByText("Independently managed")).toBeInTheDocument();
     expect(screen.getByText("Shopify content is independently managed.")).toBeInTheDocument();
     expect(screen.getByText("Updates are not sent to listings until you save.")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Review affected listings" })).toHaveAttribute("href", `/listings?productId=${ID}`);
+    expect(screen.getByRole("link", { name: /^Review affected listings/ })).toHaveAttribute("href", `/listings?productId=${ID}`);
     expect(api.save).not.toHaveBeenCalled();
   });
 
@@ -374,7 +453,7 @@ describe("EditProductPage", () => {
     await user.type(screen.getByLabelText("Width in cm"), "30");
     await user.type(screen.getByLabelText("Height in cm"), "25.5");
     await user.type(screen.getByLabelText("Weight (kg)"), "1.2");
-    await user.click(saveButton());
+    await clickSave(user);
 
     await waitFor(() => expect(api.save).toHaveBeenCalledTimes(1));
     expect(api.save).toHaveBeenCalledWith(ID, { version: 3, changes: { gstRateBps: 1800, dimensions: { length: 50, width: 30, height: 25.5, unit: "cm" }, weight: { value: 1.2, unit: "kg" } } });
@@ -386,9 +465,9 @@ describe("EditProductPage", () => {
     api.getEditor.mockResolvedValueOnce(editor()).mockResolvedValue(editor({ version: 4 }, { title: "Urban Carry Premium Travel Bag", version: 4 }));
     renderPage();
     await editTitle(user, " Plus");
-    await user.click(saveButton());
+    await clickSave(user);
 
-    expect(await screen.findByText("Changes saved", { selector: "p" })).toBeInTheDocument();
+    expect(await screen.findByText("Changes saved", { selector: "span" })).toBeInTheDocument();
     expect(screen.getByText("3 listings will sync shortly.")).toBeInTheDocument();
     const states = within(screen.getByRole("list", { name: "Channel sync state" }));
     expect(states.getAllByText("Sync pending")).toHaveLength(2);
@@ -409,11 +488,37 @@ describe("EditProductPage", () => {
     api.getEditor.mockResolvedValue(editor({ version: 4 }, { title: "Premium Travel Bag Extra", version: 4 }));
     renderPage();
     await editTitle(user);
-    await user.click(saveButton());
-    await user.click(saveButton());
+    await clickSave(user);
+    // while the save is running the dialog cannot confirm again
+    expect(await screen.findByRole("button", { name: "Saving..." })).toBeDisabled();
     expect(api.save).toHaveBeenCalledTimes(1);
     resolve(saved("Premium Travel Bag Extra"));
     expect(await screen.findByText("3 listings will sync shortly.")).toBeInTheDocument();
+  });
+
+  it("opens the impact dialog on every Save with the real impact (fetched at once when the preview has not loaded); Cancel returns to the form", async () => {
+    const user = userEvent.setup();
+    let release: (v: ChangeImpact) => void = () => undefined;
+    api.changeImpact.mockReturnValue(new Promise<ChangeImpact>((r) => (release = r)));
+    renderPage();
+    await editTitle(user, " Z");
+    await user.click(saveButton());
+
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("This change may affect connected listings.")).toBeInTheDocument();
+    expect(within(dialog).getByText("Checking what this change affects...")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Save and continue" })).toBeDisabled();
+    release(impact());
+    expect(await within(dialog).findByText("3 marketplace listings may be affected.")).toBeInTheDocument();
+    const rows = within(within(dialog).getByRole("list", { name: "Affected channels" }));
+    expect(rows.getByText("Amazon")).toBeInTheDocument();
+    expect(rows.getAllByText("Name inherited")).toHaveLength(2);
+    expect(api.save).not.toHaveBeenCalled();
+
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(titleInput().value).toBe("Premium Travel Bag Z");
+    expect(api.save).not.toHaveBeenCalled();
   });
 
   it("explains a save that changed nothing (saved: false)", async () => {
@@ -421,7 +526,7 @@ describe("EditProductPage", () => {
     api.save.mockResolvedValue({ saved: false, noChanges: true, version: 3 });
     renderPage();
     await editTitle(user, " x");
-    await user.click(saveButton());
+    await clickSave(user);
     expect(await screen.findByText("There were no changes to save.")).toBeInTheDocument();
     expect(titleInput().value).toBe("Premium Travel Bag");
     expect(saveButton()).toBeDisabled();
@@ -457,10 +562,9 @@ describe("EditProductPage", () => {
     api.getEditor.mockResolvedValue(editor({ version: 4 }, { categoryId: CAT_B, category: { id: CAT_B, name: "Luggage & Travel Bags" }, version: 4 }));
     api.getEditor.mockResolvedValueOnce(editor());
     renderPage();
-    await screen.findByRole("option", { name: "Luggage & Travel Bags" });
-    await user.selectOptions(screen.getByLabelText("Category"), CAT_B);
+    await pickCategory(user, "Luggage & Travel Bags");
     expect(screen.getByText("Previously: Travel Accessories")).toBeInTheDocument();
-    await user.click(saveButton());
+    await clickSave(user);
 
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByText("This change may affect connected listings.")).toBeInTheDocument();
@@ -483,13 +587,12 @@ describe("EditProductPage", () => {
       new ApiError({ code: "CONFLICT", message: "confirm", status: 409, details: { rule: "confirmation_required", impact: impact({ requiresConfirmation: true, confirmation: { title: "This change may affect connected listings.", message: "m", channels: [] } }) } }),
     );
     renderPage();
-    await screen.findByRole("option", { name: "Luggage & Travel Bags" });
-    await user.selectOptions(screen.getByLabelText("Category"), CAT_B);
-    await user.click(saveButton());
+    await pickCategory(user, "Luggage & Travel Bags");
+    await clickSave(user);
     const dialog = await screen.findByRole("dialog");
     await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    expect((screen.getByLabelText("Category") as HTMLSelectElement).value).toBe(CAT_B);
+    expect(screen.getByLabelText("Category")).toHaveTextContent("Luggage & Travel Bags");
     expect(api.save).toHaveBeenCalledTimes(1);
   });
 
@@ -507,7 +610,7 @@ describe("EditProductPage", () => {
     api.getEditor.mockResolvedValueOnce(editor()).mockResolvedValue(current);
     renderPage();
     await editTitle(user, " Mine");
-    await user.click(saveButton());
+    await clickSave(user);
 
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByText("This product was changed by someone else")).toBeInTheDocument();
@@ -530,13 +633,13 @@ describe("EditProductPage", () => {
     api.getEditor.mockResolvedValueOnce(editor()).mockResolvedValue(current);
     renderPage();
     await editTitle(user, " Mine");
-    await user.click(saveButton());
+    await clickSave(user);
     const dialog = await screen.findByRole("dialog");
     await user.click(within(dialog).getByRole("button", { name: "Reload and keep my edits" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(titleInput().value).toBe("Premium Travel Bag Mine");
     expect((screen.getByLabelText("Brand") as HTMLInputElement).value).toBe("Other Brand");
-    await user.click(saveButton());
+    await clickSave(user);
     await waitFor(() => expect(api.save).toHaveBeenCalledTimes(2));
     expect(api.save.mock.calls[1]?.[1]).toEqual({ version: 4, changes: { title: "Premium Travel Bag Mine" } });
   });
@@ -551,7 +654,7 @@ describe("EditProductPage", () => {
     expect(sku).not.toHaveAttribute("readonly");
     await user.clear(sku);
     await user.type(sku, "NEW-1");
-    await user.click(saveButton());
+    await clickSave(user);
     expect(await screen.findByText("The master SKU cannot be changed once the product is no longer a draft.")).toBeInTheDocument();
     expect(screen.getByText(/The master SKU is locked\. Revert it to save your other changes\./)).toBeInTheDocument();
   });
@@ -568,7 +671,7 @@ describe("EditProductPage", () => {
     );
     renderPage();
     await editTitle(user, "!");
-    await user.click(saveButton());
+    await clickSave(user);
     expect(await screen.findByText("The product name needs at least 3 characters")).toBeInTheDocument();
     expect(titleInput()).toHaveAttribute("aria-invalid", "true");
     expect(screen.getByText(/Some fields need attention/)).toBeInTheDocument();
@@ -580,10 +683,10 @@ describe("EditProductPage", () => {
     api.save.mockRejectedValueOnce(new ApiError({ code: "PAYLOAD_TOO_LARGE", message: "This product has 501 listings; at most 500 can be processed in one change.", status: 413, details: { rule: "too_many_listings" } }));
     renderPage();
     await editTitle(user, "!");
-    await user.click(saveButton());
+    await clickSave(user);
     expect(await screen.findByText(/needs at least one active variant/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open variants" })).toHaveAttribute("href", `/products/${ID}/variants`);
-    await user.click(saveButton());
+    await clickSave(user);
     expect(await screen.findByText(/at most 500 can be processed/)).toBeInTheDocument();
   });
 
@@ -679,7 +782,7 @@ describe("EditProductPage", () => {
     expect(screen.getByLabelText("Brand")).toBeDisabled();
     expect(screen.getByLabelText("Category")).toBeDisabled();
     expect(saveButton()).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Discard" })).toBeDisabled();
+    discardButtons().forEach((b) => expect(b).toBeDisabled());
     expect(screen.getByText(/You have view-only access to products\./, { selector: "p[role=note]" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Improve with AI" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Dismiss" })).not.toBeInTheDocument();

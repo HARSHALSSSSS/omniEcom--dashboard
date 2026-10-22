@@ -1,6 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { Sparkles } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { errorMessage, isApiError } from "@/api/errors";
 import { useAiAccept, useAiDismiss, useAiSuggest } from "@/hooks/useProductEdit";
 import type { AiMode, AiSuggestion } from "@/types/productEdit";
@@ -91,77 +89,78 @@ export function AiPanel({ productId, request, getText, onAccept, onClose }: Prop
   };
   const alt = suggestion?.alternatives?.[0];
 
+  const solid = "flex items-center justify-center h-9 px-4 rounded-[8px] bg-[#000000] text-[12px] font-semibold text-white leading-[145%] hover:bg-neutral-800 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed";
+  const outline = "flex items-center justify-center h-9 px-4 rounded-[8px] bg-white border border-[#EAEAEA] text-[12px] font-semibold text-[#000000] leading-[145%] hover:bg-neutral-50 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed";
+
   return (
-    <section aria-label="Improve with AI" className="space-y-3 rounded-lg border border-border bg-muted/30 p-4 text-xs">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 font-semibold text-foreground">
-          <Sparkles className="h-4 w-4 text-primary" aria-hidden="true" />
-          Improve with AI
-        </div>
-        <span className="text-[11px] text-muted-foreground">Recommend &rarr; Explain &rarr; Approve</span>
+    <section aria-label="Improve with AI" className="box-border flex flex-col items-start pt-4 gap-3 w-full border-t border-[#EAEAEA]">
+      <div className="flex flex-row justify-between items-center w-full">
+        <span className="text-[12px] font-semibold text-[#000000] leading-[145%]">Improve with AI</span>
+        <span className="text-[11px] font-normal text-[#666666] leading-[145%]">Recommend &rarr; Explain &rarr; Approve</span>
       </div>
 
-      <fieldset className="flex flex-wrap gap-2" disabled={busy}>
+      <fieldset className="flex flex-col items-start gap-2 w-full" disabled={busy}>
         <legend className="sr-only">Suggestion type</legend>
         {MODES.map((m) => (
-          <label
-            key={m.mode}
-            className={`flex cursor-pointer items-center gap-2 rounded-md border px-3 py-1.5 ${mode === m.mode ? "border-primary bg-background" : "border-border"}`}
-          >
-            <input type="radio" name="ai-mode" value={m.mode} checked={mode === m.mode} onChange={() => run(m.mode)} />
-            {m.label}
+          <label key={m.mode} className="flex flex-row items-center gap-2 cursor-pointer w-full">
+            <input type="radio" name="ai-mode" value={m.mode} checked={mode === m.mode} onChange={() => run(m.mode)} className="peer sr-only" />
+            <span
+              aria-hidden="true"
+              className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 peer-focus-visible:ring-2 peer-focus-visible:ring-[#000000]/30 ${mode === m.mode ? "border-[#000000] bg-[#000000]" : "border-[#666666] bg-white"}`}
+            >
+              {mode === m.mode && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+            </span>
+            <span className={`text-[12px] leading-[145%] ${mode === m.mode ? "font-semibold text-[#000000]" : "font-normal text-[#666666]"}`}>{m.label}</span>
           </label>
         ))}
+        {alt && (
+          <span className="text-[11px] font-normal text-[#666666] leading-[145%] pl-5">
+            Alternative ({label(alt.mode)}): {alt.text}{" "}
+            {!alt.unchanged && (
+              <button type="button" className="font-semibold text-[#000000] hover:underline cursor-pointer" disabled={busy} onClick={() => apply(alt)}>
+                Use this instead
+              </button>
+            )}
+          </span>
+        )}
       </fieldset>
 
       {suggest.isPending && (
-        <p role="status" className="text-muted-foreground">
+        <p role="status" className="text-[12px] text-[#666666]">
           Preparing a suggestion...
         </p>
       )}
       {error && (
-        <p role="alert" className="font-medium text-destructive">
+        <p role="alert" className="text-[12px] font-medium text-[#B42318]">
           {error}
         </p>
       )}
 
       {suggestion && (
-        <div className="space-y-2">
-          {alt && (
-            <p className="text-muted-foreground">
-              <span className="font-semibold text-foreground">Alternative ({label(alt.mode)}):</span> {alt.text}{" "}
-              {!alt.unchanged && (
-                <button type="button" className="font-medium text-primary hover:underline" disabled={busy} onClick={() => apply(alt)}>
-                  Use this instead
-                </button>
-              )}
-            </p>
+        <div className="box-border flex flex-col items-start p-4 gap-3 w-full bg-[#F5F5F5] rounded-[8px]">
+          <span className="text-[12px] font-semibold text-[#000000] leading-[145%]">Preview &middot; Not applied</span>
+          {suggestion.unchanged ? (
+            <p className="text-[12px] font-normal text-[#000000] leading-[145%]">No improvement found: your description already reads well for this option.</p>
+          ) : (
+            <p className="text-[12px] font-normal text-[#000000] leading-[145%]">{suggestion.text}</p>
           )}
-          <div className="space-y-2 rounded-md border border-border bg-background p-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Preview &middot; Not applied</p>
-            {suggestion.unchanged ? (
-              <p className="text-foreground">No improvement found: your description already reads well for this option.</p>
-            ) : (
-              <p className="text-sm text-foreground">{suggestion.text}</p>
-            )}
-            <p className="text-muted-foreground">{suggestion.explanation || suggestion.note}</p>
-            {suggestion.needsFacts && <p className="text-amber-700">Add product facts (material, dimensions, ...) for a more specific suggestion.</p>}
-          </div>
-          <div className="flex gap-2">
-            <Button type="button" size="sm" disabled={busy || suggestion.unchanged} onClick={() => apply(suggestion)}>
+          <p className="text-[11px] font-normal text-[#666666] leading-[145%]">{suggestion.explanation || suggestion.note}</p>
+          {suggestion.needsFacts && <p className="text-[11px] text-[#B45309] leading-[145%]">Add product facts (material, dimensions, ...) for a more specific suggestion.</p>}
+          <div className="flex flex-row items-center gap-2 pt-1">
+            <button type="button" className={solid} disabled={busy || suggestion.unchanged} onClick={() => apply(suggestion)}>
               Apply suggestion
-            </Button>
-            <Button type="button" size="sm" variant="outline" disabled={busy} onClick={dismissSuggestion}>
+            </button>
+            <button type="button" className={outline} disabled={busy} onClick={dismissSuggestion}>
               Dismiss
-            </Button>
+            </button>
           </div>
-          <p className="text-[11px] text-muted-foreground">Applying only changes the editor. Your original stays until you press Save changes.</p>
+          <p className="text-[11px] font-normal text-[#666666] leading-[145%]">Applying only changes the editor. Your original stays until you press Save changes.</p>
         </div>
       )}
       {!suggestion && !suggest.isPending && (
-        <Button type="button" size="sm" variant="outline" onClick={onClose}>
+        <button type="button" className={outline} onClick={onClose}>
           Close
-        </Button>
+        </button>
       )}
     </section>
   );

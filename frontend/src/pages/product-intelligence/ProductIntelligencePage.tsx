@@ -1,7 +1,8 @@
 import { Link } from "react-router-dom";
-import { RefreshCw, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { errorMessage } from "@/api/errors";
 import { PageHeader } from "@/components/common/PageHeader";
+import { RefreshButton } from "@/components/common/RefreshButton";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { PricingPagination } from "@/components/pricing/PricingPagination";
 import { ListSkeleton, LoadError, StateBox } from "@/components/pricing/PricingStates";
@@ -83,10 +84,7 @@ export default function ProductIntelligencePage() {
         title="Product Intelligence"
         description="One recommended action per variant, worked out from your sales, stock, cost prices and competitor prices, with the facts behind it."
         actions={
-          <Button variant="outline" size="sm" className="gap-2 text-xs" disabled={list.isFetching} onClick={() => void list.refetch()}>
-            <RefreshCw className={cn("h-3.5 w-3.5", list.isFetching && "animate-spin")} aria-hidden />
-            Refresh
-          </Button>
+          <RefreshButton onRefresh={() => void list.refetch()} spinning={list.isFetching} />
         }
       />
 
