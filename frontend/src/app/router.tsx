@@ -33,6 +33,9 @@ const EditProductPage = lazy(() => import("@/pages/products/EditProductPage"));
 const VariantsPage = lazy(() => import("@/pages/products/VariantsPage"));
 const ImportWizardPage = lazy(() => import("@/pages/import/ImportWizardPage"));
 const ImportIssuesPage = lazy(() => import("@/pages/import/ImportIssuesPage"));
+const ImportProcessingPage = lazy(
+  () => import("@/pages/import/ImportProcessingPage"),
+);
 const InventoryPage = lazy(() => import("@/pages/inventory/InventoryPage"));
 const OrdersPage = lazy(() => import("@/pages/orders/OrdersPage"));
 const FulfillmentPage = lazy(
@@ -76,9 +79,7 @@ const ProcurementPage = lazy(
 );
 // Intelligence
 const ReportsPage = lazy(() => import("@/pages/reports/ReportsPage"));
-const ProfitabilityPage = lazy(
-  () => import("@/pages/profitability/ProfitabilityPage"),
-);
+
 const ProductIntelligencePage = lazy(
   () => import("@/pages/product-intelligence/ProductIntelligencePage"),
 );
@@ -185,6 +186,14 @@ export const router = createBrowserRouter([
         path: `${ROUTES.PRODUCTS_IMPORT}/:importId/issues`,
         element: withSuspense(ImportIssuesPage),
       },
+            {
+        path: `${ROUTES.PRODUCTS_IMPORT}/:importId/processing`,
+        element: withSuspense(ImportProcessingPage),
+      },
+      {
+        path: `${ROUTES.PRODUCTS_IMPORT}/processing`,
+        element: withSuspense(ImportProcessingPage),
+      },
       {
         path: `${ROUTES.PRODUCTS}/:id`,
         element: withSuspense(ProductDetailPage),
@@ -250,7 +259,6 @@ export const router = createBrowserRouter([
       { path: ROUTES.PROCUREMENT, element: withSuspense(ProcurementPage) },
       // Intelligence
       { path: ROUTES.REPORTS, element: withSuspense(ReportsPage) },
-      { path: ROUTES.PROFITABILITY, element: withSuspense(ProfitabilityPage) },
       {
         path: ROUTES.PRODUCT_INTELLIGENCE,
         element: withSuspense(ProductIntelligencePage),
