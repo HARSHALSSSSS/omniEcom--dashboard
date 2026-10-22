@@ -4,6 +4,7 @@ import { availabilityFor } from '@oms/mod-inventory';
 import type { Container } from '@oms/module-kit';
 import { CHANNEL_NAMES } from './content-domain';
 import { computeSellable, DEFAULT_POLICY, type ChannelPolicy } from './domain';
+import { categoryPredicate, marketplaceSql } from './list-filters';
 import type { ListingJoin } from './service';
 import { buildReadiness, externalListingUrl, screenStatusOf, SCREEN_STATUS_SQL, SCREEN_STATUSES, type Readiness, type ReadinessFacts, type ScreenStatus } from './workspace-domain';
 
@@ -142,17 +143,19 @@ export async function enrichListings(tx: Tx, c: Pick<Container, 'storage' | 'con
 // ------------------------------------------------------------------------------------------------
 export interface TableFilter {
   screenStatus?: ScreenStatus; status?: string; accountId?: string; marketplace?: string; contentState?: string; source?: string; attention?: boolean; q?: string;
+  /** more predicates over l / v / p / a (see list-filters.ts) */
+  extra?: SQL[];
 }
-const FROM = sql`from marketplace_listings l
+export const FROM = sql`from marketplace_listings l
   join product_variants v on v.id = l.variant_id and v.vendor_id = l.vendor_id
   join products p on p.id = v.product_id and p.vendor_id = v.vendor_id
   join marketplace_accounts a on a.id = l.marketplace_account_id and a.vendor_id = l.vendor_id`;
 const STATUS_EXPR = sql.raw(`(${SCREEN_STATUS_SQL})`);
 
-function where(vendorId: string, f: TableFilter, opts: { skipScreenStatus?: boolean } = {}): SQL {
-  const parts: SQL[] = [sql`l.vendor_id = ${vendorId}`, sql`v.deleted_at is null`, sql`p.deleted_at is null`];
+export function where(vendorId: string, f: TableFilter, opts: { skipScreenStatus?: boolean } = {}): SQL {
+  const parts: SQL[] = [sql`l.vendor_id = ${vendorId}`, sql`v.deleted_at is null`, sql`p.deleted_at is null`, ...(f.extra ?? [])];
   if (f.accountId) parts.push(sql`l.marketplace_account_id = ${f.accountId}`);
-  if (f.marketplace) parts.push(sql`a.marketplace = ${f.marketplace}`);
+  if (f.marketplace) parts.push(marketplaceSql(f.marketplace));
   if (f.status) parts.push(sql`l.status = ${f.status}`);
   if (f.contentState) parts.push(sql`l.content_state = ${f.contentState}`);
   if (f.source) parts.push(sql`l.source = ${f.source}`);
@@ -167,7 +170,7 @@ function where(vendorId: string, f: TableFilter, opts: { skipScreenStatus?: bool
   return sql.join(parts, sql` and `);
 }
 
-const SORTS: Record<string, string> = { updatedAt: 'l.updated_at', createdAt: 'l.created_at', title: 'lower(p.title)', sku: 'lower(v.sku)', price: 'coalesce(l.price_minor, v.selling_price_minor)', status: 'l.status' };
+export const SORTS: Record<string, string> = { updatedAt: 'l.updated_at', createdAt: 'l.created_at', title: 'lower(p.title)', sku: 'lower(v.sku)', price: 'coalesce(l.price_minor, v.selling_price_minor)', status: 'l.status' };
 
 export async function listTable(tx: Tx, vendorId: string, f: TableFilter, page: { limit: number; offset: number }, sort?: { field: string; direction: 'asc' | 'desc' }) {
   const expr = SORTS[sort?.field ?? 'updatedAt'] ?? SORTS.updatedAt!;
@@ -204,19 +207,20 @@ export async function notListedCounts(tx: Tx, vendorId: string, listableMarketpl
 const NOT_LISTED_FROM = sql`from product_variants v
   join products p on p.id = v.product_id and p.vendor_id = v.vendor_id
   join marketplace_accounts a on a.vendor_id = v.vendor_id`;
-function notListedWhere(vendorId: string, marketplaces: string[], f: OverviewFilter & { q?: string }): SQL {
+function notListedWhere(vendorId: string, marketplaces: string[], f: OverviewFilter & { q?: string; categoryId?: string }): SQL {
   const parts: SQL[] = [
     sql`v.vendor_id = ${vendorId}`, sql`v.deleted_at is null`, sql`p.deleted_at is null`, sql`p.status = 'active'`, sql`v.status = 'active'`, sql`a.status = 'active'`,
     sql`a.marketplace in (${sql.join(marketplaces.map((m) => sql`${m}`), sql`, `)})`,
     sql`not exists (select 1 from marketplace_listings l where l.vendor_id = v.vendor_id and l.marketplace_account_id = a.id and l.variant_id = v.id)`,
   ];
   if (f.accountId) parts.push(sql`a.id = ${f.accountId}`);
-  if (f.marketplace) parts.push(sql`a.marketplace = ${f.marketplace}`);
+  if (f.marketplace) parts.push(marketplaceSql(f.marketplace));
+  if (f.categoryId) parts.push(categoryPredicate(f.categoryId));
   if (f.q) { const like = `%${escapeLike(f.q)}%`; parts.push(sql`(v.sku ilike ${like} or p.title ilike ${like} or v.barcode ilike ${like})`); }
   return sql.join(parts, sql` and `);
 }
 
-export async function listNotListed(tx: Tx, vendorId: string, listableMarketplaces: string[], f: OverviewFilter & { q?: string }, page: { limit: number; offset: number }) {
+export async function listNotListed(tx: Tx, vendorId: string, listableMarketplaces: string[], f: OverviewFilter & { q?: string; categoryId?: string }, page: { limit: number; offset: number }) {
   if (listableMarketplaces.length === 0) return { rows: [], total: 0 };
   const w = notListedWhere(vendorId, listableMarketplaces, f);
   const rows = (await tx.execute<{ variant_id: string; sku: string; barcode: string | null; product_id: string; title: string; price: number | null; mrp: number | null; account_id: string; account_name: string; marketplace: string }>(

@@ -21,12 +21,14 @@ export const RECEIVABLE: readonly ReturnStatus[] = ['approved', 'pickup_schedule
 export const ACTIVE: readonly ReturnStatus[] = ['requested', 'approved', 'pickup_scheduled', 'picked_up', 'in_transit', 'received', 'inspecting', 'completed'];
 
 export const RETURN_REASONS = [
-  { code: 'damaged_in_transit', label: 'Arrived damaged', sources: ['customer', 'marketplace'] },
-  { code: 'defective', label: 'Defective / not working', sources: ['customer', 'marketplace'] },
-  { code: 'wrong_item_sent', label: 'Wrong item received', sources: ['customer', 'marketplace'] },
-  { code: 'not_as_described', label: 'Not as described', sources: ['customer', 'marketplace'] },
-  { code: 'size_fit', label: 'Size / fit issue', sources: ['customer', 'marketplace'] },
-  { code: 'changed_mind', label: 'Customer changed their mind', sources: ['customer', 'marketplace'] },
+  // a seller can log a return on behalf of a customer (the Create Return form), so the customer reasons are also offered for `seller`
+  { code: 'damaged_in_transit', label: 'Arrived damaged', sources: ['customer', 'marketplace', 'seller'] },
+  { code: 'defective', label: 'Defective / not working', sources: ['customer', 'marketplace', 'seller'] },
+  { code: 'wrong_item_sent', label: 'Wrong item received', sources: ['customer', 'marketplace', 'seller'] },
+  { code: 'not_as_described', label: 'Not as described', sources: ['customer', 'marketplace', 'seller'] },
+  { code: 'color_mismatch', label: 'Colour does not match', sources: ['customer', 'marketplace', 'seller'] },
+  { code: 'size_fit', label: 'Size / fit issue', sources: ['customer', 'marketplace', 'seller'] },
+  { code: 'changed_mind', label: 'Customer changed their mind', sources: ['customer', 'marketplace', 'seller'] },
   { code: 'late_delivery', label: 'Delivered too late', sources: ['customer', 'marketplace'] },
   { code: 'undeliverable', label: 'Could not be delivered (RTO)', sources: ['rto'] },
   { code: 'recall', label: 'Recalled by the seller', sources: ['seller'] },

@@ -6,6 +6,8 @@ import { ok, requireVendor, vendorTx } from '@oms/module-kit';
 import { SyncJobSchema, toSyncJobDto } from '@oms/mod-sync';
 import { getListingRow } from './context';
 import { ctxFromRequest } from './ctx';
+import { extraInputOf, extraPredicates, ListExtraQuery } from './list-filters';
+import { hasComputed, tableComputed } from './list-readiness';
 import { LISTING_STATUS_VALUES } from './schemas';
 import { bulkAction, BULK_ACTIONS, publishFlow } from './workspace-edit';
 import { getListingDto } from './service';
@@ -47,21 +49,24 @@ export const workspaceRoutes = (ListingSchema: z.ZodObject): FastifyPluginAsync 
     config: { access: { permission: 'listings:read' } },
     schema: {
       tags: TAGS, summary: 'The Listings screen table (numbered pages, with totals and tab counts)',
-      description: 'Same listings as GET /listings (cursor) but numbered pages and every row carries the `table` block (thumbnail, category, marketplace name, effective price/MRP/sale price, channel stock, readiness percent and top blocker, marketplace id and URL, last sync). `counts` are per tab and ignore the tab filter itself. The cursor list stays for integrations (`include=table` gives it the same block).',
+      description: 'Same listings as GET /listings (cursor) but numbered pages and every row carries the `table` block (thumbnail, category, marketplace name, effective price/MRP/sale price, channel stock, readiness percent and top blocker, marketplace id and URL, last sync). `counts` are per tab and ignore the tab filter itself. The cursor list stays for integrations (`include=table` gives it the same block). `filter[marketplace]` also takes a channel group code (`social` = Social Commerce: meesho + shopify). Extra filters: issue, categoryId, productStatus, potential (SQL) and readiness, inventory (evaluated per listing, so slower on large catalogues).',
       querystring: PageQuerySchema.extend(SearchQuerySchema.shape).extend({
         'filter[screenStatus]': ScreenStatusSchema.optional(), 'filter[status]': z.enum(LISTING_STATUS_VALUES).optional(), 'filter[accountId]': z.uuid().optional(), 'filter[marketplace]': z.string().max(40).optional(),
         'filter[contentState]': z.enum(['synced', 'sync_pending', 'needs_review', 'needs_republish', 'failed']).optional(), 'filter[source]': z.enum(['created', 'imported']).optional(),
         'filter[attention]': z.enum(['true', 'false']).optional().describe('true = needs_review + failed + blocked'),
+        ...ListExtraQuery,
         sort: sortQuery(['updatedAt', 'createdAt', 'title', 'sku', 'price', 'status'] as const),
       }),
       response: { 200: successEnvelope(z.object({ items: z.array(Row), page: z.number().int(), pageSize: z.number().int(), total: z.number().int(), pages: z.number().int(), counts: CountsSchema }).meta({ id: 'ListingsTablePage' })) },
     },
   }, async (req) => {
     const q = req.query;
-    const out = await vendorTx(req, (tx) => ws.table(ctxOf(req), tx, {
+    const extra = extraInputOf(q);
+    const filter = {
       screenStatus: q['filter[screenStatus]'], status: q['filter[status]'], accountId: q['filter[accountId]'], marketplace: q['filter[marketplace]'], contentState: q['filter[contentState]'],
-      source: q['filter[source]'], attention: q['filter[attention]'] === 'true', q: q.q,
-    }, q, q.sort?.[0]));
+      source: q['filter[source]'], attention: q['filter[attention]'] === 'true', q: q.q, extra: extraPredicates(ctxOf(req), extra),
+    };
+    const out = await vendorTx(req, (tx) => (hasComputed(extra) ? tableComputed(ctxOf(req), tx, filter, extra, q, q.sort?.[0]) : ws.table(ctxOf(req), tx, filter, q, q.sort?.[0])));
     return ok(req, { items: out.items, page: q.page, pageSize: q.pageSize, total: out.total, pages: Math.max(1, Math.ceil(out.total / q.pageSize)), counts: out.counts });
   });
 
@@ -70,7 +75,7 @@ export const workspaceRoutes = (ListingSchema: z.ZodObject): FastifyPluginAsync 
     schema: {
       tags: TAGS, summary: 'Products that are not listed yet on a connected account (the "Not listed" tab)',
       description: 'One row per active variant and connected account of a marketplace that accepts listings through the API, without a listing. Start one with POST /listings.',
-      querystring: PageQuerySchema.extend(SearchQuerySchema.shape).extend({ 'filter[accountId]': z.uuid().optional(), 'filter[marketplace]': z.string().max(40).optional() }),
+      querystring: PageQuerySchema.extend(SearchQuerySchema.shape).extend({ 'filter[accountId]': z.uuid().optional(), 'filter[marketplace]': z.string().max(40).optional(), 'filter[categoryId]': ListExtraQuery['filter[categoryId]'] }),
       response: { 200: successEnvelope(z.object({
         items: z.array(z.object({ variantId: z.string(), productId: z.string(), sku: z.string(), barcode: z.string().nullable(), productTitle: z.string(), priceMinor: z.number().nullable(), mrpMinor: z.number().nullable(), accountId: z.string(), accountName: z.string(), marketplace: z.string(), marketplaceName: z.string() })),
         page: z.number().int(), pageSize: z.number().int(), total: z.number().int(), pages: z.number().int(),
@@ -78,7 +83,7 @@ export const workspaceRoutes = (ListingSchema: z.ZodObject): FastifyPluginAsync 
     },
   }, async (req) => {
     const q = req.query;
-    const out = await vendorTx(req, (tx) => ws.notListed(ctxOf(req), tx, { accountId: q['filter[accountId]'], marketplace: q['filter[marketplace]'], q: q.q }, q));
+    const out = await vendorTx(req, (tx) => ws.notListed(ctxOf(req), tx, { accountId: q['filter[accountId]'], marketplace: q['filter[marketplace]'], categoryId: q['filter[categoryId]'], q: q.q }, q));
     return ok(req, { items: out.items, page: q.page, pageSize: q.pageSize, total: out.total, pages: Math.max(1, Math.ceil(out.total / q.pageSize)) });
   });
 

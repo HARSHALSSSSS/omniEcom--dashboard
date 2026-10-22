@@ -10,6 +10,7 @@ export const TARGET_COVER_DAYS = 14;
 const MOVEMENT_LABEL: Record<string, string> = {
   receive: 'Stock received', incoming_receive: 'Stock received', return_restock: 'Return restocked', issue: 'Dispatched', commit: 'Dispatched', reserve: 'Reserved', release: 'Released',
   adjust: 'Adjusted', count: 'Stock count', damage: 'Marked damaged', undamage: 'Restored from damaged', transfer_out: 'Transferred out', transfer_in: 'Transferred in',
+  shrinkage: 'Inventory shrinkage',
 };
 const label = (type: string): string => MOVEMENT_LABEL[type] ?? type.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
 

@@ -301,9 +301,11 @@ Stock levels, the append-only movement ledger, reservations, adjustments and war
 | GET | `/api/v1/inventory/transfers` | `inventory:read` | List stock transfers |
 | POST | `/api/v1/inventory/transfers` | `inventory:write` | Create a stock transfer between warehouses (draft) |
 | GET | `/api/v1/inventory/transfers/{id}` | `inventory:read` | Get a stock transfer |
+| PATCH | `/api/v1/inventory/transfers/{id}` | `inventory:write` | Edit a draft transfer |
 | POST | `/api/v1/inventory/transfers/{id}/cancel` | `inventory:write` | Cancel a transfer |
 | POST | `/api/v1/inventory/transfers/{id}/receive` | `inventory:write` | Receive a transfer |
 | POST | `/api/v1/inventory/transfers/{id}/ship` | `inventory:write` | Ship a transfer |
+| POST | `/api/v1/inventory/transfers/{id}/submit` | `inventory:write` | Submit a draft transfer: the stock moves now |
 | GET | `/api/v1/inventory/variants/{id}` | `inventory:read` | Stock of one variant across all warehouses |
 | GET | `/api/v1/inventory/variants/{id}/locations` | `inventory:read` | Where a variant is stored (warehouse -> bins, plus unbinned stock) |
 
@@ -540,6 +542,9 @@ Shipping providers, shipments, labels, manifests, tracking, NDR and RTO
 | POST | `/api/v1/shipping/orders/bulk` | `shipping:write` | Bulk: assign a method, generate labels, recalculate |
 | GET | `/api/v1/shipping/orders/export` | `shipping:read` | Export orders to ship (CSV) |
 | GET | `/api/v1/shipping/overview` | `shipping:read` | Shipping overview |
+| GET | `/api/v1/shipping/pickup-slots` | `shipping:read` | Pickup slots (upcoming by default) |
+| POST | `/api/v1/shipping/pickup-slots` | `shipping:write` | Book a pickup slot (Book slot) |
+| POST | `/api/v1/shipping/pickup-slots/{id}/cancel` | `shipping:write` | Cancel a pickup slot |
 | GET | `/api/v1/shipping/providers` | `shipping:read` | Providers enabled for this vendor |
 | POST | `/api/v1/shipping/providers` | `shipping:configure` | Enable a shipping provider |
 | PATCH | `/api/v1/shipping/providers/{id}` | `shipping:configure` | Update / disable a shipping provider or make it the default |
@@ -553,8 +558,11 @@ Shipping providers, shipments, labels, manifests, tracking, NDR and RTO
 | POST | `/api/v1/shipping/rules/{id}/enable` | `shipping:configure` | Enable a shipping rule |
 | PUT | `/api/v1/shipping/rules/order` | `shipping:configure` | Re-order shipping rules |
 | GET | `/api/v1/shipping/shipments` | `shipping:read` | Shipments table of the shipping screen |
+| GET | `/api/v1/shipping/shipments/{id}` | `shipping:read` | One shipment as a row of the shipments table |
 | GET | `/api/v1/shipping/summary` | `shipping:read` | Carrier ribbon of the shipping screen |
-| POST | `/api/v1/shipping/sync` | `shipping:write` | Sync Shipping |
+| POST | `/api/v1/shipping/sync` | `shipping:write` | Sync Shipping (starts a background job) |
+| GET | `/api/v1/shipping/sync/{id}` | `shipping:read` | Progress of a Sync Shipping job |
+| GET | `/api/v1/shipping/sync/latest` | `shipping:read` | The latest Sync Shipping job (null when none ran yet) |
 | GET | `/api/v1/shipping/tracking` | `shipping:read` | Tracking: dispatched shipments with a derived status |
 | GET | `/api/v1/shipping/tracking/failures` | `shipping:read` | Tracking sync failures (what failed, why, retry) |
 | POST | `/api/v1/shipping/tracking/sync` | `shipping:write` | Sync tracking of open shipments (bulk refresh) |
@@ -596,6 +604,7 @@ Return orders, receiving, inspection, disposition, refunds
 | GET | `/api/v1/returns/export` | `returns:read` | Export the ledger as CSV |
 | GET | `/api/v1/returns/insights` | `returns:read` | Why and what comes back |
 | POST | `/api/v1/returns/inspection/assign` | `returns:write` | Assign inspection to a member (bulk) |
+| POST | `/api/v1/returns/inspection/mark` | `returns:write` | Mark the inspection status of several returns (bulk) |
 | GET | `/api/v1/returns/ledger` | `returns:read` | Returns ledger (numbered pages) |
 | GET | `/api/v1/returns/overview` | `returns:read` | Returns workspace overview |
 | GET | `/api/v1/returns/reasons` | `returns:read` | Return reason catalogue |
@@ -791,7 +800,7 @@ Audit trail
 
 | Method | Path | Access | Summary |
 |---|---|---|---|
-| POST | `/api/v1/inventory/adjustments` | `inventory:write` | Adjust stock by type (damage / return / correction / manual / other) |
+| POST | `/api/v1/inventory/adjustments` | `inventory:write` | Adjust stock by type (damage / return / correction / manual / shrinkage / other) |
 | POST | `/api/v1/inventory/adjustments/preview` | `inventory:write` | Preview an adjustment (nothing is written) |
 | POST | `/api/v1/inventory/bulk` | `inventory:write` | Bulk action on a selection (adjust / transfer / export / sync / group) |
 | GET | `/api/v1/inventory/channel-sync` | `inventory:read` | Channel synchronisation: master stock, state per marketplace account, incidents |
@@ -839,14 +848,28 @@ Audit trail
 | Method | Path | Access | Summary |
 |---|---|---|---|
 | GET | `/api/v1/listings/{id}/activity` | `listings:read` | Activity timeline of a listing (audit trail), newest first |
+| GET | `/api/v1/listings/{id}/channels` | `listings:read` | The other channels of the product behind a listing |
+| GET | `/api/v1/listings/{id}/fix-suggestions` | `listings:read` | Suggested values for the failing attributes of a listing ("Fix with AI") |
+| GET | `/api/v1/listings/{id}/flow-details` | `listings:read` | Category paths and the completeness list of a listing (blocker screen, quick view) |
 | POST | `/api/v1/listings/{id}/publish-flow` | `listings:write` | Validate, approve and publish in one call |
 | GET | `/api/v1/listings/{id}/readiness` | `listings:read` | Readiness checklist of a listing |
 | GET | `/api/v1/listings/{id}/studio` | `listings:read` | Everything the Listing Studio shows, in one call |
+| GET | `/api/v1/listings/{id}/sync` | `listings:read` | Sync telemetry of a listing: content, stock and listing steps with the jobs behind them |
+| GET | `/api/v1/listings/audit/publishing` | `listings:read` | Publishing preparation: the ready catalogue cohort and its potential issues |
+| GET | `/api/v1/listings/audit/readiness` | `listings:read` | Catalogue readiness audit |
 | POST | `/api/v1/listings/bulk-actions` | `listings:write` | Bulk action on listings: validate | publish | unpublish | retry | sync_inventory |
+| POST | `/api/v1/listings/bulk-content` | `listings:write` | Edit the channel content of many listings at once |
+| POST | `/api/v1/listings/bulk-create` | `listings:write` | Prepare draft listings: master products (or variants) x marketplace accounts |
 | POST | `/api/v1/listings/bulk-publish` | `listings:write` | Publish many listings (validate, approve, publish each) |
+| GET | `/api/v1/listings/channel-summary` | `listings:read` | The channel tabs of the Listings screen: every marketplace with its accounts, listings and not-listed products |
+| GET | `/api/v1/listings/filter-options` | `listings:read` | Options of the Listings screen filters |
+| GET | `/api/v1/listings/insights` | `listings:read` | Catalogue reach and why listings are not ready |
+| GET | `/api/v1/listings/matrix` | `listings:read` | Master products x marketplaces: where each product stands on every channel |
 | GET | `/api/v1/listings/not-listed` | `listings:read` | Products that are not listed yet on a connected account (the "Not listed" tab) |
 | GET | `/api/v1/listings/overview` | `listings:read` | Counts for the Listings screen: tabs, marketplaces, content states |
+| GET | `/api/v1/listings/selection` | `listings:read` | The listings of a bulk selection, with readiness and status |
 | GET | `/api/v1/listings/table` | `listings:read` | The Listings screen table (numbered pages, with totals and tab counts) |
+| GET | `/api/v1/listings/unlisted-context` | `listings:read` | Context of a variant that is not listed yet on an account |
 
 ## Marketplace Hub
 

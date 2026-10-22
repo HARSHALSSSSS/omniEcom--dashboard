@@ -4,7 +4,7 @@ import { attributeRoutes } from './routes';
 export { manifest };
 export { attributeRoutes };
 export {
-  setProductAttributeValues, getProductAttributeValues, requiredAttributesForCategory,
+  setProductAttributeValues, getProductAttributeValues, requiredAttributesForCategory, getCategoryAttributes,
   type ProductValueInput, type RawValue, type AttributeType,
 } from './service';
 

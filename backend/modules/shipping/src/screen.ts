@@ -1,4 +1,5 @@
 import { and, eq, inArray, schema, sql, type SQL, type Tx } from '@oms/database';
+import { Errors } from '@oms/shared';
 import type { Container, OpCtx } from '@oms/module-kit';
 import { effects } from '@oms/module-kit';
 import type { ShipmentStatus } from './domain';
@@ -116,23 +117,35 @@ export async function listShipmentRows(tx: Tx, vendorId: string, allowed: string
   if (ids.length) {
     for (const e of await tx.select().from(TE).where(and(eq(TE.vendorId, vendorId), inArray(TE.shipmentId, ids))).orderBy(sql`${TE.occurredAt} desc`, sql`${TE.id} desc`)) if (!last.has(e.shipmentId)) last.set(e.shipmentId, e);
   }
-  const str = (v: unknown) => (typeof v === 'string' && v ? v : null);
-  const items = rows.map(({ s, o: ord }) => {
-    const addr = ord.shippingAddress as Record<string, unknown>;
-    const buyer = ord.buyer as Record<string, unknown>;
-    const ev = last.get(s.id);
-    return {
-      id: s.id, number: s.number, awb: s.awb, carrier: s.carrier ?? s.providerCode, providerCode: s.providerCode, service: s.service,
-      orderId: ord.id, orderNumber: ord.orderNumber, channel: ord.marketplace, customerName: str(buyer.name) ?? str(addr.name),
-      destination: { city: str(addr.city), state: str(addr.state), pincode: str(addr.pincode ?? addr.postalCode) },
-      paymentMethod: ord.paymentMethod, codAmountMinor: s.codAmountMinor,
-      status: s.status as ShipmentStatus, statusLabel: STATUS_LABELS[s.status as ShipmentStatus] ?? s.status,
-      lastEvent: ev ? { status: ev.status, rawStatus: ev.rawStatus, location: ev.location, note: ev.note, occurredAt: ev.occurredAt.toISOString() } : null,
-      estimatedDeliveryAt: iso(s.estimatedDeliveryAt), dispatchedAt: iso(s.dispatchedAt), deliveredAt: iso(s.deliveredAt), attempts: s.attempts, isRto: s.isRto,
-      labelAvailable: Boolean((s.providerData as { label?: unknown }).label) && s.status !== 'cancelled', labelUrl: `/api/v1/shipments/${s.id}/label`, trackingUrl: s.trackingUrl, manifestId: s.manifestId, createdAt: s.createdAt.toISOString(),
-    };
-  });
+  const items = rows.map(({ s, o: ord }) => toRow(s, ord, last.get(s.id)));
   return { items, total: tot?.n ?? 0, counts: grouped[0]! };
+}
+
+type OrderPart = { id: string; orderNumber: string; marketplace: string; paymentMethod: string; buyer: unknown; shippingAddress: unknown };
+const str = (v: unknown) => (typeof v === 'string' && v ? v : null);
+/** one row of the shipments table (the same shape for the list and for one shipment opened by id) */
+function toRow(s: typeof S.$inferSelect, ord: OrderPart, ev: typeof TE.$inferSelect | undefined) {
+  const addr = ord.shippingAddress as Record<string, unknown>;
+  const buyer = ord.buyer as Record<string, unknown>;
+  return {
+    id: s.id, number: s.number, awb: s.awb, carrier: s.carrier ?? s.providerCode, providerCode: s.providerCode, service: s.service,
+    orderId: ord.id, orderNumber: ord.orderNumber, channel: ord.marketplace, customerName: str(buyer.name) ?? str(addr.name),
+    destination: { city: str(addr.city), state: str(addr.state), pincode: str(addr.pincode ?? addr.postalCode) },
+    paymentMethod: ord.paymentMethod, codAmountMinor: s.codAmountMinor,
+    status: s.status as ShipmentStatus, statusLabel: STATUS_LABELS[s.status as ShipmentStatus] ?? s.status,
+    lastEvent: ev ? { status: ev.status, rawStatus: ev.rawStatus, location: ev.location, note: ev.note, occurredAt: ev.occurredAt.toISOString() } : null,
+    estimatedDeliveryAt: iso(s.estimatedDeliveryAt), dispatchedAt: iso(s.dispatchedAt), deliveredAt: iso(s.deliveredAt), attempts: s.attempts, isRto: s.isRto,
+    labelAvailable: Boolean((s.providerData as { label?: unknown }).label) && s.status !== 'cancelled', labelUrl: `/api/v1/shipments/${s.id}/label`, trackingUrl: s.trackingUrl, manifestId: s.manifestId, createdAt: s.createdAt.toISOString(),
+  };
+}
+
+/** one shipment as a table row, by id (a shipment drawer that is opened from a link or after a reload loads itself with this) */
+export async function getShipmentRow(tx: Tx, vendorId: string, allowed: string[] | null, id: string) {
+  const [r] = await tx.select({ s: S, o: { id: O.id, orderNumber: O.orderNumber, marketplace: O.marketplace, paymentMethod: O.paymentMethod, buyer: O.buyer, shippingAddress: O.shippingAddress } }).from(S)
+    .innerJoin(O, and(eq(O.id, S.orderId), eq(O.vendorId, S.vendorId))).where(and(eq(S.vendorId, vendorId), eq(S.id, id), warehouseScope(allowed)));
+  if (!r) throw Errors.notFound('Shipment', id);
+  const [ev] = await tx.select().from(TE).where(and(eq(TE.vendorId, vendorId), eq(TE.shipmentId, id))).orderBy(sql`${TE.occurredAt} desc`, sql`${TE.id} desc`).limit(1);
+  return toRow(r.s, r.o, ev);
 }
 
 // ------------------------------------------------------------------------------------------------

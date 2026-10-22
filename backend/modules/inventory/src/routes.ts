@@ -43,8 +43,11 @@ const ReservationSchema = z
 const TransferSchema = z
   .object({
     id: z.string(), number: z.string(), fromWarehouseId: z.string(), toWarehouseId: z.string(), status: z.enum(schema.TRANSFER_STATUSES), notes: z.string().nullable(),
-    shippedAt: IsoDate.nullable(), receivedAt: IsoDate.nullable(), version: z.number().int(), createdAt: IsoDate,
-    items: z.array(z.object({ variantId: z.string(), sku: z.string(), quantity: z.number().int(), receivedQuantity: z.number().int() })),
+    shippedAt: IsoDate.nullable(), receivedAt: IsoDate.nullable(), version: z.number().int(), createdAt: IsoDate, updatedAt: IsoDate,
+    items: z.array(z.object({
+      variantId: z.string(), sku: z.string(), title: z.string(), quantity: z.number().int(), receivedQuantity: z.number().int(),
+      availableAtSource: z.number().int().nullable().describe('drafts only: the sellable units the source warehouse holds right now (nothing has moved yet); null once the transfer has moved stock'),
+    })),
   })
   .meta({ id: 'StockTransfer' });
 
@@ -251,6 +254,51 @@ export const inventoryRoutes: FastifyPluginAsync = async (app) => {
     config: { access: { permission: 'inventory:read' } },
     schema: { tags: TAGS, summary: 'Get a stock transfer', params: IdParamSchema, response: { 200: successEnvelope(TransferSchema) } },
   }, async (req) => ok(req, svc.toTransferDto(await vendorTx(req, (tx, vendorId) => svc.loadTransfer(tx, vendorId, req.params.id)))));
+
+  r.patch('/inventory/transfers/:id', {
+    config: { access: { permission: 'inventory:write' } },
+    schema: {
+      tags: TAGS,
+      summary: 'Edit a draft transfer',
+      description: 'Only a draft can be edited (409 INVALID_STATE otherwise). Send any of the warehouses, the whole `items` list (it replaces the old one) and `notes` (null clears them). Editing never moves stock: it moves only when the draft is submitted. `version` is optional optimistic concurrency (409 `stale_draft` when someone else changed the draft first).',
+      params: IdParamSchema,
+      body: z.object({
+        fromWarehouseId: z.uuid().optional(), toWarehouseId: z.uuid().optional(), items: z.array(z.object({ variantId: z.uuid(), quantity: Qty })).min(1).max(200).optional(),
+        notes: z.string().trim().max(500).nullable().optional(), version: z.number().int().min(1).optional(),
+      }),
+      response: { 200: successEnvelope(TransferSchema) },
+    },
+  }, async (req) => {
+    const dto = await vendorTx(req, async (tx, vendorId) => {
+      const before = await svc.loadTransfer(tx, vendorId, req.params.id);
+      const t = svc.toTransferDto(await svc.updateDraftTransfer(tx, vendorId, req.params.id, req.body));
+      await audit(tx, req, { action: 'inventory.transfer_update', resourceType: 'stock_transfer', resourceId: t.id, before: { items: before.items.length, from: before.t.fromWarehouseId, to: before.t.toWarehouseId }, after: { number: t.number, items: t.items.length, from: t.fromWarehouseId, to: t.toWarehouseId } });
+      return t;
+    });
+    return ok(req, dto);
+  });
+
+  r.post('/inventory/transfers/:id/submit', {
+    config: { access: { permission: 'inventory:write' } },
+    schema: {
+      tags: TAGS,
+      summary: 'Submit a draft transfer: the stock moves now',
+      description: 'The only step that moves stock for a draft. In one transaction (all or nothing) the stock leaves the source warehouse and is received by the destination, so the ledger shows transfer_out + incoming + receive. 409 INSUFFICIENT_STOCK (with `details.shortages`) when the source cannot cover a line; nothing changes then. Idempotent: submitting a transfer that is already received changes nothing and answers `duplicate: true`; a cancelled transfer is refused (409). Discard a draft with POST /inventory/transfers/{id}/cancel instead.',
+      params: IdParamSchema,
+      response: { 200: successEnvelope(z.object({ duplicate: z.boolean().describe('true when the transfer was already submitted (nothing changed)'), transfer: TransferSchema })) },
+    },
+  }, async (req) => {
+    const out = await vendorTx(req, async (tx, vendorId) => {
+      const before = await svc.loadTransfer(tx, vendorId, req.params.id);
+      await assertWarehouseCapability(tx, req.ctx.principal, vendorId, before.t.fromWarehouseId, 'adjust');
+      await assertWarehouseCapability(tx, req.ctx.principal, vendorId, before.t.toWarehouseId, 'receive');
+      const res = await svc.submitTransfer(tx, vendorId, req.params.id, actorOf(req));
+      const t = svc.toTransferDto(res.transfer);
+      if (!res.duplicate) await audit(tx, req, { action: 'inventory.transfer_submit', resourceType: 'stock_transfer', resourceId: t.id, before: { status: before.t.status }, after: { status: t.status, number: t.number, items: t.items.length } });
+      return { duplicate: res.duplicate, transfer: t };
+    });
+    return ok(req, out);
+  });
 
   const transition = (path: 'ship' | 'receive' | 'cancel', summary: string, description: string, body?: z.ZodType) => {
     r.post(`/inventory/transfers/:id/${path}`, {

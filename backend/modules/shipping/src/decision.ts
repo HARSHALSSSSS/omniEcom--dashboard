@@ -3,7 +3,9 @@ import { AppError, Errors } from '@oms/shared';
 import { evaluate, liveRules, type Facts, type RuleDef } from '@oms/mod-rules';
 import { getFulfillment } from '@oms/mod-fulfillment';
 import { effects, type Container, type OpCtx } from '@oms/module-kit';
-import { connectorName, flagsFor, isVerified, methodName, type CapFlags, type MethodKind, type MethodRow, METHOD_KINDS } from './methods';
+import { PINCODE, zoneOf } from './providers/common';
+import { upcomingSlotMap, type PickupRow } from './pickup-core';
+import { connectorName, decisionKind, flagsFor, isVerified, methodName, type CapFlags, type MethodKind, type MethodRow, METHOD_KINDS } from './methods';
 
 /**
  * The shipping DECISION per order: which kind of method moves a packed parcel, before a label exists.
@@ -19,7 +21,9 @@ const OI = schema.orderItems;
 const PK = schema.packages;
 
 export const CANDIDATE_STATUSES = ['packed', 'ready_to_ship'] as const;
-export const DECISION_STATUSES = ['needs_decision', 'selected', 'label_pending', 'ready_to_dispatch', 'exception'] as const;
+/** `dispatched`: handed over to the carrier in the last day and not scanned yet ("AWB assigned"): shown for tracking, not counted as ready to ship */
+export const DECISION_STATUSES = ['needs_decision', 'selected', 'label_pending', 'ready_to_dispatch', 'exception', 'dispatched'] as const;
+export const RECENT_DISPATCH_HOURS = 24;
 export type DecisionStatus = (typeof DECISION_STATUSES)[number];
 export const SLA_BANDS = ['safe', 'approaching', 'at_risk', 'breached', 'none'] as const;
 export type SlaBand = (typeof SLA_BANDS)[number];
@@ -43,7 +47,7 @@ export function slaOf(due: Date | null, th: Thresholds, now = new Date()): { due
 }
 
 export interface Preference { defaultMethod: MethodKind; overrides: Record<string, string> }
-export interface Base { methods: MethodRow[]; rules: RuleDef[]; pref: Preference | null; th: Thresholds; now: Date }
+export interface Base { methods: MethodRow[]; rules: RuleDef[]; pref: Preference | null; th: Thresholds; now: Date; slots: Map<string, PickupRow> }
 
 export async function loadBase(tx: Tx, vendorId: string, now = new Date()): Promise<Base> {
   const [methods, rules, [pref], th] = await Promise.all([
@@ -52,7 +56,8 @@ export async function loadBase(tx: Tx, vendorId: string, now = new Date()): Prom
     tx.select().from(schema.fulfillmentPreferences).where(eq(schema.fulfillmentPreferences.vendorId, vendorId)),
     loadThresholds(tx, vendorId),
   ]);
-  return { methods, rules, pref: pref ? { defaultMethod: pref.defaultMethod as MethodKind, overrides: pref.overrides } : null, th, now };
+  const slots = await upcomingSlotMap(tx, vendorId, th.timezone);
+  return { methods, rules, pref: pref ? { defaultMethod: pref.defaultMethod as MethodKind, overrides: pref.overrides } : null, th, now, slots };
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -63,7 +68,7 @@ export interface Option { kind: MethodKind; name: string; available: boolean; re
 export function optionsFor(c: Container, methods: MethodRow[], marketplace: string): Option[] {
   const mk = methods.find((m) => m.kind === 'marketplace' && m.channelCode === marketplace);
   const sl = methods.find((m) => m.kind === 'seller');
-  const tps = methods.filter((m) => m.kind === 'third_party' && m.status === 'active');
+  const tps = methods.filter((m) => decisionKind(m.kind) === 'third_party' && m.status === 'active'); // catalogue couriers and the seller's own logistics providers
   const tp = tps.find((m) => m.isDefault) ?? tps[0];
   const reason = (m: MethodRow | undefined): string | null => (!m ? 'method_not_configured' : m.status !== 'active' ? 'method_disabled' : null);
   return [
@@ -108,8 +113,8 @@ export function selectedName(c: Container, methods: MethodRow[], kind: MethodKin
 
 /** what the method chosen for an order can do (null = there is no such method any more) */
 export function flagsOfSelection(c: Container, methods: MethodRow[], kind: MethodKind, providerId: string | null, marketplace: string): { flags: CapFlags; verified: boolean } | null {
-  const m = (providerId ? methods.find((x) => x.id === providerId && x.kind === kind && x.status === 'active') : undefined)
-    ?? methods.find((x) => x.kind === kind && x.status === 'active' && (kind !== 'marketplace' || x.channelCode === marketplace));
+  const m = (providerId ? methods.find((x) => x.id === providerId && decisionKind(x.kind) === kind && x.status === 'active') : undefined)
+    ?? methods.find((x) => decisionKind(x.kind) === kind && x.status === 'active' && (kind !== 'marketplace' || x.channelCode === marketplace));
   if (!m) return null;
   return { flags: flagsFor(c, m).flags, verified: isVerified(m) };
 }
@@ -124,7 +129,7 @@ export async function loadOrderInfo(tx: Tx, vendorId: string, ids: string[]): Pr
   const out = new Map<string, OrderInfo>();
   if (ids.length === 0) return out;
   const [rows, items, weights] = await Promise.all([
-    tx.select({ id: F.id, marketplace: O.marketplace, wh: W.code, total: O.totalMinor, addr: O.shippingAddress }).from(F)
+    tx.select({ id: F.id, marketplace: O.marketplace, wh: W.code, whAddr: W.address, total: O.totalMinor, addr: O.shippingAddress }).from(F)
       .innerJoin(O, and(eq(O.id, F.orderId), eq(O.vendorId, F.vendorId))).innerJoin(W, and(eq(W.id, F.warehouseId), eq(W.vendorId, F.vendorId))).where(and(eq(F.vendorId, vendorId), inArray(F.id, ids))),
     tx.select({ fid: FI.fulfillmentId, sku: OI.sku, title: OI.title, qty: FI.quantity }).from(FI).innerJoin(OI, and(eq(OI.id, FI.orderItemId), eq(OI.vendorId, FI.vendorId))).where(and(eq(FI.vendorId, vendorId), inArray(FI.fulfillmentId, ids))),
     tx.select({ fid: PK.fulfillmentId, grams: sql<number>`coalesce(sum(${PK.weightGrams}), 0)::int`, withWeight: sql<number>`count(${PK.weightGrams})::int` }).from(PK).where(and(eq(PK.vendorId, vendorId), inArray(PK.fulfillmentId, ids), ne(PK.status, 'cancelled'))).groupBy(PK.fulfillmentId),
@@ -136,9 +141,13 @@ export async function loadOrderInfo(tx: Tx, vendorId: string, ids: string[]): Pr
     const a = (r.addr ?? {}) as Record<string, unknown>;
     const city = str(a.city); const state = str(a.state); const pincode = str(a.pincode ?? a.postalCode);
     const skus = mine.map((i) => i.sku); const titles = mine.map((i) => i.title);
+    // destination zone: how far the parcel travels from the warehouse (same city / same postal region / elsewhere), when both pincodes are real
+    const wa = (r.whAddr ?? {}) as Record<string, unknown>;
+    const from = str(wa.pincode ?? wa.postalCode);
+    const destinationZone = from && pincode && PINCODE.test(from) && PINCODE.test(pincode) ? zoneOf(from, pincode) : null;
     out.set(r.id, {
       marketplace: r.marketplace, itemCount: mine.reduce((n, i) => n + i.qty, 0), weightGrams, city, state, pincode, skus, titles, warehouseCode: r.wh, totalMinor: r.total,
-      facts: { marketplace: r.marketplace, warehouse: r.wh, destinationState: state, destinationCity: city, destinationPincode: pincode, orderValueMinor: r.total, sku: skus, product: titles, weightGrams },
+      facts: { marketplace: r.marketplace, warehouse: r.wh, destinationState: state, destinationCity: city, destinationPincode: pincode, destinationZone, orderValueMinor: r.total, sku: skus, product: titles, weightGrams },
     });
   }
   return out;
@@ -148,10 +157,11 @@ export async function loadOrderInfo(tx: Tx, vendorId: string, ids: string[]): Pr
 // candidates: fulfillments that are packed / ready to ship (not yet dispatched), with the derived decision status
 // ------------------------------------------------------------------------------------------------
 const availExists = (kind: MethodKind, vendor: SQL | unknown, channel?: SQL | unknown): SQL =>
-  sql`EXISTS (SELECT 1 FROM vendor_shipping_providers sp WHERE sp.vendor_id = ${vendor} AND sp.status = 'active' AND sp.kind = ${sql.raw(`'${kind}'`)}${channel ? sql` AND sp.channel_code = ${channel}` : sql``})`; // literal kind (not a parameter) so the same CASE can be grouped by
+  sql`EXISTS (SELECT 1 FROM vendor_shipping_providers sp WHERE sp.vendor_id = ${vendor} AND sp.status = 'active' AND sp.kind IN (${sql.raw(kind === 'third_party' ? `'third_party', 'custom'` : `'${kind}'`)})${channel ? sql` AND sp.channel_code = ${channel}` : sql``})`; // literal kind (not a parameter) so the same CASE can be grouped by
 
 /** one CASE for list, filter and counts: the status can never differ between them */
 export const statusExpr = sql<DecisionStatus>`CASE
+  WHEN ${S.id} IS NOT NULL AND ${S.status} = 'dispatched' THEN 'dispatched'
   WHEN ${S.id} IS NOT NULL AND ${S.status} = 'created' THEN 'label_pending'
   WHEN ${S.id} IS NOT NULL THEN 'ready_to_dispatch'
   WHEN ${F.shipConfirmedAt} IS NOT NULL AND NOT (CASE ${F.shipMethodKind} WHEN 'marketplace' THEN ${availExists('marketplace', F.vendorId, O.marketplace)} WHEN 'seller' THEN ${availExists('seller', F.vendorId)} WHEN 'third_party' THEN ${availExists('third_party', F.vendorId)} ELSE false END) THEN 'exception'
@@ -177,7 +187,7 @@ const joined = (tx: Tx, fields: any) => tx.select(fields).from(F)
   .innerJoin(O, and(eq(O.id, F.orderId), eq(O.vendorId, F.vendorId))).innerJoin(W, and(eq(W.id, F.warehouseId), eq(W.vendorId, F.vendorId))).leftJoin(S, and(eq(S.fulfillmentId, F.id), ne(S.status, 'cancelled')));
 
 export interface DecisionFilter { q?: string; marketplace?: string; warehouse?: string; method?: string; sla?: SlaBand; status?: DecisionStatus }
-const baseWhere = (vendorId: string, allowed: string[] | null): SQL[] => [eq(F.vendorId, vendorId), inArray(F.status, [...CANDIDATE_STATUSES]), ...(allowed ? [allowed.length ? inArray(F.warehouseId, allowed) : sql`false`] : [])];
+const baseWhere = (vendorId: string, allowed: string[] | null): SQL[] => [eq(F.vendorId, vendorId), or(inArray(F.status, [...CANDIDATE_STATUSES]), and(eq(F.status, 'shipped'), eq(S.status, 'dispatched'), sql`${S.dispatchedAt} > now() - interval '${sql.raw(String(RECENT_DISPATCH_HOURS))} hours'`))!, ...(allowed ? [allowed.length ? inArray(F.warehouseId, allowed) : sql`false`] : [])];
 
 function filterWhere(f: DecisionFilter, th: Thresholds): SQL[] {
   const w: SQL[] = [];
@@ -217,15 +227,47 @@ export async function getCandidate(tx: Tx, vendorId: string, id: string): Promis
 // ------------------------------------------------------------------------------------------------
 // DTOs
 // ------------------------------------------------------------------------------------------------
-export function actionFor(status: DecisionStatus, r: Pick<Candidate, 'id' | 'shipmentId'>) {
+/**
+ * Pickup: a confirmed method that a carrier collects from (a marketplace or a courier; not the seller's own shipping) awaits a booked slot until one
+ * is booked for this warehouse and method ("Awaiting slot booking" / "Book slot").
+ */
+export function pickupOf(base: Base, r: Pick<Candidate, 'status' | 'kind' | 'providerId' | 'warehouseId'>) {
+  if (r.status !== 'selected' || !r.kind || r.kind === 'seller' || !r.providerId) return { state: 'not_applicable' as const, methodId: null as string | null, warehouseId: r.warehouseId, slot: null };
+  const s = base.slots.get(`${r.warehouseId}:${r.providerId}`);
+  return { state: s ? 'booked' as const : 'awaiting' as const, methodId: r.providerId, warehouseId: r.warehouseId, slot: s ? { id: s.id, date: s.slotDate, windowStart: s.windowStart, windowEnd: s.windowEnd, status: s.status } : null };
+}
+
+export function actionFor(status: DecisionStatus, r: Pick<Candidate, 'id' | 'shipmentId'>, pickup?: { state: string; methodId: string | null }) {
   const opts = `/api/v1/shipping/orders/${r.id}/options`;
+  if (status === 'selected' && pickup?.state === 'awaiting') return { key: 'book_slot' as const, label: 'Book slot', method: 'POST' as const, href: '/api/v1/shipping/pickup-slots', enabled: true };
   switch (status) {
     case 'needs_decision': return { key: 'choose' as const, label: 'Choose shipping', method: 'GET' as const, href: opts, enabled: true };
-    case 'selected': return { key: 'review' as const, label: 'Review', method: 'GET' as const, href: opts, enabled: true };
+    case 'selected': return { key: 'review' as const, label: 'Review choice', method: 'GET' as const, href: opts, enabled: true };
     case 'label_pending': return { key: 'view_label' as const, label: 'View label', method: 'GET' as const, href: `/api/v1/shipments/${r.shipmentId}/label`, enabled: false };
+    case 'dispatched': return { key: 'track_dispatch' as const, label: 'Track dispatch', method: 'GET' as const, href: `/api/v1/shipments/${r.shipmentId}/tracking`, enabled: true };
     case 'ready_to_dispatch': return { key: 'dispatch' as const, label: 'Dispatch', method: 'POST' as const, href: `/api/v1/shipments/${r.shipmentId}/dispatch`, enabled: true };
     default: return { key: 'resolve' as const, label: 'Resolve', method: 'GET' as const, href: opts, enabled: true };
   }
+}
+
+export interface RowAction { key: string; label: string; method: 'GET' | 'POST'; href: string; enabled: boolean }
+/**
+ * What else can be done with the row besides its main action: print the label of a labelled order; make the label of a confirmed order
+ * (a configured logistics provider needs the AWB it issued, a marketplace issues its own label so there is nothing to make here).
+ */
+export function secondaryActionsFor(c: Container, base: Base, r: Candidate): RowAction[] {
+  const pick = pickupOf(base, r);
+  if (pick.state === 'awaiting') return [{ key: 'review', label: 'Review choice', method: 'GET', href: `/api/v1/shipping/orders/${r.id}/options`, enabled: true }, ...labelActions(c, base, r)];
+  return labelActions(c, base, r);
+}
+
+function labelActions(c: Container, base: Base, r: Candidate): RowAction[] {
+  if (r.status === 'ready_to_dispatch' && r.shipmentId) return [{ key: 'print_label', label: 'Print label', method: 'GET', href: `/api/v1/shipments/${r.shipmentId}/label`, enabled: true }];
+  if (r.status !== 'selected' || !r.kind || r.kind === 'marketplace') return [];
+  const sel = flagsOfSelection(c, base.methods, r.kind, r.providerId, r.marketplace);
+  const method = r.providerId ? base.methods.find((x) => x.id === r.providerId) : undefined;
+  if (method?.kind === 'custom') return [{ key: 'enter_awb', label: 'Enter AWB', method: 'POST', href: '/api/v1/shipments', enabled: Boolean(sel) }];
+  return [{ key: 'generate_label', label: 'Generate label', method: 'POST', href: '/api/v1/shipping/orders/bulk', enabled: Boolean(sel?.flags.label) }];
 }
 
 export function toDecisionItem(c: Container, base: Base, r: Candidate, info: OrderInfo | undefined) {
@@ -239,7 +281,7 @@ export function toDecisionItem(c: Container, base: Base, r: Candidate, info: Ord
     selectedMethod: r.kind ? { kind: r.kind, name: selectedName(c, base.methods, r.kind, r.providerId, r.marketplace), providerId: r.providerId } : null,
     selectionConfirmed: Boolean(r.confirmedAt), selectedBy: r.selectedBy as 'rule' | 'preference' | 'manual' | null,
     recommendedMethod: rec ? { kind: rec.kind, name: rec.name, why: rec.why, source: rec.source } : null,
-    sla: slaOf(r.dueAt, base.th, base.now), status: r.status, shipmentId: r.shipmentId, action: actionFor(r.status, r),
+    sla: slaOf(r.dueAt, base.th, base.now), status: r.status, shipmentId: r.shipmentId, action: actionFor(r.status, r, pickupOf(base, r)), pickup: pickupOf(base, r), secondaryActions: secondaryActionsFor(c, base, r),
   };
 }
 
@@ -247,7 +289,7 @@ export async function listDecisions(tx: Tx, c: Container, vendorId: string, allo
   const base = await loadBase(tx, vendorId);
   const [rows, total, counts] = await Promise.all([candidateRows(tx, vendorId, allowed, { filter: o.filter, th: base.th, limit: o.limit, offset: o.offset }), candidateCount(tx, vendorId, allowed, o.filter, base.th), statusCounts(tx, vendorId, allowed)]);
   const infos = await loadOrderInfo(tx, vendorId, rows.map((r) => r.id));
-  const readyToShip = Object.values(counts).reduce((a, b) => a + b, 0);
+  const readyToShip = Object.entries(counts).filter(([k]) => k !== 'dispatched').reduce((a, [, b]) => a + b, 0);
   return { items: rows.map((r) => toDecisionItem(c, base, r, infos.get(r.id))), total, counts: { readyToShip, ...counts } };
 }
 

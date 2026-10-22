@@ -167,7 +167,7 @@ export interface LedgerFilters {
 }
 const MOVEMENT_TYPES: Record<string, string[]> = {
   received: ['receive', 'incoming_receive'],
-  adjusted: ['adjust', 'count', 'damage', 'undamage', 'quarantine', 'quarantine_release'],
+  adjusted: ['adjust', 'count', 'damage', 'undamage', 'quarantine', 'quarantine_release', 'shrinkage'],
   reserved: ['reserve', 'release', 'commit'],
   returned: ['return_in', 'return_restock'],
 };
@@ -372,6 +372,7 @@ export function describeMovement(m: MoveRow, c: { title: string; warehouse: stri
       return mk_('returned', `${returnedUnits(-m.deltaReturned)} moved to Damaged stock`, c.title);
     case 'damage': return mk_('damaged', `${units(m.deltaDamaged)} marked damaged`, c.title);
     case 'undamage': return mk_('adjusted', `${units(m.deltaOnHand)} restored from damaged`, c.title);
+    case 'shrinkage': return mk_('adjusted', 'Inventory shrinkage', `${c.title} ${signed(m.deltaOnHand)}`);
     case 'quarantine': return mk_('quarantined', `${units(m.deltaQuarantined)} moved to Quarantine`, m.reason ?? c.title);
     case 'quarantine_release': return mk_('quarantine_released', `${units(-m.deltaQuarantined)} released from Quarantine`, m.reason ?? c.title);
     case 'transfer_out': return mk_('transferred', `${units(-m.deltaOnHand)} transferred out of ${c.warehouse}`, c.title);

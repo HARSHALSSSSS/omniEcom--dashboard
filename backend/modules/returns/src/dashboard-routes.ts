@@ -5,12 +5,13 @@ import { IdParamSchema, PageQuerySchema, pagedEnvelope, successEnvelope } from '
 import { Errors } from '@oms/shared';
 import { ok, opCtxFromRequest, paged, pageWindow, requireVendor, vendorTx, effects, type OpCtx } from '@oms/module-kit';
 import { assertWarehouseCapability } from '@oms/mod-warehouses';
-import { type Tx, schema, and, eq } from '@oms/database';
+import { type Tx } from '@oms/database';
 import { DISPOSITION_KINDS, INSPECTION_RESULTS } from './domain';
 import { EXPORT_MAX_ROWS, toCsv } from './csv';
 import { SIGNALS, TABS, analytics, attentionList, eligibility, exportLedger, ledgerCounts, listLedger, listRefunds, overview, refundView, returnDetailView, returnSettings } from './dashboard';
-import { applyDisposition, assignInspection, dispositionOptions, getInspection, saveInspection } from './inspection';
+import { applyDisposition, assignInspection, dispositionOptions, getInspection, markInspection, saveInspection } from './inspection';
 import { getReturnRow, retryRefund, returnDetail } from './service';
+import { requestReturnsSync } from './sync';
 import { ReturnSchema } from './routes';
 import { LEDGER_SORTS } from './ret-int-ledger';
 
@@ -33,7 +34,7 @@ const filtersOf = (q: Partial<Q>) => ({
 const LedgerItem = z.looseObject({
   id: z.string(), number: z.string(), orderId: z.string(), orderNumber: z.string(), product: z.object({ title: z.string().nullable(), sku: z.string().nullable(), itemCount: z.number().int() }),
   channel: z.object({ code: z.string(), name: z.string() }), reason: z.object({ code: z.string(), label: z.string() }), quantity: z.number().int(), receivedQuantity: z.number().int(), status: z.string(), displayStatus: z.string(),
-  requestedAt: z.string(), receivedAt: z.string().nullable(), inspection: z.object({ status: z.string(), inspector: z.object({ id: z.string(), name: z.string().nullable() }).nullable() }),
+  requestedAt: z.string(), receivedAt: z.string().nullable(), inspection: z.object({ status: z.string(), inspector: z.object({ id: z.string(), name: z.string().nullable() }).nullable(), physical: z.enum(['usable', 'damaged', 'wrong_product', 'incomplete']).nullable() }),
   refund: z.object({ status: z.string(), amountMinor: z.number().int().nullable(), currency: z.string().nullable(), source: z.enum(['connector', 'manual']).nullable() }),
   disposition: z.string(), customer: z.object({ name: z.string().nullable(), email: z.string().nullable() }).nullable(), signals: z.array(z.string()), action: z.object({ key: z.string(), href: z.string() }),
 });
@@ -155,14 +156,23 @@ export const returnsDashboardRoutes: FastifyPluginAsync = async (app) => {
       })) },
     },
   }, async (req) => ok(req, await vendorTx(req, (tx, vendorId) => analytics(tx, vendorId, req.query.days, req.query.sample))));
+  const SyncResult = successEnvelope(z.object({
+    enqueued: z.boolean(), reason: z.enum(['no_eligible_accounts']).nullable().describe('why nothing was queued; null when at least one job was'), eligibleAccounts: z.number().int(),
+    jobs: z.array(z.object({ accountId: z.string(), accountName: z.string(), marketplace: z.string(), jobId: z.string().describe('follow it with GET /sync/jobs/{jobId}: status, progress {total, done, failed}, stats, failureDetails'), status: z.string(), alreadyQueued: z.boolean() })),
+    skipped: z.array(z.object({ accountId: z.string(), accountName: z.string(), marketplace: z.string(), reason: z.enum(['returns_fetch_not_supported', 'connector_not_ready', 'connector_unavailable']) })),
+  })).meta({ id: 'ReturnsSyncResult' });
   r.post('/returns/sync', {
     config: { access: { permission: 'returns:write' } },
-    schema: { tags: TAGS, summary: 'Sync returns from the marketplaces', description: 'No returns sync job exists yet (the sync engine has the `returns` type but no runner), so nothing is enqueued; the response says so and lists the connected accounts whose connector can fetch returns.', response: { 200: successEnvelope(z.object({ enqueued: z.boolean(), reason: z.string(), eligibleAccounts: z.number().int() })) } },
-  }, async (req) => {
-    const c = req.server.container;
-    const accounts = await vendorTx(req, (tx, vendorId) => tx.select({ m: schema.marketplaceAccounts.marketplace }).from(schema.marketplaceAccounts).where(and(eq(schema.marketplaceAccounts.vendorId, vendorId), eq(schema.marketplaceAccounts.status, 'active'))));
-    const eligible = accounts.filter((a) => c.connectors.has(a.m) && c.connectors.get(a.m).capabilities.returns.fetch).length;
-    return ok(req, { enqueued: false, reason: 'returns_sync_not_available', eligibleAccounts: eligible });
+    schema: {
+      tags: TAGS, summary: 'Sync returns from the marketplaces',
+      description: 'Queues one `returns` sync job (202) for every active marketplace account whose connector can fetch returns (or for the one `accountId`). The job pulls the returns changed since the account\'s watermark (30 days on the first run) into the ledger: idempotent per marketplace return id, linked to the order it belongs to (an order that has not been imported yet is reported in the job\'s `failureDetails`), and a request withdrawn or rejected on the marketplace closes a return nobody has handled yet. Follow each job with `GET /sync/jobs/{id}` (progress, stats `fetched / created / duplicates / cancelled / rejected / unmatched / failed`). Accounts whose connector cannot fetch returns are listed in `skipped` with the reason. Nothing queued -> 200 with `enqueued: false`.',
+      body: z.object({ accountId: z.uuid().optional(), since: z.coerce.date().optional().describe('re-import everything the marketplace changed since this moment') }).default({}),
+      response: { 200: SyncResult, 202: SyncResult },
+    },
+  }, async (req, reply) => {
+    const { jobs, skipped } = await requestReturnsSync(req.server.container, requireVendor(req), { accountId: req.body.accountId, since: req.body.since?.toISOString(), requestedBy: req.ctx.principal?.actorId ?? null });
+    if (jobs.length > 0) void reply.code(202);
+    return ok(req, { enqueued: jobs.length > 0, reason: jobs.length > 0 ? null : ('no_eligible_accounts' as const), eligibleAccounts: jobs.length, jobs, skipped });
   });
 
   // ---- one return ----------------------------------------------------------------------------------
@@ -177,6 +187,15 @@ export const returnsDashboardRoutes: FastifyPluginAsync = async (app) => {
     config: { access: { permission: 'returns:write' } },
     schema: { tags: TAGS, summary: 'Assign inspection to a member (bulk)', description: 'Up to 100 returns. Returns that cannot be assigned (not received yet, inspection already finished, unknown id) are listed in `skipped` with a reason; nothing is decided or moved.', body: z.object({ ids: z.array(z.uuid()).min(1).max(100), userId: z.uuid() }), response: { 200: successEnvelope(z.object({ assigned: z.array(z.string()), skipped: z.array(z.object({ id: z.string(), reason: z.string() })) })) } },
   }, async (req) => ok(req, await run(req, (tx, ctx) => assignInspection(tx, ctx, req.body.ids, req.body.userId))));
+  r.post('/returns/inspection/mark', {
+    config: { access: { permission: 'returns:write' } },
+    schema: {
+      tags: TAGS, summary: 'Mark the inspection status of several returns (bulk)',
+      description: 'Up to 100 returns: `pass` = passed, `fail` = failed, `needs_review` = requires review, without walking the checklist. The history records it as a bulk mark (no checklist, so the physical condition keeps what the last real inspection said). Returns that are not at the warehouse yet are listed in `skipped` (`not_received`, `not_found`). It never approves a refund or selects a disposition.',
+      body: z.object({ ids: z.array(z.uuid()).min(1).max(100), result: z.enum(INSPECTION_RESULTS), note: z.string().max(500).nullish() }),
+      response: { 200: successEnvelope(z.object({ marked: z.array(z.string()), skipped: z.array(z.object({ id: z.string(), reason: z.string() })) })) },
+    },
+  }, async (req) => ok(req, await run(req, (tx, ctx) => markInspection(tx, ctx, req.body.ids, { result: req.body.result, note: req.body.note }))));
   r.post('/returns/:id/inspection/assign', {
     config: { access: { permission: 'returns:write' } },
     schema: { tags: TAGS, summary: 'Assign inspection', description: '`userId` must be an active member of the business. Starts the inspection track (in progress); it never decides a refund or disposition.', params: IdParamSchema, body: z.object({ userId: z.uuid() }), response: { 200: InspectionView } },

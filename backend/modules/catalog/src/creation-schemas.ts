@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { IsoDate, PageQuerySchema, SearchQuerySchema, sortQuery } from '@oms/contracts';
 import { ProductBase, ProductSchema } from './schemas';
+import { PRODUCT_TYPES } from './product-types';
 
 // ---------------------------------------------------------------- inputs
 /** every editor field optional and loosely typed: the rules (and their field-level error codes) are applied by the service */
@@ -45,7 +46,7 @@ export const PreviewValuesSchema = z
     productCode: z.string().max(200).nullish(),
     title: z.string().max(1000).nullish(),
     categoryId: z.uuid().nullish(),
-    productType: z.enum(['physical', 'digital', 'service']).optional(),
+    productType: z.enum(PRODUCT_TYPES).optional(),
     brand: z.string().max(200).nullish(),
     description: z.string().max(40_000).nullish(),
     descriptionHtml: z.string().max(40_000).nullish(),
@@ -113,7 +114,16 @@ export const CreationReadinessSchema = z
   .meta({ id: 'CreationReadiness' });
 
 const ImageStateSchema = z.enum(['none', 'uploading', 'placeholder', 'ready']);
+export const CategoryAttributeFieldSchema = z
+  .object({
+    attributeId: z.string(), code: z.string(), name: z.string(), dataType: z.enum(['text', 'number', 'boolean', 'date', 'enum']), unit: z.string().nullable(),
+    isRequired: z.boolean(), options: z.array(z.object({ value: z.string(), label: z.string() })).describe('Allowed values of an enum attribute'),
+    value: z.union([z.string(), z.number(), z.boolean(), z.null()]).describe('The product\'s current value; null = not supplied'),
+  })
+  .meta({ id: 'ProductCategoryAttribute' });
+
 export const ProductEditorSchema = ProductSchema.extend({
+  categoryAttributes: z.array(CategoryAttributeFieldSchema).describe('The product-level attributes of the product\'s category (Capacity, Fabric composition...) with the product\'s values; empty when the category has none'),
   category: z.object({ id: z.string(), name: z.string() }).nullable(),
   brandRecord: z.object({ id: z.string(), name: z.string(), confirmed: z.boolean() }).nullable(),
   primaryImage: z.object({ state: ImageStateSchema, documentId: z.string().nullable(), url: z.string().nullable() }),

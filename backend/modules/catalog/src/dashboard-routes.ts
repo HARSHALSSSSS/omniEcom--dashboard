@@ -9,6 +9,7 @@ import * as dash from './dashboard';
 import * as act from './dashboard-actions';
 import { ProductDetailSchema, ProductSchema, BulkResultSchema } from './schemas';
 import { toCsv } from './csv';
+import { PRODUCT_TYPES } from './product-types';
 
 const toArray = <T>(v: T | T[] | undefined): T[] | undefined => (v === undefined ? undefined : Array.isArray(v) ? v : [v]);
 const multi = <T extends z.ZodType>(s: T) => z.union([s, z.array(s)]).optional().transform((v) => toArray(v as z.infer<T> | Array<z.infer<T>> | undefined));
@@ -24,7 +25,7 @@ const FiltersShape = {
   'filter[categoryId]': multi(z.uuid()),
   'filter[channel]': multi(z.string().trim().min(2).max(40)),
   'filter[inventory]': multi(InventoryStatusSchema),
-  'filter[productType]': multi(z.enum(['physical', 'digital', 'service'])),
+  'filter[productType]': multi(z.enum(PRODUCT_TYPES)),
   'filter[needsAttention]': z.enum(['true', 'false']).optional(),
 };
 const CatalogSortSchema = sortQuery(['updatedAt', 'title', 'sku', 'inventory'] as const);

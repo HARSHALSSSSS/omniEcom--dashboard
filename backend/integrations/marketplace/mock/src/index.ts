@@ -71,6 +71,7 @@ interface MockSeller {
   calls: number;
   listingSeq: number;
   orderSeq: number;
+  returnSeq: number;
   /** events a real marketplace would push to us */
   webhooks: Array<{ type: WebhookEventType; orderId?: string; sku?: string }>;
 }
@@ -117,7 +118,7 @@ export class MockMarketplaceState {
   seller(sellerId: string): MockSeller {
     let s = this.sellers.get(sellerId);
     if (!s) {
-      s = { sellerId, products: new Map(), lifecycle: new Map(), orders: new Map(), returns: [], behavior: {}, calls: 0, listingSeq: 100, orderSeq: 2000, webhooks: [] };
+      s = { sellerId, products: new Map(), lifecycle: new Map(), orders: new Map(), returns: [], behavior: {}, calls: 0, listingSeq: 100, orderSeq: 2000, returnSeq: 100, webhooks: [] };
       this.seed(s);
       this.sellers.set(sellerId, s);
     }
@@ -160,7 +161,7 @@ export class MockMarketplaceState {
         raw: { sandbox: true },
       });
     }
-    s.returns.push({ externalReturnId: `MR-${s.sellerId}-1`, externalOrderId: `MO-${s.sellerId}-1005`, status: 'requested', reason: 'size_issue', requestedAt: new Date(base - DAY) });
+    s.returns.push({ externalReturnId: `MR-${s.sellerId}-1`, externalOrderId: `MO-${s.sellerId}-1005`, status: 'requested', reason: 'size_issue', requestedAt: new Date(base - DAY), items: [{ sku: `MOCK-${s.sellerId}-SKU-005`, quantity: 1 }] });
   }
 
   issueTokens(sellerId: string, ttlSeconds: number): { accessToken: string; refreshToken: string; expiresAt: Date } {
@@ -218,6 +219,29 @@ export const mockControl = {
     o.status = NATIVE_TO_INTERNAL[nativeStatus]!;
     mockState.seller(sellerId).webhooks.push({ type: nativeStatus === 'cancelled' ? 'order.cancelled' : 'order.updated', orderId });
   },
+  /** a customer asks the marketplace to return (part of) an order: `fetchReturns` reports it; without `items` every line of the order comes back */
+  requestReturn(sellerId: string, orderId: string, o: { reason?: string; status?: string; items?: Array<{ sku: string; quantity: number }>; requestedAt?: Date } = {}): NormalizedReturn {
+    const s = mockState.seller(sellerId);
+    const order = s.orders.get(orderId);
+    if (!order) throw new Error(`unknown mock order ${orderId}`);
+    const lines = o.items ?? order.items.map((i) => ({ sku: i.sku, quantity: i.quantity }));
+    const at = o.requestedAt ?? mockState.now();
+    const ret: NormalizedReturn = {
+      externalReturnId: `MR-${sellerId}-${s.returnSeq++}`, externalOrderId: orderId, status: o.status ?? 'requested', reason: o.reason ?? 'changed_mind', requestedAt: at, updatedAt: at,
+      items: lines.map((l) => ({ ...(order.items.find((i) => i.sku === l.sku)?.externalItemId ? { externalItemId: order.items.find((i) => i.sku === l.sku)!.externalItemId } : {}), sku: l.sku, quantity: l.quantity })),
+    };
+    s.returns.push(ret);
+    s.webhooks.push({ type: 'return.created', orderId });
+    return ret;
+  },
+  /** the marketplace moves a return to another status (e.g. "cancelled" when the customer withdraws it) */
+  setReturnStatus(sellerId: string, returnId: string, status: string): void {
+    const r = mockState.seller(sellerId).returns.find((x) => x.externalReturnId === returnId);
+    if (!r) throw new Error(`unknown mock return ${returnId}`);
+    r.status = status;
+    r.updatedAt = mockState.now();
+  },
+  returns(sellerId: string): NormalizedReturn[] { return mockState.seller(sellerId).returns; },
   order(sellerId: string, orderId: string): NormalizedOrder | undefined { return mockState.seller(sellerId).orders.get(orderId); },
   listing(sellerId: string, sku: string) { return { product: mockState.seller(sellerId).products.get(sku), lifecycle: mockState.seller(sellerId).lifecycle.get(sku) }; },
   quantity(sellerId: string, sku: string): number | undefined { return mockState.seller(sellerId).products.get(sku)?.quantity; },
@@ -478,9 +502,12 @@ export class MockConnector implements MarketplaceConnector {
     return { ok: true };
   }
 
-  async fetchReturns(ctx: ConnectorContext, { since }: { since: Date; cursor?: string | null }): Promise<Paged<NormalizedReturn>> {
+  async fetchReturns(ctx: ConnectorContext, { since, cursor }: { since: Date; cursor?: string | null }): Promise<Paged<NormalizedReturn>> {
     await this.simulate(ctx);
-    return { items: this.state.seller(this.sellerOf(ctx)).returns.filter((r) => r.requestedAt >= since), nextCursor: null };
+    // "changed since": a status change on an old return is reported again, like a real marketplace's modified-after filter
+    const all = this.state.seller(this.sellerOf(ctx)).returns.filter((r) => (r.updatedAt ?? r.requestedAt) >= since).sort((a, b) => a.requestedAt.getTime() - b.requestedAt.getTime());
+    const start = cursor ? Number(cursor) : 0;
+    return { items: all.slice(start, start + 3), nextCursor: start + 3 < all.length ? String(start + 3) : null };
   }
 
   async createShipment(ctx: ConnectorContext, { externalOrderId, carrier }: ShipmentInput): Promise<ShipmentResult> {

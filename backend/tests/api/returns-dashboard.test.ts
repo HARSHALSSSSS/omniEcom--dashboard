@@ -431,8 +431,10 @@ describe('analytics and attention', () => {
     const rival = await c.registerVendor({ businessName: 'Rival Analytics' });
     expect((await c.get(`${R}/analytics`, rival)).body.data).toMatchObject({ window: { returns: 0 }, reasons: [], intelligence: [] });
 
-    // sync reports that there is no returns sync job
-    expect((await c.post(`${R}/sync`, {}, w.admin)).body.data).toMatchObject({ enqueued: false, reason: 'returns_sync_not_available' });
+    // the sandbox marketplace can fetch returns: a sync queues one job for it (the full flow is in returns-sync.test.ts)
+    const sync = await c.post(`${R}/sync`, {}, w.admin);
+    expect(sync.status).toBe(202);
+    expect(sync.body.data).toMatchObject({ enqueued: true, reason: null, eligibleAccounts: 1, jobs: [{ accountId: w.account.id, marketplace: 'mock', alreadyQueued: false }], skipped: [] });
   });
 
   it('attention rows are computed live with impact and recommended action; settings drive the overdue window', async () => {
@@ -530,5 +532,65 @@ describe('return detail drawer', () => {
     expect((await c.get(`${R}/overview`, w.admin)).body.data.stages.closed.count).toBe(1);
     expect((await c.get(`${R}/ledger?tab=completed`, w.admin)).body.data.items[0]).toMatchObject({ id: x.id, displayStatus: 'resolved', action: { key: 'refund' } });
     expect((await c.get(`${R}/${'00000000-0000-4000-8000-0000000000aa'}/detail`, w.admin)).status).toBe(404);
+  });
+});
+
+describe('ledger physical condition', () => {
+  it('is null before an inspection, then follows the latest saved checklist (damage > wrong product > incomplete > usable)', async () => {
+    const { w, order, wh } = await shippedWorld(6);
+    const a = await mkReturn(w, order, wh, { receive: 1 });
+    const b = await mkReturn(w, order, wh, { receive: 1 });
+    const d = await mkReturn(w, order, wh, { receive: 1 });
+    const physicalOf = async (id: string) => (await c.get(`${R}/ledger?q=${encodeURIComponent((await detail(w, id)).number)}`, w.admin)).body.data.items.find((x: any) => x.id === id).inspection.physical;
+
+    expect(await physicalOf(a.id)).toBeNull();
+    expect((await inspect(w, a.id, 'pass')).status).toBe(200);
+    expect(await physicalOf(a.id)).toBe('usable');
+    // a later inspection replaces the earlier one
+    expect((await inspect(w, a.id, 'needs_review', w.admin, checklist({ accessoriesPresent: false }))).status).toBe(200);
+    expect(await physicalOf(a.id)).toBe('incomplete');
+
+    expect((await inspect(w, b.id, 'fail', w.admin, checklist({ visibleDamage: true, productMismatch: true }))).status).toBe(200);
+    expect(await physicalOf(b.id)).toBe('damaged');
+    expect((await inspect(w, d.id, 'needs_review', w.admin, checklist({ productMismatch: true }))).status).toBe(200);
+    expect(await physicalOf(d.id)).toBe('wrong_product');
+  });
+});
+
+describe('bulk inspection status mark', () => {
+  it('sets the status of the received returns, skips the rest, keeps the physical condition and never decides money or stock', async () => {
+    const { w, order, wh } = await shippedWorld(6);
+    const a = await mkReturn(w, order, wh, { receive: 1 });
+    const b = await mkReturn(w, order, wh, { receive: 1 });
+    const early = await mkReturn(w, order, wh, { approve: false });           // not received yet
+    // a real inspection first: damage found on `a`
+    expect((await inspect(w, a.id, 'fail', w.admin, checklist({ visibleDamage: true }))).status).toBe(200);
+
+    const mark = await c.post(`${R}/inspection/mark`, { ids: [a.id, b.id, early.id, '00000000-0000-4000-8000-0000000000aa'], result: 'needs_review', note: 'second look' }, w.admin);
+    expect(mark.status, JSON.stringify(mark.body)).toBe(200);
+    expect(mark.body.data.marked.sort()).toEqual([a.id, b.id].sort());
+    expect(mark.body.data.skipped).toEqual(expect.arrayContaining([{ id: early.id, reason: 'not_received' }, { id: '00000000-0000-4000-8000-0000000000aa', reason: 'not_found' }]));
+    for (const id of [a.id, b.id]) {
+      const ins = (await c.get(`${R}/${id}/inspection`, w.admin)).body.data;
+      expect(ins).toMatchObject({ status: 'requires_review', latest: { result: 'needs_review', note: 'second look', checklist: { bulk: true } } });
+    }
+    expect((await detail(w, early.id)).inspection.status).toBe('not_started');
+    // the history keeps the real inspection; the physical condition is still what that one found (a bulk mark verified nothing)
+    expect((await c.get(`${R}/${a.id}/inspection`, w.admin)).body.data.history).toHaveLength(2);
+    const ledger = (await c.get(`${R}/ledger?q=${a.number}`, w.admin)).body.data.items.find((x: any) => x.id === a.id);
+    expect(ledger.inspection).toMatchObject({ status: 'requires_review', physical: 'damaged' });
+    const bLedger = (await c.get(`${R}/ledger?q=${b.number}`, w.admin)).body.data.items.find((x: any) => x.id === b.id);
+    expect(bLedger.inspection.physical).toBeNull();
+    // no refund approved, no stock moved
+    expect(await detail(w, a.id)).toMatchObject({ refund: { status: 'pending' } });
+    expect((await detail(w, a.id)).items[0]).toMatchObject({ dispositionedQuantity: 0 });
+
+    // validation + permissions
+    expect((await c.post(`${R}/inspection/mark`, { ids: [], result: 'pass' }, w.admin)).status).toBe(400);
+    expect((await c.post(`${R}/inspection/mark`, { ids: [a.id], result: 'approve_refund' }, w.admin)).status).toBe(400);
+    const viewer = await c.addMember(w.admin, 'vendor_viewer');
+    expect((await c.post(`${R}/inspection/mark`, { ids: [a.id], result: 'pass' }, viewer)).status).toBe(403);
+    const rival = await c.registerVendor({ businessName: 'Rival Mark' });
+    expect((await c.post(`${R}/inspection/mark`, { ids: [a.id], result: 'pass' }, rival)).body.data).toEqual({ marked: [], skipped: [{ id: a.id, reason: 'not_found' }] });
   });
 });

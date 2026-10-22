@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
-import type { Tx } from '@oms/database';
+import { schema, type Tx } from '@oms/database';
 import { AppError, Errors } from '@oms/shared';
 import { IdParamSchema, IsoDate, PageQuerySchema, successEnvelope } from '@oms/contracts';
 import { created, effects, ok, opCtxFromRequest, pageWindow, requireVendor, vendorTx, type OpCtx } from '@oms/module-kit';
@@ -11,10 +11,16 @@ import { DECISION_STATUSES, MAX_BULK, MAX_EXPORT_ROWS, SLA_BANDS, candidateCount
 import { addMethod, capabilityDetail, getMethod, listMethods, patchMethod, verifyMethod, SELLER_PROVIDER } from './methods';
 import { createShippingRule, duplicateShippingRule, listShippingRules, patchShippingRule, removeShippingRule, reorderShippingRules, SHIPPING_OPS } from './shipping-rules';
 import { createShipment } from './service';
-import { EXCEPTION_KEYS, TRACKING_STATUSES_DERIVED, exceptionsCsv, exceptionsReport, listTracking, overview, refreshOpenShipments, syncShipping, trackingFailures, type ExceptionKey, type TrackingDerived } from './workspace';
+import { COMPARE_WINDOWS, EXCEPTION_KEYS, TRACKING_STATUSES_DERIVED, exceptionsCsv, exceptionsReport, listTracking, overview, refreshOpenShipments, trackingFailures, type ExceptionKey, type TrackingDerived } from './workspace';
+import { getShippingSync, latestShippingSync, startShippingSync } from './sync-job';
+import { SyncJobSchema, toSyncJobDto } from '@oms/mod-sync';
 import { getProvider } from './providers';
+import { bookPickupSlot, cancelPickupSlot, listPickupSlots } from './pickup';
 
+/** what an order's shipping decision is about */
 const Kind = z.enum(['marketplace', 'seller', 'third_party']);
+/** what a configured method is: `custom` is a logistics provider the seller set up (chosen as a third-party method for an order) */
+const MethodKindSchema = z.enum(['marketplace', 'seller', 'third_party', 'custom']);
 const Cap = z.enum(['supported', 'requires_configuration', 'not_supported']);
 const CapSet = z.object({ label: Cap, tracking: Cap, dispatchUpdate: Cap, statusSync: Cap });
 const Action = z.object({ key: z.string(), label: z.string(), method: z.enum(['GET', 'POST']), href: z.string(), enabled: z.boolean().optional() });
@@ -22,7 +28,7 @@ const Obj = z.record(z.string(), z.unknown());
 const Channel = z.object({ code: z.string(), name: z.string() });
 
 const MethodSchema = z.object({
-  id: z.string(), kind: Kind, name: z.string(), label: z.string(), providerCode: z.string(),
+  id: z.string(), kind: MethodKindSchema, name: z.string(), label: z.string(), providerCode: z.string(),
   channel: z.object({ code: z.string().nullable(), name: z.string(), accountId: z.string().nullable(), availability: z.enum(['live', 'coming_soon']) }).nullable(),
   provider: z.object({ code: z.string(), label: z.string() }).nullable(), state: z.enum(['configured', 'requires_configuration', 'disabled']), active: z.boolean(), isDefault: z.boolean(), preferredFor: z.array(z.string()),
   lastSyncAt: IsoDate.nullable(), supportedOrderTypes: z.array(z.string()), capabilities: CapSet, verification: z.object({ state: z.enum(['verified', 'unverified']), verifiedAt: IsoDate.nullable() }),
@@ -36,6 +42,8 @@ const DecisionItem = z.object({
   valueMinor: z.number().int(), currency: z.string(), weightGrams: z.number().int().nullable(), itemCount: z.number().int(), availableMethods: z.array(AvailableMethod),
   selectedMethod: z.object({ kind: Kind, name: z.string(), providerId: z.string().nullable() }).nullable(), selectionConfirmed: z.boolean(), selectedBy: z.enum(['rule', 'preference', 'manual']).nullable(),
   recommendedMethod: z.object({ kind: Kind, name: z.string(), why: z.string(), source: z.string() }).nullable(), sla: Sla, status: z.enum(DECISION_STATUSES), shipmentId: z.string().nullable(), action: Action,
+  pickup: z.object({ state: z.enum(['not_applicable', 'awaiting', 'booked']), methodId: z.string().nullable(), warehouseId: z.string(), slot: z.object({ id: z.string(), date: z.string(), windowStart: z.string(), windowEnd: z.string(), status: z.string() }).nullable() }).describe('awaiting: a confirmed carrier-collected method with no upcoming pickup slot for this warehouse and method (action book_slot)'),
+  secondaryActions: z.array(Action).describe('Other things to do with the row: print_label (labelled), generate_label / enter_awb (method confirmed, no label yet)'),
 }).meta({ id: 'ShippingDecisionItem' });
 const DecisionList = successEnvelope(z.object({ items: z.array(DecisionItem), page: z.number().int(), pageSize: z.number().int(), total: z.number().int(), pages: z.number().int(), counts: z.record(z.string(), z.number().int()) }));
 
@@ -45,6 +53,12 @@ const OptionsSchema = z.object({
   recommendation: z.object({ kind: Kind, providerId: z.string().nullable(), name: z.string(), why: z.string(), source: z.string(), ruleId: z.string().nullable() }).nullable(),
   selection: z.object({ kind: Kind, providerId: z.string().nullable(), confirmed: z.boolean(), selectedBy: z.enum(['rule', 'preference', 'manual']).nullable(), confirmedAt: IsoDate.nullable() }).nullable(),
 }).meta({ id: 'ShippingOptions' });
+
+const PickupSlotSchema = z.object({
+  id: z.string(), warehouse: z.object({ id: z.string(), code: z.string(), name: z.string() }), method: z.object({ id: z.string(), name: z.string(), kind: z.string(), providerCode: z.string() }),
+  date: z.string(), windowStart: z.string(), windowEnd: z.string(), parcelCount: z.number().int(), status: z.enum(schema.PICKUP_SLOT_STATUSES), mode: z.enum(['provider', 'manual']), reference: z.string().nullable(), note: z.string().nullable(),
+  cancellable: z.boolean(), cancelledAt: IsoDate.nullable(), createdAt: IsoDate,
+}).meta({ id: 'ShippingPickupSlot' });
 
 const RuleSchema = z.object({
   id: z.string(), name: z.string(), description: z.string().nullable(), status: z.enum(['enabled', 'disabled']), priority: z.number().int(), lastUpdatedAt: IsoDate, ordersAffected: z.number().int().nullable(),
@@ -72,15 +86,15 @@ export function registerWorkspaceRoutes(app: FastifyInstance): void {
     config: { access: { permission: 'shipping:read' } },
     schema: {
       tags: TAGS, summary: 'Shipping methods and the capability matrix', description: 'Marketplace shipping (per connected channel), seller shipping and third-party providers as one list. Capabilities come from the connector / provider catalogue and read `requires_configuration` until the method is verified.',
-      response: { 200: successEnvelope(z.object({ items: z.array(MethodSchema), capabilityMatrix: z.array(z.object({ methodId: z.string().nullable(), method: Kind, name: z.string(), label: Cap, tracking: Cap, dispatchUpdate: Cap, statusSync: Cap })), summary: z.string(), activeMethods: z.number().int() })) },
+      response: { 200: successEnvelope(z.object({ items: z.array(MethodSchema), capabilityMatrix: z.array(z.object({ methodId: z.string().nullable(), method: z.enum(['marketplace', 'seller', 'third_party', 'unverified_connector']), name: z.string(), label: Cap, tracking: Cap, dispatchUpdate: Cap, statusSync: Cap })), summary: z.string(), activeMethods: z.number().int() })) },
     },
   }, async (req) => ok(req, await vendorTx(req, (tx, vendorId) => listMethods(tx, req.server.container, vendorId))));
 
   r.post('/shipping/methods', {
     config: { access: { permission: 'shipping:configure' } },
     schema: {
-      tags: TAGS, summary: 'Add a shipping method (Add Provider)', description: 'marketplace: `channelCode` of a connected marketplace (provider code `marketplace:<code>`); seller: merchant-managed shipping; third_party: `providerCode` from the provider catalogue. Created unverified: call POST /shipping/methods/{id}/verify.',
-      body: z.object({ kind: Kind, providerCode: z.string().min(2).max(40).optional(), channelCode: z.string().min(2).max(40).optional(), label: z.string().max(80).optional(), config: z.record(z.string(), z.unknown()).default({}), supportedOrderTypes: z.array(z.enum(['prepaid', 'cod'])).max(2).optional(), isDefault: z.boolean().optional() }),
+      tags: TAGS, summary: 'Add a shipping method (Add Provider)', description: 'marketplace: `channelCode` of a connected marketplace (provider code `marketplace:<code>`); seller: merchant-managed shipping; third_party: `providerCode` from the provider catalogue; custom: a logistics provider you configure yourself (`label` = its name, `config.trackingUrlTemplate` = its tracking page with {awb}, optional `awbPrefix`, `awbLength`, `defaultService`, `trackingApiUrl` and the credential `apiKey`, which is stored and never returned). The AWB it issues is entered when the label is created (POST /shipments with `manual.awb`). Created unverified: call POST /shipping/methods/{id}/verify.',
+      body: z.object({ kind: MethodKindSchema, providerCode: z.string().min(2).max(40).optional(), channelCode: z.string().min(2).max(40).optional(), label: z.string().max(80).optional(), config: z.record(z.string(), z.unknown()).default({}), supportedOrderTypes: z.array(z.enum(['prepaid', 'cod'])).max(2).optional(), isDefault: z.boolean().optional() }),
       response: { 201: successEnvelope(MethodSchema) },
     },
   }, async (req, reply) => {
@@ -99,7 +113,7 @@ export function registerWorkspaceRoutes(app: FastifyInstance): void {
 
   r.get('/shipping/methods/:id/capabilities', {
     config: { access: { permission: 'shipping:read' } },
-    schema: { tags: TAGS, summary: 'View capability of a method', params: IdParamSchema, response: { 200: successEnvelope(z.object({ methodId: z.string(), kind: Kind, name: z.string(), verified: z.boolean(), verifiedAt: IsoDate.nullable(), source: z.string(), capabilities: z.array(z.object({ key: z.string(), value: Cap, declared: z.boolean(), note: z.string() })), declared: Obj })) } },
+    schema: { tags: TAGS, summary: 'View capability of a method', params: IdParamSchema, response: { 200: successEnvelope(z.object({ methodId: z.string(), kind: MethodKindSchema, name: z.string(), verified: z.boolean(), verifiedAt: IsoDate.nullable(), source: z.string(), capabilities: z.array(z.object({ key: z.string(), value: Cap, declared: z.boolean(), note: z.string() })), declared: Obj })) } },
   }, async (req) => ok(req, await vendorTx(req, (tx, vendorId) => capabilityDetail(tx, req.server.container, vendorId, req.params.id))));
 
   r.post('/shipping/methods/:id/verify', {
@@ -251,29 +265,71 @@ export function registerWorkspaceRoutes(app: FastifyInstance): void {
   r.get('/shipping/overview', {
     config: { access: { permission: 'shipping:read' } },
     schema: {
-      tags: TAGS, summary: 'Shipping overview', description: 'Status line, pulse with `sinceLastSync` deltas (against the latest hourly snapshot older than 30 minutes; null when there is none), the decision field (first 5 orders), the availability comparison and the attention breakdown. `asOf` (ISO date or date-time) sets the reference time for the baseline and SLA.',
-      querystring: z.object({ asOf: z.string().max(40).optional() }),
-      response: { 200: successEnvelope(z.object({ asOf: IsoDate, generatedAt: IsoDate, baseline: IsoDate.nullable(), statusLine: z.object({ connectedChannels: z.number().int(), activeMethods: z.number().int(), ordersNeedAttention: z.number().int() }), pulse: Obj, decisionField: z.array(Obj), availabilityComparison: z.array(Obj), attention: z.object({ total: z.number().int(), parts: z.record(z.string(), z.number().int()) }) })) },
+      tags: TAGS, summary: 'Shipping overview', description: 'Status line, pulse with `sinceLastSync` deltas, the decision field (first 5 orders), the availability comparison (with a "label generation" row while no verified method can make labels) and the attention breakdown. Deltas compare with an earlier moment (`compare`: `sync` = about an hour back, `24h`, `7d`): the stored hourly snapshot of the right age when there is one, otherwise the counts rebuilt from the fulfillment / shipment status history, so a fresh install has real deltas too. `comparison` says which (`source`, `at`, `windowHours`). `asOf` (ISO date or date-time) sets the reference time for the comparison and the SLA.',
+      querystring: z.object({ asOf: z.string().max(40).optional(), compare: z.enum(COMPARE_WINDOWS).default('sync') }),
+      response: { 200: successEnvelope(z.object({ asOf: IsoDate, generatedAt: IsoDate, baseline: IsoDate, comparison: z.object({ source: z.enum(['snapshot', 'history']), at: IsoDate, windowHours: z.number().int() }), statusLine: z.object({ connectedChannels: z.number().int(), activeMethods: z.number().int(), ordersNeedAttention: z.number().int() }), pulse: Obj, decisionField: z.array(Obj), availabilityComparison: z.array(Obj), attention: z.object({ total: z.number().int(), parts: z.record(z.string(), z.number().int()) }) })) },
     },
   }, async (req) => {
     const asOf = asOfOf(req.query.asOf);
-    return ok(req, await vendorTx(req, async (tx, vendorId) => overview(tx, req.server.container, vendorId, await allowed(req, tx, vendorId), asOf)));
+    return ok(req, await vendorTx(req, async (tx, vendorId) => overview(tx, req.server.container, vendorId, await allowed(req, tx, vendorId), asOf, req.query.compare)));
   });
 
+  const SyncDescription = 'A `tracking` job on the shared sync engine (see GET /sync/jobs/{id}): `status` queued | running | retrying | succeeded | partially_failed | failed | dead_lettered; `progress` { total, done, failed } counts the items (active methods to verify + open shipments to refresh) and moves while it runs; `payload.orders` is the number of orders it looks at; when it is over, `stats` hold orders, statuses, processed, updated, requireAttention and the method / tracking counts, `failureDetails` the shipments whose tracking failed.';
   r.post('/shipping/sync', {
     config: { access: { permission: 'shipping:write' } },
     schema: {
-      tags: TAGS, summary: 'Sync Shipping', description: 'Verifies the active methods and refreshes tracking of open shipments. Returns 202 with the counts: `orders` / `statuses` (progress) and `processed` / `updated` / `requireAttention` (completion).',
+      tags: TAGS, summary: 'Sync Shipping (starts a background job)', description: `Verifies the active methods and refreshes tracking of open shipments in the background. Answers 202 with the job at once; follow it with GET /shipping/sync/{id}. A sync that is already running is returned instead of starting a second one. ${SyncDescription}`,
       body: z.object({}).default({}),
-      response: { 202: successEnvelope(z.object({ orders: z.number().int(), statuses: z.number().int(), processed: z.number().int(), updated: z.number().int(), requireAttention: z.number().int(), methods: z.object({ checked: z.number().int(), verified: z.number().int(), notVerified: z.number().int() }), tracking: z.object({ processed: z.number().int(), updated: z.number().int(), failed: z.number().int(), failures: z.array(z.object({ shipmentId: z.string(), message: z.string() })) }), completedAt: IsoDate })) },
+      response: { 202: successEnvelope(SyncJobSchema) },
     },
   }, async (req, reply) => {
     const ctx = ctxOf(req);
     const al = await vendorTx(req, (tx, vendorId) => allowed(req, tx, vendorId));
-    const out = await syncShipping(ctx, al, async (tx, c2, id) => ({ ok: (await verifyMethod(tx, c2, id)).ok }));
+    const { job } = await startShippingSync(ctx, al);
     reply.code(202);
-    return ok(req, out);
+    return ok(req, toSyncJobDto(job));
   });
+
+  r.get('/shipping/sync/latest', {
+    config: { access: { permission: 'shipping:read' } },
+    schema: { tags: TAGS, summary: 'The latest Sync Shipping job (null when none ran yet)', description: `Lets a reloaded page pick a running sync up again. ${SyncDescription}`, response: { 200: successEnvelope(SyncJobSchema.nullable()) } },
+  }, async (req) => { const job = await vendorTx(req, (tx, vendorId) => latestShippingSync(tx, vendorId)); return ok(req, job ? toSyncJobDto(job) : null); });
+
+  r.get('/shipping/sync/:id', {
+    config: { access: { permission: 'shipping:read' } },
+    schema: { tags: TAGS, summary: 'Progress of a Sync Shipping job', description: SyncDescription, params: IdParamSchema, response: { 200: successEnvelope(SyncJobSchema) } },
+  }, async (req) => ok(req, toSyncJobDto(await vendorTx(req, (tx, vendorId) => getShippingSync(tx, vendorId, req.params.id)))));
+
+  // ============================================================ pickup slots
+  r.get('/shipping/pickup-slots', {
+    config: { access: { permission: 'shipping:read' } },
+    schema: {
+      tags: TAGS, summary: 'Pickup slots (upcoming by default)', description: 'The pickup slots booked for shipping methods: date, time window, parcel count, status (confirmed = the provider scheduled it and gave a `reference`; manual = recorded here, arranged with the carrier by the seller; failed = the provider refused; cancelled). `scope=all` includes past and cancelled slots. `today` is the date where the business is.',
+      querystring: z.object({ scope: z.enum(['upcoming', 'all']).default('upcoming'), 'filter[warehouse]': z.uuid().optional(), 'filter[method]': z.uuid().optional(), limit: z.coerce.number().int().min(1).max(200).default(50) }),
+      response: { 200: successEnvelope(z.object({ items: z.array(PickupSlotSchema), today: z.string() })) },
+    },
+  }, async (req) => ok(req, await vendorTx(req, async (tx, vendorId) => {
+    const res = await listPickupSlots(tx, req.server.container, vendorId, { scope: req.query.scope, warehouseId: req.query['filter[warehouse]'], methodId: req.query['filter[method]'], limit: req.query.limit });
+    const al = await allowed(req, tx, vendorId);
+    return al ? { ...res, items: res.items.filter((i) => al.includes(i.warehouse.id)) } : res;
+  })));
+
+  r.post('/shipping/pickup-slots', {
+    config: { access: { permission: 'shipping:write' } },
+    schema: {
+      tags: TAGS, summary: 'Book a pickup slot (Book slot)', description: 'Asks a shipping method to collect `parcelCount` parcels from a warehouse on `date` between `windowStart` and `windowEnd` (HH:MM). A provider that can schedule pickups is called (status confirmed + reference, or failed with the reason); a marketplace, the sellers own shipping or a provider without pickup scheduling is recorded as a manual booking. The date cannot be in the past; two active slots of one method and warehouse cannot overlap (409 slot_overlap).',
+      body: z.object({ warehouseId: z.uuid(), methodId: z.uuid(), date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), windowStart: z.string().regex(/^\d{2}:\d{2}$/), windowEnd: z.string().regex(/^\d{2}:\d{2}$/), parcelCount: z.number().int().min(1).max(10_000), note: z.string().max(300).nullish() }),
+      response: { 201: successEnvelope(PickupSlotSchema) },
+    },
+  }, async (req, reply) => {
+    const dto = await bookPickupSlot(ctxOf(req), req.body, (tx, wh) => can(req, tx, wh));
+    return created(req, reply, dto, `/api/v1/shipping/pickup-slots/${dto.id}`);
+  });
+
+  r.post('/shipping/pickup-slots/:id/cancel', {
+    config: { access: { permission: 'shipping:write' } },
+    schema: { tags: TAGS, summary: 'Cancel a pickup slot', description: 'A provider booking is cancelled with the provider first (if it refuses, the slot stays). 409 for a slot that is already cancelled or failed.', params: IdParamSchema, body: z.object({}).default({}), response: { 200: successEnvelope(PickupSlotSchema) } },
+  }, async (req) => ok(req, await cancelPickupSlot(ctxOf(req), req.params.id, (tx, wh) => can(req, tx, wh))));
 
   // ============================================================ tracking
   r.get('/shipping/tracking', {

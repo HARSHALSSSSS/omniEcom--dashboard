@@ -46,7 +46,7 @@ describe('pure rules', () => {
     expect(adjustmentFor('audit_correction', -4)).toMatchObject({ type: 'correction', direction: 'decrease', quantity: 4 });
     expect(adjustmentFor('audit_correction', 4)).toMatchObject({ type: 'correction', direction: 'increase', quantity: 4 });
     expect(adjustmentFor('damaged', -2)).toMatchObject({ type: 'damage', direction: 'decrease', quantity: 2 });
-    expect(adjustmentFor('shrinkage', -1)).toMatchObject({ type: 'manual', direction: 'decrease' });
+    expect(adjustmentFor('shrinkage', -1)).toMatchObject({ type: 'shrinkage', direction: 'decrease' });
     expect(adjustmentFor('manual_addition', 7, 'inward')).toMatchObject({ type: 'manual', direction: 'increase', quantity: 7, note: 'inward' });
     expect(() => adjustmentFor('damaged', 2)).toThrow(/negative/);
     expect(() => adjustmentFor('shrinkage', 2)).toThrow(/loss/);

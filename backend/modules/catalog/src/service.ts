@@ -7,6 +7,7 @@ import type { Effects } from './effects';
 import { upsertBrand } from './brands';
 import { isPlaceholderCode, normalizeFields, type CustomAttribute, type CustomAttributeInput, type FieldIssue, type NormalizedFields, type RawFields } from './fields';
 import { canonicalDimensions, displayDimensions, displayWeight, type DimensionsInput, type WeightInput } from './physical';
+import { productTypeOfAttributes, type ProductType } from './product-types';
 
 export type ProductRow = typeof schema.products.$inferSelect;
 export type VariantRow = typeof schema.productVariants.$inferSelect;
@@ -48,7 +49,7 @@ export const toProductDto = (p: ProductRow, variantCount = 0) => ({
   material: p.material,
   standardCategory: p.standardCategory,
   customAttributes: (p.customAttributes ?? []) as CustomAttribute[],
-  productType: ((p.attributes as Record<string, unknown> | null)?.productType ?? 'physical') as 'physical' | 'digital' | 'service',
+  productType: productTypeOfAttributes(p.attributes),
   status: p.status as 'draft' | 'active' | 'archived',
   productCodeLocked: isCodeLocked(p.status),
   variantCount,
@@ -95,7 +96,7 @@ export interface VariantInput {
 }
 export interface ProductInput {
   productCode: string; title: string; description?: string | null; brand?: string | null; manufacturer?: string | null; countryOfOrigin?: string | null;
-  categoryId?: string | null; hsnCode?: string | null; gstRateBps?: number | null; tags?: string[]; status?: 'draft' | 'active' | 'archived'; productType?: 'physical' | 'digital' | 'service';
+  categoryId?: string | null; hsnCode?: string | null; gstRateBps?: number | null; tags?: string[]; status?: 'draft' | 'active' | 'archived'; productType?: ProductType;
   variants?: VariantInput[]; attributeValues?: ProductValueInput[];
   /** rich description (sanitised); wins over `description` when both are sent */
   descriptionHtml?: string | null;

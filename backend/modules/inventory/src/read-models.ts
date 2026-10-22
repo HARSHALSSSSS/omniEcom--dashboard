@@ -83,7 +83,7 @@ export async function inventoryKpis(tx: Tx, vendorId: string, vctx: VendorCtx, o
 // ================================================================================================
 // movement feed
 // ================================================================================================
-export const FEED_KINDS = ['order_deduction', 'order_release', 'inward', 'transfer', 'manual_adjustment', 'damage', 'return', 'quarantine'] as const;
+export const FEED_KINDS = ['order_deduction', 'order_release', 'inward', 'transfer', 'manual_adjustment', 'damage', 'return', 'quarantine', 'shrinkage'] as const;
 export type FeedKind = (typeof FEED_KINDS)[number];
 
 const TYPE_KIND: Record<(typeof schema.MOVEMENT_TYPES)[number], { kind: FeedKind; label: string }> = {
@@ -93,6 +93,7 @@ const TYPE_KIND: Record<(typeof schema.MOVEMENT_TYPES)[number], { kind: FeedKind
   adjust: { kind: 'manual_adjustment', label: 'Manual adjustment' }, count: { kind: 'manual_adjustment', label: 'Stock count' }, undamage: { kind: 'manual_adjustment', label: 'Restored from damaged' },
   damage: { kind: 'damage', label: 'Marked damaged' }, return_in: { kind: 'return', label: 'Customer return received' }, return_restock: { kind: 'return', label: 'Return restocked' },
   quarantine: { kind: 'quarantine', label: 'Moved to quarantine' }, quarantine_release: { kind: 'quarantine', label: 'Released from quarantine' },
+  shrinkage: { kind: 'shrinkage', label: 'Inventory shrinkage' },
 };
 const KIND_TYPES = (kind: FeedKind): string[] => Object.entries(TYPE_KIND).filter(([, v]) => v.kind === kind).map(([t]) => t);
 
@@ -183,7 +184,7 @@ export function adjustmentFor(reason: QuickReason, delta: number, notes?: string
       return { ...base, type: 'damage', direction: 'decrease' };
     case 'shrinkage':
       if (delta > 0) throw bad('Shrinkage is a loss: use a negative quantityDelta', 'shrinkage_requires_decrease');
-      return { ...base, type: 'manual', direction: 'decrease' };
+      return { ...base, type: 'shrinkage', direction: 'decrease' };
     case 'manual_addition':
       if (delta < 0) throw bad('A manual addition needs a positive quantityDelta', 'addition_requires_increase');
       return { ...base, type: 'manual', direction: 'increase' };

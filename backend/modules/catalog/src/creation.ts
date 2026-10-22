@@ -8,6 +8,7 @@ import {
   CODE_REASON_MESSAGE, checkCode, collapseSpaces, isPlaceholderCode, nameKey, normalizeFields, TITLE_MIN_STEP, type CustomAttribute, type FieldIssue, type NormalizedFields, type ProductType, type RawFields,
 } from './fields';
 import { sanitizeDescription } from './description';
+import { categoryAttributeFields } from './category-attributes';
 import {
   categoryAttributeStates, evaluateCreationReadiness, inputFromSaved, loadChannels, loadSavedStates, type CreationReadiness, type CreationRow, type ImageState, type ReadinessInput, type SavedStates,
 } from './creation-readiness';
@@ -123,8 +124,10 @@ export async function buildEditorProduct(tx: Tx, vendorId: string, p: svc.Produc
   const [brand] = p.brand ? await tx.select().from(B).where(and(eq(B.vendorId, vendorId), eq(B.nameKey, nameKey(p.brand)))) : [];
   const [vc] = await tx.select({ n: sql<number>`count(*)::int` }).from(V).where(and(eq(V.vendorId, vendorId), eq(V.productId, p.id), isNull(V.deletedAt)));
   const image = st.images.get(p.id) ?? { state: 'none' as ImageState, primary: null };
+  const categoryAttributes = await categoryAttributeFields(tx, vendorId, p.id, p.categoryId);
   return {
     ...svc.toProductDto(p, vc?.n ?? 0),
+    categoryAttributes,
     category: cat ? { id: cat.id, name: cat.name } : null,
     brandRecord: brand ? { id: brand.id, name: brand.name, confirmed: brand.confirmedAt !== null } : null,
     primaryImage: { state: image.state, documentId: image.primary?.id ?? null, url: image.primary ? thumbHref(image.primary.id) : null },

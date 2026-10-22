@@ -1,9 +1,10 @@
 import { and, count, desc, eq, gt, ilike, inArray, isNull, lte, or, schema, sql, withSystem, withVendor, type SQL, type Tx } from '@oms/database';
 import { effects, type Container, type JobHandler, type OpCtx } from '@oms/module-kit';
 import { CANDIDATE_STATUSES, candidateRows, flagsOfSelection, loadBase, loadOrderInfo, loadThresholds, optionsFor, recommend, selectedName, slaOf, statusCounts, toCsv, toDecisionItem, type Base, type Candidate, type DecisionStatus } from './decision';
-import { connectorName, isVerified, methodName, type MethodKind } from './methods';
+import { connectorName, decisionKind, flagsFor, isVerified, methodName, type MethodKind } from './methods';
 import { IN_FLIGHT } from './domain';
 import { refreshTracking } from './service';
+import { pulseAt } from './pulse-history';
 
 const S = schema.shipments;
 const O = schema.orders;
@@ -127,6 +128,7 @@ export async function computeExceptions(tx: Tx, c: Container, vendorId: string, 
   const groups = Object.fromEntries(EXCEPTION_KEYS.map((k) => [k, [] as ExcOrder[]])) as Record<ExceptionKey, ExcOrder[]>;
   const ch = (m: string) => ({ code: m, name: connectorName(c, m) });
   for (const r of cands) {
+    if (r.status === 'dispatched') continue; // already handed over: tracking covers it
     const o = { orderId: r.orderId, number: r.orderNumber, fulfillmentId: r.id, shipmentId: r.shipmentId, channel: ch(r.marketplace) };
     if (!r.confirmedAt && !r.shipmentId) groups.no_method_selected.push({ ...o, detail: r.status === 'exception' ? 'no_method_available' : null });
     if (r.kind && !r.shipmentId) {
@@ -194,7 +196,7 @@ export async function pulseCounts(tx: Tx, c: Container, vendorId: string, allowe
   const sh = (s: string) => Number(ship.find((x) => x.st === s)?.n ?? 0);
   const g = exc.groups;
   return {
-    readyToShip: Object.values(counts).reduce((a, b) => a + b, 0), needDecision: counts.needs_decision, shippingSelected: Number(confirmed[0]?.n ?? 0), labelReady: counts.ready_to_dispatch,
+    readyToShip: Object.entries(counts).filter(([k]) => k !== 'dispatched').reduce((a, [, b]) => a + b, 0), needDecision: counts.needs_decision, shippingSelected: Number(confirmed[0]?.n ?? 0), labelReady: counts.ready_to_dispatch,
     labelUnavailable: g.label_unavailable.length, dispatched: sh('dispatched'), inTransit: sh('in_transit') + sh('out_for_delivery'), trackingIssues: g.tracking_not_received.length + g.shipping_sync_failed.length,
   };
 }
@@ -234,13 +236,26 @@ export const snapshotJob: JobHandler = {
 // ------------------------------------------------------------------------------------------------
 // overview
 // ------------------------------------------------------------------------------------------------
-export async function overview(tx: Tx, c: Container, vendorId: string, allowed: string[] | null, asOf: Date) {
+/** what the pulse is compared with: the last sync (about an hour back, from a snapshot, else rebuilt for 24 h back), a day, a week */
+export const COMPARE_WINDOWS = ['sync', '24h', '7d'] as const;
+export type CompareWindow = (typeof COMPARE_WINDOWS)[number];
+const WINDOW_MS: Record<CompareWindow, number> = { sync: SNAPSHOT_BASE_MIN * 60_000, '24h': 86_400_000, '7d': 7 * 86_400_000 };
+const SLACK_MS = 12 * 3_600_000; // a snapshot much older than the window says nothing about "then"
+type StageKey = 'readyToShip' | 'shippingSelected' | 'labelReady' | 'dispatched' | 'inTransit';
+
+export async function overview(tx: Tx, c: Container, vendorId: string, allowed: string[] | null, asOf: Date, compare: CompareWindow = 'sync') {
   const exc = await computeExceptions(tx, c, vendorId, allowed);
   const base: Base = { ...exc.base, now: asOf };
   const pulse = await pulseCounts(tx, c, vendorId, allowed, exc);
   const SN = schema.shippingSnapshots;
-  const [snap] = await tx.select().from(SN).where(and(eq(SN.vendorId, vendorId), lte(SN.takenAt, new Date(asOf.getTime() - SNAPSHOT_BASE_MIN * 60_000)))).orderBy(desc(SN.takenAt)).limit(1);
-  const delta = (key: keyof Pulse): number | null => (snap && typeof snap.counts[key] === 'number' ? pulse[key] - snap.counts[key]! : null);
+  // the earlier counts: a stored snapshot of the right age when there is one, else the pulse rebuilt from the status history (real from the first day)
+  const target = new Date(asOf.getTime() - WINDOW_MS[compare]);
+  const [snap] = await tx.select().from(SN).where(and(eq(SN.vendorId, vendorId), lte(SN.takenAt, target), gt(SN.takenAt, new Date(target.getTime() - SLACK_MS)))).orderBy(desc(SN.takenAt)).limit(1);
+  const historyAt = compare === 'sync' ? new Date(asOf.getTime() - WINDOW_MS['24h']) : target;
+  const earlier: Record<string, number> = snap ? snap.counts : { ...(await pulseAt(tx, vendorId, allowed, historyAt)) };
+  const baselineAt = snap ? snap.takenAt : historyAt;
+  const comparison = { source: snap ? 'snapshot' as const : 'history' as const, at: baselineAt.toISOString(), windowHours: Math.round((asOf.getTime() - baselineAt.getTime()) / 3_600_000) };
+  const delta = (key: StageKey): number => pulse[key] - (typeof earlier[key] === 'number' ? earlier[key]! : 0);
   const accounts = await tx.select().from(A).where(and(eq(A.vendorId, vendorId), eq(A.status, 'active')));
   const channels = [...new Set(accounts.map((a) => a.marketplace))];
   const selectedSources = await tx.select({ by: F.shipSelectedBy, n: count() }).from(F).where(and(eq(F.vendorId, vendorId), inArray(F.status, [...CANDIDATE_STATUSES]), sql`${F.shipConfirmedAt} IS NOT NULL`)).groupBy(F.shipSelectedBy);
@@ -278,13 +293,21 @@ export async function overview(tx: Tx, c: Container, vendorId: string, allowed: 
   for (const ch of channels) {
     cmp(ch, 'marketplace', base.methods.find((m) => m.kind === 'marketplace' && m.channelCode === ch), `${connectorName(c, ch)} Shipping`);
     cmp(ch, 'seller', base.methods.find((m) => m.kind === 'seller'), 'Seller Shipping');
-    const tps = base.methods.filter((m) => m.kind === 'third_party');
+    const tps = base.methods.filter((m) => decisionKind(m.kind) === 'third_party');
     if (tps.length === 0) cmp(ch, 'third_party', undefined, 'Third-party provider');
     for (const m of tps) cmp(ch, 'third_party', m, methodName(c, m));
+    // label generation: shown while no verified method can produce a label for this channel (a connector that declares no label support reads "not supported")
+    const labelling = base.methods.filter((m) => m.status === 'active' && (m.kind !== 'marketplace' || m.channelCode === ch) && flagsFor(c, m).flags.label);
+    if (!labelling.some((m) => isVerified(m))) {
+      rows.push({
+        channel: { code: ch, name: connectorName(c, ch) }, method: 'label_generation', provider: 'No verified provider', methodId: null,
+        availability: labelling.length > 0 ? 'requires_configuration' : 'unsupported', default: 'unavailable', override: 'unavailable',
+      });
+    }
   }
   const g = exc.groups;
   return {
-    asOf: asOf.toISOString(), generatedAt: new Date().toISOString(), baseline: snap ? snap.takenAt.toISOString() : null,
+    asOf: asOf.toISOString(), generatedAt: new Date().toISOString(), baseline: baselineAt.toISOString(), comparison,
     statusLine: { connectedChannels: channels.length, activeMethods: base.methods.filter((m) => m.status === 'active').length, ordersNeedAttention: exc.distinctOrders },
     pulse: {
       readyToShip: { count: pulse.readyToShip, sinceLastSync: delta('readyToShip'), needDecision: pulse.needDecision },
@@ -301,17 +324,49 @@ export async function overview(tx: Tx, c: Container, vendorId: string, allowed: 
 // ------------------------------------------------------------------------------------------------
 // Sync Shipping: method verification + tracking refresh
 // ------------------------------------------------------------------------------------------------
-export async function syncShipping(ctx: OpCtx, allowed: string[] | null, verify: (tx: Tx, ctx: OpCtx, id: string) => Promise<{ ok: boolean }>) {
+/** how many orders the sync looks at: the packed ones waiting for a shipping decision plus the open shipments */
+export async function syncScope(tx: Tx, vendorId: string, allowed: string[] | null): Promise<{ orders: number }> {
+  const scope = (col: typeof F.warehouseId | typeof S.warehouseId) => (allowed ? [allowed.length ? inArray(col, allowed) : sql`false`] : []);
+  const [waiting, open] = await Promise.all([
+    tx.select({ n: count() }).from(F).where(and(eq(F.vendorId, vendorId), inArray(F.status, [...CANDIDATE_STATUSES]), ...scope(F.warehouseId))),
+    tx.select({ n: count() }).from(S).where(and(eq(S.vendorId, vendorId), inArray(S.status, [...IN_FLIGHT]), ...scope(S.warehouseId))),
+  ]);
+  return { orders: Number(waiting[0]?.n ?? 0) + Math.min(200, Number(open[0]?.n ?? 0)) };
+}
+
+export const SYNC_KIND = 'shipping_sync';
+export const SYNC_MAX_SHIPMENTS = 200;
+/** what the job tells its observer while it works: the amount of work first, then every finished item */
+export interface SyncHooks { onPlan?(total: number): Promise<void>; onItem?(progress: { done: number; failed: number }): Promise<void>; onFailure?(f: { ref: string; code?: string; message: string }): void }
+
+/**
+ * Sync Shipping: verifies the active methods and refreshes the tracking of open shipments, item by item, reporting each finished item
+ * to `hooks` (the sync job turns that into `progress {total, done, failed}`). One failing item never stops the others.
+ */
+export async function syncShipping(ctx: OpCtx, allowed: string[] | null, verify: (tx: Tx, ctx: OpCtx, id: string) => Promise<{ ok: boolean }>, hooks: SyncHooks = {}) {
   const db = ctx.c.database.db;
-  const { methods, orders } = await withVendor(db, ctx.vendorId, async (tx) => ({
-    methods: await tx.select({ id: SP.id }).from(SP).where(and(eq(SP.vendorId, ctx.vendorId), eq(SP.status, 'active'))),
+  const { methods, open, orders } = await withVendor(db, ctx.vendorId, async (tx) => ({
+    methods: await tx.select({ id: SP.id }).from(SP).where(and(eq(SP.vendorId, ctx.vendorId), eq(SP.status, 'active'))).orderBy(SP.createdAt),
+    open: await tx.select({ id: S.id }).from(S).where(and(eq(S.vendorId, ctx.vendorId), inArray(S.status, [...IN_FLIGHT]), ...(allowed ? [allowed.length ? inArray(S.warehouseId, allowed) : sql`false`] : []))).orderBy(S.lastTrackedAt).limit(SYNC_MAX_SHIPMENTS),
     orders: Number((await tx.select({ n: count() }).from(F).where(and(eq(F.vendorId, ctx.vendorId), inArray(F.status, [...CANDIDATE_STATUSES])))) [0]?.n ?? 0),
   }));
-  let verified = 0; let notVerified = 0;
+  await hooks.onPlan?.(methods.length + open.length);
+  let done = 0; let failed = 0; let verified = 0; let notVerified = 0;
   for (const m of methods) {
     try { const r = await withVendor(db, ctx.vendorId, (tx) => verify(tx, ctx, m.id)); if (r.ok) verified++; else notVerified++; } catch { notVerified++; }
+    done++;
+    await hooks.onItem?.({ done, failed });
   }
-  const tracking = await refreshOpenShipments(ctx, allowed);
+  const tracking = { processed: 0, updated: 0, failed: 0, failures: [] as Array<{ shipmentId: string; message: string }> };
+  for (const s of open) {
+    tracking.processed++;
+    try { const r = await refreshTracking(ctx, s.id); if (r.applied > 0 || r.recorded > 0) tracking.updated++; } catch (e) {
+      tracking.failed++; failed++; tracking.failures.push({ shipmentId: s.id, message: (e as Error).message });
+      hooks.onFailure?.({ ref: s.id, message: (e as Error).message });
+    }
+    done++;
+    await hooks.onItem?.({ done, failed });
+  }
   const out = {
     orders: orders + tracking.processed, statuses: tracking.processed - tracking.failed, processed: orders + tracking.processed, updated: tracking.updated + verified, requireAttention: tracking.failed + notVerified,
     methods: { checked: methods.length, verified, notVerified }, tracking, completedAt: new Date().toISOString(),

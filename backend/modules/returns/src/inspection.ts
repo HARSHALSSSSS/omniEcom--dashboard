@@ -61,13 +61,13 @@ export async function assignInspection(tx: Tx, ctx: OpCtx, ids: string[], userId
 // ------------------------------------------------------------------------------------------------
 // inspection record
 // ------------------------------------------------------------------------------------------------
-export async function saveInspection(tx: Tx, ctx: OpCtx, id: string, input: { checklist: Omit<Checklist, 'custom'>; custom?: Array<{ label: string; ok: boolean }>; result: InspectionResult; note?: string | null }): Promise<ReturnRow> {
+export async function saveInspection(tx: Tx, ctx: OpCtx, id: string, input: { checklist: Omit<Checklist, 'custom'>; custom?: Array<{ label: string; ok: boolean }>; result: InspectionResult; note?: string | null; /** a status mark without a checklist (bulk): the record says so and says nothing about the physical condition */ bulk?: boolean }): Promise<ReturnRow> {
   const r = await getReturnRow(tx, ctx.vendorId, id, true);
   if (!inspectable(r.status)) throw new AppError('CONFLICT', `A ${r.status} return has not been received, so it cannot be inspected`, { details: { rule: 'not_received', status: r.status } });
   const rc = await receiptOf(tx, ctx.vendorId, id);
   const systemCondition = rc.mismatch ? 'quantity_mismatch' : 'receipt_matched';
   const isUser = ctx.actor.type === 'user' && ctx.actor.id;
-  await tx.insert(INS).values({ vendorId: ctx.vendorId, returnOrderId: id, checklist: { ...input.checklist, custom: input.custom ?? [] }, result: input.result, systemCondition, note: input.note ?? null, inspectorId: isUser ? ctx.actor.id : null });
+  await tx.insert(INS).values({ vendorId: ctx.vendorId, returnOrderId: id, checklist: input.bulk ? { bulk: true, custom: [] } : { ...input.checklist, custom: input.custom ?? [] }, result: input.result, systemCondition, note: input.note ?? null, inspectorId: isUser ? ctx.actor.id : null });
   const status = RESULT_TO_STATUS[input.result];
   const [after] = await tx.update(R).set({
     inspectionStatus: status, inspectionStartedAt: r.inspectionStartedAt ?? new Date(), inspectedAt: new Date(), ...(isUser ? { inspectorId: ctx.actor.id } : {}),
@@ -78,6 +78,28 @@ export async function saveInspection(tx: Tx, ctx: OpCtx, id: string, input: { ch
   await logReturnEvent(tx, ctx, { id, status: after!.status }, 'inspection', input.note ?? `inspection ${status}`, { result: input.result, systemCondition });
   await effects(tx, ctx).audit({ action: 'return.inspection_saved', resourceType: 'return', resourceId: id, before: { inspectionStatus: r.inspectionStatus }, after: { inspectionStatus: status, result: input.result, systemCondition } });
   return after!;
+}
+
+const NO_CHECKS: Omit<Checklist, 'custom'> = { packagingIntact: true, productUsable: true, accessoriesPresent: true, visibleDamage: false, productMismatch: false, missingQuantity: false };
+
+/**
+ * "Mark inspection status" on several returns: sets pass / fail / needs review without walking the checklist. The history says it was a
+ * bulk mark (no checklist, so the physical condition stays what the last real inspection said) and, like every inspection, it never
+ * approves a refund or selects a disposition. Returns that are not at the warehouse yet are skipped with a reason.
+ */
+export async function markInspection(tx: Tx, ctx: OpCtx, ids: string[], input: { result: InspectionResult; note?: string | null }): Promise<{ marked: string[]; skipped: Array<{ id: string; reason: string }> }> {
+  const unique = [...new Set(ids)];
+  const rows = await tx.select().from(R).where(and(eq(R.vendorId, ctx.vendorId), inArray(R.id, unique))).orderBy(R.id).for('update');
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const marked: string[] = [];
+  const skipped: Array<{ id: string; reason: string }> = [];
+  for (const id of unique) {
+    const r = byId.get(id);
+    if (!r) skipped.push({ id, reason: 'not_found' });
+    else if (!inspectable(r.status)) skipped.push({ id, reason: 'not_received' });
+    else { await saveInspection(tx, ctx, id, { checklist: NO_CHECKS, result: input.result, note: input.note, bulk: true }); marked.push(id); }
+  }
+  return { marked, skipped };
 }
 
 export async function getInspection(tx: Tx, vendorId: string, id: string) {

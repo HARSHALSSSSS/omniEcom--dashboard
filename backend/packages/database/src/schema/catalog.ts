@@ -70,6 +70,7 @@ export const products = pgTable('products', {
 }, (t) => [
   check('products_physical_chk', sql`(length_mm IS NULL OR length_mm BETWEEN 1 AND 100000) AND (width_mm IS NULL OR width_mm BETWEEN 1 AND 100000) AND (height_mm IS NULL OR height_mm BETWEEN 1 AND 100000) AND (weight_grams IS NULL OR weight_grams BETWEEN 1 AND 10000000)`),
   check('products_material_chk', sql`material IS NULL OR length(material) <= 80`),
+  check('products_type_chk', sql`(attributes ->> 'productType') IS NULL OR (attributes ->> 'productType') IN ('physical', 'digital', 'service', 'bundle')`),
   unique('products_vendor_id_id_uq').on(t.vendorId, t.id),
   uniqueIndex('products_vendor_code_uq').on(t.vendorId, t.productCode).where(sql`${t.deletedAt} IS NULL`),
   /** master codes are unique ignoring case (marketplaces treat TRV-1042 and trv-1042 as the same SKU) */

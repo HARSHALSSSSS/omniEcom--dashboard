@@ -17,6 +17,9 @@ import { inventoryAllocationRoutes } from './inventory-allocations';
 import * as svc from './service';
 import { editListing } from './workspace-edit';
 import { workspaceRoutes } from './workspace-routes';
+import { auditRoutes } from './audit-routes';
+import { flowsRoutes } from './flows-routes';
+import { listInsightsRoutes } from './list-insights';
 import { ChannelContentFields, TableBlockSchema } from './workspace-schemas';
 import { rowsWithTable } from './workspace-service';
 
@@ -78,6 +81,9 @@ export const listingRoutes: FastifyPluginAsync = async (app) => {
   };
 
   await app.register(workspaceRoutes(ListingSchema));
+  await app.register(auditRoutes);
+  await app.register(flowsRoutes(ListingSchema));
+  await app.register(listInsightsRoutes);
 
   // ================================================================== listings
   r.post('/listings', {

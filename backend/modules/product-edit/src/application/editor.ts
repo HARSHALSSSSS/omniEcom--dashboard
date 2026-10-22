@@ -1,7 +1,7 @@
 import { sql, type Tx } from '@oms/database';
 import { AppError } from '@oms/shared';
 import { buildEditorProduct, isCodeLocked, listingStatusOf, productContent, rollupStatus, type ChannelNameFn, type ProductRow } from '@oms/mod-catalog';
-import type { CustomAttribute } from '@oms/mod-catalog';
+import type { CategoryAttributeField, CustomAttribute } from '@oms/mod-catalog';
 import { ALL_CONTENT_FIELDS } from '../domain/diff';
 import { productListingContentSummary, type ListingImpact, type ListingOpts } from '../infrastructure/listings-port';
 import { imageHref, loadImages, type ImageDoc } from './images';
@@ -28,15 +28,16 @@ const SLOTS = [
 ] as const;
 
 /** E9: supplied slots among the six core facts, plus the confirmed custom attributes */
-export function attributesPanel(p: ProductRow) {
+export function attributesPanel(p: ProductRow, categoryFields: CategoryAttributeField[] = []) {
   const supplied: Record<(typeof SLOTS)[number]['key'], boolean> = {
     material: !!p.material, dimensions: p.lengthMm != null && p.widthMm != null && p.heightMm != null, weight: p.weightGrams != null,
     countryOfOrigin: !!p.countryOfOrigin, hsnCode: !!p.hsnCode, taxInformation: p.gstRateBps != null,
   };
   const slots = SLOTS.map((s) => ({ key: s.key, label: s.label, supplied: supplied[s.key] }));
   const custom = ((p.customAttributes ?? []) as CustomAttribute[]).filter((a) => a.confirmed).length;
-  const configured = slots.filter((s) => s.supplied).length + custom;
-  return { configured, customConfirmed: custom, slots, note: slots.some((s) => !s.supplied) ? ATTRIBUTES_NOTE : null };
+  const categorySlots = categoryFields.map((f) => ({ attributeId: f.attributeId, label: f.name, supplied: f.value !== null && f.value !== '', isRequired: f.isRequired }));
+  const configured = slots.filter((s) => s.supplied).length + categorySlots.filter((s) => s.supplied).length + custom;
+  return { configured, customConfirmed: custom, slots, categorySlots, note: slots.some((s) => !s.supplied) || categorySlots.some((s) => !s.supplied) ? ATTRIBUTES_NOTE : null };
 }
 
 const HUMAN: Record<string, string> = { hsn_code: 'HSN code', gst_rate_bps: 'GST rate', country_of_origin: 'country of origin', brand: 'brand', category: 'category' };
@@ -121,7 +122,7 @@ export async function buildEditor(tx: Tx, vendorId: string, p: ProductRow, names
     locks: { productCode: { locked, reason: locked ? CODE_LOCK_REASON : null } },
     meta: { productId: p.productCode, createdAt: p.createdAt.toISOString(), updatedAt: p.updatedAt.toISOString(), updatedBy },
     nav: NAV.map((n) => (counts[n.key] !== undefined ? { ...n, count: counts[n.key]! } : n)),
-    attributes: attributesPanel(p),
+    attributes: attributesPanel(p, product.categoryAttributes),
     media: mediaPanel(images),
     inheritance: inheritancePanel(preview.impacts, preview.limited),
     readiness,

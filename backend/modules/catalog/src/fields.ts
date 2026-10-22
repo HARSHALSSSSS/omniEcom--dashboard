@@ -1,6 +1,7 @@
 import { isCountryCode } from './countries';
 import { DESCRIPTION_MAX_CHARS, DESCRIPTION_MAX_INPUT, cleanDescriptionChars, sanitizeDescription, truncatePlainText } from './description';
 import { normalizeDimensions, normalizeWeight, type DimensionsInput, type FieldProblem, type WeightInput } from './physical';
+import type { ProductType } from './product-types';
 
 /**
  * Field rules of the product editor (docs/figma/41-creation-build-brief.md section 2) in ONE place, shared by create / patch / draft /
@@ -22,7 +23,7 @@ export const CUSTOM_ATTRIBUTES_MAX = 20;
 export const CUSTOM_ATTRIBUTE_NAME_MAX = 60;
 export const CUSTOM_ATTRIBUTE_VALUE_MAX = 250;
 
-export type ProductType = 'physical' | 'digital' | 'service';
+export type { ProductType };
 export interface CustomAttribute { name: string; value: string; confirmed: boolean }
 export interface CustomAttributeInput { name: string; value: string; confirmed?: boolean }
 

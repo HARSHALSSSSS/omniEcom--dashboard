@@ -87,8 +87,8 @@ export const RULE_TYPE_SPECS: Record<RuleType, RuleTypeSpec> = {
   },
   shipping: {
     title: 'Shipping rules',
-    description: 'Prefer a shipping method (marketplace / seller / third-party) for orders that are ready to ship. The first matching rule by priority decides the recommendation; a manual override stays possible where the method is available. orderValueMinor is in minor units; weightGrams in grams; sku / product hold every line of the order.',
-    fields: { marketplace: 'string', warehouse: 'string', destinationState: 'string', destinationCity: 'string', destinationPincode: 'string', orderValueMinor: 'number', sku: 'string[]', product: 'string[]', weightGrams: 'number' },
+    description: 'Prefer a shipping method (marketplace / seller / third-party) for orders that are ready to ship. The first matching rule by priority decides the recommendation; a manual override stays possible where the method is available. orderValueMinor is in minor units; weightGrams in grams; sku / product hold every line of the order; destinationZone is local (same city), regional (same postal region) or national, from the warehouse and destination pincodes.',
+    fields: { marketplace: 'string', warehouse: 'string', destinationState: 'string', destinationCity: 'string', destinationPincode: 'string', destinationZone: 'string', orderValueMinor: 'number', sku: 'string[]', product: 'string[]', weightGrams: 'number' },
     actions: {
       prefer_shipping_method: { description: 'Prefer this kind of shipping method (optionally one specific provider)', params: z.object({ kind: z.enum(['marketplace', 'seller', 'third_party']), providerId: uuid.optional() }) },
     },

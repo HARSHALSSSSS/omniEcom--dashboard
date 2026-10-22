@@ -121,7 +121,7 @@ const PanelSchema = z.object({
 }).meta({ id: 'InventoryVariantPanel' });
 
 const AdjustBody = z.object({
-  variantId: z.uuid(), warehouseId: z.uuid(), type: z.enum(ADJUSTMENT_TYPES).describe('damage: available -> damaged (direction increase restores); return: customer return; correction / manual / other: change on-hand'),
+  variantId: z.uuid(), warehouseId: z.uuid(), type: z.enum(ADJUSTMENT_TYPES).describe('damage: available -> damaged (direction increase restores); return: customer return; shrinkage: a loss, removes units (direction decrease only); correction / manual / other: change on-hand'),
   quantity: z.number().int().min(1).max(10_000_000).optional(), direction: z.enum(['increase', 'decrease']).optional().describe('required for correction / manual / other'),
   setOnHand: z.number().int().min(0).max(10_000_000).optional().describe('correction only: a physical count (the ledger records the difference)'),
   disposition: z.enum(['hold', 'restock']).optional().describe('return only: hold = returned bucket until inspected (default), restock = sellable immediately'),
@@ -313,8 +313,8 @@ export const inventoryDashboardRoutes: FastifyPluginAsync = async (app) => {
   r.post('/inventory/adjustments', {
     config: { access: { permission: 'inventory:write' } },
     schema: {
-      tags: TAGS, summary: 'Adjust stock by type (damage / return / correction / manual / other)',
-      description: 'One ledger movement in the audit trail. `damage` moves available -> damaged (direction `increase` restores); `return` records a customer return (held in the returned bucket unless `disposition: restock`); `correction` / `manual` / `other` change on-hand by `quantity` in `direction`, or `correction` can pass a physical count `setOnHand`. `other` requires a `note`.',
+      tags: TAGS, summary: 'Adjust stock by type (damage / return / correction / manual / shrinkage / other)',
+      description: 'One ledger movement in the audit trail. `damage` moves available -> damaged (direction `increase` restores); `return` records a customer return (held in the returned bucket unless `disposition: restock`); `shrinkage` writes off lost units as its own movement type (a loss: `quantity` units leave on-hand, `direction` may only be `decrease`); `correction` / `manual` / `other` change on-hand by `quantity` in `direction`, or `correction` can pass a physical count `setOnHand`. `other` requires a `note`.',
       body: AdjustBody,
       response: { 200: successEnvelope(z.object({ duplicate: z.boolean(), movement: z.object({ id: z.number().int() }), type: z.enum(ADJUSTMENT_TYPES), result: PreviewSchema.pick({ currentAvailable: true, adjustment: true, newAvailable: true, warnings: true }), stock: z.object({ warehouseId: z.string(), onHand: z.number().int(), reserved: z.number().int(), available: z.number().int(), incoming: z.number().int(), damaged: z.number().int(), returned: z.number().int(), quarantined: z.number().int() }) })) },
     },

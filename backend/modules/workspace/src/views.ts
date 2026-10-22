@@ -12,7 +12,7 @@ export const MAX_FILTER_BYTES = 8 * 1024;
  */
 export const VIEW_FILTER_KEYS: Record<(typeof schema.VIEW_SCREENS)[number], readonly string[]> = {
   products: ['q', 'status', 'categoryId', 'channel', 'inventory', 'productType', 'needsAttention'],
-  inventory: ['q', 'warehouse', 'channel', 'health', 'stockMin', 'stockMax', 'movement', 'signal'],
+  inventory: ['q', 'warehouse', 'channel', 'health', 'stockMin', 'stockMax', 'movement', 'signal', 'stockStatus', 'group'],
   orders: ['q', 'marketplace', 'status', 'slaState', 'payment', 'fulfillment', 'attention', 'date'],
   returns: ['tab', 'q', 'marketplace', 'signal', 'inspectionStatus', 'refundStatus', 'disposition'],
 };

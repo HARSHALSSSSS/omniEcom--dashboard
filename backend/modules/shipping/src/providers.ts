@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { AppError, newId } from '@oms/shared';
 import type { TrackingStatus } from './domain';
-import { blueDartProvider, delhiveryProvider } from './providers/index';
+import { blueDartProvider, customProvider, delhiveryProvider, isCustomCode } from './providers/index';
 
 /**
  * The shipping provider interface. Core code (shipments, manifests, tracking, NDR/RTO) only ever talks to this interface, so
@@ -32,6 +32,9 @@ export interface ProviderShipment {
 export interface TrackingUpdate { eventId: string; status: TrackingStatus; rawStatus?: string; location?: string | null; note?: string | null; occurredAt: Date }
 
 export interface ProviderCapabilities { labels: boolean; polling: boolean; cancel: boolean; reattempt: boolean; rto: boolean; manifest: boolean }
+/** `secret`: a credential. It is stored, accepted when set, and never returned by the API (a placeholder shows that it is set). */
+export interface ProviderConfigField { key: string; description: string; required: boolean; secret?: boolean }
+export const SECRET_MASK = '********';
 export interface ShippingProvider {
   code: string;
   name: string;
@@ -40,13 +43,17 @@ export interface ShippingProvider {
   /** simulators: only available when SANDBOX_COURIER_ENABLED (off by default in production) */
   simulator?: boolean;
   /** non-secret settings a vendor may set for this provider (documented in the catalogue) */
-  configFields: Array<{ key: string; description: string; required: boolean }>;
+  configFields: ProviderConfigField[];
   createShipment(req: ShipmentRequest, config: Record<string, unknown>): Promise<ProviderShipment>;
   cancelShipment(awb: string, config: Record<string, unknown>): Promise<void>;
   track(awb: string, config: Record<string, unknown>, since?: Date): Promise<TrackingUpdate[]>;
   requestReattempt?(awb: string, config: Record<string, unknown>, input: { nextAttemptAt?: Date | null; note?: string | null }): Promise<void>;
   initiateRto?(awb: string, config: Record<string, unknown>, input: { note?: string | null }): Promise<void>;
+  /** providers that can book a pickup with the carrier; every other provider's slots are recorded as manual bookings */
+  schedulePickup?(input: PickupRequest, config: Record<string, unknown>): Promise<{ reference: string }>;
+  cancelPickup?(reference: string, config: Record<string, unknown>): Promise<void>;
 }
+export interface PickupRequest { date: string; windowStart: string; windowEnd: string; parcelCount: number; warehouse: { code: string; name: string; address: Record<string, unknown> } }
 
 /** Staff type the AWB (or we generate an internal reference). No network, no polling: tracking is entered by hand or pushed in. */
 const manualProvider: ShippingProvider = {
@@ -75,7 +82,7 @@ const manualProvider: ShippingProvider = {
 const sandboxProvider: ShippingProvider = {
   code: 'sandbox', simulator: true, name: 'Sandbox courier (simulator)', description: 'A built-in simulated courier for development, demos and tests. Issues AWBs and labels; tracking events are simulated through the API.',
   capabilities: { labels: true, polling: false, cancel: true, reattempt: true, rto: true, manifest: true },
-  configFields: [{ key: 'fail', description: 'Test hook: "create" makes shipment creation fail, "track" makes tracking refreshes fail', required: false }],
+  configFields: [{ key: 'fail', description: 'Test hook: "create" makes shipment creation fail, "track" makes tracking refreshes fail, "pickup" makes pickup booking fail', required: false }],
   async createShipment(req, config) {
     if (config.fail === 'create') throw new AppError('UPSTREAM_ERROR', 'Sandbox courier rejected the shipment (simulated failure)');
     const awb = `SBX${createHash('sha1').update(`${req.shipmentNumber}:${newId()}`).digest('hex').slice(0, 10).toUpperCase()}`;
@@ -92,14 +99,35 @@ const sandboxProvider: ShippingProvider = {
   },
   async requestReattempt() { /* accepted */ },
   async initiateRto() { /* accepted */ },
+  async schedulePickup(input, config) {
+    if (config.fail === 'pickup') throw new AppError('UPSTREAM_ERROR', 'Sandbox courier rejected the pickup (simulated failure)');
+    return { reference: `SBXPK${createHash('sha1').update(`${input.warehouse.code}:${input.date}:${input.windowStart}:${newId()}`).digest('hex').slice(0, 8).toUpperCase()}` };
+  },
+  async cancelPickup() { /* accepted */ },
 };
 
-const REGISTRY = new Map<string, ShippingProvider>([[manualProvider.code, manualProvider], [sandboxProvider.code, sandboxProvider], [delhiveryProvider.code, delhiveryProvider], [blueDartProvider.code, blueDartProvider]]);
+const REGISTRY = new Map<string, ShippingProvider>([[manualProvider.code, manualProvider], [sandboxProvider.code, sandboxProvider], [delhiveryProvider.code, delhiveryProvider], [blueDartProvider.code, blueDartProvider], [customProvider.code, customProvider]]);
 export const listProviders = (): ShippingProvider[] => [...REGISTRY.values()];
+/** a vendor's own logistics provider has the code `custom:<slug>`; all of them are served by the one `custom` adapter */
 export function getProvider(code: string): ShippingProvider {
-  const p = REGISTRY.get(code);
+  const p = REGISTRY.get(isCustomCode(code) ? 'custom' : code);
   if (!p) throw new AppError('BAD_REQUEST', `Unknown shipping provider "${code}"`, { details: { available: [...REGISTRY.keys()] } });
   return p;
+}
+const secretKeys = (code: string): string[] => { try { return getProvider(code).configFields.filter((f) => f.secret).map((f) => f.key); } catch { return []; } };
+/** the settings the provider declares, with every credential replaced by a placeholder: nothing free-form and no secret can leave through the API */
+export function publicConfig(code: string, config: Record<string, unknown>): Record<string, unknown> {
+  let fields: ProviderConfigField[] = [];
+  try { fields = getProvider(code).configFields; } catch { /* unknown provider: expose nothing */ }
+  const secret = new Set(fields.filter((f) => f.secret).map((f) => f.key));
+  return Object.fromEntries(Object.entries(config).filter(([k]) => fields.some((f) => f.key === k)).map(([k, v]) => [k, secret.has(k) ? (typeof v === 'string' && v ? SECRET_MASK : '') : v]));
+}
+/** a changed configuration keeps a credential that was not sent again (or came back as the placeholder) */
+export function mergeConfig(code: string, before: Record<string, unknown>, next: Record<string, unknown>): Record<string, unknown> {
+  const out = { ...next };
+  for (const k of secretKeys(code)) if ((out[k] === undefined || out[k] === SECRET_MASK) && typeof before[k] === 'string' && before[k]) out[k] = before[k];
+  for (const k of secretKeys(code)) if (out[k] === SECRET_MASK || out[k] === '') delete out[k];
+  return out;
 }
 /** register an additional provider (a real courier adapter calls this at start-up) */
 export const registerProvider = (p: ShippingProvider): void => { REGISTRY.set(p.code, p); };

@@ -141,6 +141,34 @@
       "when": 1792171928735,
       "tag": "0019_backend_readiness_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1792171929735,
+      "tag": "0020_inventory_shrinkage",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1792171930735,
+      "tag": "0021_shipping_custom_provider",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1792171932235,
+      "tag": "0022_product_bundle_type",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1792171940735,
+      "tag": "0023_shipping_pickup_slots",
+      "breakpoints": true
     }
   ]
 }

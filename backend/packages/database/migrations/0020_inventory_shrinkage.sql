@@ -1,0 +1,3 @@
+-- Inventory: shrinkage is its own ledger movement type (a loss of sellable stock), so the audit trail, the movement filters and the reports can tell it apart from a manual adjustment.
+ALTER TABLE "inventory_movements" DROP CONSTRAINT IF EXISTS "inventory_movements_type_chk";--> statement-breakpoint
+ALTER TABLE "inventory_movements" ADD CONSTRAINT "inventory_movements_type_chk" CHECK (type IN ('receive', 'adjust', 'reserve', 'release', 'commit', 'return_in', 'return_restock', 'damage', 'undamage', 'incoming_add', 'incoming_receive', 'transfer_out', 'transfer_in', 'count', 'quarantine', 'quarantine_release', 'shrinkage'));

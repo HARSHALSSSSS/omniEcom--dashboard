@@ -268,9 +268,12 @@ describe('orders to ship: list, filters, SLA, bulk, export', () => {
     const dispatchable = (await orders(w, '?filter[status]=ready_to_dispatch')).items[0];
     expect(dispatchable).toMatchObject({ fulfillmentId: risk.f.id, action: { key: 'dispatch', method: 'POST' } });
     expect(dispatchable.action.href).toBe(`/api/v1/shipments/${dispatchable.shipmentId}/dispatch`);
-    // dispatched orders leave the list
+    // a dispatched order stays on the list for a day as "dispatched" (Track dispatch), but is no longer ready to ship
     expect((await c.post(`/api/v1/shipments/${dispatchable.shipmentId}/dispatch`, {}, w.admin)).status).toBe(200);
-    expect((await orders(w)).total).toBe(4);
+    const afterDispatch = await orders(w);
+    expect(afterDispatch.total).toBe(5);
+    expect(afterDispatch.items.find((i: any) => i.fulfillmentId === risk.f.id)).toMatchObject({ status: 'dispatched', action: { key: 'track_dispatch' } });
+    expect(afterDispatch.counts).toMatchObject({ dispatched: 1, readyToShip: 4 });
 
     // export: CSV with the same filters, formula-safe
     const exp = await c.get('/api/v1/shipping/orders/export?filter[sla]=breached', w.admin);
@@ -338,9 +341,10 @@ describe('overview, snapshots and "since last sync"', () => {
     await prefs(w, { defaultMethod: 'seller', overrides: {} });
     const empty = (await c.get('/api/v1/shipping/overview', w.admin)).body.data;
     expect(empty.statusLine).toEqual({ connectedChannels: 1, activeMethods: 3, ordersNeedAttention: 0 });
-    expect(empty.pulse.readyToShip).toMatchObject({ count: 0, sinceLastSync: null, needDecision: 0 }); // no snapshot yet: null deltas
+    expect(empty.pulse.readyToShip).toMatchObject({ count: 0, sinceLastSync: 0, needDecision: 0 }); // no snapshot yet: the earlier counts are rebuilt from the history, so there is a delta (0)
     expect(empty.decisionField).toEqual([]);
-    expect(empty.baseline).toBeNull();
+    expect(empty.comparison).toMatchObject({ source: 'history', windowHours: 24 });
+    expect(empty.baseline).toBe(empty.comparison.at);
 
     const o1 = await packedOrder(w, { dueInMinutes: 30 });  // undecided + SLA risk
     const o2 = await packedOrder(w, { dueInMinutes: 800 }); // selected seller
@@ -352,7 +356,12 @@ describe('overview, snapshots and "since last sync"', () => {
     expect((await c.post('/api/v1/shipping/orders/bulk', { action: 'generate_labels', fulfillmentIds: [o4.f.id] }, w.admin)).body.data.succeeded).toBe(1);
 
     const ov = (await c.get('/api/v1/shipping/overview', w.admin)).body.data;
-    expect(ov.pulse.readyToShip).toMatchObject({ count: 4, needDecision: 1, sinceLastSync: null });
+    // no snapshot: everything that is ready now arrived after the earlier moment (24 h ago), computed from the fulfillment / shipment history
+    expect(ov.pulse.readyToShip).toMatchObject({ count: 4, needDecision: 1, sinceLastSync: 4 });
+    expect(ov.pulse.shippingSelected.sinceLastSync).toBe(3);
+    expect(ov.pulse.labelReady.sinceLastSync).toBe(1);
+    expect(ov.pulse.dispatched.sinceLastSync).toBe(0);
+    expect(ov.comparison.source).toBe('history');
     expect(ov.pulse.shippingSelected).toMatchObject({ count: 3, note: 'preference_confirmed' });
     expect(ov.pulse.labelReady).toMatchObject({ count: 1, labelUnavailable: 0 });
     expect(ov.pulse.dispatched.count).toBe(0);
@@ -365,10 +374,14 @@ describe('overview, snapshots and "since last sync"', () => {
     expect(ov.attention.total).toBe(1);
     // comparison rows: one channel x (marketplace, seller, third party)
     const cmp = ov.availabilityComparison;
-    expect(cmp.filter((x: any) => x.channel.code === 'mock').map((x: any) => x.method).sort()).toEqual(['marketplace', 'seller', 'third_party']);
+    // ... plus a "label generation" row while no verified method can make labels
+    expect(cmp.filter((x: any) => x.channel.code === 'mock').map((x: any) => x.method).sort()).toEqual(['label_generation', 'marketplace', 'seller', 'third_party']);
+    expect(cmp.find((x: any) => x.method === 'label_generation')).toMatchObject({ provider: 'No verified provider', availability: 'requires_configuration', default: 'unavailable', override: 'unavailable' });
     expect(cmp.find((x: any) => x.method === 'seller')).toMatchObject({ availability: 'requires_configuration', default: 'preferred', override: 'verify_capability' });
     await c.post(`/api/v1/shipping/methods/${seller.id}/verify`, {}, w.admin);
-    expect((await c.get('/api/v1/shipping/overview', w.admin)).body.data.availabilityComparison.find((x: any) => x.method === 'seller')).toMatchObject({ availability: 'ready', override: 'where_supported' });
+    const verified = (await c.get('/api/v1/shipping/overview', w.admin)).body.data.availabilityComparison;
+    expect(verified.find((x: any) => x.method === 'seller')).toMatchObject({ availability: 'ready', override: 'where_supported' });
+    expect(verified.some((x: any) => x.method === 'label_generation')).toBe(false); // a verified method can make labels now
     expect((await c.get('/api/v1/shipping/overview?asOf=nonsense', w.admin)).status).toBe(400);
     expect((await c.get('/api/v1/shipping/overview?asOf=2026-10-05', w.admin)).status).toBe(200);
 
@@ -385,10 +398,14 @@ describe('overview, snapshots and "since last sync"', () => {
     const rows = await snaps();
     expect(rows).toHaveLength(1); // the second run saw a snapshot younger than 50 minutes
     expect(rows[0]!.counts).toMatchObject({ readyToShip: 4, needDecision: 1, shippingSelected: 3, labelReady: 1, labelUnavailable: 0 });
-    // a snapshot younger than 30 minutes is not a baseline
-    expect((await c.get('/api/v1/shipping/overview', w.admin)).body.data.pulse.readyToShip.sinceLastSync).toBeNull();
+    // a snapshot younger than 30 minutes is not a baseline: the pulse is compared with the history 24 h back instead
+    const young = (await c.get('/api/v1/shipping/overview', w.admin)).body.data;
+    expect(young.pulse.readyToShip.sinceLastSync).toBe(4);
+    expect(young.comparison.source).toBe('history');
     await sqlAdmin(`UPDATE shipping_snapshots SET taken_at = now() - interval '40 minutes' WHERE vendor_id = '${w.admin.vendorId}'`);
-    expect((await c.get('/api/v1/shipping/overview', w.admin)).body.data.pulse.readyToShip.sinceLastSync).toBe(0);
+    const old = (await c.get('/api/v1/shipping/overview', w.admin)).body.data;
+    expect(old.pulse.readyToShip.sinceLastSync).toBe(0);
+    expect(old.comparison).toMatchObject({ source: 'snapshot', windowHours: 1 });
     // more orders are ready: the delta shows it
     const o5 = await packedOrder(w);
     await selectIt(w, o5.f.id, { kind: 'seller', source: 'recommended' });
@@ -484,7 +501,7 @@ describe('tracking: derived statuses, failures, bulk sync', () => {
     expect((await c.get('/api/v1/shipping/tracking?filter[status]=bogus', w.admin)).status).toBe(400);
   });
 
-  it('Sync Shipping verifies the methods and refreshes tracking, returning counts (202)', async () => {
+  it('Sync Shipping is a background job: 202 with the job, progress while it runs, the counts when it is over', async () => {
     const w = await buildWorld(t, c, { warehouses: 1, stock: [10] });
     await addMethod(w, { kind: 'seller' });
     const o = await packedOrder(w);
@@ -493,11 +510,45 @@ describe('tracking: derived statuses, failures, bulk sync', () => {
     await c.post(`/api/v1/shipments/${shipmentId}/dispatch`, {}, w.admin);
     const sync = await c.post('/api/v1/shipping/sync', {}, w.admin);
     expect(sync.status, JSON.stringify(sync.body)).toBe(202);
-    expect(sync.body.data).toMatchObject({ methods: { checked: 2, verified: 2, notVerified: 0 }, tracking: { processed: 1, failed: 0 }, requireAttention: 0 });
-    expect(sync.body.data.processed).toBeGreaterThanOrEqual(1);
+    const job = sync.body.data;
+    expect(job).toMatchObject({ type: 'tracking', status: 'queued', marketplaceAccountId: null, progress: { total: 0, done: 0, failed: 0 }, payload: { kind: 'shipping_sync', orders: 1 } });
+    // a second click while it waits hands back the same job
+    expect((await c.post('/api/v1/shipping/sync', {}, w.admin)).body.data.id).toBe(job.id);
+    expect((await c.get('/api/v1/shipping/sync/latest', w.admin)).body.data.id).toBe(job.id);
+    // the worker runs it: 2 active methods to verify + 1 open shipment to refresh
+    await t.runJobs();
+    const done = (await c.get(`/api/v1/shipping/sync/${job.id}`, w.admin)).body.data;
+    expect(done).toMatchObject({ status: 'succeeded', progress: { total: 3, done: 3, failed: 0 }, stats: { methodsChecked: 2, methodsVerified: 2, methodsNotVerified: 0, trackingProcessed: 1, trackingFailed: 0, requireAttention: 0 }, error: null });
+    expect(done.stats.processed).toBeGreaterThanOrEqual(1);
+    expect(done.finishedAt).toBeTruthy();
+    expect((await c.get(`/api/v1/sync/jobs/${job.id}`, w.admin)).body.data).toMatchObject({ id: job.id, status: 'succeeded' }); // the generic job endpoint speaks about it too
     const methods = (await c.get('/api/v1/shipping/methods', w.admin)).body.data.items as any[];
     expect(methods.every((m) => m.state === 'configured')).toBe(true);
-    expect(sync.body.data.completedAt).toBeTruthy();
+    // a finished job does not block the next one
+    expect((await c.post('/api/v1/shipping/sync', {}, w.admin)).body.data.id).not.toBe(job.id);
+  });
+
+  it('a sync reports the shipments whose tracking failed and ends partially_failed; other jobs are not shipping syncs', async () => {
+    const w = await buildWorld(t, c, { warehouses: 1, stock: [10] });
+    const tp = ((await c.get('/api/v1/shipping/methods', w.admin)).body.data.items as any[])[0];
+    const o = await packedOrder(w);
+    await selectIt(w, o.f.id, { kind: 'third_party', source: 'manual_override' });
+    const shipmentId = (await c.post('/api/v1/shipping/orders/bulk', { action: 'generate_labels', fulfillmentIds: [o.f.id] }, w.admin)).body.data.results[0].shipmentId;
+    await c.post(`/api/v1/shipments/${shipmentId}/dispatch`, {}, w.admin);
+    await c.patch(`/api/v1/shipping/providers/${tp.id}`, { config: { fail: 'track' } }, w.admin);
+    const job = (await c.post('/api/v1/shipping/sync', {}, w.admin)).body.data;
+    await t.runJobs();
+    const done = (await c.get(`/api/v1/shipping/sync/${job.id}`, w.admin)).body.data;
+    expect(done.status).toBe('partially_failed');
+    expect(done.progress).toMatchObject({ total: 2, done: 2, failed: 1 });
+    expect(done.stats).toMatchObject({ trackingFailed: 1, requireAttention: 1 });
+    expect(done.failureDetails).toEqual([expect.objectContaining({ ref: shipmentId })]);
+    // another vendor's / another kind of job is not reachable here
+    const other = ((await c.get('/api/v1/sync/jobs', w.admin)).body.data as any[]).find((j: any) => j.id !== job.id);
+    if (other) expect((await c.get(`/api/v1/shipping/sync/${other.id}`, w.admin)).status).toBe(404);
+    const rival = await c.registerVendor({ businessName: 'Rival Sync Ltd' });
+    expect((await c.get(`/api/v1/shipping/sync/${job.id}`, rival)).status).toBe(404);
+    expect((await c.get('/api/v1/shipping/sync/latest', rival)).body.data).toBeNull();
   });
 });
 

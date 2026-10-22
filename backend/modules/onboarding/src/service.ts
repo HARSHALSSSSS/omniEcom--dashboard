@@ -338,7 +338,7 @@ export async function getFulfillment(tx: Tx, c: Container, vendorId: string) {
   const F = schema.fulfillmentPreferences;
   const [pref] = await tx.select().from(F).where(eq(F.vendorId, vendorId));
   const accounts = await tx.select().from(A).where(and(eq(A.vendorId, vendorId), eq(A.status, 'active')));
-  const providers = await tx.select().from(schema.vendorShippingProviders).where(and(eq(schema.vendorShippingProviders.vendorId, vendorId), eq(schema.vendorShippingProviders.status, 'active'), eq(schema.vendorShippingProviders.kind, 'third_party')));
+  const providers = await tx.select().from(schema.vendorShippingProviders).where(and(eq(schema.vendorShippingProviders.vendorId, vendorId), eq(schema.vendorShippingProviders.status, 'active'), inArray(schema.vendorShippingProviders.kind, ['third_party', 'custom'])));
   const marketplaceAvailable = accounts.length > 0;
   const thirdPartyAvailable = providers.length > 0;
   const available: Record<FulfillmentMethod, boolean> = { marketplace: marketplaceAvailable, seller: true, third_party: thirdPartyAvailable };

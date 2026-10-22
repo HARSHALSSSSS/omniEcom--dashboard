@@ -70,6 +70,8 @@ async function move(tx: Tx, ctx: OpCtx, r: ReturnRow, to: ReturnStatus, patch: P
 export interface CreateReturnInput {
   orderId: string; source: (typeof schema.RETURN_SOURCES)[number]; reasonCode: string; reasonText?: string | null; marketplaceReturnId?: string | null; warehouseId?: string | null;
   items: Array<{ orderItemId: string; quantity: number }>; pickupRequired?: boolean; notes?: string | null; shipmentId?: string | null; autoApprove?: boolean;
+  /** the marketplace itself reported the return (sync): it knows the customer has the goods, so only a cancelled order is refused */
+  marketplaceAsserted?: boolean;
 }
 
 /** units of an order line that are already part of a live return */
@@ -88,7 +90,8 @@ export async function createReturn(tx: Tx, ctx: OpCtx, input: CreateReturnInput)
     if (dup) return dup;
   }
   const order = await getOrderRow(tx, ctx.vendorId, input.orderId, true);
-  if (!(['dispatched', 'in_transit', 'delivered', 'returned'] as string[]).includes(order.status)) throw new AppError('INVALID_STATE', `A ${order.status} order has not reached the customer; cancel it instead of returning it`, { details: { status: order.status } });
+  const reachedCustomer = input.marketplaceAsserted ? order.status !== 'cancelled' : (['dispatched', 'in_transit', 'delivered', 'returned'] as string[]).includes(order.status);
+  if (!reachedCustomer) throw new AppError('INVALID_STATE', `A ${order.status} order has not reached the customer; cancel it instead of returning it`, { details: { status: order.status } });
   if (input.warehouseId) await getWarehouseRow(tx, ctx.vendorId, input.warehouseId);
   const orderItems = await tx.select().from(schema.orderItems).where(and(eq(schema.orderItems.vendorId, ctx.vendorId), eq(schema.orderItems.orderId, input.orderId)));
   const lines: Array<{ item: typeof orderItems[number]; quantity: number }> = [];

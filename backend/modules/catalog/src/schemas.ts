@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { HsnSchema, IsoDate, PaginationQuerySchema, SearchQuerySchema, SkuSchema, sortQuery } from '@oms/contracts';
+import { PRODUCT_TYPES } from './product-types';
 
 export const CodeSchema = z.string().trim().min(1).max(64).regex(/^[A-Za-z0-9][A-Za-z0-9._\-/]*$/, 'letters, digits and . _ - / only');
 export const GstRateSchema = z.number().int().min(0).max(4000).describe('GST rate in basis points (1800 = 18%)');
@@ -91,7 +92,7 @@ export const ProductBase = z.object({
   hsnCode: HsnSchema.nullish().describe('HSN (goods) / SAC (services) code: digits only, 4, 6 or 8 digits'),
   gstRateBps: ProductGstRateSchema.nullish(),
   tags: z.array(z.string().trim().min(1).max(40)).max(50),
-  productType: z.enum(['physical', 'digital', 'service']).optional().describe('Stored in products.attributes.productType (default physical)'),
+  productType: z.enum(PRODUCT_TYPES).optional().describe('Stored in products.attributes.productType (default physical). `bundle` = "Bundle / Kit", `service` = "Service / Warranty"'),
   material: z.string().trim().min(1).max(80).nullish(),
   standardCategory: z.string().trim().min(1).max(120).nullish().describe('The seller\'s "standard product category" (free text with suggestions), separate from the category tree'),
   dimensions: DimensionsInputSchema.nullish(),
@@ -117,7 +118,7 @@ export const ProductSchema = z
     descriptionHtml: z.string().nullable(), dimensions: DisplayDimensionsSchema.nullable(), dimensionsMm: DimensionsSchema.nullable(),
     weight: DisplayWeightSchema.nullable(), weightGrams: z.number().int().nullable(), material: z.string().nullable(), standardCategory: z.string().nullable(),
     customAttributes: z.array(CustomAttributeSchema),
-    productType: z.enum(['physical', 'digital', 'service']), status: z.enum(['draft', 'active', 'archived']),
+    productType: z.enum(PRODUCT_TYPES), status: z.enum(['draft', 'active', 'archived']),
     productCodeLocked: z.boolean().describe('true once the product is no longer a draft: the master code cannot change (409 code_locked)'),
     variantCount: z.number().int(), version: z.number().int(), createdAt: IsoDate, updatedAt: IsoDate,
   })

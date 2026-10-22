@@ -13,6 +13,7 @@ import { orderItems, orders, warehouses } from './operations';
 export const MOVEMENT_TYPES = [
   'receive', 'adjust', 'reserve', 'release', 'commit', 'return_in', 'return_restock', 'damage', 'undamage',
   'incoming_add', 'incoming_receive', 'transfer_out', 'transfer_in', 'count', 'quarantine', 'quarantine_release',
+  'shrinkage',
 ] as const;
 export const RESERVATION_STATUSES = ['active', 'committed', 'released'] as const;
 export const TRANSFER_STATUSES = ['draft', 'in_transit', 'received', 'cancelled'] as const;

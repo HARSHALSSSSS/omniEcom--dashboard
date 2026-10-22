@@ -1,10 +1,10 @@
 import { and, eq, isNull, schema, type Tx } from '@oms/database';
 import { AppError, Errors } from '@oms/shared';
 import {
-  buildEditorProduct, codeLockedError, duplicateCodeError, findCodeConflict, isCodeLocked, validationError, writeProductFields, versionConflict,
-  type ChannelNameFn, type Effects, type FieldIssue, type ProductRow, type RawFields,
+  buildEditorProduct, codeLockedError, duplicateCodeError, findCodeConflict, isCodeLocked, planCategoryAttributes, validationError, writeCategoryAttributeValues, writeProductFields, versionConflict,
+  type ChannelNameFn, type Effects, type FieldIssue, type ProductRow,
 } from '@oms/mod-catalog';
-import { computeChange, type ChangeSet } from '../domain/diff';
+import { computeChange, withAttributePlan, withIssues, type ChangeSet, type EditRaw } from '../domain/diff';
 import { applyProductChange, type ListingOpts, type ListingPlan, type ListingPlanState } from '../infrastructure/listings-port';
 import { buildEditor, buildReadiness } from './editor';
 import { computeImpact, type ImpactDto } from './impact';
@@ -20,7 +20,18 @@ const P = schema.products;
 const C = schema.categories;
 const V = schema.productVariants;
 
-export interface SaveInput { version: number; changes: RawFields; confirm?: boolean }
+export interface SaveInput { version: number; changes: EditRaw; confirm?: boolean }
+
+/**
+ * The change of an edit as the database sees it: the pure diff, plus the category attribute edits (against the category the product will have
+ * after the edit) and the problems that need the database (see `contextIssues`).
+ */
+export async function resolveChange(tx: Tx, vendorId: string, before: ProductRow, raw: EditRaw, first: ChangeSet): Promise<ChangeSet> {
+  const toCategory = first.fields.categoryId !== undefined ? first.fields.categoryId : before.categoryId;
+  const plan = await planCategoryAttributes(tx, vendorId, before.id, toCategory ?? null, raw.categoryAttributes);
+  const withAttributes = withAttributePlan(first, plan);
+  return withIssues(withAttributes, await contextIssues(tx, vendorId, before, withAttributes));
+}
 
 /** problems that need the database: the category must exist; a draft that changes its code must not take another product's code */
 export async function contextIssues(tx: Tx, vendorId: string, before: ProductRow, change: ChangeSet): Promise<FieldIssue[]> {
@@ -75,12 +86,13 @@ export async function saveEdit(tx: Tx, vendorId: string, productId: string, inpu
     throw new AppError('VERSION_CONFLICT', err.message, { details: { currentVersion: before.version, current, updatedAt: before.updatedAt.toISOString(), updatedBy: current.meta.updatedBy } });
   }
 
-  const change = computeChange(before, input.changes);
-  if (change.codeLocked) throw codeLockedError(before.productCode, input.changes.productCode ?? '');
-  const issues = [...change.issues, ...(await contextIssues(tx, vendorId, before, change))];
+  const first = computeChange(before, input.changes);
+  if (first.codeLocked) throw codeLockedError(before.productCode, input.changes.productCode ?? '');
+  const change = await resolveChange(tx, vendorId, before, input.changes, first);
+  const issues = change.issues;
   if (issues.length) {
     const dup = issues.find((i) => i.code === 'duplicate_product_code');
-    if (dup && issues.length === 1 && change.codeChange) throw duplicateCodeError(change.codeChange.to, await findCodeConflict(tx, vendorId, change.codeChange.to, before.id));
+    if (dup && issues.length === 1 && first.codeChange) throw duplicateCodeError(first.codeChange.to, await findCodeConflict(tx, vendorId, first.codeChange.to, before.id));
     throw validationError(issues);
   }
   if (change.items.length === 0) return { outcome: { saved: false, noChanges: true, version: before.version }, accountsToSync: [] };
@@ -96,6 +108,7 @@ export async function saveEdit(tx: Tx, vendorId: string, productId: string, inpu
   }
 
   const { after } = await writeProductFields(tx, vendorId, before, change.fields, { version: input.version }, fx, { strict: true, auditAction: null });
+  if (change.attributeValues.length) await writeCategoryAttributeValues(tx, vendorId, productId, change.attributeValues);
 
   const plan: ListingPlan = change.contentFields.length
     ? await applyProductChange(tx, vendorId, productId, { fields: change.contentFields, ...(change.category ? { category: change.category } : {}) }, opts)

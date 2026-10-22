@@ -1316,6 +1316,9 @@ importers:
       '@oms/mod-orders':
         specifier: workspace:*
         version: link:../orders
+      '@oms/mod-sync':
+        specifier: workspace:*
+        version: link:../sync
       '@oms/mod-warehouses':
         specifier: workspace:*
         version: link:../warehouses
@@ -1349,6 +1352,9 @@ importers:
       '@oms/mod-rules':
         specifier: workspace:*
         version: link:../rules
+      '@oms/mod-sync':
+        specifier: workspace:*
+        version: link:../sync
       '@oms/mod-warehouses':
         specifier: workspace:*
         version: link:../warehouses

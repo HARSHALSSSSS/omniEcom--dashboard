@@ -151,7 +151,7 @@ describe('shipping domain + providers', () => {
     expect(fulfillmentStatusFor('label_ready')).toBeNull();
   });
   it('providers share ONE interface; the catalogue is open (nothing hardcoded)', async () => {
-    expect(listProviders().map((p) => p.code).sort()).toEqual(['bluedart', 'delhivery', 'manual', 'sandbox']);
+    expect(listProviders().map((p) => p.code).sort()).toEqual(['bluedart', 'custom', 'delhivery', 'manual', 'sandbox']);
     const req = { shipmentNumber: 'SHP-1', orderNumber: 'ORD-1', warehouse: { code: 'W', name: 'W', address: {} }, destination: { name: 'Asha', pincode: '110001' }, packages: [{ barcode: 'PKG-1', weightGrams: 900, lengthMm: 1, widthMm: 1, heightMm: 1 }], codAmountMinor: 12_300, currency: 'INR' };
     for (const code of ['manual', 'sandbox']) {
       const p = getProvider(code);

@@ -97,7 +97,7 @@ export const inventoryReadRoutes: FastifyPluginAsync = async (app) => {
       body: QuickAdjustBody,
       response: { 200: successEnvelope(z.object({
         duplicate: z.boolean(), movement: z.object({ id: Count }), variant: z.object({ id: z.string(), sku: z.string(), title: z.string() }), warehouse: z.object({ id: z.string(), name: z.string() }),
-        type: z.enum(['correction', 'damage', 'manual']), result: z.object({ currentAvailable: Count, adjustment: Count, newAvailable: Count }), stock: StockRowSchema, totals: Totals,
+        type: z.enum(['correction', 'damage', 'manual', 'shrinkage']), result: z.object({ currentAvailable: Count, adjustment: Count, newAvailable: Count }), stock: StockRowSchema, totals: Totals,
       })) },
     },
   }, async (req) => {
@@ -110,7 +110,7 @@ export const inventoryReadRoutes: FastifyPluginAsync = async (app) => {
       const { row, totals } = await stockRow(tx, vendorId, plan.variant.id, plan.warehouseId);
       const [w] = await tx.select({ name: schema.warehouses.name }).from(schema.warehouses).where(eq(schema.warehouses.id, plan.warehouseId));
       return {
-        duplicate: mv.duplicate, movement: { id: mv.movementId }, variant: plan.variant, warehouse: { id: plan.warehouseId, name: w?.name ?? '' }, type: plan.adjustment.type as 'correction' | 'damage' | 'manual',
+        duplicate: mv.duplicate, movement: { id: mv.movementId }, variant: plan.variant, warehouse: { id: plan.warehouseId, name: w?.name ?? '' }, type: plan.adjustment.type as 'correction' | 'damage' | 'manual' | 'shrinkage',
         result: { currentAvailable: mv.availableBefore, adjustment: mv.availableAfter - mv.availableBefore, newAvailable: mv.availableAfter },
         stock: { warehouseId: plan.warehouseId, onHand: row!.onHand, reserved: row!.reserved, available: row!.available, incoming: row!.incoming, damaged: row!.damaged, returned: row!.returned, quarantined: row!.quarantined, reorderLevel: row!.reorderLevel, version: row!.version },
         totals,

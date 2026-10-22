@@ -6,6 +6,7 @@ import { IN_FLIGHT, PRE_DISPATCH } from './domain';
 import { getProvider } from './providers';
 import { cancelShipment, refreshTracking } from './service';
 import { snapshotJob } from './workspace';
+import { shippingSyncJobs } from './sync-job';
 
 export { snapshotJob, takeSnapshot, JOB_SNAPSHOT } from './workspace';
 
@@ -53,7 +54,7 @@ const jobs: JobHandler[] = [{
   },
 }];
 
-jobs.push(snapshotJob);
+jobs.push(snapshotJob, ...shippingSyncJobs);
 
 /**
  * Shipping: provider-neutral. Vendors enable providers (manual, sandbox courier, real couriers later); shipments, labels,

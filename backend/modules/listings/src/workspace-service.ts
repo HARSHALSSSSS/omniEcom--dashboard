@@ -64,7 +64,7 @@ export async function table(ctx: Ctx, tx: Tx, f: TableFilter, page: { page: numb
   return { items: await rowsWithTable(ctx, tx, r.ids), total: r.total, counts: r.counts };
 }
 
-export async function notListed(ctx: Ctx, tx: Tx, f: OverviewFilter & { q?: string }, page: { page: number; pageSize: number }) {
+export async function notListed(ctx: Ctx, tx: Tx, f: OverviewFilter & { q?: string; categoryId?: string }, page: { page: number; pageSize: number }) {
   const r = await listNotListed(tx, ctx.vendorId, listableMarketplaces(ctx), f, { limit: page.pageSize, offset: (page.page - 1) * page.pageSize });
   return {
     total: r.total,

@@ -586,7 +586,7 @@ describe('form options', () => {
     const r = await c.get('/api/v1/products/form-options', viewer);
     expect(r.status, J(r)).toBe(200);
     const d = r.body.data;
-    expect(d.productTypes).toEqual(['physical', 'digital', 'service']);
+    expect(d.productTypes).toEqual(['physical', 'digital', 'service', 'bundle']);
     expect(d.gstSlabs).toEqual([{ bps: 0, label: '0%' }, { bps: 500, label: '5%' }, { bps: 1200, label: '12%' }, { bps: 1800, label: '18%' }, { bps: 2800, label: '28%' }]);
     expect(d.countries[0]).toEqual({ code: 'IN', name: 'India' });
     expect(d.countries.length).toBeGreaterThanOrEqual(249);

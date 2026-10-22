@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { IsoDate } from '@oms/contracts';
-import { ProductEditorSchema } from '@oms/mod-catalog';
+import { PRODUCT_TYPES, ProductEditorSchema } from '@oms/mod-catalog';
 
 // ---------------------------------------------------------------- inputs
 /**
@@ -12,7 +12,7 @@ export const EditChangesSchema = z
   .object({
     productCode: z.string().max(200).optional().describe('Master SKU. Locked once the product is not a draft: a different value is a 409 `code_locked`'),
     title: z.string().max(1000).optional(),
-    productType: z.enum(['physical', 'digital', 'service']).optional().describe('Changing it needs confirmation when listings are live'),
+    productType: z.enum(PRODUCT_TYPES).optional().describe('physical, digital, service ("Service / Warranty") or bundle ("Bundle / Kit"). Changing it needs confirmation when listings are live'),
     categoryId: z.uuid().nullish().describe('Changing it needs confirmation when listings are live; an active product cannot clear it'),
     brand: z.string().max(500).nullish(),
     description: z.string().max(40_000).nullish().describe('Plain or simple HTML; compared as plain text'),
@@ -27,6 +27,11 @@ export const EditChangesSchema = z
     dimensions: z.object({ length: z.number(), width: z.number(), height: z.number(), unit: z.enum(['cm', 'mm', 'in']).optional() }).nullish(),
     weight: z.object({ value: z.number(), unit: z.enum(['kg', 'g', 'lb']).optional() }).nullish(),
     customAttributes: z.array(z.object({ name: z.string().max(200), value: z.string().max(1000), confirmed: z.boolean().optional() })).max(50).nullish(),
+    categoryAttributes: z
+      .array(z.object({ attributeId: z.uuid(), value: z.union([z.string().max(2000), z.number(), z.boolean(), z.null()]).describe('null or an empty string clears the value') }))
+      .max(100)
+      .optional()
+      .describe('Values of the category-specific attributes shown under "Additional attributes" (`product.categoryAttributes`). Only attributes of the product\'s category (after this edit) can be set; typed like the attribute (number, yes/no, date YYYY-MM-DD, one of the enum values).'),
   })
   .meta({ id: 'ProductEditChanges', description: 'The proposed values of the edit page. Values equal to the stored product are ignored.' });
 
@@ -84,7 +89,8 @@ export const EditorSchema = z
     nav: z.array(z.object({ key: z.string(), label: z.string(), count: z.number().int().optional() })),
     attributes: z.object({
       configured: z.number().int(), customConfirmed: z.number().int(),
-      slots: z.array(z.object({ key: z.enum(['material', 'dimensions', 'weight', 'countryOfOrigin', 'hsnCode', 'taxInformation']), label: z.string(), supplied: z.boolean() })),
+      slots: z.array(z.object({ key: z.enum(['material', 'dimensions', 'weight', 'countryOfOrigin', 'hsnCode', 'taxInformation']), label: z.string(), supplied: z.boolean() })).describe('The six core facts with Supplied / Not supplied'),
+      categorySlots: z.array(z.object({ attributeId: z.string(), label: z.string(), supplied: z.boolean(), isRequired: z.boolean() })).describe('The category-specific attributes with Supplied / Not supplied'),
       note: z.string().nullable(),
     }),
     media: z.object({

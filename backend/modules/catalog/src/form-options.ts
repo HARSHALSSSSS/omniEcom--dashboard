@@ -3,10 +3,11 @@ import { COUNTRIES } from './countries';
 import { DESCRIPTION_MAX_CHARS } from './description';
 import { BRAND_MAX, CODE_MAX, CUSTOM_ATTRIBUTES_MAX, CUSTOM_ATTRIBUTE_NAME_MAX, CUSTOM_ATTRIBUTE_VALUE_MAX, HSN_LENGTHS, MATERIAL_MAX, STANDARD_CATEGORY_MAX, TITLE_MAX, TITLE_MIN_STEP } from './fields';
 import { DIMENSION_UNITS, MAX_DIMENSION_MM, MAX_WEIGHT_GRAMS, WEIGHT_UNITS } from './physical';
+import { PRODUCT_TYPES } from './product-types';
 
 const P = schema.products;
 
-export const PRODUCT_TYPES = ['physical', 'digital', 'service'] as const;
+export { PRODUCT_TYPES };
 /** India GST slabs (basis points); any value 0-28 % is accepted, these are the ones offered in the select */
 export const GST_SLABS = [0, 500, 1200, 1800, 2800].map((bps) => ({ bps, label: `${bps / 100}%` }));
 

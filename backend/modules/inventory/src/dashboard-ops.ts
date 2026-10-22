@@ -1,7 +1,7 @@
 import { and, asc, eq, inArray, schema, sql, type SQL, type Tx } from '@oms/database';
 import { AppError, Errors } from '@oms/shared';
 import type { MovementResult } from './ledger';
-import { adjustStock, availabilityFor, createTransfer, markDamaged, receiveReturn } from './service';
+import { adjustStock, availabilityFor, createTransfer, markDamaged, receiveReturn, writeOffShrinkage } from './service';
 import {
   channelRef, ledgerAll, ledgerForVariants, marketplaceName, type LedgerFilters, type LedgerItem, type Thresholds, type VendorCtx,
 } from './dashboard-query';
@@ -17,9 +17,9 @@ const I = schema.inventory;
 const V = schema.productVariants;
 
 // ================================================================================================
-// adjustments (types: damage | return | correction | manual | other)
+// adjustments (types: damage | return | correction | manual | shrinkage | other)
 // ================================================================================================
-export const ADJUSTMENT_TYPES = ['damage', 'return', 'correction', 'manual', 'other'] as const;
+export const ADJUSTMENT_TYPES = ['damage', 'return', 'correction', 'manual', 'shrinkage', 'other'] as const;
 export type AdjustmentType = (typeof ADJUSTMENT_TYPES)[number];
 
 export interface AdjustmentInput {
@@ -38,6 +38,7 @@ export function validateAdjustment(a: Pick<AdjustmentInput, 'type' | 'quantity' 
     return;
   }
   if (a.quantity === undefined) bad('quantity is required', 'quantity_required');
+  if (a.type === 'shrinkage' && a.direction === 'increase') bad('Shrinkage is a loss: it can only remove units', 'shrinkage_requires_decrease');
   if ((a.type === 'correction' || a.type === 'manual' || a.type === 'other') && !a.direction) bad('direction (increase or decrease) is required for this adjustment type', 'direction_required');
 }
 
@@ -52,6 +53,7 @@ export async function applyAdjustment(tx: Tx, vendorId: string, actor: Actor, a:
   switch (a.type) {
     case 'damage': return markDamaged(tx, { ...base, quantity: q, restore: a.direction === 'increase' });
     case 'return': return receiveReturn(tx, { ...base, quantity: q, disposition: a.disposition ?? 'hold' });
+    case 'shrinkage': return writeOffShrinkage(tx, { ...base, quantity: q });
     default: return adjustStock(tx, { ...base, delta: a.direction === 'decrease' ? -q : q });
   }
 }
@@ -83,6 +85,7 @@ export async function previewAdjustment(tx: Tx, vendorId: string, actor: Actor, 
   else if (s.reorderLevel !== null && result!.availableAfter <= s.reorderLevel) warnings.push({ code: 'low_stock', message: `Available stock will be at or below the reorder level (${s.reorderLevel}).` });
   if (a.type === 'return' && (a.disposition ?? 'hold') === 'hold') warnings.push({ code: 'held_for_inspection', message: 'Returned units are held for inspection and are not sellable yet.' });
   if (a.type === 'damage' && a.direction !== 'increase') warnings.push({ code: 'moves_to_damaged', message: 'Units move to Damaged stock and are no longer sellable.' });
+  if (a.type === 'shrinkage') warnings.push({ code: 'recorded_as_loss', message: 'The units are written off as shrinkage (a loss) and leave the books.' });
   return {
     currentAvailable: result!.availableBefore, adjustment: result!.availableAfter - result!.availableBefore, newAvailable: result!.availableAfter, warnings,
     buckets: { onHand: s.quantityOnHand, reserved: s.quantityReserved, incoming: s.quantityIncoming, returned: s.quantityReturned, damaged: s.quantityDamaged, quarantined: s.quantityQuarantined },

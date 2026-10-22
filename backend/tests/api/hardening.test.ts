@@ -50,7 +50,8 @@ describe('production configuration', () => {
     const prod = await buildTestApp({ database: true, config: { ...PROD_SAFE_ENV, MOCK_MARKETPLACE_ENABLED: 'false', SWAGGER_ENABLED: 'false' } });
     const cc = clientFor(prod);
     const admin = await cc.registerVendor();
-    expect((await cc.get('/api/v1/shipping/providers/catalog', admin)).body.data.map((p: any) => p.code)).toEqual(['manual']);
+    // manual and the seller's own configured provider are real in production; the sandbox courier is not
+    expect((await cc.get('/api/v1/shipping/providers/catalog', admin)).body.data.map((p: any) => p.code)).toEqual(['manual', 'custom']);
     const r = await cc.post('/api/v1/shipping/providers', { providerCode: 'sandbox' }, admin);
     expect(r.status).toBe(400);
     expect(r.body.error.message).toContain('not available');

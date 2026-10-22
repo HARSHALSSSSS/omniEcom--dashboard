@@ -16,6 +16,8 @@ export { getCreationDto, buildEditorProduct, type CreationDto, type EditorProduc
 export { writeProductFields, validationError, versionConflict, findCodeConflict, duplicateCodeError, isCodeLocked, codeLockedError } from './service';
 export { normalizeFields, collapseSpaces, nameKey, isPlaceholderCode, TITLE_MIN_STEP, type CustomAttribute, type NormalizedFields, type RawFields, type FieldIssue } from './fields';
 export { ProductEditorSchema } from './creation-schemas';
+export { PRODUCT_TYPES, productTypeOfAttributes, type ProductType } from './product-types';
+export { categoryAttributeFields, planCategoryAttributes, writeCategoryAttributeValues, type CategoryAttributeField, type CategoryAttributeInput, type CategoryAttributeChange } from './category-attributes';
 export { productContent, listingStatusOf, rollupStatus, type ChannelNameFn, type ChannelStatus } from './dashboard';
 export { evaluateCreationReadiness } from './creation-readiness';
 export { sanitizeDescription, toPlainText, DESCRIPTION_MAX_CHARS } from './description';

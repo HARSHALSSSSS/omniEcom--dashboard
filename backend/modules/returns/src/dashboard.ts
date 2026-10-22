@@ -155,9 +155,27 @@ const customerOf = (buyer: Record<string, unknown>, full: boolean) => {
   return { name, email: email ? (full ? email : maskEmail(email)) : null };
 };
 
+/** what the latest saved checklist says about the goods: damage beats a wrong product beats missing parts (null before any inspection) */
+export type PhysicalCondition = 'usable' | 'damaged' | 'wrong_product' | 'incomplete';
+export function physicalOf(c: Record<string, unknown> | null | undefined): PhysicalCondition | null {
+  if (!c) return null;
+  if (c.visibleDamage === true || c.productUsable === false) return 'damaged';
+  if (c.productMismatch === true) return 'wrong_product';
+  if (c.packagingIntact === false || c.accessoriesPresent === false || c.missingQuantity === true) return 'incomplete';
+  return 'usable';
+}
+async function loadPhysical(tx: Tx, vendorId: string, ids: string[]): Promise<Map<string, PhysicalCondition | null>> {
+  const out = new Map<string, PhysicalCondition | null>();
+  if (!ids.length) return out;
+  const rows = await tx.select({ rid: schema.returnInspections.returnOrderId, checklist: schema.returnInspections.checklist }).from(schema.returnInspections)
+    .where(and(eq(schema.returnInspections.vendorId, vendorId), inArray(schema.returnInspections.returnOrderId, ids), sql`${schema.returnInspections.checklist}->>'bulk' is null`)).orderBy(sql`${schema.returnInspections.createdAt} desc`, sql`${schema.returnInspections.id} desc`);
+  for (const r of rows) if (!out.has(r.rid)) out.set(r.rid, physicalOf(r.checklist as Record<string, unknown>));
+  return out;
+}
+
 export async function ledgerRows(tx: Tx, c: Container, vendorId: string, rows: Array<{ r: ReturnRow; o: { number: string; marketplace: string; currency: string; buyer: Record<string, unknown> } }>, s: ReturnSettings) {
   const ids = rows.map((x) => x.r.id);
-  const [items, users] = await Promise.all([loadItems(tx, vendorId, ids), loadUsers(tx, vendorId, rows.map((x) => x.r.inspectorId))]);
+  const [items, users, physical] = await Promise.all([loadItems(tx, vendorId, ids), loadUsers(tx, vendorId, rows.map((x) => x.r.inspectorId)), loadPhysical(tx, vendorId, ids)]);
   return rows.map(({ r, o }) => {
     const its = items.get(r.id) ?? [];
     const first = its[0];
@@ -167,7 +185,7 @@ export async function ledgerRows(tx: Tx, c: Container, vendorId: string, rows: A
       channel: channelOf(c, o.marketplace), reason: { code: r.reasonCode, label: reasonLabel(r.reasonCode) },
       quantity: its.reduce((n, i) => n + i.quantity, 0), receivedQuantity: its.reduce((n, i) => n + i.received, 0),
       status: r.status, displayStatus: displayStatus(r), stage: returnStage(r), stageLabel: STAGE_LABELS[returnStage(r)], requestedAt: r.createdAt.toISOString(), receivedAt: iso(r.receivedAt),
-      inspection: { status: r.inspectionStatus, inspector: r.inspectorId ? { id: r.inspectorId, name: users.get(r.inspectorId) ?? null } : null },
+      inspection: { status: r.inspectionStatus, inspector: r.inspectorId ? { id: r.inspectorId, name: users.get(r.inspectorId) ?? null } : null, physical: physical.get(r.id) ?? null },
       refund: { status: r.refundStatus, amountMinor: r.refundAmountMinor, currency: r.refundCurrency ?? o.currency, source: r.refundSource as 'connector' | 'manual' | null },
       disposition: dispositionOf(its), customer: customerOf(o.buyer, false), signals: signalsOf(r, its, s), action: actionOf(r),
     };

@@ -116,6 +116,12 @@ export async function markDamaged(tx: Tx, t: Target & { quantity: number; restor
     : applyMovement(tx, { ...t, type: 'damage', onHand: -t.quantity, damaged: t.quantity, referenceType: t.referenceType ?? 'manual' });
 }
 
+/** units lost (theft, miscount, spoilage): sellable stock goes down by `quantity`; its own movement type keeps it apart from a manual adjustment in the audit trail */
+export async function writeOffShrinkage(tx: Tx, t: Target & { quantity: number }): Promise<MovementResult> {
+  await assertStockTargets(tx, t.vendorId, t.variantId, t.warehouseId);
+  return applyMovement(tx, { ...t, type: 'shrinkage', onHand: -t.quantity, referenceType: t.referenceType ?? 'adjustment' });
+}
+
 /** A customer return arrives. hold = quarantine until inspected; restock = sellable again; damaged = write-off bucket */
 export async function receiveReturn(tx: Tx, t: Target & { quantity: number; disposition: 'hold' | 'restock' | 'damaged' }): Promise<MovementResult> {
   await assertStockTargets(tx, t.vendorId, t.variantId, t.warehouseId);
@@ -256,22 +262,39 @@ const T = schema.stockTransfers;
 const TI = schema.stockTransferItems;
 export type TransferRow = typeof T.$inferSelect;
 
+/** sellable units (on hand - reserved) of the variants in one warehouse; a variant without a stock row has 0 */
+async function sourceAvailability(tx: Tx, vendorId: string, warehouseId: string, variantIds: string[]): Promise<Map<string, number>> {
+  const out = new Map<string, number>(variantIds.map((v) => [v, 0]));
+  if (variantIds.length === 0) return out;
+  const rows = await tx.select({ variantId: I.variantId, available: sql<number>`${I.quantityOnHand} - ${I.quantityReserved}` }).from(I).where(and(eq(I.vendorId, vendorId), eq(I.warehouseId, warehouseId), inArray(I.variantId, variantIds)));
+  for (const r of rows) out.set(r.variantId, Number(r.available));
+  return out;
+}
+
 export async function loadTransfer(tx: Tx, vendorId: string, id: string, lock = false) {
   const q = tx.select().from(T).where(and(eq(T.id, id), eq(T.vendorId, vendorId)));
   const [t] = await (lock ? q.for('update') : q);
   if (!t) throw Errors.notFound('Stock transfer', id);
-  const items = await tx.select({ i: TI, sku: V.sku }).from(TI).innerJoin(V, and(eq(V.id, TI.variantId), eq(V.vendorId, TI.vendorId))).where(and(eq(TI.vendorId, vendorId), eq(TI.transferId, id)));
-  return { t, items };
+  const items = await tx.select({ i: TI, sku: V.sku, title: P.title }).from(TI)
+    .innerJoin(V, and(eq(V.id, TI.variantId), eq(V.vendorId, TI.vendorId)))
+    .innerJoin(P, and(eq(P.id, V.productId), eq(P.vendorId, V.vendorId)))
+    .where(and(eq(TI.vendorId, vendorId), eq(TI.transferId, id)))
+    .orderBy(V.sku);
+  // a draft shows what the source could give today (nothing has moved yet); other states have already moved the stock
+  const avail = t.status === 'draft' ? await sourceAvailability(tx, vendorId, t.fromWarehouseId, items.map((r) => r.i.variantId)) : null;
+  return { t, items, avail };
 }
 
 export const toTransferDto = (x: Awaited<ReturnType<typeof loadTransfer>>) => ({
   id: x.t.id, number: x.t.number, fromWarehouseId: x.t.fromWarehouseId, toWarehouseId: x.t.toWarehouseId, status: x.t.status as (typeof schema.TRANSFER_STATUSES)[number], notes: x.t.notes,
-  shippedAt: x.t.shippedAt ? x.t.shippedAt.toISOString() : null, receivedAt: x.t.receivedAt ? x.t.receivedAt.toISOString() : null, version: x.t.version, createdAt: x.t.createdAt.toISOString(),
-  items: x.items.map((r) => ({ variantId: r.i.variantId, sku: r.sku, quantity: r.i.quantity, receivedQuantity: r.i.receivedQuantity })),
+  shippedAt: x.t.shippedAt ? x.t.shippedAt.toISOString() : null, receivedAt: x.t.receivedAt ? x.t.receivedAt.toISOString() : null, version: x.t.version, createdAt: x.t.createdAt.toISOString(), updatedAt: x.t.updatedAt.toISOString(),
+  items: x.items.map((r) => ({ variantId: r.i.variantId, sku: r.sku, title: r.title, quantity: r.i.quantity, receivedQuantity: r.i.receivedQuantity, availableAtSource: x.avail ? (x.avail.get(r.i.variantId) ?? 0) : null })),
 });
 
-export async function createTransfer(tx: Tx, vendorId: string, input: { fromWarehouseId: string; toWarehouseId: string; items: Array<{ variantId: string; quantity: number }>; notes?: string | null }) {
+/** the rules every transfer document obeys, at creation, on each edit of a draft and again when it is submitted */
+async function assertTransferShape(tx: Tx, vendorId: string, input: { fromWarehouseId: string; toWarehouseId: string; items: Array<{ variantId: string; quantity: number }> }) {
   if (input.fromWarehouseId === input.toWarehouseId) throw new AppError('BAD_REQUEST', 'Source and destination must differ');
+  if (input.items.length === 0) throw new AppError('BAD_REQUEST', 'A transfer needs at least one product');
   if (new Set(input.items.map((i) => i.variantId)).size !== input.items.length) throw new AppError('BAD_REQUEST', 'Each variant may appear once per transfer');
   for (const wid of [input.fromWarehouseId, input.toWarehouseId]) {
     const [w] = await tx.select({ id: W.id, status: W.status }).from(W).where(and(eq(W.id, wid), eq(W.vendorId, vendorId), isNull(W.deletedAt)));
@@ -280,6 +303,10 @@ export async function createTransfer(tx: Tx, vendorId: string, input: { fromWare
   }
   const found = await tx.select({ id: V.id }).from(V).where(and(eq(V.vendorId, vendorId), inArray(V.id, input.items.map((i) => i.variantId))));
   if (found.length !== input.items.length) throw Errors.notFound('Variant');
+}
+
+export async function createTransfer(tx: Tx, vendorId: string, input: { fromWarehouseId: string; toWarehouseId: string; items: Array<{ variantId: string; quantity: number }>; notes?: string | null }) {
+  await assertTransferShape(tx, vendorId, input);
   const number = `TR-${String(await nextCounter(tx, vendorId, 'stock_transfer')).padStart(6, '0')}`;
   const [t] = await tx.insert(T).values({ vendorId, number, fromWarehouseId: input.fromWarehouseId, toWarehouseId: input.toWarehouseId, notes: input.notes ?? null }).returning();
   await tx.insert(TI).values(input.items.map((i) => ({ vendorId, transferId: t!.id, variantId: i.variantId, quantity: i.quantity })));
@@ -334,6 +361,50 @@ export async function cancelTransfer(tx: Tx, vendorId: string, id: string, actor
   }
   await tx.update(T).set({ status: 'cancelled', version: sql`${T.version} + 1` }).where(eq(T.id, id));
   return loadTransfer(tx, vendorId, id);
+}
+
+/**
+ * Edits a DRAFT (nothing has moved yet): the warehouses, the products and quantities (the list is replaced as a whole) and the notes.
+ * `version` is optional optimistic concurrency: a stale one is a 409.
+ */
+export async function updateDraftTransfer(tx: Tx, vendorId: string, id: string, input: { fromWarehouseId?: string; toWarehouseId?: string; items?: Array<{ variantId: string; quantity: number }>; notes?: string | null; version?: number }) {
+  const { t, items } = await loadTransfer(tx, vendorId, id, true);
+  if (t.status !== 'draft') throw new AppError('INVALID_STATE', `A ${t.status} transfer cannot be edited, only a draft can`, { details: { status: t.status } });
+  if (input.version !== undefined && input.version !== t.version) throw new AppError('CONFLICT', 'This draft was changed by someone else. Reload it and try again.', { details: { rule: 'stale_draft', version: t.version } });
+  if (input.fromWarehouseId === undefined && input.toWarehouseId === undefined && input.items === undefined && input.notes === undefined) throw new AppError('BAD_REQUEST', 'Nothing to change', { details: { rule: 'empty_update' } });
+  const next = {
+    fromWarehouseId: input.fromWarehouseId ?? t.fromWarehouseId,
+    toWarehouseId: input.toWarehouseId ?? t.toWarehouseId,
+    items: input.items ?? items.map((r) => ({ variantId: r.i.variantId, quantity: r.i.quantity })),
+  };
+  await assertTransferShape(tx, vendorId, next);
+  await tx.update(T).set({ fromWarehouseId: next.fromWarehouseId, toWarehouseId: next.toWarehouseId, notes: input.notes === undefined ? t.notes : input.notes, version: sql`${T.version} + 1` }).where(eq(T.id, id));
+  if (input.items) {
+    await tx.delete(TI).where(and(eq(TI.vendorId, vendorId), eq(TI.transferId, id)));
+    await tx.insert(TI).values(input.items.map((i) => ({ vendorId, transferId: id, variantId: i.variantId, quantity: i.quantity })));
+  }
+  return loadTransfer(tx, vendorId, id);
+}
+
+/**
+ * Submits a draft: the stock leaves the source and lands in the destination (ship + receive in one transaction, all or nothing).
+ * Idempotent: submitting a transfer that is already received changes nothing (`duplicate: true`); a cancelled one is refused.
+ * Stock moves ONLY here: creating or editing a draft never touches a quantity.
+ */
+export async function submitTransfer(tx: Tx, vendorId: string, id: string, actor?: Actor): Promise<{ transfer: Awaited<ReturnType<typeof loadTransfer>>; duplicate: boolean }> {
+  const cur = await loadTransfer(tx, vendorId, id, true);
+  if (cur.t.status === 'received') return { transfer: cur, duplicate: true };
+  if (cur.t.status === 'cancelled') throw new AppError('INVALID_STATE', 'A cancelled transfer cannot be submitted', { details: { status: cur.t.status } });
+  if (cur.t.status === 'draft') {
+    await assertTransferShape(tx, vendorId, { fromWarehouseId: cur.t.fromWarehouseId, toWarehouseId: cur.t.toWarehouseId, items: cur.items.map((r) => ({ variantId: r.i.variantId, quantity: r.i.quantity })) });
+    const short = cur.items.filter((r) => (cur.avail?.get(r.i.variantId) ?? 0) < r.i.quantity);
+    if (short.length > 0) {
+      const shortages = short.map((r) => ({ variantId: r.i.variantId, sku: r.sku, needed: r.i.quantity, available: cur.avail?.get(r.i.variantId) ?? 0 }));
+      throw new AppError('INSUFFICIENT_STOCK', `Not enough available stock in the source warehouse: ${shortages.map((s) => `${s.sku} has ${s.available}, needs ${s.needed}`).join('; ')}`, { details: { shortages } });
+    }
+    await shipTransfer(tx, vendorId, id, actor);
+  }
+  return { transfer: await receiveTransfer(tx, vendorId, id, undefined, actor), duplicate: false };
 }
 
 export async function listTransfers(tx: Tx, vendorId: string, q: { limit: number; cursor?: string; status?: string }) {

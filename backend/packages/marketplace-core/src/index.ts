@@ -242,7 +242,14 @@ export interface NormalizedOrder {
   raw: unknown;
 }
 
-export interface NormalizedReturn { externalReturnId: string; externalOrderId: string; status: string; reason?: string; requestedAt: Date; raw?: unknown }
+export interface NormalizedReturn {
+  externalReturnId: string; externalOrderId: string; status: string; reason?: string; requestedAt: Date;
+  /** when the marketplace last changed the return (a withdrawal of an old return is picked up by the next sync); defaults to `requestedAt` */
+  updatedAt?: Date;
+  /** the returned lines (by the marketplace's item id and / or SKU); when a connector cannot say, every line of the order is meant */
+  items?: Array<{ externalItemId?: string; sku?: string; quantity: number }>;
+  raw?: unknown;
+}
 export interface InventoryUpdate { externalSku: string; quantity: number; externalListingId?: string }
 export interface PriceUpdate { externalSku: string; priceMinor: number; currency: string }
 export interface OperationResult { externalSku?: string; ok: boolean; errorCode?: string; message?: string; retryable?: boolean }

@@ -1,6 +1,6 @@
 import {
-  isPlaceholderCode, nameKey, normalizeFields, sanitizeDescription, TITLE_MIN_STEP,
-  type CustomAttribute, type FieldIssue, type NormalizedFields, type ProductRow, type RawFields,
+  isPlaceholderCode, nameKey, normalizeFields, productTypeOfAttributes, sanitizeDescription, TITLE_MIN_STEP,
+  type CustomAttribute, type FieldIssue, type NormalizedFields, type ProductRow, type ProductType, type RawFields,
 } from '@oms/mod-catalog';
 import type { ContentField } from '../infrastructure/listings-port';
 
@@ -13,7 +13,7 @@ import type { ContentField } from '../infrastructure/listings-port';
  */
 export const CHANGE_KEYS = [
   'productCode', 'title', 'productType', 'categoryId', 'brand', 'description', 'material', 'dimensions', 'weight', 'countryOfOrigin',
-  'hsnCode', 'gstRateBps', 'customAttributes', 'tags', 'standardCategory', 'manufacturer',
+  'hsnCode', 'gstRateBps', 'customAttributes', 'tags', 'standardCategory', 'manufacturer', 'categoryAttributes',
 ] as const;
 export type ChangeKey = (typeof CHANGE_KEYS)[number];
 
@@ -21,12 +21,14 @@ export const FIELD_LABELS: Record<ChangeKey, string> = {
   productCode: 'Master SKU', title: 'Product name', productType: 'Product type', categoryId: 'Category', brand: 'Brand', description: 'Description',
   material: 'Material', dimensions: 'Dimensions', weight: 'Weight', countryOfOrigin: 'Country of origin', hsnCode: 'HSN code',
   gstRateBps: 'Tax information', customAttributes: 'Custom attributes', tags: 'Tags', standardCategory: 'Standard category', manufacturer: 'Manufacturer',
+  categoryAttributes: 'Category attributes',
 };
 
 /** which master content a listing inherits (the LISTINGS contract). Keys that no listing reads are absent. */
 const CONTENT_FIELD: Partial<Record<ChangeKey, ContentField>> = {
   title: 'title', description: 'description', brand: 'brand', categoryId: 'category', productType: 'productType', material: 'material',
   dimensions: 'dimensions', weight: 'weight', countryOfOrigin: 'countryOfOrigin', hsnCode: 'hsnCode', gstRateBps: 'gstRate', customAttributes: 'customAttributes', tags: 'tags', manufacturer: 'brand',
+  categoryAttributes: 'customAttributes',
 };
 export const ALL_CONTENT_FIELDS: ContentField[] = ['title', 'description', 'brand', 'category', 'productType', 'material', 'dimensions', 'weight', 'countryOfOrigin', 'hsnCode', 'gstRate', 'customAttributes', 'tags'];
 
@@ -55,13 +57,28 @@ export interface ChangeSet {
   codeChange: { from: string; to: string } | null;
   /** the master code would change on a product that is no longer a draft (E1): the save answers 409 code_locked */
   codeLocked: boolean;
+  /** category attribute values to write (Capacity, Fabric composition...): only the ones that differ from the stored value */
+  attributeValues: AttributeWrite[];
+}
+
+export interface AttributeWrite { attributeId: string; value: string | number | boolean | null }
+
+/** the proposed values of the edit page: the catalog field set plus the category-specific attribute values */
+export type EditRaw = RawFields & { categoryAttributes?: AttributeWrite[] };
+
+/** the category-specific attribute edits of the page (resolved against the database by the caller) */
+export interface AttributePlan {
+  entries: AttributeWrite[];
+  before: Record<string, Json>;
+  after: Record<string, Json>;
+  issues: FieldIssue[];
 }
 
 /** the columns each change key writes (to leave out a key that carries a problem) */
 const COLUMNS: Record<ChangeKey, Array<keyof NormalizedFields>> = {
   productCode: ['productCode'], title: ['title'], productType: ['productType'], categoryId: ['categoryId'], brand: ['brand'], description: ['description', 'descriptionHtml'],
   material: ['material'], dimensions: ['lengthMm', 'widthMm', 'heightMm'], weight: ['weightGrams'], countryOfOrigin: ['countryOfOrigin'], hsnCode: ['hsnCode'], gstRateBps: ['gstRateBps'],
-  customAttributes: ['customAttributes'], tags: ['tags'], standardCategory: ['standardCategory'], manufacturer: ['manufacturer'],
+  customAttributes: ['customAttributes'], tags: ['tags'], standardCategory: ['standardCategory'], manufacturer: ['manufacturer'], categoryAttributes: [],
 };
 const rootOf = (field: string) => field.replace(/[.[].*$/, '');
 
@@ -72,6 +89,7 @@ export function withIssues(change: ChangeSet, more: FieldIssue[]): ChangeSet {
   const items = change.items.filter((i) => !bad.has(i.field));
   const fields: NormalizedFields = { ...change.fields };
   for (const i of change.items) if (bad.has(i.field)) for (const col of COLUMNS[i.field]) delete fields[col];
+  const attributeValues = bad.has('categoryAttributes') ? [] : change.attributeValues;
   const content = new Set(items.flatMap((i) => (CONTENT_FIELD[i.field] && !i.formattingOnly ? [CONTENT_FIELD[i.field]!] : [])));
   const categoryChanged = fields.categoryId !== undefined;
   return {
@@ -82,10 +100,25 @@ export function withIssues(change: ChangeSet, more: FieldIssue[]): ChangeSet {
     typeChanged: fields.productType !== undefined,
     codeChange: fields.productCode !== undefined ? change.codeChange : null,
     codeLocked: change.codeLocked,
+    attributeValues,
   };
 }
 
-const productTypeOf = (p: ProductRow): 'physical' | 'digital' | 'service' => (((p.attributes ?? {}) as Record<string, unknown>).productType ?? 'physical') as 'physical' | 'digital' | 'service';
+const ITEM_ORDER = new Map(CHANGE_KEYS.map((k, i) => [k, i]));
+
+/** adds the category attribute edits (resolved by the caller: they need the database) to the change; their problems are the problems of the change */
+export function withAttributePlan(change: ChangeSet, plan: AttributePlan): ChangeSet {
+  const withProblems = plan.issues.length ? withIssues(change, plan.issues) : change;
+  if (plan.issues.length || plan.entries.length === 0) return { ...withProblems, attributeValues: [] };
+  const attributeItem: ChangedField = { field: 'categoryAttributes', label: FIELD_LABELS.categoryAttributes, message: `${FIELD_LABELS.categoryAttributes} changed`, before: plan.before, after: plan.after };
+  const items = [...withProblems.items, attributeItem].sort((x, y) => ITEM_ORDER.get(x.field)! - ITEM_ORDER.get(y.field)!);
+  const content = new Set<ContentField>(withProblems.contentFields);
+  const cf = CONTENT_FIELD.categoryAttributes;
+  if (cf) content.add(cf);
+  return { ...withProblems, items, contentFields: ALL_CONTENT_FIELDS.filter((f) => content.has(f)), attributeValues: plan.entries };
+}
+
+const productTypeOf = (p: ProductRow): ProductType => productTypeOfAttributes(p.attributes);
 const same = (a: unknown, b: unknown) => (a ?? null) === (b ?? null);
 const attrKey = (a: CustomAttribute) => JSON.stringify([nameKey(a.name), a.value, a.confirmed ? 1 : 0]);
 
@@ -184,6 +217,7 @@ export function computeChange(before: ProductRow, raw: RawFields): ChangeSet {
     typeChanged: out.productType !== undefined,
     codeChange: out.productCode !== undefined ? { from: before.productCode, to: out.productCode } : null,
     codeLocked,
+    attributeValues: [],
   }, []);
 }
 

@@ -6,6 +6,7 @@ import { returnRoutes } from './routes';
 import { returnsDashboardRoutes } from './dashboard-routes';
 import { returnsReadinessRoutes } from './readiness-routes';
 import { createRtoReturn } from './service';
+import { returnJobHandlers } from './sync';
 
 export { manifest };
 export { returnRoutes } from './routes';
@@ -36,4 +37,6 @@ const routes: FastifyPluginAsync = async (app) => {
   await app.register(returnsReadinessRoutes);
 };
 
-export const returnsModule = { manifest, routes, consumers };
+export { requestReturnsSync, importMarketplaceReturn, mapReason, marketplaceDecision } from './sync';
+
+export const returnsModule = { manifest, routes, consumers, jobs: returnJobHandlers };

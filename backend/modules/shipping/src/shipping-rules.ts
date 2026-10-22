@@ -3,7 +3,9 @@ import { AppError, Errors } from '@oms/shared';
 import { RULE_TYPE_SPECS, createRule, deleteRule, getRule, listRules, matches, updateRule, validateRule, type ConditionSet, type RuleRow } from '@oms/mod-rules';
 import { effects, type OpCtx } from '@oms/module-kit';
 import { loadOrderInfo } from './decision';
-import { methodName, type MethodKind } from './methods';
+import { decisionKind, methodName, type MethodKind } from './methods';
+
+export const DESTINATION_ZONES = ['local', 'regional', 'national'] as const;
 
 /**
  * Shipping rules (IF / AND / THEN): a thin, validated layer over the generic rules engine (type `shipping`).
@@ -38,6 +40,10 @@ async function validateInput(tx: Tx, vendorId: string, input: Pick<ShippingRuleI
   input.conditions.forEach((c, i) => {
     if (!SHIPPING_FIELDS.includes(c.field)) issues.push({ path: `conditions[${i}].field`, message: `unknown field "${c.field}" (allowed: ${SHIPPING_FIELDS.join(', ')})` });
     if (!(SHIPPING_OPS as readonly string[]).includes(c.op)) issues.push({ path: `conditions[${i}].op`, message: `operator "${c.op}" is not offered for shipping rules (allowed: ${SHIPPING_OPS.join(', ')})` });
+    if (c.field === 'destinationZone') {
+      const values = Array.isArray(c.value) ? c.value : [c.value];
+      if (c.op === 'contains' || c.op === 'gt' || c.op === 'gte' || c.op === 'lt' || c.op === 'lte' || values.some((v) => !(DESTINATION_ZONES as readonly unknown[]).includes(v))) issues.push({ path: `conditions[${i}].value`, message: `destinationZone is ${DESTINATION_ZONES.join(', ')} and is compared with equals / not equals / one of` });
+    }
   });
   const conditions: ConditionSet = { combinator: 'all', conditions: input.conditions.map((c) => ({ field: c.field, op: c.op, value: c.value })) };
   const prefer = input.then.prefer;
@@ -45,7 +51,7 @@ async function validateInput(tx: Tx, vendorId: string, input: Pick<ShippingRuleI
   if (issues.length === 0) issues.push(...validateRule('shipping', conditions, action)); // value types: a real number / text, in-lists, parameters
   if (prefer.providerId) {
     const [m] = await tx.select({ kind: schema.vendorShippingProviders.kind }).from(schema.vendorShippingProviders).where(and(eq(schema.vendorShippingProviders.vendorId, vendorId), eq(schema.vendorShippingProviders.id, prefer.providerId)));
-    if (!m || m.kind !== prefer.kind) issues.push({ path: 'then.prefer.providerId', message: 'not a shipping method of this kind in your account' });
+    if (!m || decisionKind(m.kind) !== prefer.kind) issues.push({ path: 'then.prefer.providerId', message: 'not a shipping method of this kind in your account' });
   }
   if (issues.length) throw Errors.validation({ issues });
   return { conditions, action };

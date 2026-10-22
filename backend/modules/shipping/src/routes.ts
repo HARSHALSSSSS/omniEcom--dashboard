@@ -60,8 +60,8 @@ export const shippingRoutes: FastifyPluginAsync = async (app) => {
   r.get('/shipping/providers/catalog', {
     config: { access: { permission: 'shipping:read' } },
     schema: {
-      tags: TAGS, summary: 'Available shipping providers', description: 'Every provider the platform can talk to, with its capabilities and the (non-secret) settings it accepts. No courier is hardcoded: a new provider is one adapter implementing the same interface.',
-      response: { 200: successEnvelope(z.array(z.object({ code: z.string(), name: z.string(), description: z.string(), capabilities: z.object({ labels: z.boolean(), polling: z.boolean(), cancel: z.boolean(), reattempt: z.boolean(), rto: z.boolean(), manifest: z.boolean() }), configFields: z.array(z.object({ key: z.string(), description: z.string(), required: z.boolean() })) }))) },
+      tags: TAGS, summary: 'Available shipping providers', description: 'Every provider the platform can talk to, with its capabilities and the settings it accepts (a setting marked `secret` is a credential: stored, never returned). No courier is hardcoded: a new provider is one adapter implementing the same interface. The entry `custom` is the template for a logistics provider the seller configures: add one with POST /shipping/methods (kind "custom").',
+      response: { 200: successEnvelope(z.array(z.object({ code: z.string(), name: z.string(), description: z.string(), capabilities: z.object({ labels: z.boolean(), polling: z.boolean(), cancel: z.boolean(), reattempt: z.boolean(), rto: z.boolean(), manifest: z.boolean() }), configFields: z.array(z.object({ key: z.string(), description: z.string(), required: z.boolean(), secret: z.boolean().optional().describe('A credential: stored, never returned') })) }))) },
     },
   }, async (req) => ok(req, providerCatalog(req.server.container)));
   r.get('/shipping/providers', {

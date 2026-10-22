@@ -28,6 +28,7 @@ const publishRunner: SyncRunner = async (ctx): Promise<{ stats: Record<string, n
   if (action === 'unpublish') {
     const l = await withVendor(db, vendorId, async (tx) => (await tx.select().from(L).where(and(eq(L.id, listingId), eq(L.vendorId, vendorId))))[0]);
     if (!l) throw new AppError('NOT_FOUND', 'Listing not found', { details: { resource: 'listing', id: listingId } });
+    await ctx.progress({ total: 2, done: 1, failed: 0 });
     const res = await host.run(vendorId, accountId, async (conn, cctx) => {
       requireCapability(conn, 'listings.deactivate');
       return conn.deactivateListing!(cctx, { externalSku: l.externalSku, externalListingId: l.externalListingId ?? undefined });
@@ -53,6 +54,8 @@ const publishRunner: SyncRunner = async (ctx): Promise<{ stats: Record<string, n
     return loadListingContext(tx, c, vendorId, listingId, { requirements: storedRequirements(row) });
   });
   const { listing } = context;
+  // three real stages, reported for the sync screen: 1 content prepared, 2 submitted to the marketplace, 3 outcome recorded (the job status finishes it)
+  await ctx.progress({ total: 3, done: 1, failed: 0 });
   if (listing.status !== 'approved' || listing.approvedHash !== context.hash) {
     // not retryable: the content changed (or the state moved) after the request; the merchant has to approve again
     throw new AppError('LISTING_NOT_READY', 'The listing is no longer approved for this content; approve it again', { details: { status: listing.status } });
@@ -62,6 +65,7 @@ const publishRunner: SyncRunner = async (ctx): Promise<{ stats: Record<string, n
     requireCapability(conn, 'listings.create');
     return conn.createListing!(cctx, context.input);
   });
+  await ctx.progress({ done: 2 });
   const status = fromReport(result.status);
   await withVendor(db, vendorId, async (tx) => {
     await tx.update(L).set({

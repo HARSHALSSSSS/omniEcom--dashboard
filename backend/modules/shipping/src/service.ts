@@ -6,7 +6,8 @@ import { getOrderRow } from '@oms/mod-orders';
 import { getWarehouseRow } from '@oms/mod-warehouses';
 import { effects, type Container, type OpCtx } from '@oms/module-kit';
 import { DEFAULT_MAX_ATTEMPTS, IN_FLIGHT, PRE_DISPATCH, canMove, fulfillmentStatusFor, type ShipmentStatus, type TrackingStatus } from './domain';
-import { getProvider, listProviders, type ShipmentRequest, type TrackingUpdate } from './providers';
+import { getProvider, listProviders, mergeConfig, publicConfig, type ShipmentRequest, type TrackingUpdate } from './providers';
+import { isCustomCode } from './providers/custom';
 
 const S = schema.shipments;
 const SP = schema.vendorShippingProviders;
@@ -45,12 +46,10 @@ export function assertProviderAllowed(c: Container, code: string): void {
   if (getProvider(code).simulator && !c.config.sandboxCourierEnabled) throw new AppError('BAD_REQUEST', 'The sandbox courier is not available in this environment', { details: { providerCode: code } });
 }
 export const providerCatalog = (c: Container) => listProviders().filter((p) => !p.simulator || c.config.sandboxCourierEnabled).map((p) => ({ code: p.code, name: p.name, description: p.description, capabilities: p.capabilities, configFields: p.configFields }));
-/** only the settings the provider DECLARES (configFields) are returned: nothing free-form can leak through this DTO */
-const visibleConfig = (code: string, config: Record<string, unknown>): Record<string, unknown> => {
-  let keys: string[] = [];
-  try { keys = getProvider(code).configFields.map((f) => f.key); } catch { /* unknown provider: expose nothing */ }
-  return Object.fromEntries(Object.entries(config).filter(([k]) => keys.includes(k)));
-};
+/** couriers a vendor can use: the catalogue ones and the seller's own logistics providers */
+const COURIER_KINDS = ['third_party', 'custom'];
+/** only the settings the provider DECLARES (configFields) are returned, credentials as a placeholder: nothing free-form can leak through this DTO */
+const visibleConfig = publicConfig;
 /** a tracking link template is rendered into UI / e-mail: https only, and it must carry the AWB */
 function validateConfig(config: Record<string, unknown>): void {
   const tpl = config.trackingUrlTemplate;
@@ -60,9 +59,10 @@ function validateConfig(config: Record<string, unknown>): void {
 export const toVendorProviderDto = (p: typeof SP.$inferSelect) => ({ id: p.id, providerCode: p.providerCode, label: p.label, status: p.status as 'active' | 'disabled', isDefault: p.isDefault, config: visibleConfig(p.providerCode, p.config), version: p.version, createdAt: p.createdAt.toISOString() });
 
 export async function listVendorProviders(tx: Tx, vendorId: string) {
-  return (await tx.select().from(SP).where(and(eq(SP.vendorId, vendorId), eq(SP.kind, 'third_party'))).orderBy(SP.createdAt)).map(toVendorProviderDto);
+  return (await tx.select().from(SP).where(and(eq(SP.vendorId, vendorId), inArray(SP.kind, COURIER_KINDS))).orderBy(SP.createdAt)).map(toVendorProviderDto);
 }
 export async function enableProvider(tx: Tx, ctx: OpCtx, input: { providerCode: string; label?: string; config?: Record<string, unknown>; isDefault?: boolean }) {
+  if (isCustomCode(input.providerCode)) throw new AppError('BAD_REQUEST', 'Your own logistics provider is added with POST /shipping/methods (kind "custom")', { details: { rule: 'use_custom_kind' } });
   const p = getProvider(input.providerCode);
   assertProviderAllowed(ctx.c, p.code);
   validateConfig(input.config ?? {});
@@ -76,21 +76,22 @@ export async function enableProvider(tx: Tx, ctx: OpCtx, input: { providerCode: 
   return toVendorProviderDto(row!);
 }
 export async function updateProvider(tx: Tx, ctx: OpCtx, id: string, patch: { label?: string; config?: Record<string, unknown>; status?: 'active' | 'disabled'; isDefault?: boolean }) {
-  const [before] = await tx.select().from(SP).where(and(eq(SP.id, id), eq(SP.vendorId, ctx.vendorId), eq(SP.kind, 'third_party')));
+  const [before] = await tx.select().from(SP).where(and(eq(SP.id, id), eq(SP.vendorId, ctx.vendorId), inArray(SP.kind, COURIER_KINDS)));
   if (!before) throw Errors.notFound('Shipping provider', id);
   if (patch.config) validateConfig(patch.config);
+  const config = patch.config ? mergeConfig(before.providerCode, before.config, patch.config) : before.config;
   const status = patch.status ?? before.status;
   if (patch.isDefault) {
     if (status === 'disabled') throw new AppError('CONFLICT', 'A disabled provider cannot be the default');
     await tx.update(SP).set({ isDefault: false }).where(and(eq(SP.vendorId, ctx.vendorId), eq(SP.isDefault, true)));
   }
-  const [after] = await tx.update(SP).set({ label: patch.label ?? before.label, config: patch.config ?? before.config, status, isDefault: status === 'disabled' ? false : (patch.isDefault ?? before.isDefault), version: sql`${SP.version} + 1` }).where(eq(SP.id, id)).returning();
+  const [after] = await tx.update(SP).set({ label: patch.label ?? before.label, config, status, isDefault: status === 'disabled' ? false : (patch.isDefault ?? before.isDefault), version: sql`${SP.version} + 1` }).where(eq(SP.id, id)).returning();
   await effects(tx, ctx).audit({ action: 'shipping.provider_updated', resourceType: 'shipping_provider', resourceId: id, before: { status: before.status, isDefault: before.isDefault }, after: { status: after!.status, isDefault: after!.isDefault, configKeysChanged: patch.config ? Object.keys(patch.config) : [] } }); // never the values: config may hold courier credentials
   return toVendorProviderDto(after!);
 }
 
 async function resolveProvider(tx: Tx, vendorId: string, code?: string): Promise<{ code: string; config: Record<string, unknown> }> {
-  const rows = await tx.select().from(SP).where(and(eq(SP.vendorId, vendorId), eq(SP.status, 'active'), eq(SP.kind, 'third_party'))); // marketplace / seller methods are decisions, not courier adapters
+  const rows = await tx.select().from(SP).where(and(eq(SP.vendorId, vendorId), eq(SP.status, 'active'), inArray(SP.kind, COURIER_KINDS))); // marketplace / seller methods are decisions, not courier adapters
   const row = code ? rows.find((r) => r.providerCode === code) : (rows.find((r) => r.isDefault) ?? rows[0]);
   if (code && !row) {
     if (code === 'manual') return { code, config: {} }; // manual hand-over always works, even before any provider is set up
@@ -144,15 +145,17 @@ export async function createShipment(ctx: OpCtx, input: CreateShipmentInput): Pr
     const wh = await getWarehouseRow(tx, ctx.vendorId, f.warehouseId);
     const provider = await resolveProvider(tx, ctx.vendorId, input.providerCode);
     const number = `SHP-${String(await nextCounter(tx, ctx.vendorId, 'shipment')).padStart(6, '0')}`;
+    const defaultService = isCustomCode(provider.code) && typeof provider.config.defaultService === 'string' && provider.config.defaultService.trim() ? provider.config.defaultService.trim() : null; // a configured logistics provider's usual service
+    const service = input.service ?? defaultService;
     const ship = order.shippingAddress as Record<string, unknown>;
     const buyer = order.buyer as Record<string, unknown>;
     const req: ShipmentRequest = {
       shipmentNumber: number, orderNumber: order.orderNumber, warehouse: { code: wh.code, name: wh.name, address: wh.address },
       destination: { ...ship, name: ship.name ?? buyer.name, phone: ship.phone ?? buyer.phone },
       packages: pkgs.map((p) => ({ barcode: p.barcode, weightGrams: p.weightGrams, lengthMm: p.lengthMm, widthMm: p.widthMm, heightMm: p.heightMm })),
-      codAmountMinor: order.paymentMethod === 'cod' ? (order.codAmountMinor ?? order.totalMinor) : null, currency: order.currency.trim(), service: input.service ?? null, manual: input.manual,
+      codAmountMinor: order.paymentMethod === 'cod' ? (order.codAmountMinor ?? order.totalMinor) : null, currency: order.currency.trim(), service, manual: input.manual,
     };
-    return { f, order, number, provider, req, weight: pkgs.reduce((n, p) => n + (p.weightGrams ?? 0), 0) };
+    return { f, order, number, provider, req, service, weight: pkgs.reduce((n, p) => n + (p.weightGrams ?? 0), 0) };
   });
 
   assertProviderAllowed(ctx.c, prep.provider.code);
@@ -167,7 +170,7 @@ export async function createShipment(ctx: OpCtx, input: CreateShipmentInput): Pr
       const [dupAwb] = await tx.select({ id: S.id }).from(S).where(and(eq(S.providerCode, prep.provider.code), eq(S.awb, made.awb)));
       if (dupAwb) throw new AppError('CONFLICT', 'This AWB is already used by another shipment', { details: { awb: made.awb } });
       const [row] = await tx.insert(S).values({
-        vendorId: ctx.vendorId, number: prep.number, fulfillmentId: f.id, orderId: f.orderId, warehouseId: f.warehouseId, providerCode: prep.provider.code, service: input.service ?? null, carrier: made.carrier, awb: made.awb, trackingUrl: made.trackingUrl,
+        vendorId: ctx.vendorId, number: prep.number, fulfillmentId: f.id, orderId: f.orderId, warehouseId: f.warehouseId, providerCode: prep.provider.code, service: prep.service, carrier: made.carrier, awb: made.awb, trackingUrl: made.trackingUrl,
         status: 'label_ready', costMinor: made.costMinor, codAmountMinor: prep.req.codAmountMinor, weightGrams: prep.weight || null, estimatedDeliveryAt: made.estimatedDeliveryAt, providerData: { ...made.providerData, label: made.label },
       }).returning();
       await attachPackages(tx, ctx.vendorId, f.id, row!.id);

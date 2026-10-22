@@ -2,11 +2,11 @@ import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { ok, vendorTx } from '@oms/module-kit';
 import { IdParamSchema, successEnvelope } from '@oms/contracts';
-import { getProductRow, requestEffects, type RawFields } from '@oms/mod-catalog';
-import { computeChange, withIssues } from '../domain/diff';
+import { getProductRow, requestEffects } from '@oms/mod-catalog';
+import { computeChange, type EditRaw } from '../domain/diff';
 import { buildEditor } from '../application/editor';
 import { computeImpact } from '../application/impact';
-import { contextIssues, saveEdit } from '../application/save';
+import { resolveChange, saveEdit } from '../application/save';
 import { currentInsights, dismissInsight, restoreInsight } from '../application/insights';
 import { requestContentSync, type ListingOpts } from '../infrastructure/listings-port';
 import {
@@ -44,8 +44,7 @@ export const productEditRoutes: FastifyPluginAsync = async (app) => {
     },
   }, async (req) => ok(req, await vendorTx(req, async (tx, vendorId) => {
     const before = await getProductRow(tx, vendorId, req.params.id);
-    const first = computeChange(before, req.body.changes as RawFields);
-    const change = withIssues(first, await contextIssues(tx, vendorId, before, first));
+    const change = await resolveChange(tx, vendorId, before, req.body.changes as EditRaw, computeChange(before, req.body.changes as EditRaw));
     return (await computeImpact(tx, vendorId, before, change, listingOpts(req))).dto;
   })));
 
@@ -59,7 +58,7 @@ export const productEditRoutes: FastifyPluginAsync = async (app) => {
   }, async (req) => {
     const res = await vendorTx(req, async (tx, vendorId) => ({
       vendorId,
-      ...(await saveEdit(tx, vendorId, req.params.id, { version: req.body.version, changes: req.body.changes as RawFields, confirm: req.body.confirm }, requestEffects(tx, req), names, listingOpts(req))),
+      ...(await saveEdit(tx, vendorId, req.params.id, { version: req.body.version, changes: req.body.changes as EditRaw, confirm: req.body.confirm }, requestEffects(tx, req), names, listingOpts(req))),
     }));
     // after the commit: one coalesced, idempotent content-sync job per account. A failure to enqueue never fails the save (the listing stays sync_pending and the sweep / retry picks it up)
     for (const accountId of res.accountsToSync) {

@@ -2,13 +2,13 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { type Tx } from '@oms/database';
-import { PageQuerySchema, successEnvelope } from '@oms/contracts';
+import { IdParamSchema, PageQuerySchema, successEnvelope } from '@oms/contracts';
 import { AppError } from '@oms/shared';
 import { ok, opCtxFromRequest, pageWindow, requireVendor, vendorTx, type OpCtx } from '@oms/module-kit';
 import { FULFILLMENT_ACTIONS, Work, fulfillmentWorkspace } from '@oms/mod-fulfillment';
 import { allowedWarehouses, assertWarehouseCapability } from '@oms/mod-warehouses';
 import { SHIPMENT_STATUSES } from './domain';
-import { GROUP_KEYS, bulkLabels, carriers, listShipmentRows, summary } from './screen';
+import { GROUP_KEYS, bulkLabels, carriers, getShipmentRow, listShipmentRows, summary } from './screen';
 import { MAX_BATCH, applyInTx, applyReady, batchCandidates, handoverGroup, planAction, type ActionDeps, type ActionInput, type BatchError } from './fulfillment-actions';
 
 const Loose = z.looseObject({});
@@ -52,6 +52,15 @@ export function registerScreenRoutes(app: FastifyInstance): void {
     }));
     return ok(req, { items: res.items, page: q.page, pageSize: q.pageSize, total: res.total, pages: Math.max(1, Math.ceil(res.total / q.pageSize)), counts: res.counts });
   });
+
+  r.get('/shipping/shipments/:id', {
+    config: { access: { permission: 'shipping:read' } },
+    schema: {
+      tags: ['Shipping'], summary: 'One shipment as a row of the shipments table',
+      description: 'The same fields as an item of GET /shipping/shipments (carrier, AWB, order, destination, payment, status, last tracking event, ETA, label), found by id, so a shipment can be opened from a link, a reload or another screen. 404 outside the warehouses of the caller.',
+      params: IdParamSchema, response: { 200: successEnvelope(Loose) },
+    },
+  }, async (req) => ok(req, await vendorTx(req, async (tx, vendorId) => getShipmentRow(tx, vendorId, await allowed(req, tx, vendorId), req.params.id))));
 
   r.get('/shipping/carriers', {
     config: { access: { permission: 'shipping:read' } },

@@ -26,7 +26,7 @@ export const vendorShippingProviders = pgTable('vendor_shipping_providers', {
   isDefault: boolean('is_default').notNull().default(false),
   /** non-secret provider settings (service defaults, pickup location ids ...). Credentials will be stored encrypted when a real courier is added. */
   config: jsonb('config').$type<Record<string, unknown>>().notNull().default({}),
-  /** marketplace = the marketplace's own shipping (provider_code marketplace:<code>), seller = merchant-managed, third_party = a courier / aggregator */
+  /** marketplace = the marketplace's own shipping (provider_code marketplace:<code>), seller = merchant-managed, third_party = a courier / aggregator from the catalogue, custom = a logistics provider the seller configured (provider_code custom:<slug>) */
   kind: text('kind').notNull().default('third_party'),
   channelCode: text('channel_code'),
   /** { state: 'unverified'|'verified', verifiedAt, capabilities: { label, tracking, dispatchUpdate, statusSync } } */
@@ -35,7 +35,7 @@ export const vendorShippingProviders = pgTable('vendor_shipping_providers', {
   version: version(),
   ...timestamps(),
 }, (t) => [
-  check('vendor_shipping_providers_kind_chk', sql`kind IN ('marketplace', 'seller', 'third_party')`),
+  check('vendor_shipping_providers_kind_chk', sql`kind IN ('marketplace', 'seller', 'third_party', 'custom')`),
   unique('vendor_shipping_providers_vendor_id_id_uq').on(t.vendorId, t.id),
   uniqueIndex('vendor_shipping_providers_uq').on(t.vendorId, t.providerCode),
   uniqueIndex('vendor_shipping_providers_default_uq').on(t.vendorId).where(sql`${t.isDefault}`),
@@ -154,4 +154,37 @@ export const ndrCases = pgTable('ndr_cases', {
   index('ndr_cases_vendor_status_idx').on(t.vendorId, t.status, t.createdAt.desc()),
   foreignKey({ columns: [t.vendorId, t.shipmentId], foreignColumns: [shipments.vendorId, shipments.id], name: 'ndr_cases_shipment_fk' }).onDelete('cascade'),
   check('ndr_cases_status_chk', inList('status', NDR_STATUSES)),
+]);
+
+export const PICKUP_SLOT_STATUSES = ['requested', 'confirmed', 'manual', 'cancelled', 'failed'] as const;
+/**
+ * A pickup slot: the seller asks a shipping method to collect N parcels from a warehouse on a date within a time window.
+ * `mode` provider = the provider adapter scheduled it (status confirmed + reference); manual = recorded here only, the seller
+ * arranges it with the carrier (status manual).
+ */
+export const shippingPickupSlots = pgTable('shipping_pickup_slots', {
+  id: pk(),
+  vendorId: tenantId().references(() => vendors.id, { onDelete: 'cascade' }),
+  warehouseId: uuid('warehouse_id').notNull(),
+  methodId: uuid('method_id').notNull(),
+  providerCode: text('provider_code').notNull(),
+  slotDate: text('slot_date').notNull(),
+  windowStart: text('window_start').notNull(),
+  windowEnd: text('window_end').notNull(),
+  parcelCount: integer('parcel_count').notNull(),
+  status: text('status').notNull().default('requested'),
+  mode: text('mode').notNull().default('manual'),
+  reference: text('reference'),
+  note: text('note'),
+  createdBy: text('created_by'),
+  cancelledAt: tz('cancelled_at'),
+  version: version(),
+  ...timestamps(),
+}, (t) => [
+  index('shipping_pickup_slots_vendor_idx').on(t.vendorId, t.slotDate, t.windowStart),
+  foreignKey({ columns: [t.vendorId, t.warehouseId], foreignColumns: [warehouses.vendorId, warehouses.id], name: 'shipping_pickup_slots_warehouse_fk' }),
+  foreignKey({ columns: [t.vendorId, t.methodId], foreignColumns: [vendorShippingProviders.vendorId, vendorShippingProviders.id], name: 'shipping_pickup_slots_method_fk' }),
+  check('shipping_pickup_slots_status_chk', inList('status', PICKUP_SLOT_STATUSES)),
+  check('shipping_pickup_slots_mode_chk', inList('mode', ['provider', 'manual'])),
+  check('shipping_pickup_slots_parcels_chk', sql`parcel_count BETWEEN 1 AND 10000`),
 ]);
