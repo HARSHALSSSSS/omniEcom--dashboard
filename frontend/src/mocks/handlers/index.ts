@@ -1,7 +1,29 @@
 /**
- * MSW handler index. Every screen now talks to the real API, so there are no mock handlers left.
- * Set VITE_USE_MOCKS=true only if you add handlers here for an isolated UI experiment.
+ * MSW handler index — combines all module handlers.
+ * Add new module handlers here as they are built.
  */
-import type { RequestHandler } from "msw";
+import { authHandlers } from "./auth.handlers";
+import { productHandlers } from "./product.handlers";
+import { importHandlers } from "./import.handlers";
+import { connectorHandlers } from "./connector.handlers";
+import { listingHandlers } from "./listing.handlers";
+import { inventoryHandlers } from "./inventory.handlers";
+import { orderHandlers } from "./order.handlers";
+import { attentionHandlers } from "./attention.handlers";
+import { hardeningHandlers } from "./hardening.handlers";
+import { shippingHandlers } from "./shipping.handlers";
+import { returnsHandlers } from "./returns.handlers";
 
-export const handlers: RequestHandler[] = [];
+export const handlers = [
+  ...authHandlers,
+  ...productHandlers,
+  ...importHandlers,
+  ...connectorHandlers,
+  ...listingHandlers,
+  ...inventoryHandlers,
+  ...orderHandlers,
+  ...attentionHandlers,
+  ...hardeningHandlers,
+  ...shippingHandlers,
+  ...returnsHandlers,
+];
