@@ -154,18 +154,19 @@ export async function marginOverview(tx: Tx, vendorId: string, f: { accountId?: 
     channels,
     totals: {
       productsInView: new Set(view.rows.map((r) => r.productId)).size, productChannelPrices: view.rows.length, avgMarginBps: avg(known.map((r) => r.marginBps as number)),
-      belowTargetCount: view.rows.filter((r) => r.belowTarget === true).length, unknownCostCount: view.rows.length - known.length, targetMarginBps: view.targetMarginBps,
+      belowTargetCount: view.rows.filter((r) => r.belowTarget === true).length, unknownCostCount: view.rows.length - known.length, withProposalCount: view.rows.filter((r) => r.proposalId !== null).length, targetMarginBps: view.targetMarginBps,
     },
   };
 }
 
-export interface PriceTableQuery { accountId?: string; q?: string; sort: 'product' | 'margin_asc' | 'margin_desc' | 'price_desc'; limit: number; offset: number }
+export interface PriceTableQuery { accountId?: string; q?: string; state?: 'below_target' | 'proposed'; sort: 'product' | 'margin_asc' | 'margin_desc' | 'price_desc'; limit: number; offset: number }
 
 /** numbered-page list of every listing price with its real cost, fees, margin and the pending proposal if any */
 export async function priceTable(tx: Tx, vendorId: string, q: PriceTableQuery) {
   const view = await loadMarginView(tx, vendorId, { accountId: q.accountId });
   const needle = q.q?.toLowerCase();
-  const rows = needle ? view.rows.filter((r) => r.sku.toLowerCase().includes(needle) || r.productTitle.toLowerCase().includes(needle)) : view.rows.slice();
+  const byState = q.state === 'below_target' ? view.rows.filter((r) => r.belowTarget === true) : q.state === 'proposed' ? view.rows.filter((r) => r.proposalId !== null) : view.rows;
+  const rows = needle ? byState.filter((r) => r.sku.toLowerCase().includes(needle) || r.productTitle.toLowerCase().includes(needle)) : byState.slice();
   // unknown margins always last, whatever the direction; ties keep the product / sku order of the loader
   const byMargin = (dir: 1 | -1) => (a: PricedListing, b: PricedListing): number => {
     if (a.marginBps === null || b.marginBps === null) return a.marginBps === b.marginBps ? 0 : a.marginBps === null ? 1 : -1;

@@ -1,14 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Routes, Route, useLocation } from "react-router-dom";
 import PricingPage from "./PricingPage";
 import { useWorkspaceStore } from "@/store/workspace.store";
-import type { PricingOverview, ProposalsPage } from "@/types/pricing";
+import type { MarginOverview, PriceProposal, PriceTablePage, PriceTableRow, PricingOverview, ProposalsPage } from "@/types/pricing";
 
 const api = vi.hoisted(() => ({
   overview: vi.fn(),
+  marginOverview: vi.fn(),
+  priceTable: vi.fn(),
   proposals: vi.fn(),
   policies: vi.fn(),
   policyPreview: vi.fn(),
@@ -16,39 +18,65 @@ const api = vi.hoisted(() => ({
   history: vi.fn(),
 }));
 
-vi.mock("@/api/pricing.api", () => ({ pricingApi: api }));
-vi.mock("@/api/listings.api", () => ({
-  listingsApi: {
-    table: vi.fn().mockResolvedValue({ items: [], page: 1, pageSize: 25, total: 0, pages: 1 }),
-  },
-}));
+vi.mock("@/api/pricing.api", () => ({ pricingApi: api, HISTORY_PAGE: 50 }));
 vi.mock("@/utils/shell", () => ({ refreshShell: vi.fn() }));
+
+const AMAZON = "11111111-1111-4111-8111-111111111111";
+const FLIPKART = "22222222-2222-4222-8222-222222222222";
 
 const overviewData = (): PricingOverview => ({
   pendingProposals: 3,
   potentialMarginGainMinor: 4860000,
   proposalsWithoutEstimate: 2,
-  autoAppliedLast30Days: 0,
-  approvedLast30Days: 0,
+  autoAppliedLast30Days: 1,
+  appliedLast30Days: 4,
+  opportunitiesCount: 2,
+  approvedLast30Days: 3,
   rejectedLast30Days: 0,
   activePolicies: 2,
   pausedPolicies: 1,
   channelsCovered: 2,
   channels: [
-    { accountId: "11111111-1111-4111-8111-111111111111", name: "Amazon", marketplace: "amazon" },
-    { accountId: "22222222-2222-4222-8222-222222222222", name: "Flipkart", marketplace: "flipkart" },
+    { accountId: AMAZON, name: "Amazon", marketplace: "amazon" },
+    { accountId: FLIPKART, name: "Flipkart", marketplace: "flipkart" },
   ],
   proposalCounts: {},
   basis: "estimated",
 });
 
-const emptyProposals = (): ProposalsPage => ({
-  items: [],
-  page: 1,
-  pageSize: 25,
-  total: 0,
-  pages: 1,
-  counts: { pending_review: 0, approved: 0, rejected: 0, auto_applied: 0, failed: 0, expired: 0, superseded: 0, all: 0 },
+const marginData = (): MarginOverview => ({
+  channels: [
+    {
+      accountId: AMAZON, channel: "Amazon", marketplace: "amazon", priceCount: 3, pricedWithCostCount: 3, avgMarginBps: 2988, belowTargetCount: 2, targetMarginBps: 3500,
+      feeTermsSummary: "10% commission", feesConfigured: true, unknownCostCount: 0, nextAction: "proposals",
+    },
+    {
+      accountId: FLIPKART, channel: "Flipkart", marketplace: "flipkart", priceCount: 2, pricedWithCostCount: 0, avgMarginBps: null, belowTargetCount: 0, targetMarginBps: 3500,
+      feeTermsSummary: "fees not configured", feesConfigured: false, unknownCostCount: 2, nextAction: "costs",
+    },
+  ],
+  totals: { productsInView: 4, productChannelPrices: 5, avgMarginBps: 2988, belowTargetCount: 2, unknownCostCount: 2, withProposalCount: 1, targetMarginBps: 3500 },
+});
+
+const row = (over: Partial<PriceTableRow> = {}): PriceTableRow => ({
+  listingId: "l1", variantId: "v1", productTitle: "Cotton Kurta", sku: "KURTA-M", accountId: AMAZON, channel: "Amazon", marketplace: "amazon",
+  currentPriceMinor: 49900, unitCostMinor: 30000, feesMinor: 4990, marginBps: 2988, targetMarginBps: 3500, belowTarget: true, proposalState: "proposed", proposalId: "p1", proposedPriceMinor: 54600,
+  ...over,
+});
+
+const tablePage = (items: PriceTableRow[], over: Partial<PriceTablePage> = {}): PriceTablePage => ({ items, page: 1, pageSize: 10, total: items.length, pages: 1, ...over });
+
+const proposal = (over: Partial<PriceProposal> = {}): PriceProposal => ({
+  id: "p1", status: "pending_review", strategy: "margin_floor", variantId: "v1", sku: "KURTA-M", productTitle: "Cotton Kurta", accountId: AMAZON, channelName: "Amazon", marketplace: "amazon",
+  policyId: "pol", policyName: "Floor", currentPriceMinor: 49900, proposedPriceMinor: 54600, currency: "INR", priceChangeBps: 942, competitorPriceMinor: null, estMarginDeltaBps: 512,
+  projectedSalesDeltaBps: null, reasoning: "Floor", unitCostMinor: 30000, feesMinor: 4990, currentMarginBps: 2988, proposedMarginBps: 3500, targetMarginBps: 3500, reasonCode: "below_margin_target",
+  reasonText: "Current margin is 29.88%, below the 35% target.", expiresAt: null, createdAt: "2026-10-01T00:00:00.000Z", decidedBy: null, decidedByName: null, decidedAt: null, decisionNote: null,
+  appliedAt: null, failureMessage: null, pushSkipped: false, version: 1, ...over,
+});
+
+const proposalsPage = (items: PriceProposal[]): ProposalsPage => ({
+  items, page: 1, pageSize: 25, total: items.length, pages: 1,
+  counts: { pending_review: items.length, approved: 0, rejected: 0, auto_applied: 0, failed: 0, expired: 0, superseded: 0, all: items.length },
 });
 
 function Probe() {
@@ -57,92 +85,159 @@ function Probe() {
 }
 
 function renderOverviewPage(url = "/pricing") {
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false, staleTime: 0 }, mutations: { retry: false } },
-  });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 0 }, mutations: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[url]}>
         <Routes>
-          <Route
-            path="*"
-            element={
-              <>
-                <PricingPage />
-                <Probe />
-              </>
-            }
-          />
+          <Route path="*" element={<><PricingPage /><Probe /></>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>
   );
 }
 
+const loc = () => new URL(screen.getByTestId("loc").textContent ?? "", "http://x");
+
 beforeEach(() => {
   vi.clearAllMocks();
   useWorkspaceStore.setState({ permissions: ["pricing:read", "pricing:write", "pricing:approve"] });
   api.overview.mockResolvedValue(overviewData());
-  api.proposals.mockResolvedValue(emptyProposals());
+  api.marginOverview.mockResolvedValue(marginData());
+  api.priceTable.mockResolvedValue(tablePage([
+    row(),
+    row({ listingId: "l2", variantId: "v2", productTitle: "Canvas Shoes", sku: "SHOE-9", accountId: FLIPKART, channel: "Flipkart", marketplace: "flipkart", currentPriceMinor: 159900, unitCostMinor: null, feesMinor: null, marginBps: null, belowTarget: null, proposalState: "none", proposalId: null, proposedPriceMinor: null }),
+  ]));
+  api.proposals.mockResolvedValue(proposalsPage([proposal()]));
   api.policies.mockResolvedValue([]);
   api.competitors.mockResolvedValue({ items: [], page: 1, pageSize: 25, total: 0, pages: 1 });
   api.history.mockResolvedValue({ items: [], nextBefore: null });
 });
 
-describe("PricingOverviewView (Figma Screen 1)", () => {
-  it("renders the pricing pulse KPI bar, opportunities card, and intelligence card", async () => {
+describe("Pricing overview tab (real data)", () => {
+  it("shows the pulse bar from the real margin totals and the overview counts", async () => {
     renderOverviewPage();
-
-    // 1. Breadcrumbs & Title
-    expect(screen.getByText("Workspace")).toBeInTheDocument();
-    expect(screen.getAllByText("Pricing")[0]).toBeInTheDocument();
-
-    // 2. Pricing pulse KPI metrics
     expect(await screen.findByText("Products in view")).toBeInTheDocument();
-    expect(screen.getByText(/product-channel prices/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/Avg\. est\. margin/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Pricing opportunities").length).toBeGreaterThan(0);
-    expect(screen.getByText("Updates applied")).toBeInTheDocument();
+    expect(screen.getByText("5 product-channel prices")).toBeInTheDocument();
+    expect(screen.getAllByText("29.88%").length).toBeGreaterThan(0);
+    expect(screen.getByText(/2 without a cost price left out/)).toBeInTheDocument();
+    expect(screen.getAllByText(/Target ≥ 35%/).length).toBeGreaterThan(0);
+    expect(screen.getByText("Updates applied").parentElement).toHaveTextContent("4");
+    expect(screen.getByText("Pricing opportunities", { selector: "span" }).parentElement).toHaveTextContent("2");
+    // nothing invented
+    expect(screen.queryByText(/Illustrative/i)).not.toBeInTheDocument();
+    expect(screen.queryByText("Home Storage Set")).not.toBeInTheDocument();
+    expect(screen.getByText(/Based on your costs and channel fees/)).toBeInTheDocument();
+  });
 
-    // 3. Pricing opportunities table
-    expect(screen.getAllByText("Cotton Oversized T-Shirt").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Home Storage Set").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Canvas Shoes").length).toBeGreaterThan(0);
+  it("lists the pending proposals as opportunities with real margins and the reason", async () => {
+    renderOverviewPage();
+    const card = (await screen.findByRole("heading", { name: "Pricing opportunities" })).closest("div.rounded-xl") as HTMLElement;
+    expect(await within(card).findByText("Cotton Kurta")).toBeInTheDocument();
+    expect(within(card).getByText("₹499 → ₹546")).toBeInTheDocument();
+    expect(within(card).getByText("29.88% → 35%")).toBeInTheDocument();
+    expect(within(card).getByText("Current margin is 29.88%, below the 35% target.")).toBeInTheDocument();
+    expect(api.proposals.mock.calls[0][0]).toMatchObject({ tab: "pending_review", sort: "impact" });
+  });
 
-    // 4. Pricing intelligence card
-    expect(screen.getByText(/channel prices fall below the 30% margin target/i)).toBeInTheDocument();
+  it("shows a dash when a proposal has no known margin", async () => {
+    api.proposals.mockResolvedValue(proposalsPage([proposal({ currentMarginBps: null, proposedMarginBps: null, reasonText: "A competitor sells at Rs 450.00." })]));
+    renderOverviewPage();
+    expect(await screen.findByText("— → —")).toBeInTheDocument();
+  });
+
+  it("says what is true in the intelligence card", async () => {
+    renderOverviewPage();
+    expect(await screen.findByText("2 channel prices fall below the 35% margin target.")).toBeInTheDocument();
+    expect(screen.getByText(/2 prices have no cost price/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Review price proposals" })).toBeInTheDocument();
   });
 
-  it("renders the product & channel pricing table with filters and margin context table", async () => {
+  it("renders the price table from the server with dashes for unknown cost, and filters on the server", async () => {
     const user = userEvent.setup();
     renderOverviewPage();
-
-    // Product & channel pricing table
     expect(await screen.findByText("Product & channel pricing")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /All prices/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Below target/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /With proposals/i })).toBeInTheDocument();
+    const kurta = (await screen.findAllByText("KURTA-M")).map((e) => e.closest("tr")).find(Boolean) as HTMLElement;
+    expect(within(kurta).getByText("₹300")).toBeInTheDocument();
+    expect(within(kurta).getByText("₹49.90")).toBeInTheDocument();
+    expect(within(kurta).getByText("29.88%")).toHaveClass("text-amber-600");
+    expect(within(kurta).getByText(/Proposed · ₹546/)).toBeInTheDocument();
+    const shoes = screen.getByText("SHOE-9").closest("tr") as HTMLElement;
+    expect(within(shoes).getAllByText("—")).toHaveLength(3);
+    expect(within(shoes).getByText("No proposal")).toBeInTheDocument();
+    expect(api.priceTable.mock.calls[0][0]).toMatchObject({ sort: "product", page: 1, pageSize: 10 });
 
-    // Filter by 'Below target'
-    await user.click(screen.getByRole("button", { name: /Below target/i }));
-    expect(screen.getAllByText("Cotton Oversized T-Shirt").length).toBeGreaterThan(0);
+    await user.click(screen.getByRole("button", { name: /Below target/ }));
+    await waitFor(() => expect(api.priceTable.mock.calls.at(-1)?.[0]).toMatchObject({ state: "below_target", page: 1 }));
+    await user.click(screen.getByRole("button", { name: /With proposals/ }));
+    await waitFor(() => expect(api.priceTable.mock.calls.at(-1)?.[0]).toMatchObject({ state: "proposed" }));
 
-    // Margin context table & advisory notice
-    expect(screen.getByText("Margin context")).toBeInTheDocument();
-    expect(screen.getByText(/All prices, costs and recommendations are illustrative/i)).toBeInTheDocument();
+    await user.type(screen.getByLabelText("Search product or SKU"), "shoe");
+    await waitFor(() => expect(api.priceTable.mock.calls.at(-1)?.[0]).toMatchObject({ q: "shoe" }));
+    await user.selectOptions(screen.getByLabelText("Channel"), FLIPKART);
+    await waitFor(() => expect(api.priceTable.mock.calls.at(-1)?.[0]).toMatchObject({ accountId: FLIPKART }));
+    await user.click(screen.getByRole("button", { name: "Sort by margin" }));
+    await waitFor(() => expect(api.priceTable.mock.calls.at(-1)?.[0]).toMatchObject({ sort: "margin_asc" }));
   });
 
-  it("navigates to proposals tab when Review button is clicked", async () => {
+  it("opens the proposals tab for a proposed price and for a channel's margin row", async () => {
     const user = userEvent.setup();
     renderOverviewPage();
+    const kurta = (await screen.findAllByText("KURTA-M")).map((e) => e.closest("tr")).find(Boolean) as HTMLElement;
+    await user.click(kurta);
+    await waitFor(() => expect(loc().searchParams.get("view")).toBe("proposals"));
+    expect(loc().searchParams.get("q")).toBe("KURTA-M");
+    expect(loc().searchParams.get("account")).toBe(AMAZON);
+  });
 
+  it("shows the real fee terms and sends a channel with missing costs to the products", async () => {
+    const user = userEvent.setup();
+    renderOverviewPage();
+    expect(await screen.findByText("Margin context")).toBeInTheDocument();
+    expect(screen.getByText("10% commission")).toBeInTheDocument();
+    expect(screen.getByText("fees not configured")).toBeInTheDocument();
+    expect(screen.getByText("2 prices · 2 without a cost price")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Review proposals/ }));
+    await waitFor(() => expect(loc().searchParams.get("view")).toBe("proposals"));
+    expect(loc().searchParams.get("account")).toBe(AMAZON);
+  });
+
+  it("sends a channel without costs to the product list", async () => {
+    const user = userEvent.setup();
+    renderOverviewPage();
+    await user.click(await screen.findByRole("button", { name: /Review costs/ }));
+    await waitFor(() => expect(loc().pathname).toBe("/products"));
+  });
+
+  it("offers the Marketplace hub when no channel is connected", async () => {
+    api.marginOverview.mockResolvedValue({ channels: [], totals: { productsInView: 0, productChannelPrices: 0, avgMarginBps: null, belowTargetCount: 0, unknownCostCount: 0, withProposalCount: 0, targetMarginBps: null } });
+    renderOverviewPage();
+    expect(await screen.findByText("No sales channels connected yet.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open Marketplace hub" })).toHaveAttribute("href", "/marketplace-hub");
+  });
+
+  it("shows an error with a retry that reloads", async () => {
+    const user = userEvent.setup();
+    api.marginOverview.mockRejectedValueOnce(new Error("boom"));
+    renderOverviewPage();
+    expect(await screen.findByRole("alert")).toHaveTextContent(/could not be loaded/i);
+    await user.click(screen.getByRole("button", { name: "Retry" }));
     expect(await screen.findByText("Products in view")).toBeInTheDocument();
-    const reviewButtons = screen.getAllByRole("button", { name: /Review/i });
-    expect(reviewButtons.length).toBeGreaterThan(0);
-    await user.click(reviewButtons[0]);
+    expect(api.marginOverview).toHaveBeenCalledTimes(2);
+  });
 
-    // Navigates to proposals tab
-    expect(screen.getByTestId("loc").textContent).toBe("/pricing?view=proposals");
+  it("shows empty states for no proposals and no priced listings", async () => {
+    api.proposals.mockResolvedValue(proposalsPage([]));
+    api.priceTable.mockResolvedValue(tablePage([]));
+    renderOverviewPage();
+    expect(await screen.findByText(/No price proposals are waiting for review/)).toBeInTheDocument();
+    expect(await screen.findByText(/No listings with a price yet/)).toBeInTheDocument();
+  });
+
+  it("lets a viewer read the overview", async () => {
+    useWorkspaceStore.setState({ permissions: ["pricing:read"] });
+    renderOverviewPage();
+    expect(await screen.findByText("Products in view")).toBeInTheDocument();
+    expect(screen.getByText("Product & channel pricing")).toBeInTheDocument();
   });
 });

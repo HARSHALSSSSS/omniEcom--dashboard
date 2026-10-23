@@ -109,7 +109,7 @@ export const proposalRoutes: FastifyPluginAsync = async (app) => {
           accountId: z.string(), channel: z.string(), marketplace: z.string(), priceCount: z.number().int(), pricedWithCostCount: z.number().int(), avgMarginBps: z.number().int().nullable(),
           belowTargetCount: z.number().int(), targetMarginBps: z.number().int().nullable(), feeTermsSummary: z.string(), feesConfigured: z.boolean(), unknownCostCount: z.number().int(), nextAction: z.enum(['costs', 'proposals']),
         })),
-        totals: z.object({ productsInView: z.number().int(), productChannelPrices: z.number().int(), avgMarginBps: z.number().int().nullable(), belowTargetCount: z.number().int(), unknownCostCount: z.number().int(), targetMarginBps: z.number().int().nullable().describe('Strictest active policy target; null without a policy target') }),
+        totals: z.object({ productsInView: z.number().int(), productChannelPrices: z.number().int(), avgMarginBps: z.number().int().nullable(), belowTargetCount: z.number().int(), unknownCostCount: z.number().int(), withProposalCount: z.number().int().describe('Listings with a pending proposal'), targetMarginBps: z.number().int().nullable().describe('Strictest active policy target; null without a policy target') }),
       })) },
     },
   }, async (req) => ok(req, await vendorTx(req, (tx, vendorId) => marginOverview(tx, vendorId, { accountId: req.query['filter[accountId]'] }))));
@@ -119,7 +119,7 @@ export const proposalRoutes: FastifyPluginAsync = async (app) => {
     schema: {
       tags: TAGS, summary: 'Every listing price with its real cost, fees and margin',
       description: 'One row per active listing with a price. `unitCostMinor`, `feesMinor`, `marginBps`, `belowTarget` are null when unknown (no cost price / no fee profile / no policy target). `proposalState` is `proposed` when a proposal is pending for the listing (`proposalId`, `proposedPriceMinor`). Unknown margins sort last.',
-      querystring: PageQuerySchema.extend({ 'filter[accountId]': z.uuid().optional(), q: z.string().trim().min(1).max(100).optional(), sort: z.enum(['product', 'margin_asc', 'margin_desc', 'price_desc']).default('product') }),
+      querystring: PageQuerySchema.extend({ 'filter[accountId]': z.uuid().optional(), 'filter[state]': z.enum(['below_target', 'proposed']).optional().describe('below_target = margin under the policy target; proposed = a proposal is pending'), q: z.string().trim().min(1).max(100).optional(), sort: z.enum(['product', 'margin_asc', 'margin_desc', 'price_desc']).default('product') }),
       response: { 200: successEnvelope(z.object({
         items: z.array(z.object({
           listingId: z.string(), variantId: z.string(), productTitle: z.string(), sku: z.string(), accountId: z.string(), channel: z.string(), marketplace: z.string(), currentPriceMinor: z.number().int(),
@@ -131,7 +131,7 @@ export const proposalRoutes: FastifyPluginAsync = async (app) => {
     },
   }, async (req) => {
     const w = pageWindow(req.query);
-    const res = await vendorTx(req, (tx, vendorId) => priceTable(tx, vendorId, { accountId: req.query['filter[accountId]'], q: req.query.q, sort: req.query.sort, ...w }));
+    const res = await vendorTx(req, (tx, vendorId) => priceTable(tx, vendorId, { accountId: req.query['filter[accountId]'], state: req.query['filter[state]'], q: req.query.q, sort: req.query.sort, ...w }));
     return paged(req, res.items, req.query, res.total);
   });
 

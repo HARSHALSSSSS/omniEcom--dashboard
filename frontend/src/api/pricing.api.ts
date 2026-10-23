@@ -13,6 +13,9 @@ import type {
   GenerateResponse,
   HistoryPage,
   HistoryQuery,
+  MarginOverview,
+  PriceTablePage,
+  PriceTableQuery,
   PriceProposal,
   PricingOverview,
   PricingPolicy,
@@ -33,6 +36,15 @@ export function proposalParams(query: ProposalsQuery): Record<string, string | n
   return params;
 }
 
+export function priceTableParams(query: PriceTableQuery): Record<string, string | number> {
+  const params: Record<string, string | number> = { sort: query.sort, pageSize: query.pageSize };
+  if (query.accountId) params["filter[accountId]"] = query.accountId;
+  if (query.state) params["filter[state]"] = query.state;
+  if (query.q) params.q = query.q;
+  if (query.page > 1) params.page = query.page;
+  return params;
+}
+
 export function competitorParams(query: CompetitorsQuery): Record<string, string | number> {
   const params: Record<string, string | number> = { pageSize: query.pageSize, latest: query.latest ? "true" : "false" };
   if (query.accountId) params["filter[accountId]"] = query.accountId;
@@ -45,6 +57,13 @@ export const HISTORY_PAGE = 50;
 
 export const pricingApi = {
   overview: async (signal?: AbortSignal) => unwrap<PricingOverview>(await client.get(ENDPOINTS.PRICING_OVERVIEW, { signal })),
+
+  /** per-channel margins and totals from real cost, fee and policy data */
+  marginOverview: async (accountId?: string, signal?: AbortSignal) =>
+    unwrap<MarginOverview>(await client.get(ENDPOINTS.PRICING_MARGIN_OVERVIEW, { params: accountId ? { "filter[accountId]": accountId } : {}, signal })),
+
+  priceTable: async (query: PriceTableQuery, signal?: AbortSignal) =>
+    unwrap<PriceTablePage>(await client.get(ENDPOINTS.PRICING_PRICE_TABLE, { params: priceTableParams(query), signal })),
 
   proposals: async (query: ProposalsQuery, signal?: AbortSignal) =>
     unwrap<ProposalsPage>(await client.get(ENDPOINTS.PRICING_PROPOSALS, { params: proposalParams(query), signal })),

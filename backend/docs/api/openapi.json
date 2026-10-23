@@ -115468,6 +115468,12 @@
                               "minimum": -9007199254740991,
                               "maximum": 9007199254740991
                             },
+                            "withProposalCount": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991,
+                              "description": "Listings with a pending proposal"
+                            },
                             "targetMarginBps": {
                               "anyOf": [
                                 {
@@ -115488,6 +115494,7 @@
                             "avgMarginBps",
                             "belowTargetCount",
                             "unknownCostCount",
+                            "withProposalCount",
                             "targetMarginBps"
                           ],
                           "additionalProperties": false
@@ -115605,6 +115612,19 @@
             "in": "query",
             "name": "filter[accountId]",
             "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "below_target",
+                "proposed"
+              ]
+            },
+            "in": "query",
+            "name": "filter[state]",
+            "required": false,
+            "description": "below_target = margin under the policy target; proposed = a proposal is pending"
           },
           {
             "schema": {

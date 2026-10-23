@@ -16,28 +16,75 @@ export type ProposalSort = (typeof PROPOSAL_SORTS)[number];
 export const PRICING_VIEWS = ["overview", "proposals", "policies", "competitors", "history"] as const;
 export type PricingView = (typeof PRICING_VIEWS)[number];
 
-export interface ProductChannelPriceItem {
-  id: string;
+/** one row of GET /pricing/price-table: a listing price with its real cost, fees and margin (null = unknown, never guessed) */
+export interface PriceTableRow {
+  listingId: string;
+  variantId: string;
   productTitle: string;
   sku: string;
+  accountId: string;
   channel: string;
   marketplace: string;
-  currentPrice: number;
-  unitCost: number;
-  feesAndShipping: number;
-  estMarginPct: number;
+  currentPriceMinor: number;
+  unitCostMinor: number | null;
+  feesMinor: number | null;
+  marginBps: number | null;
+  targetMarginBps: number | null;
+  belowTarget: boolean | null;
   proposalState: "none" | "proposed";
-  proposedPrice?: number;
+  proposalId: string | null;
+  proposedPriceMinor: number | null;
 }
 
-export interface MarginContextItem {
+export const PRICE_TABLE_SORTS = ["product", "margin_asc", "margin_desc", "price_desc"] as const;
+export type PriceTableSort = (typeof PRICE_TABLE_SORTS)[number];
+
+export type PriceTableState = "below_target" | "proposed";
+
+export interface PriceTableQuery {
+  state?: PriceTableState;
+  q?: string;
+  accountId?: string;
+  sort: PriceTableSort;
+  page: number;
+  pageSize: number;
+}
+
+export interface PriceTablePage {
+  items: PriceTableRow[];
+  page: number;
+  pageSize: number;
+  total: number;
+  pages: number;
+}
+
+/** one channel of GET /pricing/margin-overview */
+export interface ChannelMargin {
+  accountId: string;
   channel: string;
   marketplace: string;
   priceCount: number;
-  avgEstMarginPct: number;
+  pricedWithCostCount: number;
+  avgMarginBps: number | null;
   belowTargetCount: number;
-  feeAssumptions: string;
-  nextActionType: "costs" | "proposals";
+  targetMarginBps: number | null;
+  feeTermsSummary: string;
+  feesConfigured: boolean;
+  unknownCostCount: number;
+  nextAction: "costs" | "proposals";
+}
+
+export interface MarginOverview {
+  channels: ChannelMargin[];
+  totals: {
+    productsInView: number;
+    productChannelPrices: number;
+    avgMarginBps: number | null;
+    belowTargetCount: number;
+    unknownCostCount: number;
+    withProposalCount: number;
+    targetMarginBps: number | null;
+  };
 }
 
 export interface PricingChannel {
@@ -51,6 +98,10 @@ export interface PricingOverview {
   potentialMarginGainMinor: number;
   proposalsWithoutEstimate: number;
   autoAppliedLast30Days: number;
+  /** approved + auto-applied in the last 30 days */
+  appliedLast30Days: number;
+  /** pending proposals with a positive estimated monthly gain */
+  opportunitiesCount: number;
   approvedLast30Days: number;
   rejectedLast30Days: number;
   activePolicies: number;
@@ -81,6 +132,14 @@ export interface PriceProposal {
   estMarginDeltaBps: number | null;
   projectedSalesDeltaBps: number | null;
   reasoning: string;
+  /** real inputs behind the margins; null = unknown (no cost price / no fee profile / no policy target) */
+  unitCostMinor: number | null;
+  feesMinor: number | null;
+  currentMarginBps: number | null;
+  proposedMarginBps: number | null;
+  targetMarginBps: number | null;
+  reasonCode: string;
+  reasonText: string;
   expiresAt: string | null;
   createdAt: string;
   decidedBy: string | null;

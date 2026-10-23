@@ -33,7 +33,7 @@ describe('margin overview and price table', () => {
     expect(res.body.data.channels[0]).toMatchObject({
       accountId: w.account.id, priceCount: 1, pricedWithCostCount: 1, avgMarginBps: 2988, belowTargetCount: 0, unknownCostCount: 0, feeTermsSummary: '10% commission', nextAction: 'proposals', targetMarginBps: null,
     });
-    expect(res.body.data.totals).toEqual({ productsInView: 1, productChannelPrices: 1, avgMarginBps: 2988, belowTargetCount: 0, unknownCostCount: 0, targetMarginBps: null });
+    expect(res.body.data.totals).toEqual({ productsInView: 1, productChannelPrices: 1, avgMarginBps: 2988, belowTargetCount: 0, unknownCostCount: 0, withProposalCount: 0, targetMarginBps: null });
     const row = (await c.get(`${API}/price-table`, viewer)).body.data.items[0];
     expect(row).toMatchObject({ variantId: w.variant.variantId, listingId: w.variant.listingId, sku: w.variant.sku, accountId: w.account.id, currentPriceMinor: 49_900, unitCostMinor: 30_000, feesMinor: 4_990, marginBps: 2988, belowTarget: null, proposalState: 'none', proposalId: null, proposedPriceMinor: null });
   });
@@ -78,6 +78,9 @@ describe('margin overview and price table', () => {
     expect(list.counts.pending_review).toBe(1);
     const row = (await table(w)).items[0];
     expect(row).toMatchObject({ proposalState: 'proposed', proposalId: p.id, proposedPriceMinor: p.proposedPriceMinor });
+    expect((await table(w, '?filter[state]=proposed')).total).toBe(1);
+    expect((await table(w, '?filter[state]=below_target')).total).toBe(1);
+    expect((await overview(w)).totals).toMatchObject({ withProposalCount: 1, belowTargetCount: 1 });
     const o1 = (await c.get(`${API}/overview`, w.admin)).body.data;
     expect(o1).toMatchObject({ pendingProposals: 1, appliedLast30Days: 0 });
     expect(typeof o1.opportunitiesCount).toBe('number');
@@ -109,6 +112,8 @@ describe('margin overview and price table', () => {
     expect(p2.items).toHaveLength(1);
     expect(p1.items[0].marginBps).toBeGreaterThanOrEqual(p2.items[0].marginBps);
     expect((await table(w, '?sort=margin_asc')).items[0].marginBps).toBeLessThanOrEqual(p1.items[0].marginBps);
+    expect((await table(w, '?filter[state]=proposed')).total).toBe(0);
+    expect((await table(w, '?filter[state]=below_target')).total).toBe(0);
     expect((await table(w, `?q=${w.variant.sku}`)).total).toBe(1);
     expect((await table(w, '?q=second')).items[0].productTitle).toBe('Second tee');
     expect((await table(w, '?q=nothing-like-this')).total).toBe(0);

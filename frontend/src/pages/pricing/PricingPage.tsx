@@ -193,7 +193,7 @@ export default function PricingPage() {
           )}
         </div>
         <p className="text-xs text-muted-foreground">
-          Illustrative data · No prices changed automatically
+          Based on your costs and channel fees · No prices changed automatically
         </p>
       </div>
 
@@ -202,8 +202,9 @@ export default function PricingPage() {
         {view === "overview" && (
           <PricingOverviewView
             overview={overview.data}
-            onReviewProposal={() => update({ view: "proposals" })}
-            onReviewAllProposals={() => update({ view: "proposals" })}
+            onReviewProposals={(target) =>
+              update(target ? { view: "proposals", tab: null, account: target.accountId ?? null, q: target.q ?? null } : { view: "proposals" })
+            }
           />
         )}
         {view === "proposals" && (

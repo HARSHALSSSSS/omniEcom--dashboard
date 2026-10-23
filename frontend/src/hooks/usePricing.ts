@@ -2,11 +2,13 @@ import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClie
 import { pricingApi } from "@/api/pricing.api";
 import { refreshShell } from "@/lib/session";
 import { useWorkspaceStore } from "@/store/workspace.store";
-import type { CompetitorWrite, CompetitorsQuery, DecisionAction, GenerateInput, HistoryQuery, PolicyWrite, ProposalsQuery } from "@/types/pricing";
+import type { CompetitorWrite, CompetitorsQuery, DecisionAction, GenerateInput, HistoryQuery, PolicyWrite, PriceTableQuery, ProposalsQuery } from "@/types/pricing";
 
 export const pricingKeys = {
   all: ["pricing"] as const,
   overview: (b: string | undefined) => ["pricing", "overview", b] as const,
+  marginOverview: (b: string | undefined, a: string | undefined) => ["pricing", "margin-overview", b, a] as const,
+  priceTable: (b: string | undefined, q: PriceTableQuery) => ["pricing", "price-table", b, q] as const,
   proposals: (b: string | undefined, q: ProposalsQuery) => ["pricing", "proposals", b, q] as const,
   policies: (b: string | undefined) => ["pricing", "policies", b] as const,
   competitors: (b: string | undefined, q: CompetitorsQuery) => ["pricing", "competitors", b, q] as const,
@@ -20,6 +22,23 @@ const useBusinessId = () => useWorkspaceStore((s) => s.shell?.business.id);
 export function usePricingOverview() {
   const businessId = useBusinessId();
   return useQuery({ queryKey: pricingKeys.overview(businessId), queryFn: ({ signal }) => pricingApi.overview(signal), staleTime: 30_000 });
+}
+
+/** per-channel margin rows and totals (real cost + fee data) */
+export function useMarginOverview(accountId?: string) {
+  const businessId = useBusinessId();
+  return useQuery({ queryKey: pricingKeys.marginOverview(businessId, accountId), queryFn: ({ signal }) => pricingApi.marginOverview(accountId, signal), staleTime: 30_000 });
+}
+
+/** one numbered page of the product / channel price table; the previous page stays while the next loads */
+export function usePriceTable(query: PriceTableQuery) {
+  const businessId = useBusinessId();
+  return useQuery({
+    queryKey: pricingKeys.priceTable(businessId, query),
+    queryFn: ({ signal }) => pricingApi.priceTable(query, signal),
+    staleTime: 15_000,
+    placeholderData: keepPreviousData,
+  });
 }
 
 /** one numbered page of the review queue; the previous page stays on screen while the next one loads */

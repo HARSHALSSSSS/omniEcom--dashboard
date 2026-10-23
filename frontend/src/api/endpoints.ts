@@ -313,6 +313,8 @@ export const ENDPOINTS = {
 
   // Pricing
   PRICING_OVERVIEW: `${BASE}/pricing/overview`,
+  PRICING_MARGIN_OVERVIEW: `${BASE}/pricing/margin-overview`,
+  PRICING_PRICE_TABLE: `${BASE}/pricing/price-table`,
   PRICING_PROPOSALS: `${BASE}/pricing/proposals`,
   PRICING_PROPOSAL: (id: string) => `${BASE}/pricing/proposals/${id}`,
   PRICING_PROPOSAL_ACTION: (id: string, action: "approve" | "reject") =>
