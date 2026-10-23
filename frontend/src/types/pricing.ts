@@ -13,8 +13,32 @@ export const PROPOSAL_TABS: readonly ProposalTab[] = ["pending_review", "approve
 export const PROPOSAL_SORTS = ["impact", "newest", "oldest"] as const;
 export type ProposalSort = (typeof PROPOSAL_SORTS)[number];
 
-export const PRICING_VIEWS = ["proposals", "policies", "competitors", "history"] as const;
+export const PRICING_VIEWS = ["overview", "proposals", "policies", "competitors", "history"] as const;
 export type PricingView = (typeof PRICING_VIEWS)[number];
+
+export interface ProductChannelPriceItem {
+  id: string;
+  productTitle: string;
+  sku: string;
+  channel: string;
+  marketplace: string;
+  currentPrice: number;
+  unitCost: number;
+  feesAndShipping: number;
+  estMarginPct: number;
+  proposalState: "none" | "proposed";
+  proposedPrice?: number;
+}
+
+export interface MarginContextItem {
+  channel: string;
+  marketplace: string;
+  priceCount: number;
+  avgEstMarginPct: number;
+  belowTargetCount: number;
+  feeAssumptions: string;
+  nextActionType: "costs" | "proposals";
+}
 
 export interface PricingChannel {
   accountId: string;
