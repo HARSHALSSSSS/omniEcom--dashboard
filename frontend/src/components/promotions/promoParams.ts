@@ -34,7 +34,8 @@ export interface PromotionsUrlState {
 }
 
 export function readUrlState(params: URLSearchParams): PromotionsUrlState {
-  const view: PromotionView = params.get("view") === "products" ? "products" : "campaigns";
+  const rawView = params.get("view");
+  const view: PromotionView = rawView === "products" ? "products" : rawView === "campaigns" ? "campaigns" : "overview";
   const rawStatus = params.get("status");
   const page = Number(params.get("page"));
   const size = Number(params.get("size"));
@@ -88,7 +89,7 @@ export function usePromotionsUrlState() {
           if (!("page" in patch) && !onlyDrawer) next.delete("page");
           for (const [key, value] of Object.entries(patch)) {
             next.delete(key);
-            if (value !== null && value !== undefined && value !== "" && !(key === "view" && value === "campaigns")) next.set(key, value);
+            if (value !== null && value !== undefined && value !== "" && !(key === "view" && value === "overview")) next.set(key, value);
           }
           return next;
         },

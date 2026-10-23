@@ -100,6 +100,19 @@ export const promotionsApi = {
   /** starts due campaigns, ends finished ones and refreshes results now (the scheduler does it every minute) */
   process: async () => unwrap<ProcessResult>(await client.post(ENDPOINTS.PROMOTIONS_PROCESS, {})),
 
+  /** recent promotion activity from audit log */
+  recentActivity: async (signal?: AbortSignal) => {
+    try {
+      const res = await client.get<{ data: Array<{ id: number; action: string; createdAt: string; metadata?: Record<string, unknown>; resourceId: string | null; resourceType: string | null }> }>(
+        ENDPOINTS.AUDIT_LOGS,
+        { params: { "filter[actionPrefix]": "promotion.", limit: 10 }, signal }
+      );
+      return res.data.data;
+    } catch {
+      return [];
+    }
+  },
+
   /** connected accounts a campaign can target */
   accounts: async (): Promise<PromotionAccount[]> => {
     const res = await client.get<{ data: PromotionAccount[] }>(ENDPOINTS.MARKETPLACE_ACCOUNTS, { params: { limit: 100 } });

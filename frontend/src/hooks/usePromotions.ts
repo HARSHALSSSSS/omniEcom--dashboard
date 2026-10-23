@@ -17,6 +17,7 @@ export const promotionKeys = {
   campaign: (b: string | undefined, id: string) => ["promotions", "campaign", b, id] as const,
   campaignProducts: (b: string | undefined, id: string, q: object) => ["promotions", "campaign-products", b, id, q] as const,
   accounts: (b: string | undefined) => ["promotions", "accounts", b] as const,
+  activity: (b: string | undefined) => ["promotions", "activity", b] as const,
   categories: (b: string | undefined) => ["promotions", "categories", b] as const,
   variants: (b: string | undefined, q: string) => ["promotions", "variants", b, q] as const,
 };
@@ -74,6 +75,11 @@ export function useCampaignProducts(id: string | null, query: Pick<ProductsQuery
 export function usePromotionAccounts() {
   const b = useBusinessId();
   return useQuery({ queryKey: promotionKeys.accounts(b), queryFn: promotionsApi.accounts, staleTime: 5 * 60_000 });
+}
+
+export function useRecentPromotionActivity() {
+  const b = useBusinessId();
+  return useQuery({ queryKey: promotionKeys.activity(b), queryFn: ({ signal }) => promotionsApi.recentActivity(signal), staleTime: 30_000 });
 }
 
 export function usePromotionCategories(enabled: boolean) {

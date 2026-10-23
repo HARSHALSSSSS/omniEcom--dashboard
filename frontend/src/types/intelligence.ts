@@ -17,6 +17,8 @@ export interface IntelConfidence {
   factors: Array<{ key: string; weight: number; met: boolean; text: string }>;
 }
 
+export type IntelItem = ProductIntelligenceItem;
+
 export interface ProductIntelligenceItem {
   id: string;
   variantId: string;
