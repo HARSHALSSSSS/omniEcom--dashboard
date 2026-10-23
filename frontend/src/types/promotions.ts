@@ -120,7 +120,7 @@ export type ProductCounts = Record<"all" | PromotionItemStatus, number>;
 export type CampaignsPage = Paged<PromotionCampaign, CampaignCounts>;
 export type ProductsPage = Paged<PromotionProduct, ProductCounts>;
 
-export type PromotionView = "campaigns" | "products";
+export type PromotionView = "overview" | "products" | "campaigns";
 
 export interface CampaignsQuery {
   status?: PromotionStatus;
