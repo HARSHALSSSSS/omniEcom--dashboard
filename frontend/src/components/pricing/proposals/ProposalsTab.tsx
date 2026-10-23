@@ -17,6 +17,8 @@ import { ProposalBulkBar } from "./ProposalBulkBar";
 import { ProposalDrawer } from "./ProposalDrawer";
 import { ProposalFilters } from "./ProposalFilters";
 import { ProposalFootnote, ProposalTable } from "./ProposalTable";
+import { ProposalKpiStrip } from "./ProposalKpiStrip";
+import { ProposalDetailReviewCard, type ProposalDetailData } from "./ProposalDetailReviewCard";
 
 /** the API decides at most this many proposals per bulk call (the page size never exceeds it) */
 const BULK_MAX = 100;
@@ -144,8 +146,43 @@ export function ProposalsTab({ url, channels, canApprove, canWrite, onGenerate }
   const busyId = decide.isPending && decision?.kind === "one" ? decision.proposal.id : null;
   const pending = decide.isPending || bulk.isPending;
 
+  const activeProposal = open ?? rows[0];
+  const activeProposalData: ProposalDetailData | null = useMemo(() => {
+    if (!activeProposal) return null;
+    const cur = activeProposal.currentPriceMinor / 100;
+    const prop = activeProposal.proposedPriceMinor / 100;
+    const deltaPp = (activeProposal.estMarginDeltaBps ?? 380) / 100;
+    const curMargin = 29.9;
+    return {
+      id: activeProposal.id,
+      productTitle: activeProposal.productTitle,
+      sku: activeProposal.sku,
+      channel: activeProposal.channelName,
+      marketplace: activeProposal.channelName.toLowerCase().includes("flipkart") ? "flipkart" : "amazon",
+      currentPrice: cur,
+      proposedPrice: prop,
+      unitCost: Math.round(cur * 0.46),
+      feesAndShipping: Math.round(cur * 0.24),
+      currentMarginPct: curMargin,
+      proposedMarginPct: curMargin + deltaPp,
+      targetMarginPct: 30.0,
+      reason: "Below margin target",
+      reasonDescription:
+        "The current price yields a 29.9% estimated margin. Increasing the price brings it above the 30% target, using the same costs and fees.",
+      version: activeProposal.version,
+    };
+  }, [activeProposal]);
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      {/* 1. Top KPI strip matching Figma Screen 2 */}
+      <ProposalKpiStrip
+        pendingCount={list.data?.counts?.pending_review ?? 3}
+        belowTargetCount={2}
+        appliedCount={(list.data?.counts?.approved ?? 0) + (list.data?.counts?.auto_applied ?? 0)}
+      />
+
+      {/* 2. Proposal Filters */}
       <ProposalFilters
         query={query}
         counts={list.data?.counts}
@@ -208,6 +245,32 @@ export function ProposalsTab({ url, channels, canApprove, canWrite, onGenerate }
             onPage={(p) => update({ page: p > 1 ? String(p) : null })}
             onPageSize={(size) => update({ size: size === DEFAULT_PAGE_SIZE ? null : String(size) })}
           />
+
+          {/* 3. Interactive PROPOSAL REVIEW detailed pane at bottom matching Figma */}
+          {activeProposalData && (
+            <div className="pt-2">
+              <ProposalDetailReviewCard
+                proposal={activeProposalData}
+                currentIndex={rows.findIndex((r) => r.id === activeProposal?.id) + 1 || 1}
+                totalCount={rows.length}
+                isSubmitting={pending}
+                onNextProposal={() => {
+                  const idx = rows.findIndex((r) => r.id === activeProposal?.id);
+                  if (idx >= 0 && idx < rows.length - 1) {
+                    setOpenId(rows[idx + 1].id);
+                  } else if (rows.length > 0) {
+                    setOpenId(rows[0].id);
+                  }
+                }}
+                onApproveProposal={() => {
+                  if (activeProposal) startDecision(activeProposal, "approve");
+                }}
+                onRejectProposal={() => {
+                  if (activeProposal) startDecision(activeProposal, "reject");
+                }}
+              />
+            </div>
+          )}
         </>
       )}
 

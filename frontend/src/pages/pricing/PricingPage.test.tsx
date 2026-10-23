@@ -123,7 +123,7 @@ function Probe() {
   return <div data-testid="loc">{l.pathname + l.search}</div>;
 }
 
-function renderPage(url = "/pricing") {
+function renderPage(url = "/pricing?view=proposals") {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 0 }, mutations: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
@@ -284,7 +284,7 @@ describe("PricingPage proposals", () => {
     await screen.findByText("Cotton Kurta");
 
     await user.click(screen.getByRole("tab", { name: /Approved/ }));
-    expect(loc()).toBe("/pricing?tab=approved");
+    expect(loc()).toBe("/pricing?view=proposals&tab=approved");
     await waitFor(() => expect(lastQuery()).toMatchObject({ tab: "approved" }));
 
     await user.selectOptions(screen.getByLabelText("Channel"), ACCOUNT);
@@ -305,7 +305,7 @@ describe("PricingPage proposals", () => {
   });
 
   it("starts from the URL: a deep link restores the tab and page", async () => {
-    renderPage(`/pricing?tab=failed&page=2&sort=oldest&account=${ACCOUNT}`);
+    renderPage(`/pricing?view=proposals&tab=failed&page=2&sort=oldest&account=${ACCOUNT}`);
     await screen.findByText("Cotton Kurta");
     expect(lastQuery()).toMatchObject({ tab: "failed", page: 2, sort: "oldest", accountId: ACCOUNT });
   });
