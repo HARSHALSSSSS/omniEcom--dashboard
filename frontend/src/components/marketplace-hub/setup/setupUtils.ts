@@ -1,10 +1,12 @@
 import { z } from "zod";
 import { ApiError } from "@/api/errors";
+import { TAG_LABEL } from "@/components/marketplace-hub/accounts/hubFormat";
 import { ROUTES } from "@/constants/routes";
 import type {
   AuthField,
   ConnectInput,
   ConnectStepName,
+  DirectoryItem,
   PendingOauth,
   SyncOptions,
 } from "@/types/directory";
@@ -183,3 +185,37 @@ export const newIdempotencyKey = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+/**
+ * One Idempotency-Key per connect attempt. The same input sent again after the request itself failed (network, 5xx) reuses the key, so the
+ * server returns the first result instead of connecting twice; a changed form, or a finished attempt (the server answered), starts a new one.
+ */
+export function createAttemptKeys() {
+  let last: { fingerprint: string; key: string; settled: boolean } | null = null;
+  return {
+    keyFor(input: unknown): string {
+      const fingerprint = JSON.stringify(input);
+      if (last && last.fingerprint === fingerprint && !last.settled) return last.key;
+      last = { fingerprint, key: newIdempotencyKey(), settled: false };
+      return last.key;
+    },
+    /** the server answered (success, failed result or a definite error): a retry is a new attempt */
+    settle() {
+      if (last) last.settled = true;
+    },
+  };
+}
+
+/** what the connector offers, as the labels the screens use ("Product import · Listings · ...") */
+export const capabilityLabels = (item: Pick<DirectoryItem, "capabilityTags">): string[] => item.capabilityTags.map((t) => TAG_LABEL[t] ?? t);
+export const accessLabels = (item: Pick<DirectoryItem, "capabilityTags">): string => capabilityLabels(item).join(" · ") || "No capabilities enabled yet";
+
+/** which sync scopes the seller chose in the connect form */
+export function scopesOf(o: SyncOptions | undefined): Array<"catalog" | "inventory" | "orders"> {
+  const pick = o ?? { syncCatalog: true, syncOrders: true, syncInventory: true, runFirstSync: true };
+  const scopes: Array<"catalog" | "inventory" | "orders"> = [];
+  if (pick.syncCatalog) scopes.push("catalog");
+  if (pick.syncInventory) scopes.push("inventory");
+  if (pick.syncOrders) scopes.push("orders");
+  return scopes;
+}

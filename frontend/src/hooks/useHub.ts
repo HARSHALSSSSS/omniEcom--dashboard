@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { hubApi } from "@/api/hub.api";
 import { refreshShell } from "@/lib/session";
 import { useWorkspaceStore } from "@/store/workspace.store";
-import type { SyncScope, SyncStart } from "@/types/hub";
+import type { HubSyncJob, SyncScope, SyncStart } from "@/types/hub";
 
 export const HUB_KEYS = {
   all: ["hub"] as const,
@@ -145,4 +145,59 @@ export function useJobAction() {
     mutationFn: (v: { id: string; action: "retry" | "cancel" }) => (v.action === "retry" ? hubApi.retryJob(v.id) : hubApi.cancelJob(v.id)),
     onSettled: refresh,
   });
+}
+
+/**
+ * The first sync of the setup flow. POST /marketplace-hub/connect may already have queued jobs (`seed`: their ids); "Start initial sync" (or a
+ * retry) queues new ones that take over. Either way the only truth is GET .../sync-status, polled until none of these jobs is active any more: `settled` is true only then.
+ */
+export function useSetupSync(accountId: string | null, seed: string[]) {
+  const refresh = useRefreshHub();
+  const [started, setStarted] = useState<SyncStart | null>(null);
+
+  const start = useMutation({
+    mutationFn: (scopes?: SyncScope[]) => hubApi.startSync(accountId as string, scopes),
+    onSuccess: (data) => {
+      setStarted(data);
+      refresh();
+    },
+  });
+
+  // a sync started here replaces the one the connect call queued (a retry after a failure must not be judged by the old jobs)
+  const ids = started ? [...new Set(started.jobs.map((j) => j.job.id))] : seed;
+  const status = useQuery({
+    queryKey: HUB_KEYS.syncStatus(accountId ?? ""),
+    queryFn: ({ signal }) => hubApi.syncStatus(accountId as string, signal),
+    enabled: Boolean(accountId) && ids.length > 0,
+    gcTime: 0,
+    // the setup step must notice the end of the jobs even while the tab is in the background
+    refetchIntervalInBackground: true,
+    refetchInterval: (q) => {
+      const s = q.state.data;
+      if (!s) return 1500;
+      return s.active.some((j) => ids.includes(j.id)) ? 1500 : false;
+    },
+  });
+
+  const live = new Map([...(status.data?.latest ?? []), ...(status.data?.active ?? [])].map((j) => [j.id, j]));
+  const jobs = ids.map((id) => live.get(id) ?? started?.jobs.find((j) => j.job.id === id)?.job).filter((j): j is HubSyncJob => Boolean(j));
+  const running = ids.length > 0 && !(status.isSuccess && !status.data.active.some((j) => ids.includes(j.id)));
+  const settled = ids.length > 0 && !running && jobs.length > 0 && jobs.every((j) => TERMINAL.includes(j.status));
+  const reset = () => {
+    setStarted(null);
+    start.reset();
+  };
+  return {
+    start,
+    started,
+    ids,
+    jobs,
+    running,
+    settled,
+    progress: status.data?.progress ?? null,
+    lastSyncedAt: status.data?.lastSyncedAt ?? null,
+    statusError: status.isError,
+    refetchStatus: status.refetch,
+    reset,
+  };
 }

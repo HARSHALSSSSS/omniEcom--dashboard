@@ -1,44 +1,41 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { InlineError } from "@/components/onboarding/wizard";
+import { ApiError, errorMessage } from "@/api/errors";
 import { ROUTES } from "@/constants/routes";
 import { useCan } from "@/hooks/useCan";
-import {
-  useConnect,
-  useConnectorReadiness,
-  useDirectory,
-} from "@/hooks/useDirectory";
-import { useAccountSync, useHubAccounts, useJobLogs } from "@/hooks/useHub";
+import { useConnect, useConnectorReadiness, useDirectory } from "@/hooks/useDirectory";
+import { useDeleteAccount, useHubAccounts, useJobLogs, useSetupSync } from "@/hooks/useHub";
 import { useCatalogStats } from "@/hooks/useProducts";
+import { toast } from "@/hooks/useToast";
 import { useWorkspaceStore } from "@/store/workspace.store";
-import type {
-  ConnectInput,
-  ConnectResult,
-} from "@/types/directory";
+import type { SyncScope } from "@/types/hub";
+import type { ConnectInput, ConnectResult } from "@/types/directory";
 import {
-  newIdempotencyKey,
+  createAttemptKeys,
   redirectBrowser,
   savePending,
+  scopesOf,
   type ConnectMethod,
 } from "@/components/marketplace-hub/setup/setupUtils";
 import { SetupStepper } from "@/components/marketplace-hub/setup/SetupStepper";
-import {
-  SetupStatusSidebar,
-  type SetupStage,
-} from "@/components/marketplace-hub/setup/SetupStatusSidebar";
+import { SetupStatusSidebar, type SetupStage } from "@/components/marketplace-hub/setup/SetupStatusSidebar";
 import { SetupReviewStep } from "@/components/marketplace-hub/setup/SetupReviewStep";
 import { SetupAuthorizeStep } from "@/components/marketplace-hub/setup/SetupAuthorizeStep";
 import { SetupVerifyStep } from "@/components/marketplace-hub/setup/SetupVerifyStep";
-import {
-  SetupSyncStep,
-  type SyncStateMode,
-} from "@/components/marketplace-hub/setup/SetupSyncStep";
+import { SetupSyncStep, type SyncStateMode } from "@/components/marketplace-hub/setup/SetupSyncStep";
 import { SetupReadyStep } from "@/components/marketplace-hub/setup/SetupReadyStep";
 import { SetupExistingConnection } from "@/components/marketplace-hub/setup/SetupExistingConnection";
-import { StepResults } from "@/components/marketplace-hub/setup/StepResults";
+
+const FAILED = ["failed", "dead_lettered", "cancelled"];
+/** the sync scope that reruns a job type */
+const SCOPE_OF_TYPE: Record<string, SyncScope> = { orders: "orders", inventory: "inventory", catalog_import: "catalog", listing_status: "listings" };
+const SCOPE_LABEL: Record<string, string> = { catalog: "Product catalogue", inventory: "Inventory", orders: "Orders" };
+
+const healthWord = (status: string) => (status === "healthy" ? "Healthy" : status === "paused" ? "Paused" : "Needs attention");
 
 export default function ConnectionSetupPage() {
   const { id } = useParams<{ id: string }>();
@@ -46,13 +43,13 @@ export default function ConnectionSetupPage() {
   const [searchParams] = useSearchParams();
   const canWrite = useCan("marketplace_accounts:write");
 
-  // Shell & catalog stats
+  // Workspace facts, shown only when they are real
   const shell = useWorkspaceStore((s) => s.shell);
-  const businessName = shell?.business.name ?? "Urban Carry";
+  const businessName = shell?.business.name ?? "Your business";
   const workspaceName = `${businessName} Commerce`;
   const catalogStats = useCatalogStats({});
-  const totalProducts = catalogStats.data?.products ?? 427;
-  const totalVariants = catalogStats.data?.variants ?? 1286;
+  const totalProducts = catalogStats.data?.products;
+  const totalVariants = catalogStats.data?.variants;
 
   // Directory and readiness
   const directory = useDirectory();
@@ -61,54 +58,59 @@ export default function ConnectionSetupPage() {
   const readiness = useConnectorReadiness(connectable && item ? item.id : null);
   const hubAccounts = useHubAccounts();
   const connect = useConnect();
+  const removePending = useDeleteAccount();
+  const attempts = useRef(createAttemptKeys()).current;
 
-  // Step state: 0 = Review, 1 = Authorize, 2 = Verify, 3 = Sync, 4 = Ready
-  const initialStepParam = searchParams.get("step");
-  const [step, setStep] = useState<number>(() => {
-    if (initialStepParam === "authorize" || initialStepParam === "1") return 1;
-    if (initialStepParam === "verify" || initialStepParam === "2") return 2;
-    if (initialStepParam === "sync" || initialStepParam === "3") return 3;
-    if (initialStepParam === "ready" || initialStepParam === "4") return 4;
-    return 0;
-  });
-
+  // Step state: 0 = Review, 1 = Authorize, 2 = Verify, 3 = Sync, 4 = Ready. Later steps need a real connect result.
+  const [step, setStep] = useState<number>(() => (searchParams.get("step") === "authorize" || searchParams.get("step") === "1" ? 1 : 0));
   const [result, setResult] = useState<ConnectResult | null>(null);
   const [lastInput, setLastInput] = useState<ConnectInput | null>(null);
   const [failureReason, setFailureReason] = useState<string | null>(null);
   const [isWaitingRedirect, setIsWaitingRedirect] = useState(false);
-  const [syncStateMode, setSyncStateMode] = useState<SyncStateMode>("ready");
-  const [syncProgress, setSyncProgress] = useState(32);
-  const [productProgress, setProductProgress] = useState(82);
-  const [inventoryProgress, setInventoryProgress] = useState(46);
-  const [orderProgress, setOrderProgress] = useState(12);
   const [dismissExisting, setDismissExisting] = useState(false);
 
-  // Existing connection guard
-  const existingAccount = hubAccounts.data?.items.find(
-    (a) => a.marketplace === id && a.accountStatus === "active"
-  );
-  const showExistingGuard = Boolean(existingAccount && !dismissExisting && step === 0);
+  // Accounts of this connector that already exist
+  const existingAccounts = (hubAccounts.data?.items ?? []).filter((a) => a.marketplace === id && (a.accountStatus === "active" || a.accountStatus === "paused"));
+  const showExistingGuard = existingAccounts.length > 0 && !dismissExisting && step === 0 && !result;
 
-  // Active account and sync engine
-  const activeAccountId = result?.account?.id ?? existingAccount?.id ?? null;
-  const sync = useAccountSync(activeAccountId ?? "");
+  // The first sync: jobs queued by the connect call, or started on the sync step. Completion is read from sync-status only.
+  const accountId = result?.status === "connected" ? (result.account?.id ?? null) : null;
+  const seedIds = useMemo(() => result?.jobs.map((j) => j.id) ?? [], [result]);
+  const sync = useSetupSync(accountId, seedIds);
+  const jobsKnown = sync.ids.length > 0;
+  const anyFailed = sync.jobs.some((j) => FAILED.includes(j.status));
+  const anyPartial = sync.jobs.some((j) => j.status === "partially_failed" || (j.status === "succeeded" && j.progress.failed > 0));
+  const syncStateMode: SyncStateMode = !jobsKnown ? "ready" : !sync.settled ? "syncing" : anyFailed ? "error" : anyPartial ? "partial" : "syncing";
+  const syncComplete = jobsKnown && sync.settled && !anyFailed && !anyPartial;
 
-  // Active job and live logs
-  const activeJob =
-    sync.jobs.find(
-      (j) => !["succeeded", "failed", "partially_failed", "cancelled"].includes(j.job.status)
-    )?.job ??
-    sync.jobs[0]?.job ??
-    null;
-
+  // live log of the running job
+  const activeJob = sync.jobs.find((j) => !["succeeded", "failed", "partially_failed", "cancelled", "dead_lettered"].includes(j.status)) ?? null;
   const jobLogsQuery = useJobLogs(activeJob?.id ?? null);
   const realLogs = (jobLogsQuery.data?.items ?? []).map((l) => ({
     time: new Date(l.createdAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
     text: l.message,
   }));
 
-  // Derive active SetupStage for right sidebar & header
-  const getStage = (): SetupStage => {
+  // finished without exceptions: the flow moves on by itself (no timer: this is the real end of the jobs)
+  useEffect(() => {
+    if (syncComplete && step === 3) {
+      setStep(4);
+      void hubAccounts.refetch();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [syncComplete, step]);
+
+  // a connect request in flight must not be lost silently
+  useEffect(() => {
+    if (!connect.isPending) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [connect.isPending]);
+
+  const stage: SetupStage = (() => {
     if (showExistingGuard) return "existing";
     if (step === 0) return "review";
     if (step === 1) {
@@ -117,100 +119,42 @@ export default function ConnectionSetupPage() {
       return "authorize";
     }
     if (step === 2) return "verified";
-    if (step === 3) {
-      if (syncStateMode === "ready") return "ready_to_sync";
-      if (syncStateMode === "syncing") return "syncing";
-      if (syncStateMode === "error") return "sync_error";
-      if (syncStateMode === "partial") return "partial_sync";
-      return "ready_to_sync";
-    }
+    if (step === 3) return syncStateMode === "ready" ? "ready_to_sync" : syncStateMode === "syncing" ? "syncing" : syncStateMode === "error" ? "sync_error" : "partial_sync";
     return "connected";
+  })();
+
+  // lane and overall progress, from the real job counters (null while a job reports no total)
+  const laneProgress = (types: string[]) => {
+    const js = sync.jobs.filter((j) => types.includes(j.type));
+    if (js.length === 0) return null;
+    const total = js.reduce((n, j) => n + j.progress.total, 0);
+    if (js.every((j) => j.status === "succeeded")) return 100;
+    return total > 0 ? Math.round((js.reduce((n, j) => n + Math.min(j.progress.done, j.progress.total), 0) / total) * 100) : null;
   };
-
-  const stage = getStage();
-
-  // Update progress from live backend sync status
-  useEffect(() => {
-    if (sync.progress !== null) {
-      setSyncProgress(sync.progress);
-    } else if (activeJob && activeJob.progress.total > 0) {
-      setSyncProgress(Math.round((activeJob.progress.done / activeJob.progress.total) * 100));
-    }
-  }, [sync.progress, activeJob]);
-
-  // Update lane progress from backend jobs breakdown
-  useEffect(() => {
-    if (sync.jobs.length > 0) {
-      for (const j of sync.jobs) {
-        const pct =
-          j.job.progress.total > 0
-            ? Math.round((j.job.progress.done / j.job.progress.total) * 100)
-            : j.job.status === "succeeded"
-              ? 100
-              : 0;
-        if (j.scope === "catalog") setProductProgress(pct);
-        if (j.scope === "inventory") setInventoryProgress(pct);
-        if (j.scope === "orders") setOrderProgress(pct);
-      }
-    }
-  }, [sync.jobs]);
-
-  // Handle sync completion when live jobs settle
-  useEffect(() => {
-    if (sync.settled && syncStateMode === "syncing") {
-      const hasFailures = sync.jobs.some((j) => j.job.status === "failed");
-      const hasPartials = sync.jobs.some((j) => j.job.status === "partially_failed");
-      if (hasFailures) {
-        setSyncStateMode("error");
-      } else if (hasPartials) {
-        setSyncStateMode("partial");
-      } else {
-        setSyncProgress(100);
-        setProductProgress(100);
-        setInventoryProgress(100);
-        setOrderProgress(100);
-        const timer = setTimeout(() => setStep(4), 600);
-        return () => clearTimeout(timer);
-      }
-    }
-  }, [sync.settled, sync.jobs, syncStateMode]);
-
-  // Fallback simulation timer when syncing without a backend account (e.g. demo / test mode)
-  useEffect(() => {
-    if (syncStateMode === "syncing" && !activeAccountId) {
-      const interval = setInterval(() => {
-        setSyncProgress((prev) => {
-          if (prev >= 100) {
-            clearInterval(interval);
-            setTimeout(() => setStep(4), 600);
-            return 100;
-          }
-          return prev + 15;
-        });
-      }, 900);
-      return () => clearInterval(interval);
-    }
-  }, [syncStateMode, activeAccountId]);
+  const failedItems = sync.jobs.reduce((n, j) => n + j.progress.failed, 0);
 
   const toHub = () => navigate(ROUTES.MARKETPLACE_HUB);
+  const accountCard = hubAccounts.data?.items.find((a) => a.id === accountId) ?? null;
+  const includedScopes = scopesOf(lastInput?.syncOptions).map((s) => SCOPE_LABEL[s]);
+  const firstSyncStep = result?.steps.find((s) => s.name === "first_sync");
+  const notQueuedReason = result && !jobsKnown && lastInput?.syncOptions.runFirstSync ? (firstSyncStep?.message ?? "nothing was queued") : null;
+  const accountPath = (accountIdValue: string | undefined) => (accountIdValue ? `${ROUTES.MARKETPLACE_HUB_CONNECTORS}/${accountIdValue}` : ROUTES.MARKETPLACE_HUB);
 
   // Submit connect credentials / initiate OAuth
   const handleSubmit = (input: ConnectInput, method: ConnectMethod) => {
     if (!item) return;
     setLastInput(input);
     setFailureReason(null);
+    setResult(null);
     setStep(1);
 
     connect.mutate(
-      { input, idempotencyKey: newIdempotencyKey() },
+      { input, idempotencyKey: attempts.keyFor(input) },
       {
         onSuccess: (r) => {
+          attempts.settle();
           setResult(r);
-          if (
-            r.status === "awaiting_authorization" &&
-            r.redirect &&
-            method === "redirect"
-          ) {
+          if (r.status === "awaiting_authorization" && r.redirect && method === "redirect") {
             setIsWaitingRedirect(true);
             savePending({
               connectorCode: item.id,
@@ -225,41 +169,56 @@ export default function ConnectionSetupPage() {
             redirectBrowser(r.redirect.authorizationUrl);
             return;
           }
-
           if (r.status === "failed") {
-            setFailureReason(r.error?.message ?? "The marketplace rejected these credentials");
-            setStep(1);
+            setFailureReason(r.error?.message ?? "The connection could not be completed.");
             return;
           }
-
-          // Successfully connected / authorized: proceed to Step 2 (Verify)
           setStep(2);
         },
-        onError: () => {
-          // Keep on step 1 with form error feedback
-          setFailureReason(null);
-          setStep(1);
+        onError: (e) => {
+          // the server answered with a definite error: a retry is a new attempt; a lost request keeps its key
+          if (e instanceof ApiError && e.status >= 400 && e.status < 500) attempts.settle();
         },
-      }
+      },
     );
   };
 
-  const handleStartSync = () => {
-    setStep(3);
-    setSyncStateMode("ready");
+  // leaving the redirect wait: the account that was prepared for it is removed, and the user is told
+  const cancelPendingAuthorization = () => {
+    const pendingId = result?.redirect?.accountId ?? result?.account?.id;
+    setIsWaitingRedirect(false);
+    setResult(null);
+    setStep(0);
+    if (!pendingId) return;
+    removePending.mutate(pendingId, {
+      onSuccess: () => toast({ title: "Connection cancelled", description: "The account prepared for this authorization was removed.", variant: "success" }),
+      onError: (e) =>
+        toast({
+          title: "The prepared account is still there",
+          description: `${errorMessage(e)} You can delete it in the Marketplace Hub (shown as not authorized).`,
+          variant: "destructive",
+        }),
+    });
   };
 
-  const handleTriggerInitialSync = () => {
-    setSyncStateMode("syncing");
-    if (activeAccountId) {
-      sync.start.mutate(["catalog", "inventory", "orders"]);
-    } else {
-      setSyncProgress(32);
-      setProductProgress(82);
-      setInventoryProgress(46);
-      setOrderProgress(12);
-    }
+  const startSyncScopes = (scopes: SyncScope[]) => {
+    sync.reset();
+    sync.start.mutate(scopes);
   };
+  const handleTriggerInitialSync = () => startSyncScopes(scopesOf(lastInput?.syncOptions));
+  const handleRetrySync = () => {
+    const scopes = [...new Set(sync.jobs.filter((j) => FAILED.includes(j.status)).map((j) => SCOPE_OF_TYPE[j.type]).filter((s): s is SyncScope => Boolean(s)))];
+    startSyncScopes(scopes.length > 0 ? scopes : scopesOf(lastInput?.syncOptions));
+  };
+
+  // facts of the connector itself, for the sidebar
+  const facts = item
+    ? {
+        environment: readiness.data ? (readiness.data.live && readiness.data.sandbox ? "Sandbox and live" : readiness.data.live ? "Live" : "Sandbox only") : "Loading...",
+        requestLimit: `${item.limits.requestsPerSecond} requests/s, burst ${item.limits.burst}`,
+        orderEvents: item.webhooks ? "Pushed by webhook" : "Polled",
+      }
+    : null;
 
   // Header top-right status or actions
   const getHeaderActions = () => {
@@ -269,17 +228,12 @@ export default function ConnectionSetupPage() {
           <Button variant="outline" size="sm" onClick={toHub} className="text-xs h-9 px-4">
             Cancel
           </Button>
-          <Button
-            size="sm"
-            onClick={() => setStep(1)}
-            className="bg-black text-white hover:bg-neutral-800 text-xs h-9 px-4 font-semibold"
-          >
+          <Button size="sm" onClick={() => setStep(1)} className="bg-black text-white hover:bg-neutral-800 text-xs h-9 px-4 font-semibold">
             Continue to authorization
           </Button>
         </div>
       );
     }
-
     const stageBadgeMap: Record<SetupStage, string> = {
       review: "Not connected",
       authorize: "Not connected · Ready to authorize",
@@ -290,15 +244,10 @@ export default function ConnectionSetupPage() {
       syncing: "Connection active · Sync running",
       sync_error: "Connection active · Sync needs attention",
       partial_sync: "Connection active · Partial sync",
-      connected: "Connected · Healthy",
+      connected: accountCard ? `Connected · ${healthWord(accountCard.status)}` : "Connected",
       existing: "Existing connection found",
     };
-
-    return (
-      <span className="text-xs text-muted-foreground font-medium">
-        {stageBadgeMap[stage]}
-      </span>
-    );
+    return <span className="text-xs text-muted-foreground font-medium">{stageBadgeMap[stage]}</span>;
   };
 
   // Loading state
@@ -422,7 +371,8 @@ export default function ConnectionSetupPage() {
           currentStep={showExistingGuard ? 0 : step}
           hasError={stage === "auth_failure" || stage === "sync_error" || stage === "partial_sync"}
           onStepClick={(s) => {
-            if (s <= step) setStep(s);
+            // earlier steps only; once the account exists the form is not shown again
+            if (s <= step && (s === 0 || s >= 2 || !result || result.status !== "connected")) setStep(s);
           }}
         />
       </div>
@@ -437,26 +387,15 @@ export default function ConnectionSetupPage() {
               item={item}
               businessName={businessName}
               workspaceName={workspaceName}
-              onManageExisting={() =>
-                navigate(
-                  existingAccount
-                    ? `${ROUTES.MARKETPLACE_HUB_CONNECTORS}/${existingAccount.marketplace}`
-                    : ROUTES.MARKETPLACE_HUB
-                )
-              }
+              accounts={existingAccounts}
+              onManageExisting={() => navigate(accountPath(existingAccounts[0]?.id))}
               onSetupNewConnection={() => setDismissExisting(true)}
             />
           )}
 
           {/* CASE B: Step 0 (Review) */}
           {!showExistingGuard && step === 0 && (
-            <SetupReviewStep
-              item={item}
-              businessName={businessName}
-              workspaceName={workspaceName}
-              totalProducts={totalProducts}
-              onContinue={() => setStep(1)}
-            />
+            <SetupReviewStep item={item} businessName={businessName} workspaceName={workspaceName} totalProducts={totalProducts} onContinue={() => setStep(1)} />
           )}
 
           {/* CASE C: Step 1 (Authorize) */}
@@ -472,8 +411,11 @@ export default function ConnectionSetupPage() {
               failureMessage={failureReason}
               isWaitingRedirect={isWaitingRedirect}
               onBack={() => {
+                if (isWaitingRedirect) {
+                  cancelPendingAuthorization();
+                  return;
+                }
                 setFailureReason(null);
-                setIsWaitingRedirect(false);
                 setStep(0);
               }}
               onRetry={() => {
@@ -485,92 +427,57 @@ export default function ConnectionSetupPage() {
             />
           )}
 
-          {/* CASE D: Step 2 (Verify / Account authorized) */}
-          {!showExistingGuard && step === 2 && (
-            <div className="space-y-6">
-              <SetupVerifyStep
-                item={item}
-                businessName={result?.account?.name || businessName}
-                onStartSync={handleStartSync}
-                onReviewSettings={() => setStep(0)}
-              />
-
-              {/* Verified Results Container for tests & audit log */}
-              {result && (
-                <div className="rounded-xl border border-neutral-200 bg-white p-6 shadow-sm space-y-4">
-                  <div className="flex items-center justify-between pb-3 border-b border-neutral-100">
-                    <h3 className="text-sm font-bold text-foreground">
-                      {result.account?.name ?? businessName} is connected
-                    </h3>
-                    <span className="text-xs text-muted-foreground font-mono">
-                      {result.account?.mode === "sandbox" ? "Sandbox" : "Live"}
-                    </span>
-                  </div>
-
-                  <StepResults steps={result.steps} />
-
-                  <p
-                    className="text-xs text-muted-foreground"
-                    data-testid="first-sync-summary"
-                  >
-                    {result.jobs.length > 0
-                      ? `First sync queued for ${[
-                          ...new Set(result.jobs.map((j) => j.type)),
-                        ].join(", ")}. Follow its progress on the Marketplace Hub.`
-                      : lastInput && !lastInput.syncOptions?.runFirstSync
-                        ? "No first sync was requested. You can sync from the Marketplace Hub at any time."
-                        : "First sync queued for orders, inventory."}
-                  </p>
-
-                  <div className="flex justify-end pt-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={toHub}
-                      className="text-xs"
-                    >
-                      Go to Marketplace Hub
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
+          {/* CASE D: Step 2 (Verify): what the connect call really did */}
+          {!showExistingGuard && step === 2 && result && (
+            <SetupVerifyStep
+              item={item}
+              businessName={businessName}
+              result={result}
+              onStartSync={() => setStep(3)}
+              onReviewSettings={() => navigate(accountPath(result.account?.id))}
+              onGoToHub={toHub}
+            />
           )}
 
-          {/* CASE E: Step 3 (Sync) */}
-          {!showExistingGuard && step === 3 && (
+          {/* CASE E: Step 3 (Sync): finished only when the real jobs finished */}
+          {!showExistingGuard && step === 3 && result && (
             <SetupSyncStep
               item={item}
-              businessName={result?.account?.name || businessName}
+              businessName={result.account?.name ?? businessName}
               syncStateMode={syncStateMode}
               totalProducts={totalProducts}
               totalVariants={totalVariants}
+              includedScopes={includedScopes}
+              jobs={sync.jobs}
+              skipped={sync.started?.skipped ?? []}
               activityLogs={realLogs.length > 0 ? realLogs : undefined}
-              productsDetected={sync.jobs.find((j) => j.scope === "catalog")?.job.progress.total || totalProducts}
-              productsSynced={
-                sync.jobs.find((j) => j.scope === "catalog")?.job.progress.done ||
-                totalProducts - (sync.jobs.find((j) => j.scope === "catalog")?.job.progress.failed || 15)
-              }
-              productsFailed={sync.jobs.find((j) => j.scope === "catalog")?.job.progress.failed || 15}
+              notQueuedReason={notQueuedReason}
+              starting={sync.start.isPending}
+              canWrite={canWrite}
+              startError={sync.start.isError ? errorMessage(sync.start.error, "The sync could not be started.") : null}
+              statusUnreadable={sync.statusError}
+              lastSuccessfulSync={sync.lastSyncedAt}
               onStartInitialSync={handleTriggerInitialSync}
               onContinueToWorkspace={toHub}
-              onRetrySync={handleTriggerInitialSync}
-              onManageConnection={() => navigate(ROUTES.MARKETPLACE_HUB)}
+              onRetrySync={handleRetrySync}
+              onManageConnection={() => navigate(accountPath(result.account?.id))}
               onCancel={() => setStep(2)}
             />
           )}
 
           {/* CASE F: Step 4 (Ready / Connected) */}
-          {!showExistingGuard && step === 4 && (
+          {!showExistingGuard && step === 4 && result && (
             <SetupReadyStep
               item={item}
-              businessName={result?.account?.name || businessName}
+              businessName={result.account?.name ?? businessName}
+              account={accountCard}
+              jobs={sync.jobs}
               totalProducts={totalProducts}
               totalVariants={totalVariants}
-              onManageConnection={() => navigate(ROUTES.MARKETPLACE_HUB)}
+              onManageConnection={() => navigate(`${ROUTES.MARKETPLACE_HUB}?q=${encodeURIComponent(result.account?.name ?? "")}`)}
               onViewProducts={() => navigate(ROUTES.PRODUCTS)}
-              onViewListings={() => navigate(ROUTES.LISTINGS)}
-              onViewSyncActivity={() => navigate(ROUTES.MARKETPLACE_HUB)}
+              onViewListings={() => navigate(`${ROUTES.LISTINGS}${result.account ? `?account=${result.account.id}` : ""}`)}
+              onViewSyncActivity={() => navigate(accountPath(result.account?.id))}
             />
           )}
 
@@ -599,10 +506,14 @@ export default function ConnectionSetupPage() {
             stage={stage}
             totalProducts={totalProducts}
             totalVariants={totalVariants}
-            syncProgress={syncProgress}
-            productProgress={productProgress}
-            inventoryProgress={inventoryProgress}
-            orderProgress={orderProgress}
+            syncProgress={sync.progress ?? (syncComplete ? 100 : null)}
+            productProgress={laneProgress(["catalog_import"])}
+            inventoryProgress={laneProgress(["inventory"])}
+            orderProgress={laneProgress(["orders"])}
+            failedItems={failedItems}
+            firstSyncQueued={jobsKnown}
+            health={accountCard ? { label: healthWord(accountCard.status), score: accountCard.health.pulseScore } : null}
+            facts={facts}
           />
         </div>
       </div>

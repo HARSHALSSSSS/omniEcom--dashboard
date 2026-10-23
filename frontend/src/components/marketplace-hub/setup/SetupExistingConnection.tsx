@@ -1,10 +1,15 @@
 import { Button } from "@/components/ui/button";
+import { SetupFooterNote } from "./SetupNotices";
+import { ago } from "@/components/marketplace-hub/accounts/hubFormat";
 import type { DirectoryItem } from "@/types/directory";
+import type { HubAccountCard } from "@/types/hub";
 
 interface SetupExistingConnectionProps {
   item: DirectoryItem;
   businessName: string;
   workspaceName: string;
+  /** the real accounts of this connector, the first is shown */
+  accounts: HubAccountCard[];
   onManageExisting: () => void;
   onSetupNewConnection?: () => void;
 }
@@ -13,6 +18,7 @@ export function SetupExistingConnection({
   item,
   businessName,
   workspaceName,
+  accounts,
   onManageExisting,
   onSetupNewConnection,
 }: SetupExistingConnectionProps) {
@@ -39,7 +45,7 @@ export function SetupExistingConnection({
             Existing connection found.
           </h2>
           <p className="text-xs text-muted-foreground mt-1">
-            This workspace already has a {item.name} connection.
+            This workspace already has {accounts.length === 1 ? "a" : accounts.length} {item.name} connection{accounts.length === 1 ? "" : "s"}.
           </p>
         </div>
 
@@ -56,6 +62,16 @@ export function SetupExistingConnection({
             <span className="text-muted-foreground">Workspace</span>
             <span className="font-medium text-foreground">{workspaceName}</span>
           </div>
+          {accounts.map((a) => (
+            <div key={a.id} className="flex justify-between gap-3 py-2.5">
+              <span className="text-muted-foreground">Account</span>
+              <span className="font-medium text-foreground text-right">
+                {a.name}
+                {a.accountIdentifier ? ` · ${a.accountIdentifier}` : ""}
+                {a.mode === "sandbox" ? " · Sandbox" : ""} · {a.status === "healthy" ? "Healthy" : a.status === "paused" ? "Paused" : "Needs attention"} · last sync {a.lastSyncAt ? ago(a.lastSyncAt) : "never"}
+              </span>
+            </div>
+          ))}
         </div>
 
         <div className="rounded-lg border border-neutral-200 bg-neutral-50/50 p-5 space-y-3 text-xs">
@@ -86,16 +102,7 @@ export function SetupExistingConnection({
           )}
         </div>
 
-        {/* Pricing notice */}
-        <div className="border-t border-neutral-100 pt-4 text-xs text-muted-foreground space-y-1">
-          <p className="text-[11px]">
-            Connecting does not publish products automatically. You will review catalog mapping and marketplace workflows before activating them.
-          </p>
-          <div className="text-[11px] text-neutral-500 pt-1">
-            <span className="font-medium text-foreground">Connector add-on · ₹499 / month · ₹4,999 / year</span>
-            <span className="block mt-0.5">Monthly billing · Demo pricing only · Separate from workspace plan</span>
-          </div>
-        </div>
+        <SetupFooterNote connectorName={item.name} />
       </div>
     </div>
   );

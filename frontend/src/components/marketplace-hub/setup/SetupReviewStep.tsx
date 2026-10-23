@@ -1,12 +1,15 @@
 import { ArrowRight, Clock, Lock, Shield, Sliders } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { formatNumber } from "@/utils/format";
+import { SetupFooterNote } from "./SetupNotices";
 import type { DirectoryItem } from "@/types/directory";
 
 interface SetupReviewStepProps {
   item: DirectoryItem;
   businessName: string;
   workspaceName: string;
-  totalProducts: number;
+  /** master catalogue size, when known */
+  totalProducts?: number;
   onContinue: () => void;
 }
 
@@ -14,7 +17,7 @@ export function SetupReviewStep({
   item,
   businessName,
   workspaceName,
-  totalProducts = 427,
+  totalProducts,
   onContinue,
 }: SetupReviewStepProps) {
   const categoryLabel =
@@ -24,15 +27,13 @@ export function SetupReviewStep({
         ? "Shipping carrier"
         : "Marketplace";
 
-  const tags = new Set([
-    ...(item.capabilityTags ?? []),
-    ...(item.capabilities ?? []).map((c) => c.split(".")[0]),
-  ]);
-  const hasProducts = tags.has("catalog") || tags.has("products") || item.category !== "shipping";
-  const hasInventory = tags.has("inventory") || item.category !== "shipping";
-  const hasOrders = tags.has("orders") || tags.has("orders_fetch") || item.category !== "shipping";
-  const hasListings = tags.has("listings") || item.category === "marketplace" || item.category === "storefront";
-  const hasShipping = tags.has("shipping") || tags.has("fulfillment") || item.category === "shipping";
+  // what the connector really offers: its directory capability tags
+  const tags = new Set(item.capabilityTags ?? []);
+  const hasProducts = tags.has("product_import");
+  const hasInventory = tags.has("inventory");
+  const hasOrders = tags.has("orders");
+  const hasListings = tags.has("listings");
+  const hasShipping = tags.has("shipping");
 
   return (
     <div className="space-y-6">
@@ -124,7 +125,7 @@ export function SetupReviewStep({
                 {hasProducts ? "Supported" : "Not enabled"}
               </span>
               <span className="text-muted-foreground text-[11px] w-48 text-right">
-                {hasProducts ? "Supported product/catalog data" : "Not applicable for this connector"}
+                {hasProducts ? "Supported product/catalog data" : "Not offered by this connector"}
               </span>
             </div>
           </div>
@@ -137,7 +138,7 @@ export function SetupReviewStep({
                 {hasInventory ? "Supported" : "Not enabled"}
               </span>
               <span className="text-muted-foreground text-[11px] w-48 text-right">
-                {hasInventory ? "Supported stock updates" : "Not applicable for this connector"}
+                {hasInventory ? "Supported stock updates" : "Not offered by this connector"}
               </span>
             </div>
           </div>
@@ -150,7 +151,7 @@ export function SetupReviewStep({
                 {hasOrders ? "Supported" : "Not enabled"}
               </span>
               <span className="text-muted-foreground text-[11px] w-48 text-right">
-                {hasOrders ? "Supported marketplace orders" : "Not applicable for this connector"}
+                {hasOrders ? "Supported marketplace orders" : "Not offered by this connector"}
               </span>
             </div>
           </div>
@@ -163,7 +164,7 @@ export function SetupReviewStep({
                 {hasListings ? "Supported" : "Not enabled"}
               </span>
               <span className="text-muted-foreground text-[11px] w-48 text-right">
-                {hasListings ? "Supported marketplace listing information" : "Not applicable for this connector"}
+                {hasListings ? "Supported marketplace listing information" : "Not offered by this connector"}
               </span>
             </div>
           </div>
@@ -197,35 +198,35 @@ export function SetupReviewStep({
                 <td className="py-2.5 font-medium text-foreground">Product/catalog</td>
                 <td className="py-2.5 text-muted-foreground">Import and synchronize supported products</td>
                 <td className="py-2.5 text-right font-semibold text-foreground">
-                  {hasProducts ? "Required" : "Optional"}
+                  {hasProducts ? "Required" : "Not offered"}
                 </td>
               </tr>
               <tr>
                 <td className="py-2.5 font-medium text-foreground">Inventory</td>
                 <td className="py-2.5 text-muted-foreground">Sync available stock</td>
                 <td className="py-2.5 text-right font-semibold text-foreground">
-                  {hasInventory ? "Required" : "Optional"}
+                  {hasInventory ? "Required" : "Not offered"}
                 </td>
               </tr>
               <tr>
                 <td className="py-2.5 font-medium text-foreground">Orders</td>
                 <td className="py-2.5 text-muted-foreground">Retrieve marketplace orders</td>
                 <td className="py-2.5 text-right font-semibold text-foreground">
-                  {hasOrders ? "Required" : "Optional"}
+                  {hasOrders ? "Required" : "Not offered"}
                 </td>
               </tr>
               <tr>
                 <td className="py-2.5 font-medium text-foreground">Listings</td>
                 <td className="py-2.5 text-muted-foreground">Manage supported listing information</td>
                 <td className="py-2.5 text-right font-semibold text-foreground">
-                  {hasListings ? "Required" : "Optional"}
+                  {hasListings ? "Required" : "Not offered"}
                 </td>
               </tr>
               <tr>
                 <td className="py-2.5 font-medium text-foreground">Shipping</td>
                 <td className="py-2.5 text-muted-foreground">Update supported fulfillment information</td>
                 <td className="py-2.5 text-right text-muted-foreground">
-                  {hasShipping ? (item.category === "shipping" ? "Required" : "Depends") : "Optional"}
+                  {hasShipping ? "Required" : "Not offered"}
                 </td>
               </tr>
             </tbody>
@@ -260,7 +261,7 @@ export function SetupReviewStep({
         <div>
           <h3 className="text-base font-bold text-foreground">Catalog matching</h3>
           <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-            Your workspace already contains {totalProducts.toLocaleString()} master products. Match existing SKUs before importing new products to reduce duplicate master products and preserve your existing catalog structure.
+            {totalProducts !== undefined ? `Your workspace already contains ${formatNumber(totalProducts)} master products. ` : ""}Match existing SKUs before importing new products to reduce duplicate master products and preserve your existing catalog structure.
           </p>
         </div>
 
@@ -305,14 +306,7 @@ export function SetupReviewStep({
           </p>
         </div>
 
-        <div className="border-t border-neutral-100 pt-3 text-xs text-muted-foreground space-y-0.5">
-          <p className="font-medium text-foreground">
-            Connector add-on · ₹499 / month · ₹4,999 / year
-          </p>
-          <p className="text-[11px]">
-            Monthly billing · Demo pricing only · Separate from workspace plan
-          </p>
-        </div>
+        <SetupFooterNote connectorName={item.name} />
 
         <Button
           onClick={onContinue}

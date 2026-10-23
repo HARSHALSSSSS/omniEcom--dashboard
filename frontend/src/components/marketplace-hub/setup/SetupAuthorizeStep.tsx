@@ -2,6 +2,8 @@ import { Clock, Lock, Shield, Sliders } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SetupForm } from "./SetupForm";
 import { StepResults } from "./StepResults";
+import { SetupFooterNote } from "./SetupNotices";
+import { accessLabels } from "./setupUtils";
 import type {
   ConnectInput,
   ConnectResult,
@@ -67,10 +69,12 @@ export function SetupAuthorizeStep({
                 We couldn&apos;t verify this connection.
               </h2>
               <p className="text-xs text-muted-foreground mt-1">
-                {item.name} could not be connected. The marketplace authorization did not complete successfully.
+                {item.name} could not be connected.
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
-                The unfinished account was removed, so nothing is left half set up. You can try again.
+                {result?.cleanedUp
+                  ? "The unfinished account was removed, so nothing is left half set up. You can try again."
+                  : "Check the details and try again. If the account shows up in your Marketplace Hub as not authorized, you can reconnect or delete it there."}
               </p>
             </div>
 
@@ -98,16 +102,16 @@ export function SetupAuthorizeStep({
 
             <div className="rounded-lg border border-neutral-200 bg-neutral-50/50 p-4 space-y-3">
               <div>
-                <p className="text-xs font-bold text-foreground">Possible reason</p>
+                <p className="text-xs font-bold text-foreground">What the server reported</p>
                 <p role="alert" className="text-xs text-muted-foreground mt-1">
-                  {failureMessage || result?.error?.message || "The marketplace rejected these credentials"}
+                  {failureMessage || result?.error?.message || "The connection could not be completed."}
                 </p>
               </div>
 
               <div className="pt-2 border-t border-neutral-200">
-                <p className="text-xs font-bold text-foreground">Try authorization again</p>
+                <p className="text-xs font-bold text-foreground">Try again</p>
                 <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-                  Return to {item.name} to review and approve the requested access. No synchronization will start until account verification is complete.
+                  Edit the details and send them again. No synchronization starts until the connection is verified.
                 </p>
               </div>
             </div>
@@ -147,7 +151,7 @@ export function SetupAuthorizeStep({
               <div className="flex justify-between py-2.5">
                 <span className="text-muted-foreground">Access</span>
                 <span className="font-semibold text-foreground">
-                  Catalog · Inventory · Orders · Listings
+                  {accessLabels(item)}
                 </span>
               </div>
             </div>
@@ -169,7 +173,7 @@ export function SetupAuthorizeStep({
                 </li>
               </ol>
               <p className="text-[11px] text-muted-foreground pt-1 border-t border-neutral-200">
-                No synchronization has started. You can cancel this connection while authorization is in progress.
+                No synchronization has started. Cancelling removes the account that was prepared for this authorization.
               </p>
             </div>
 
@@ -202,7 +206,7 @@ export function SetupAuthorizeStep({
               <div className="flex justify-between py-2.5">
                 <span className="text-muted-foreground">Access</span>
                 <span className="font-semibold text-foreground">
-                  Catalog · Inventory · Orders · Listings
+                  {accessLabels(item)}
                 </span>
               </div>
             </div>
@@ -224,16 +228,7 @@ export function SetupAuthorizeStep({
             </div>
           </div>
 
-        {/* Pricing notice */}
-        <div className="border-t border-neutral-100 pt-4 text-xs text-muted-foreground space-y-1">
-          <p className="text-[11px]">
-            Connecting does not publish products automatically. You will review catalog mapping and marketplace workflows before activating them.
-          </p>
-          <div className="text-[11px] text-neutral-500 pt-1">
-            <span className="font-medium text-foreground">Connector add-on · ₹499 / month · ₹4,999 / year</span>
-            <span className="block mt-0.5">Monthly billing · Demo pricing only · Separate from workspace plan</span>
-          </div>
-        </div>
+        <SetupFooterNote connectorName={item.name} />
       </div>
 
       {/* Trust strip */}

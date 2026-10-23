@@ -17,23 +17,39 @@ export type SetupStage =
 interface SetupStatusSidebarProps {
   connectorName: string;
   stage: SetupStage;
+  /** master catalogue size, shown only when known */
   totalProducts?: number;
   totalVariants?: number;
-  syncProgress?: number; // 0-100
-  productProgress?: number;
-  inventoryProgress?: number;
-  orderProgress?: number;
+  /** real progress of the running sync jobs (0-100); null while nothing reports a total */
+  syncProgress?: number | null;
+  productProgress?: number | null;
+  inventoryProgress?: number | null;
+  orderProgress?: number | null;
+  /** the connect call already queued the first sync */
+  firstSyncQueued?: boolean;
+  /** items the finished sync could not process */
+  failedItems?: number;
+  /** the connected account's live health, when the account exists */
+  health?: { label: string; score: number } | null;
+  /** facts of the connector itself: readiness, limits, order events */
+  facts?: { environment: string; requestLimit: string; orderEvents: string } | null;
 }
+
+const pct = (v: number | null | undefined) => (v === null || v === undefined ? "—" : `${v}%`);
 
 export function SetupStatusSidebar({
   connectorName,
   stage,
-  totalProducts = 427,
-  totalVariants = 1286,
-  syncProgress = 32,
-  productProgress = 82,
-  inventoryProgress = 46,
-  orderProgress = 12,
+  totalProducts,
+  totalVariants,
+  syncProgress,
+  productProgress,
+  inventoryProgress,
+  orderProgress,
+  firstSyncQueued = false,
+  failedItems = 0,
+  health,
+  facts,
 }: SetupStatusSidebarProps) {
   // Derive badge top right of "Connection status"
   const getStatusBadge = () => {
@@ -55,7 +71,7 @@ export function SetupStatusSidebar({
       case "partial_sync":
         return "Active";
       case "connected":
-        return "Healthy";
+        return health?.label ?? "Connected";
       case "existing":
         return "Existing";
     }
@@ -90,6 +106,7 @@ export function SetupStatusSidebar({
 
   const getSyncStatus = () => {
     if (stage === "existing") return { title: "Initial sync", label: "Review in management", state: "pending" };
+    if (stage === "verified" && firstSyncQueued) return { title: "Initial sync", label: "Queued", state: "active" };
     if (["review", "authorize", "waiting", "auth_failure", "verified"].includes(stage)) {
       return { title: "Initial sync", label: "Not started", state: "pending" };
     }
@@ -156,13 +173,13 @@ export function SetupStatusSidebar({
       case "sync_error":
         return [
           { num: "01", text: "Review the synchronization issue" },
-          { num: "02", text: "Retry Products · Inventory" },
+          { num: "02", text: "Retry the failed synchronization" },
           { num: "03", text: "Check the latest sync result" },
           { num: "04", text: "Continue marketplace operations" },
         ];
       case "partial_sync":
         return [
-          { num: "01", text: "Review the 15 items requiring attention" },
+          { num: "01", text: `Review the ${failedItems} item${failedItems === 1 ? "" : "s"} requiring attention` },
           { num: "02", text: "Resolve affected data" },
           { num: "03", text: "Retry the affected synchronization" },
           { num: "04", text: "Review the final sync result" },
@@ -215,17 +232,17 @@ export function SetupStatusSidebar({
                 <p className="text-xs font-semibold text-foreground">Initial sync in progress</p>
                 <p className="text-[11px] text-muted-foreground flex items-center gap-1.5 mt-0.5">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  Running · Live processing
+                  Running · live status from the sync jobs
                 </p>
               </div>
-              <span className="text-2xl font-bold tracking-tight text-foreground">{syncProgress}%</span>
+              <span className="text-2xl font-bold tracking-tight text-foreground">{pct(syncProgress)}</span>
             </div>
 
             {/* Main Progress Bar */}
             <div className="h-2 w-full rounded-full bg-neutral-100 overflow-hidden">
               <div
                 className="h-full bg-black transition-all duration-500 rounded-full"
-                style={{ width: `${syncProgress}%` }}
+                style={{ width: `${syncProgress ?? 0}%` }}
               />
             </div>
 
@@ -234,30 +251,30 @@ export function SetupStatusSidebar({
               <div className="space-y-1">
                 <div className="flex justify-between text-[11px]">
                   <span className="text-muted-foreground">Products</span>
-                  <span className="font-medium text-foreground">{productProgress}%</span>
+                  <span className="font-medium text-foreground">{pct(productProgress)}</span>
                 </div>
                 <div className="h-1.5 w-full rounded-full bg-neutral-100 overflow-hidden">
-                  <div className="h-full bg-black transition-all rounded-full" style={{ width: `${productProgress}%` }} />
+                  <div className="h-full bg-black transition-all rounded-full" style={{ width: `${productProgress ?? 0}%` }} />
                 </div>
               </div>
 
               <div className="space-y-1">
                 <div className="flex justify-between text-[11px]">
                   <span className="text-muted-foreground">Inventory</span>
-                  <span className="font-medium text-foreground">{inventoryProgress}%</span>
+                  <span className="font-medium text-foreground">{pct(inventoryProgress)}</span>
                 </div>
                 <div className="h-1.5 w-full rounded-full bg-neutral-100 overflow-hidden">
-                  <div className="h-full bg-black transition-all rounded-full" style={{ width: `${inventoryProgress}%` }} />
+                  <div className="h-full bg-black transition-all rounded-full" style={{ width: `${inventoryProgress ?? 0}%` }} />
                 </div>
               </div>
 
               <div className="space-y-1">
                 <div className="flex justify-between text-[11px]">
                   <span className="text-muted-foreground">Orders</span>
-                  <span className="font-medium text-foreground">{orderProgress}%</span>
+                  <span className="font-medium text-foreground">{pct(orderProgress)}</span>
                 </div>
                 <div className="h-1.5 w-full rounded-full bg-neutral-100 overflow-hidden">
-                  <div className="h-full bg-black transition-all rounded-full" style={{ width: `${orderProgress}%` }} />
+                  <div className="h-full bg-black transition-all rounded-full" style={{ width: `${orderProgress ?? 0}%` }} />
                 </div>
               </div>
             </div>
@@ -301,7 +318,7 @@ export function SetupStatusSidebar({
           <div className="py-3 border-b border-neutral-100">
             <p className="text-xs font-semibold text-foreground">Initial synchronization complete</p>
             <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">
-              Ongoing order synchronization is still running. Your account connection is healthy.
+              Your account connection is {health ? health.label.toLowerCase() : "connected"}{health ? ` (${health.score}%)` : ""}. Orders keep synchronizing on schedule.
             </p>
           </div>
         )}
@@ -437,13 +454,15 @@ export function SetupStatusSidebar({
           <h4 className="text-xs font-bold text-foreground">Initial sync preview</h4>
           <div className="space-y-2 text-xs">
             <div className="flex items-center justify-between text-muted-foreground">
-              <span>{totalProducts.toLocaleString()} potential products</span>
+              <span>{totalProducts !== undefined ? `${totalProducts.toLocaleString()} potential products` : "Your master catalogue"}</span>
               <span className="h-1 w-1 rounded-full bg-neutral-300" />
             </div>
-            <div className="flex items-center justify-between text-muted-foreground">
-              <span>{totalVariants.toLocaleString()} potential variants</span>
-              <span className="h-1 w-1 rounded-full bg-neutral-300" />
-            </div>
+            {totalVariants !== undefined && (
+              <div className="flex items-center justify-between text-muted-foreground">
+                <span>{totalVariants.toLocaleString()} potential variants</span>
+                <span className="h-1 w-1 rounded-full bg-neutral-300" />
+              </div>
+            )}
             <div className="flex items-center justify-between text-muted-foreground">
               <span>Current inventory</span>
               <span className="text-[11px] text-foreground font-medium">
@@ -460,6 +479,27 @@ export function SetupStatusSidebar({
           <p className="text-[11px] text-muted-foreground pt-1 border-t border-neutral-100">
             Nothing will be published automatically.
           </p>
+        </div>
+      )}
+
+      {/* 4. Facts of the connector */}
+      {facts && (
+        <div className="rounded-xl border border-neutral-200 bg-white p-5 shadow-sm space-y-3">
+          <h4 className="text-xs font-bold text-foreground">About this connector</h4>
+          <div className="divide-y divide-neutral-100 text-xs">
+            <div className="flex justify-between gap-3 py-2">
+              <span className="text-muted-foreground">Environment</span>
+              <span className="font-medium text-foreground text-right">{facts.environment}</span>
+            </div>
+            <div className="flex justify-between gap-3 py-2">
+              <span className="text-muted-foreground">Request limit</span>
+              <span className="font-medium text-foreground text-right">{facts.requestLimit}</span>
+            </div>
+            <div className="flex justify-between gap-3 py-2">
+              <span className="text-muted-foreground">Order events</span>
+              <span className="font-medium text-foreground text-right">{facts.orderEvents}</span>
+            </div>
+          </div>
         </div>
       )}
     </div>
