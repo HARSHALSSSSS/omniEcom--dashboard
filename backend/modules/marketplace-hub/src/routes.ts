@@ -58,7 +58,8 @@ export const marketplaceHubRoutes: FastifyPluginAsync = async (app) => {
         out.push({
           id: connector.code, name: connector.displayName, category: profile.category, description: profile.description, logoKey: profile.logoKey, supportedRegions: profile.supportedRegions,
           implementation: connector.implementation, status, statusReason: unavailableReason ?? (attention[0]?.card.health.frictionPoints[0] ?? null), accountCount: accounts.length, partnerGated: profile.authFlow.partnerGated,
-          authFlow: profile.authFlow, capabilities: caps, capabilityTags: capabilityTags(caps), rating: null, reviewsCount: null, pricing: null,
+          authFlow: profile.authFlow, capabilities: caps, capabilityTags: capabilityTags(caps),
+          readiness: connector.readiness, limits: connector.capabilities.limits, webhooks: Boolean(connector.verifyWebhook), rating: null, reviewsCount: null, pricing: null,
         });
       }
       return out;

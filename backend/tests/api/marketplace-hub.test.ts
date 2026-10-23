@@ -84,6 +84,11 @@ describe('directory', () => {
     expect(by.shopify.capabilityTags).not.toContain('shipping');
     expect(by.meesho.capabilityTags).toContain('returns');
     expect(by.shopify.authFlow.redirectFields).toHaveLength(1);
+    // what the marketplace screen needs to compare connectors: real readiness, limiter limits and webhook support
+    expect(by.shopify.readiness).toEqual({ sandbox: expect.any(Boolean), live: expect.any(Boolean), notes: expect.any(String) });
+    expect(by.shopify.limits).toEqual({ requestsPerSecond: expect.any(Number), burst: expect.any(Number), maxBatchSize: expect.any(Number) });
+    expect(by.shopify.limits.requestsPerSecond).toBeGreaterThan(0);
+    expect(typeof by.shopify.webhooks).toBe('boolean');
   });
 
   it('merges my accounts: connected, needs attention (not finished / unhealthy), account counts; filters by category and text', async () => {

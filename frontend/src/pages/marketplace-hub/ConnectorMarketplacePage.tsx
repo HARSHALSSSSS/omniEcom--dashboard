@@ -1,26 +1,27 @@
-import { useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
-import {
-  ChevronDown,
-  X,
-  Radar,
-  ArrowRight,
-} from "lucide-react";
+import { useState, useMemo, useCallback } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { ChevronDown, X, Radar, ArrowRight } from "lucide-react";
 import { ROUTES } from "@/constants/routes";
+import { errorMessage } from "@/api/errors";
+import { useCan } from "@/hooks/useCan";
 import { useConnectorDirectory, useConnections } from "@/hooks/useConnectors";
 import type { ConnectorDirectoryItem } from "@/types/connection";
+import { LoadError } from "@/components/marketplace-hub/accounts/hubUi";
+import { WRITE_REASON } from "@/components/marketplace-hub/accounts/hubFormat";
 import { ConnectorCardItem } from "./components/ConnectorCardItem";
 import { ConnectorPreviewDrawer } from "./components/ConnectorPreviewDrawer";
 import { ConnectorCompareModal } from "./components/ConnectorCompareModal";
+import { CAPABILITY_LABEL, FEE_NOTE, loadBookmarks, saveBookmarks } from "./components/connectorFacts";
 
+/** category tab -> the directory categories it shows. Tabs without a connector in the directory stay and show an honest empty state. */
 const CATEGORY_TABS = [
-  { id: "all", label: "All" },
-  { id: "marketplace", label: "Marketplaces" },
-  { id: "commerce", label: "Commerce" },
-  { id: "shipping", label: "Shipping" },
-  { id: "operations", label: "Operations" },
-  { id: "social", label: "Social Commerce" },
-  { id: "other", label: "Other" },
+  { id: "all", label: "All", categories: ["marketplace", "storefront", "shipping"] },
+  { id: "marketplace", label: "Marketplaces", categories: ["marketplace"] },
+  { id: "commerce", label: "Commerce", categories: ["storefront"] },
+  { id: "shipping", label: "Shipping", categories: ["shipping"] },
+  { id: "operations", label: "Operations", categories: [] as string[] },
+  { id: "social", label: "Social Commerce", categories: [] as string[] },
+  { id: "other", label: "Other", categories: [] as string[] },
 ];
 
 const I_NEED_OPTIONS = [
@@ -34,221 +35,205 @@ const I_NEED_OPTIONS = [
   { id: "promotions", label: "Promotions" },
 ];
 
+const STATUS_OPTIONS = [
+  { id: "all", label: "All" },
+  { id: "connected", label: "Connected" },
+  { id: "needs_attention", label: "Needs attention" },
+  { id: "available", label: "Not connected" },
+];
+
+const AVAILABILITY_OPTIONS = [
+  { id: "all", label: "All" },
+  { id: "now", label: "Available now" },
+  { id: "partner", label: "Partner approval required" },
+  { id: "unavailable", label: "Not available yet" },
+];
+
+type SortId = "recommended" | "name" | "status";
+const SORT_OPTIONS: Array<{ id: SortId; label: string }> = [
+  { id: "recommended", label: "Recommended" },
+  { id: "name", label: "Name A-Z" },
+  { id: "status", label: "Connection status" },
+];
+
+const STATUS_RANK: Record<ConnectorDirectoryItem["status"], number> = { available: 0, needs_attention: 1, connected: 2, unavailable: 3 };
+
+const MENU = "absolute left-0 top-full mt-1.5 z-30 rounded-xl border border-[#E5E5E5] bg-[#FFFFFF] p-1.5 shadow-xl space-y-0.5 text-[12px]";
+const TRIGGER = "h-8 px-3 rounded-lg border text-[12px] font-medium flex items-center gap-1.5 transition-colors";
+
+function ChoiceMenu<T extends string>({
+  label,
+  value,
+  options,
+  isOpen,
+  onToggle,
+  onPick,
+  width = "w-48",
+  showValue = false,
+}: {
+  label: string;
+  value: T;
+  options: Array<{ id: T; label: string }>;
+  isOpen: boolean;
+  onToggle: () => void;
+  onPick: (id: T) => void;
+  width?: string;
+  showValue?: boolean;
+}) {
+  const current = options.find((o) => o.id === value);
+  const active = value !== options[0].id;
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={isOpen}
+        onClick={onToggle}
+        className={`${TRIGGER} ${active ? "border-[#111111] bg-[#F5F5F5] text-[#111111]" : "border-[#D4D4D4] bg-[#FFFFFF] text-[#111111] hover:bg-[#F9F9F9]"}`}
+      >
+        {active || showValue ? `${label}: ${current?.label}` : label} <ChevronDown className="h-3.5 w-3.5 text-[#737373]" />
+      </button>
+      {isOpen && (
+        <div role="menu" className={`${MENU} ${width}`}>
+          {options.map((o) => (
+            <button
+              key={o.id}
+              type="button"
+              role="menuitemradio"
+              aria-checked={value === o.id}
+              onClick={() => onPick(o.id)}
+              className={`w-full text-left px-2.5 py-1.5 rounded-lg ${value === o.id ? "bg-[#F5F5F5] font-semibold text-[#111111]" : "text-[#525252] hover:bg-[#F9F9F9]"}`}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ConnectorMarketplacePage() {
   const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
+  const canConnect = useCan("marketplace_accounts:write");
 
-  // Queries
-  const { data: directoryData = [], isLoading: isDirectoryLoading } = useConnectorDirectory();
-  const { data: connectionsResponse } = useConnections();
-  const connections = useMemo(() => connectionsResponse?.data || [], [connectionsResponse?.data]);
+  const directory = useConnectorDirectory();
+  const connectionsQuery = useConnections();
+  const connectors = useMemo(() => directory.data ?? [], [directory.data]);
+  const connections = useMemo(() => connectionsQuery.data?.data ?? [], [connectionsQuery.data]);
 
-  // Make sure we have the core connectors shown on Figma
-  const connectors = useMemo(() => {
-    const list = [...directoryData];
-    const hasSnapdeal = list.some((c) => c.id === "snapdeal");
-    const hasSocial = list.some((c) => c.id === "social_commerce");
+  // Filters live in the URL so a reload or a shared link shows the same list
+  const searchTerm = params.get("q") ?? "";
+  const activeTab = CATEGORY_TABS.some((t) => t.id === params.get("tab")) ? (params.get("tab") as string) : "all";
+  const statusFilter = STATUS_OPTIONS.some((o) => o.id === params.get("status")) ? (params.get("status") as string) : "all";
+  const availFilter = AVAILABILITY_OPTIONS.some((o) => o.id === params.get("avail")) ? (params.get("avail") as string) : "all";
+  const sortBy: SortId = SORT_OPTIONS.some((o) => o.id === params.get("sort")) ? (params.get("sort") as SortId) : "recommended";
+  const selectedCapabilities = useMemo(() => (params.get("need") ?? "").split(",").filter((c) => I_NEED_OPTIONS.some((o) => o.id === c)), [params]);
 
-    if (!hasSnapdeal) {
-      list.push({
-        id: "snapdeal",
-        name: "Snapdeal",
-        category: "marketplace",
-        authType: "api_credentials",
-        description: "Snapdeal seller operations: products, stock and order updates.",
-        rating: 4.5,
-        reviewsCount: 80,
-        status: "unavailable",
-        pricing: { freeTrialDays: 0, monthlyFeeINR: 399, planName: "Add-on" },
-        capabilities: ["product_import", "orders"],
-        supportedRegions: ["IN"],
-        fields: [],
-        authFlow: { type: "credentials", mode: "credentials", fields: [], redirectFields: [], partnerGated: false, refreshable: false },
-      });
-    }
+  const setFilter = useCallback(
+    (patch: Record<string, string | null>) => {
+      const next = new URLSearchParams(params);
+      for (const [k, v] of Object.entries(patch)) {
+        if (v && v !== "all") next.set(k, v);
+        else next.delete(k);
+      }
+      setParams(next, { replace: true });
+    },
+    [params, setParams],
+  );
 
-    if (!hasSocial) {
-      list.push({
-        id: "social_commerce",
-        name: "Social Commerce",
-        category: "marketplace",
-        authType: "oauth",
-        description: "Explore · Supported channels only. Availability depends on permissions.",
-        rating: 4.8,
-        reviewsCount: 45,
-        status: "available",
-        pricing: { freeTrialDays: 0, monthlyFeeINR: 0, planName: "Explore" },
-        capabilities: ["product_import", "orders"],
-        supportedRegions: ["IN"],
-        fields: [],
-        authFlow: { type: "oauth2", mode: "redirect", fields: [], redirectFields: [], partnerGated: true, refreshable: true },
-      });
-    }
+  const [openMenu, setOpenMenu] = useState<null | "category" | "need" | "status" | "availability" | "subscription" | "sort">(null);
+  const toggleMenu = (m: NonNullable<typeof openMenu>) => setOpenMenu((cur) => (cur === m ? null : m));
 
-    return list;
-  }, [directoryData]);
-
-  // Search & Filter State
-  const [searchTerm, setSearchTerm] = useState("");
-  const [activeTab, setActiveTab] = useState("all");
-
-  // Dropdown filter state
-  const [selectedCapabilities, setSelectedCapabilities] = useState<string[]>([]);
-  const [isINeedOpen, setIsINeedOpen] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [isStatusFilterOpen, setIsStatusFilterOpen] = useState(false);
-
-  // Compare state
   const [selectedForCompare, setSelectedForCompare] = useState<string[]>([]);
+  const [compareNotice, setCompareNotice] = useState<string | null>(null);
   const [isCompareModalOpen, setIsCompareModalOpen] = useState(false);
+  const [previewId, setPreviewId] = useState<string | null>(null);
+  const [bookmarks, setBookmarks] = useState<string[]>(() => loadBookmarks());
 
-  // Preview Drawer state
-  const [previewConnector, setPreviewConnector] = useState<ConnectorDirectoryItem | null>(null);
+  const previewConnector = connectors.find((c) => c.id === previewId) ?? null;
+  const connectionOf = useCallback((id: string) => connections.find((c) => c.connectorId === id), [connections]);
+  const previewConnection = previewConnector ? (connectionOf(previewConnector.id) ?? null) : null;
 
-  // Connected channel counts
-  const connectedCount = connections.length || connectionsResponse?.meta?.total || 0;
-
-  // Format connected marketplace names (e.g., "Amazon, Meesho and Shopify")
+  const connectedCount = connectionsQuery.data?.meta.total ?? connections.length;
   const connectedNames = useMemo(() => {
-    const names = connections.map((c) => c.name || c.connectorId).filter(Boolean);
-    if (names.length === 0) return "";
-    if (names.length === 1) return names[0];
-    if (names.length === 2) return `${names[0]} and ${names[1]}`;
+    const names = connections.map((c) => c.name).filter(Boolean);
+    if (names.length <= 1) return names[0] ?? "";
     return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
   }, [connections]);
 
-  // Dynamically recommend an unconnected channel (Flipkart or first available connector)
+  // the first connector the business can connect and has not connected yet
   const recommendedConnector = useMemo(() => {
-    const available = connectors.filter((c) => c.status === "available");
-    const flipkart = available.find((c) => c.id === "flipkart");
-    if (flipkart) return flipkart;
-    if (available.length > 0) return available[0];
-    return connectors[0] || null;
+    const open = connectors.filter((c) => c.status === "available" && !c.isPartnerGated);
+    return open[0] ?? connectors.find((c) => c.status === "available") ?? null;
   }, [connectors]);
+  const recommendedCapabilitiesText = recommendedConnector?.capabilities.map((c) => CAPABILITY_LABEL[c] ?? c).slice(0, 4).join(" · ") ?? "";
 
-  const recommendedDisplayName = useMemo(() => {
-    if (!recommendedConnector) return "";
-    return recommendedConnector.name
-      .replace(/ Seller API| SP-API| Supplier Panel| API/i, "")
-      .trim();
-  }, [recommendedConnector]);
-
-  const recommendedCapabilitiesText = useMemo(() => {
-    if (!recommendedConnector?.capabilities?.length) {
-      return "Products · Listings · Inventory · Orders";
-    }
-    const labelMap: Record<string, string> = {
-      product_import: "Products",
-      listings: "Listings",
-      inventory: "Inventory",
-      orders: "Orders",
-      shipping: "Shipping",
-      returns: "Returns",
-      promotions: "Promotions",
-    };
-    const caps = recommendedConnector.capabilities
-      .filter((c) => !c.includes("."))
-      .map((c) => labelMap[c] || c.replace("_", " ").replace(/\b\w/g, (l) => l.toUpperCase()));
-    return caps.slice(0, 4).join(" · ") || "Products · Listings · Inventory · Orders";
-  }, [recommendedConnector]);
-
-  // Toggle compare selection (Max 3)
   const toggleCompare = (id: string) => {
+    setCompareNotice(null);
     if (selectedForCompare.includes(id)) {
-      setSelectedForCompare(selectedForCompare.filter((item) => item !== id));
+      setSelectedForCompare(selectedForCompare.filter((x) => x !== id));
+    } else if (selectedForCompare.length >= 3) {
+      setCompareNotice("You can compare up to 3 connectors at once.");
     } else {
-      if (selectedForCompare.length >= 3) {
-        alert("You can compare up to 3 connectors at once.");
-        return;
-      }
       setSelectedForCompare([...selectedForCompare, id]);
     }
   };
 
-  // Toggle capability filter
-  const toggleCapability = (capKey: string) => {
-    if (selectedCapabilities.includes(capKey)) {
-      setSelectedCapabilities(selectedCapabilities.filter((c) => c !== capKey));
-    } else {
-      setSelectedCapabilities([...selectedCapabilities, capKey]);
-    }
+  const toggleBookmark = (id: string) => {
+    const next = bookmarks.includes(id) ? bookmarks.filter((b) => b !== id) : [...bookmarks, id];
+    setBookmarks(next);
+    saveBookmarks(next);
   };
 
-  // Filtered List
+  const toggleCapability = (cap: string) =>
+    setFilter({ need: (selectedCapabilities.includes(cap) ? selectedCapabilities.filter((c) => c !== cap) : [...selectedCapabilities, cap]).join(",") || null });
+
   const filteredConnectors = useMemo(() => {
-    return connectors.filter((item) => {
-      // Search
-      const searchMatch =
-        !searchTerm ||
-        item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.id.toLowerCase().includes(searchTerm.toLowerCase());
-
-      if (!searchMatch) return false;
-
-      // Category tab
-      if (activeTab === "marketplace" && item.category !== "marketplace") return false;
-      if (activeTab === "commerce" && item.category !== "storefront") return false;
-      if (activeTab === "shipping" && item.category !== "shipping") return false;
-      if (activeTab === "social" && !item.id.includes("social")) return false;
-
-      // Status dropdown filter
-      if (statusFilter !== "all") {
-        if (statusFilter === "connected" && item.status !== "connected") return false;
-        if (statusFilter === "available" && item.status !== "available") return false;
-        if (statusFilter === "needs_attention" && item.status !== "needs_attention") return false;
-        if (statusFilter === "unavailable" && item.status !== "unavailable") return false;
-      }
-
-      // Capability filter ("I need")
-      if (selectedCapabilities.length > 0) {
-        const itemCaps = (item.capabilities || []).map((c) => c.toLowerCase());
-        const hasMatchingCap = selectedCapabilities.some((cap) => {
-          if (cap === "inventory") return itemCaps.some((c) => c.includes("inventory"));
-          if (cap === "orders") return itemCaps.some((c) => c.includes("order"));
-          if (cap === "product_import") return itemCaps.some((c) => c.includes("catalog") || c.includes("product"));
-          if (cap === "listings") return itemCaps.some((c) => c.includes("listing"));
-          return true;
-        });
-        if (!hasMatchingCap) return false;
-      }
-
+    const q = searchTerm.trim().toLowerCase();
+    const tab = CATEGORY_TABS.find((t) => t.id === activeTab) ?? CATEGORY_TABS[0];
+    const list = connectors.filter((item) => {
+      if (q && !`${item.name} ${item.description} ${item.id} ${item.capabilities.join(" ")} ${item.category}`.toLowerCase().includes(q)) return false;
+      if (!tab.categories.includes(item.category)) return false;
+      if (statusFilter !== "all" && item.status !== statusFilter) return false;
+      if (availFilter === "now" && item.status === "unavailable") return false;
+      if (availFilter === "unavailable" && item.status !== "unavailable") return false;
+      if (availFilter === "partner" && !item.isPartnerGated) return false;
+      if (selectedCapabilities.length > 0 && !selectedCapabilities.every((cap) => (item.capabilities as string[]).includes(cap))) return false;
       return true;
     });
-  }, [connectors, searchTerm, activeTab, statusFilter, selectedCapabilities]);
+    return list.sort((a, b) => {
+      if (sortBy === "name") return a.name.localeCompare(b.name);
+      const byStatus = STATUS_RANK[a.status] - STATUS_RANK[b.status];
+      return byStatus !== 0 ? byStatus : a.name.localeCompare(b.name);
+    });
+  }, [connectors, searchTerm, activeTab, statusFilter, availFilter, selectedCapabilities, sortBy]);
 
-  // Selected for comparison items
-  const compareItems = useMemo(() => {
-    return connectors.filter((c) => selectedForCompare.includes(c.id));
-  }, [connectors, selectedForCompare]);
+  const compareItems = useMemo(() => connectors.filter((c) => selectedForCompare.includes(c.id)), [connectors, selectedForCompare]);
+  const hasFilters = Boolean(searchTerm || activeTab !== "all" || statusFilter !== "all" || availFilter !== "all" || selectedCapabilities.length || sortBy !== "recommended");
+  const clearFilters = () => setParams({}, { replace: true });
 
-  // Find live connection for drawer
-  const previewConnection = useMemo(() => {
-    if (!previewConnector) return null;
-    return connections.find((c) => c.connectorId === previewConnector.id || c.id === previewConnector.id) || null;
-  }, [connections, previewConnector]);
-
-  // Clear all filters
-  const handleClearFilters = () => {
-    setSearchTerm("");
-    setActiveTab("all");
-    setSelectedCapabilities([]);
-    setStatusFilter("all");
+  const connect = (id: string) => navigate(`${ROUTES.MARKETPLACE_HUB}/connect/${id}`);
+  const manage = (id: string) => {
+    const conn = connectionOf(id);
+    navigate(conn ? `${ROUTES.MARKETPLACE_HUB}?q=${encodeURIComponent(conn.name)}` : ROUTES.MARKETPLACE_HUB);
   };
 
+  const supportingNeeded =
+    selectedCapabilities.length > 0
+      ? `${filteredConnectors.length} connector${filteredConnectors.length === 1 ? "" : "s"} support ${selectedCapabilities.map((k) => I_NEED_OPTIONS.find((o) => o.id === k)?.label ?? k).join(" + ")}`
+      : null;
+  const connectedInList = filteredConnectors.filter((c) => c.status === "connected").length;
+
   return (
-    <div className="w-full space-y-6 pb-24 text-[#111111] animate-in fade-in duration-200">
+    <div className="w-full space-y-6 pb-24 text-[#111111] animate-in fade-in duration-200" onClick={() => openMenu && setOpenMenu(null)}>
       {/* HEADER WITH ACTIONS */}
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
-          <span className="text-[11px] font-bold uppercase tracking-wider text-[#737373]">
-            CONNECTORS
-          </span>
-          <h1 className="mt-1 text-[28px] font-bold tracking-tight text-[#111111]">
-            Expand your commerce network
-          </h1>
-          <p className="mt-1 text-[13px] text-[#666666]">
-            Connect new marketplaces, commerce platforms and operational services as your business grows.
-          </p>
+          <span className="text-[11px] font-bold uppercase tracking-wider text-[#737373]">CONNECTORS</span>
+          <h1 className="mt-1 text-[28px] font-bold tracking-tight text-[#111111]">Expand your commerce network</h1>
+          <p className="mt-1 text-[13px] text-[#666666]">Connect new marketplaces, commerce platforms and operational services as your business grows.</p>
         </div>
 
         <div className="flex flex-col sm:items-end gap-1.5">
@@ -266,27 +251,30 @@ export default function ConnectorMarketplacePage() {
         </div>
       </div>
 
-      {/* 3. FULL-WIDTH SEARCH BAR */}
+      {!canConnect && (
+        <p role="status" className="rounded-lg border border-[#EAEAEA] bg-[#F5F5F5] px-3 py-2 text-[12px] text-[#666666]">
+          You have read-only access. You can browse and compare connectors. {WRITE_REASON}
+        </p>
+      )}
+
+      {/* SEARCH */}
       <div className="relative w-full">
         <input
           type="text"
+          aria-label="Search connectors"
           placeholder="Search marketplaces, capabilities or categories..."
           value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+          onChange={(e) => setFilter({ q: e.target.value || null })}
           className="w-full h-11 rounded-lg border border-[#D4D4D4] bg-[#FFFFFF] px-4 text-[13px] text-[#111111] placeholder:text-[#8A8A8A] focus:border-[#000000] focus:outline-none transition-colors"
         />
         {searchTerm && (
-          <button
-            type="button"
-            onClick={() => setSearchTerm("")}
-            className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#8A8A8A] hover:text-[#111111]"
-          >
+          <button type="button" aria-label="Clear search" onClick={() => setFilter({ q: null })} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#8A8A8A] hover:text-[#111111]">
             <X className="h-4 w-4" />
           </button>
         )}
       </div>
 
-      {/* 4. CATEGORY TABS */}
+      {/* CATEGORY TABS */}
       <div className="flex items-center gap-6 border-b border-[#E5E5E5] text-[13px] overflow-x-auto">
         {CATEGORY_TABS.map((tab) => {
           const isActive = activeTab === tab.id;
@@ -294,134 +282,95 @@ export default function ConnectorMarketplacePage() {
             <button
               key={tab.id}
               type="button"
-              onClick={() => setActiveTab(tab.id)}
-              className={`pb-3 font-medium transition-colors whitespace-nowrap relative ${
-                isActive ? "text-[#111111] font-semibold" : "text-[#737373] hover:text-[#111111]"
-              }`}
+              aria-pressed={isActive}
+              onClick={() => setFilter({ tab: tab.id })}
+              className={`pb-3 font-medium transition-colors whitespace-nowrap relative ${isActive ? "text-[#111111] font-semibold" : "text-[#737373] hover:text-[#111111]"}`}
             >
               {tab.label}
-              {isActive && (
-                <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#000000]" />
-              )}
+              {isActive && <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#000000]" />}
             </button>
           );
         })}
       </div>
 
-      {/* 5. RECOMMENDATION / "EXPAND YOUR REACH" BANNER */}
+      {/* RECOMMENDATION BANNER */}
       {!searchTerm && activeTab === "all" && recommendedConnector && (
         <div className="relative flex flex-col md:flex-row rounded-xl border border-[#EDEDED] bg-[#FAFAFA] p-6 gap-8">
-          {/* Left Block */}
           <div className="flex-1 space-y-2">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-[#737373]">
-              Expand your reach
-            </span>
-            <h3 className="text-[18px] font-bold text-[#111111]">
-              {recommendedDisplayName}
-            </h3>
-            <p className="text-[12px] text-[#525252] leading-relaxed">
-              Connect your existing catalog, inventory and order operations to {recommendedDisplayName} from one workspace.
-            </p>
-            <p className="text-[12px] text-[#737373] font-medium pt-0.5">
-              {recommendedCapabilitiesText}
-            </p>
-            <button
-              type="button"
-              onClick={() => setPreviewConnector(recommendedConnector)}
-              className="text-[12px] font-semibold text-[#111111] hover:underline flex items-center gap-1 pt-1"
-            >
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-[#737373]">Expand your reach</span>
+            <h2 className="text-[18px] font-bold text-[#111111]">{recommendedConnector.name}</h2>
+            <p className="text-[12px] text-[#525252] leading-relaxed">{recommendedConnector.description}</p>
+            {recommendedCapabilitiesText && <p className="text-[12px] text-[#737373] font-medium pt-0.5">{recommendedCapabilitiesText}</p>}
+            <button type="button" onClick={() => setPreviewId(recommendedConnector.id)} className="text-[12px] font-semibold text-[#111111] hover:underline flex items-center gap-1 pt-1">
               View connector <ArrowRight className="h-3.5 w-3.5" />
             </button>
           </div>
 
-          {/* Right Block */}
           <div className="flex-1 border-t md:border-t-0 md:border-l border-[#E5E5E5] md:pl-8 pt-4 md:pt-0 space-y-2">
-            <h4 className="text-[13px] font-bold text-[#111111]">
-              Based on your connected channels
-            </h4>
+            <h4 className="text-[13px] font-bold text-[#111111]">Based on your connected channels</h4>
             <p className="text-[12px] text-[#525252] leading-relaxed">
               {connectedNames
-                ? `You currently sell on ${connectedNames}. Adding ${recommendedDisplayName} could help centralize more of your catalog and order activity.`
-                : `Adding ${recommendedDisplayName} will centralize your multi-channel catalog, inventory sync, and order lifecycle into one dashboard.`}
+                ? `You currently sell on ${connectedNames}. ${recommendedConnector.name} is not connected yet.`
+                : `You have not connected a channel yet. ${recommendedConnector.name} is a good first channel to centralize your catalog, inventory and orders.`}
             </p>
           </div>
         </div>
       )}
 
-      {/* 6. AVAILABLE CONNECTORS SECTION & TOOLBAR */}
+      {/* AVAILABLE CONNECTORS + TOOLBAR */}
       <div className="space-y-4">
         <div>
-          <h2 className="text-[18px] font-bold text-[#111111]">
-            Available connectors
-          </h2>
-          <p className="text-[12px] text-[#737373] mt-0.5">
-            Choose what you need. You can add connectors as your business grows.
-          </p>
+          <h2 className="text-[18px] font-bold text-[#111111]">Available connectors</h2>
+          <p className="text-[12px] text-[#737373] mt-0.5">Choose what you need. You can add connectors as your business grows.</p>
         </div>
 
-        {/* Dropdowns row */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3" onClick={(e) => e.stopPropagation()}>
           <div className="flex flex-wrap items-center gap-2">
-            {/* Category Dropdown */}
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setIsStatusFilterOpen(false)}
-                className="h-8 px-3 rounded-lg border border-[#D4D4D4] bg-[#FFFFFF] text-[12px] font-medium text-[#111111] hover:bg-[#F9F9F9] flex items-center gap-1.5"
-              >
-                Category <ChevronDown className="h-3.5 w-3.5 text-[#737373]" />
-              </button>
-            </div>
+            <ChoiceMenu
+              label="Category"
+              value={activeTab}
+              options={CATEGORY_TABS.map((t) => ({ id: t.id, label: t.label }))}
+              isOpen={openMenu === "category"}
+              onToggle={() => toggleMenu("category")}
+              onPick={(id) => {
+                setFilter({ tab: id });
+                setOpenMenu(null);
+              }}
+            />
 
-            {/* "I need" Capability Dropdown */}
+            {/* "I need" capability filter */}
             <div className="relative">
               <button
                 type="button"
-                onClick={() => {
-                  setIsINeedOpen(!isINeedOpen);
-                  setIsStatusFilterOpen(false);
-                }}
-                className={`h-8 px-3 rounded-lg border text-[12px] font-medium flex items-center gap-1.5 transition-colors ${
-                  selectedCapabilities.length > 0
-                    ? "border-[#111111] bg-[#F5F5F5] text-[#111111]"
-                    : "border-[#D4D4D4] bg-[#FFFFFF] text-[#111111] hover:bg-[#F9F9F9]"
-                }`}
+                aria-haspopup="menu"
+                aria-expanded={openMenu === "need"}
+                onClick={() => toggleMenu("need")}
+                className={`${TRIGGER} ${selectedCapabilities.length > 0 ? "border-[#111111] bg-[#F5F5F5] text-[#111111]" : "border-[#D4D4D4] bg-[#FFFFFF] text-[#111111] hover:bg-[#F9F9F9]"}`}
               >
-                {selectedCapabilities.length > 0
-                  ? `I need: ${selectedCapabilities.map((k) => I_NEED_OPTIONS.find((o) => o.id === k)?.label || k).join(", ")}`
-                  : "I need"}{" "}
+                {selectedCapabilities.length > 0 ? `I need: ${selectedCapabilities.map((k) => I_NEED_OPTIONS.find((o) => o.id === k)?.label ?? k).join(", ")}` : "I need"}{" "}
                 <ChevronDown className="h-3.5 w-3.5 text-[#737373]" />
               </button>
-
-              {isINeedOpen && (
-                <div className="absolute left-0 top-full mt-1.5 z-30 w-52 rounded-xl border border-[#E5E5E5] bg-[#FFFFFF] p-2 shadow-xl space-y-1">
-                  <div className="px-2 py-1 text-[11px] font-bold text-[#737373] uppercase tracking-wider">
-                    I need
-                  </div>
+              {openMenu === "need" && (
+                <div className={`${MENU} w-56`}>
+                  <div className="px-2 py-1 text-[11px] font-bold text-[#737373] uppercase tracking-wider">I need</div>
                   {I_NEED_OPTIONS.map((opt) => {
-                    const isChecked = selectedCapabilities.includes(opt.id);
+                    const supportedBy = connectors.filter((c) => (c.capabilities as string[]).includes(opt.id)).length;
                     return (
-                      <label
-                        key={opt.id}
-                        className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-[#F5F5F5] text-[12px] text-[#111111] cursor-pointer"
-                      >
+                      <label key={opt.id} className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-[#F5F5F5] text-[12px] text-[#111111] cursor-pointer">
                         <input
                           type="checkbox"
-                          checked={isChecked}
+                          checked={selectedCapabilities.includes(opt.id)}
                           onChange={() => toggleCapability(opt.id)}
                           className="h-3.5 w-3.5 rounded border-[#D4D4D4] text-[#111111] focus:ring-0"
                         />
-                        <span>{opt.label}</span>
+                        <span className="flex-1">{opt.label}</span>
+                        <span className="text-[11px] text-[#8A8A8A]">{supportedBy}</span>
                       </label>
                     );
                   })}
                   {selectedCapabilities.length > 0 && (
                     <div className="border-t border-[#F0F0F0] pt-1">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedCapabilities([])}
-                        className="w-full text-left px-2 py-1 text-[11px] font-medium text-[#737373] hover:text-[#111111]"
-                      >
+                      <button type="button" onClick={() => setFilter({ need: null })} className="w-full text-left px-2 py-1 text-[11px] font-medium text-[#737373] hover:text-[#111111]">
                         Clear selection
                       </button>
                     </div>
@@ -430,210 +379,172 @@ export default function ConnectorMarketplacePage() {
               )}
             </div>
 
-            {/* Connection status Dropdown */}
+            <ChoiceMenu
+              label="Connection status"
+              value={statusFilter}
+              options={STATUS_OPTIONS}
+              isOpen={openMenu === "status"}
+              onToggle={() => toggleMenu("status")}
+              onPick={(id) => {
+                setFilter({ status: id });
+                setOpenMenu(null);
+              }}
+            />
+
+            <ChoiceMenu
+              label="Availability"
+              value={availFilter}
+              options={AVAILABILITY_OPTIONS}
+              isOpen={openMenu === "availability"}
+              onToggle={() => toggleMenu("availability")}
+              onPick={(id) => {
+                setFilter({ avail: id });
+                setOpenMenu(null);
+              }}
+              width="w-60"
+            />
+
+            {/* Subscription: the platform has no connector billing, so this says so */}
             <div className="relative">
               <button
                 type="button"
-                onClick={() => {
-                  setIsStatusFilterOpen(!isStatusFilterOpen);
-                  setIsINeedOpen(false);
-                }}
-                className={`h-8 px-3 rounded-lg border text-[12px] font-medium flex items-center gap-1.5 ${
-                  statusFilter !== "all"
-                    ? "border-[#111111] bg-[#F5F5F5] text-[#111111]"
-                    : "border-[#D4D4D4] bg-[#FFFFFF] text-[#111111] hover:bg-[#F9F9F9]"
-                }`}
-              >
-                {statusFilter !== "all" ? `Status: ${statusFilter}` : "Connection status"}{" "}
-                <ChevronDown className="h-3.5 w-3.5 text-[#737373]" />
-              </button>
-
-              {isStatusFilterOpen && (
-                <div className="absolute left-0 top-full mt-1.5 z-30 w-44 rounded-xl border border-[#E5E5E5] bg-[#FFFFFF] p-1.5 shadow-xl space-y-0.5 text-[12px]">
-                  {["all", "connected", "available", "needs_attention", "unavailable"].map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => {
-                        setStatusFilter(s);
-                        setIsStatusFilterOpen(false);
-                      }}
-                      className={`w-full text-left px-2.5 py-1.5 rounded-lg capitalize ${
-                        statusFilter === s ? "bg-[#F5F5F5] font-semibold text-[#111111]" : "text-[#525252] hover:bg-[#F9F9F9]"
-                      }`}
-                    >
-                      {s.replace("_", " ")}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Availability */}
-            <div className="relative">
-              <button
-                type="button"
-                className="h-8 px-3 rounded-lg border border-[#D4D4D4] bg-[#FFFFFF] text-[12px] font-medium text-[#111111] hover:bg-[#F9F9F9] flex items-center gap-1.5"
-              >
-                Availability <ChevronDown className="h-3.5 w-3.5 text-[#737373]" />
-              </button>
-            </div>
-
-            {/* Subscription */}
-            <div className="relative">
-              <button
-                type="button"
-                className="h-8 px-3 rounded-lg border border-[#D4D4D4] bg-[#FFFFFF] text-[12px] font-medium text-[#111111] hover:bg-[#F9F9F9] flex items-center gap-1.5"
+                aria-haspopup="menu"
+                aria-expanded={openMenu === "subscription"}
+                onClick={() => toggleMenu("subscription")}
+                className={`${TRIGGER} border-[#D4D4D4] bg-[#FFFFFF] text-[#111111] hover:bg-[#F9F9F9]`}
               >
                 Subscription <ChevronDown className="h-3.5 w-3.5 text-[#737373]" />
               </button>
+              {openMenu === "subscription" && (
+                <div role="status" className={`${MENU} w-64 p-3 text-[#525252]`}>
+                  <p className="font-semibold text-[#111111]">Included in your workspace</p>
+                  <p className="mt-1 text-[11px] leading-relaxed">{FEE_NOTE} Every connector in the directory is covered by your workspace.</p>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Sort Dropdown */}
-          <div className="relative">
-            <button
-              type="button"
-              className="h-8 px-3 rounded-lg border border-[#D4D4D4] bg-[#FFFFFF] text-[12px] font-medium text-[#111111] hover:bg-[#F9F9F9] flex items-center gap-1.5"
-            >
-              Sort: Recommended <ChevronDown className="h-3.5 w-3.5 text-[#737373]" />
-            </button>
-          </div>
+          <ChoiceMenu
+            label="Sort"
+            showValue
+            value={sortBy}
+            options={SORT_OPTIONS}
+            isOpen={openMenu === "sort"}
+            onToggle={() => toggleMenu("sort")}
+            onPick={(id) => {
+              setFilter({ sort: id });
+              setOpenMenu(null);
+            }}
+          />
         </div>
 
-        {/* Counter & Compare info line */}
         <div className="flex items-center justify-between text-[12px] text-[#737373] pt-1">
           <div>
-            {selectedCapabilities.includes("inventory") ? (
-              <span>4 connectors support Inventory sync</span>
-            ) : (
+            {supportingNeeded ?? (
               <span>
-                {filteredConnectors.length} connectors · 3 connected shown in this directory
+                {filteredConnectors.length} connector{filteredConnectors.length === 1 ? "" : "s"} · {connectedInList} connected
               </span>
             )}
+            {hasFilters && (
+              <button type="button" onClick={clearFilters} className="ml-3 font-medium text-[#111111] hover:underline">
+                Clear filters
+              </button>
+            )}
           </div>
-          <div>Compare up to 3</div>
+          <div>{compareNotice ?? "Compare up to 3"}</div>
         </div>
       </div>
 
-      {/* 7. SKELETON LOADING STATE */}
-      {isDirectoryLoading && (
-        <div className="space-y-3 pt-2">
+      {/* LOADING */}
+      {directory.isPending && (
+        <div className="space-y-3 pt-2" aria-busy="true">
           <p className="text-[12px] text-[#737373]">Loading connectors...</p>
-          <div className="space-y-3">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <div
-                key={i}
-                className="h-20 w-full animate-pulse rounded-xl border border-[#EDEDED] bg-[#F9F9FA]"
-              />
-            ))}
-          </div>
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="h-20 w-full animate-pulse rounded-xl border border-[#EDEDED] bg-[#F9F9FA]" />
+          ))}
         </div>
       )}
 
-      {/* 8. EMPTY ZERO-STATE */}
-      {!isDirectoryLoading && filteredConnectors.length === 0 && (
+      {/* ERROR */}
+      {directory.isError && <LoadError title="Connectors could not be loaded." message={errorMessage(directory.error)} onRetry={() => void directory.refetch()} />}
+
+      {/* EMPTY */}
+      {directory.isSuccess && filteredConnectors.length === 0 && (
         <div className="flex flex-col items-center justify-center rounded-2xl bg-[#000000] px-8 py-16 text-center text-white space-y-4">
           <div className="flex h-14 w-14 items-center justify-center rounded-full border border-neutral-700 bg-neutral-900">
-            <Radar className="h-6 w-6 text-amber-400 animate-spin duration-1000" />
+            <Radar className="h-6 w-6 text-amber-400" />
           </div>
           <div className="space-y-1">
-            <h3 className="text-[18px] font-bold text-white">
-              No connectors match your search.
-            </h3>
+            <h3 className="text-[18px] font-bold text-white">{connectors.length === 0 ? "No connectors are available yet." : "No connectors match your search."}</h3>
             <p className="text-[13px] text-neutral-400">
-              No results for "{searchTerm}" — try a different marketplace or capability.
-            </p>
-            <p className="text-[11px] text-neutral-500">
-              Try a different marketplace or capability.
+              {searchTerm ? `No results for "${searchTerm}". ` : ""}
+              {activeTab !== "all" && CATEGORY_TABS.find((t) => t.id === activeTab)?.categories.length === 0
+                ? "There is no connector in this category yet."
+                : "Try a different marketplace or capability."}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={handleClearFilters}
-            className="mt-2 h-9 px-5 rounded-lg bg-[#FFFFFF] text-[12px] font-semibold text-[#000000] hover:bg-neutral-100 transition-colors shadow-none"
-          >
-            Clear filters
-          </button>
+          {hasFilters && (
+            <button type="button" onClick={clearFilters} className="mt-2 h-9 px-5 rounded-lg bg-[#FFFFFF] text-[12px] font-semibold text-[#000000] hover:bg-neutral-100 transition-colors shadow-none">
+              Clear filters
+            </button>
+          )}
         </div>
       )}
 
-      {/* 9. CONNECTORS GRID */}
-      {!isDirectoryLoading && filteredConnectors.length > 0 && (
+      {/* GRID */}
+      {directory.isSuccess && filteredConnectors.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {filteredConnectors.map((item) => (
             <ConnectorCardItem
               key={item.id}
               item={item}
-              connection={connections.find((c) => c.connectorId === item.id)}
+              connection={connectionOf(item.id)}
               isSelectedForCompare={selectedForCompare.includes(item.id)}
+              isBookmarked={bookmarks.includes(item.id)}
+              canConnect={canConnect}
               onToggleCompare={toggleCompare}
-              onOpenPreview={(c) => setPreviewConnector(c)}
-              onConnect={(id) => {
-                const c = connectors.find((x) => x.id === id);
-                if (c) setPreviewConnector(c);
-              }}
-              onManage={(id) => {
-                const c = connectors.find((x) => x.id === id);
-                if (c) setPreviewConnector(c);
-              }}
+              onToggleBookmark={toggleBookmark}
+              onOpenPreview={(c) => setPreviewId(c.id)}
+              onConnect={connect}
+              onManage={manage}
             />
           ))}
         </div>
       )}
 
-      {/* 10. FLOATING / INLINE COMPARE TOOLBAR (When items are selected) */}
+      {/* COMPARE TOOLBAR */}
       {selectedForCompare.length > 0 && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-4 rounded-full border border-[#E5E5E5] bg-[#FFFFFF] px-6 py-3 shadow-2xl animate-in slide-in-from-bottom duration-200">
-          <span className="text-[12px] font-medium text-[#111111]">
-            {compareItems.map((c) => c.name).join(" · ")}
-          </span>
+          <span className="text-[12px] font-medium text-[#111111]">{compareItems.map((c) => c.name).join(" · ")}</span>
           <span className="text-[11px] text-[#737373]">Maximum 3 connectors</span>
-          <button
-            type="button"
-            onClick={() => setIsCompareModalOpen(true)}
-            className="h-8 px-4 rounded-full bg-[#000000] text-[12px] font-semibold text-[#FFFFFF] hover:bg-neutral-800 transition-colors"
-          >
+          <button type="button" onClick={() => setIsCompareModalOpen(true)} className="h-8 px-4 rounded-full bg-[#000000] text-[12px] font-semibold text-[#FFFFFF] hover:bg-neutral-800 transition-colors">
             Compare ({selectedForCompare.length})
           </button>
-          <button
-            type="button"
-            onClick={() => setSelectedForCompare([])}
-            className="text-[12px] font-medium text-[#737373] hover:text-[#111111]"
-          >
+          <button type="button" onClick={() => setSelectedForCompare([])} className="text-[12px] font-medium text-[#737373] hover:text-[#111111]">
             Clear selection
           </button>
         </div>
       )}
 
-      {/* 11. SIDE DRAWER PREVIEW */}
-      <ConnectorPreviewDrawer
-        isOpen={!!previewConnector}
-        onClose={() => setPreviewConnector(null)}
-        connector={previewConnector}
-        connection={previewConnection}
-      />
+      <ConnectorPreviewDrawer isOpen={!!previewConnector} onClose={() => setPreviewId(null)} connector={previewConnector} connection={previewConnection} canConnect={canConnect} />
 
-      {/* 12. COMPARISON MODAL */}
       <ConnectorCompareModal
         isOpen={isCompareModalOpen}
         onClose={() => setIsCompareModalOpen(false)}
         items={compareItems}
+        canConnect={canConnect}
         onConnect={(id) => {
           setIsCompareModalOpen(false);
-          const c = connectors.find((x) => x.id === id);
-          if (c) setPreviewConnector(c);
+          connect(id);
         }}
         onManage={(id) => {
           setIsCompareModalOpen(false);
-          const c = connectors.find((x) => x.id === id);
-          if (c) setPreviewConnector(c);
+          manage(id);
         }}
       />
 
-      {/* 13. FOOTER DISCLAIMER */}
       <div className="pt-8 text-[11px] text-[#8A8A8A] leading-relaxed">
-        Demo pricing only. Connector add-ons are separate from the workspace plan. Capabilities depend on supported APIs and permissions.
+        {FEE_NOTE} Capabilities depend on each connector's supported APIs and on the permissions the marketplace grants.
       </div>
     </div>
   );

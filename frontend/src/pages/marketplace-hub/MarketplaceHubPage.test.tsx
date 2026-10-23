@@ -52,6 +52,9 @@ const dirItem = (over: Partial<DirectoryItem>): DirectoryItem => ({
   authFlow: { type: "credentials", mode: "credentials", fields: [], redirectFields: [], partnerGated: false, refreshable: false },
   capabilities: [],
   capabilityTags: ["orders"],
+  readiness: { sandbox: true, live: false, notes: "" },
+  limits: { requestsPerSecond: 1, burst: 1, maxBatchSize: 1 },
+  webhooks: false,
   ...over,
 });
 const DIRECTORY = {

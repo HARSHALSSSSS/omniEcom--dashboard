@@ -28701,6 +28701,54 @@
               "type": "string"
             }
           },
+          "readiness": {
+            "type": "object",
+            "properties": {
+              "sandbox": {
+                "type": "boolean"
+              },
+              "live": {
+                "type": "boolean"
+              },
+              "notes": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "sandbox",
+              "live",
+              "notes"
+            ],
+            "description": "Whether the connector is verified against a sandbox and against the live marketplace"
+          },
+          "limits": {
+            "type": "object",
+            "properties": {
+              "requestsPerSecond": {
+                "type": "number"
+              },
+              "burst": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "maxBatchSize": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "requestsPerSecond",
+              "burst",
+              "maxBatchSize"
+            ],
+            "description": "Documented platform limits the host enforces per account"
+          },
+          "webhooks": {
+            "type": "boolean",
+            "description": "The marketplace can push events (orders) to this platform"
+          },
           "rating": {
             "type": "null"
           },
@@ -28726,6 +28774,9 @@
           "authFlow",
           "capabilities",
           "capabilityTags",
+          "readiness",
+          "limits",
+          "webhooks",
           "rating",
           "reviewsCount",
           "pricing"
@@ -65654,6 +65705,56 @@
               "type": "string"
             }
           },
+          "readiness": {
+            "type": "object",
+            "properties": {
+              "sandbox": {
+                "type": "boolean"
+              },
+              "live": {
+                "type": "boolean"
+              },
+              "notes": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "sandbox",
+              "live",
+              "notes"
+            ],
+            "additionalProperties": false,
+            "description": "Whether the connector is verified against a sandbox and against the live marketplace"
+          },
+          "limits": {
+            "type": "object",
+            "properties": {
+              "requestsPerSecond": {
+                "type": "number"
+              },
+              "burst": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "maxBatchSize": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "requestsPerSecond",
+              "burst",
+              "maxBatchSize"
+            ],
+            "additionalProperties": false,
+            "description": "Documented platform limits the host enforces per account"
+          },
+          "webhooks": {
+            "type": "boolean",
+            "description": "The marketplace can push events (orders) to this platform"
+          },
           "rating": {
             "type": "null"
           },
@@ -65679,6 +65780,9 @@
           "authFlow",
           "capabilities",
           "capabilityTags",
+          "readiness",
+          "limits",
+          "webhooks",
           "rating",
           "reviewsCount",
           "pricing"

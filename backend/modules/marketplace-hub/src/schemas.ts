@@ -64,6 +64,9 @@ export const DirectoryItemSchema = z
     authFlow: AuthFlowSchema,
     capabilities: z.array(z.string()),
     capabilityTags: z.array(z.string()),
+    readiness: z.object({ sandbox: z.boolean(), live: z.boolean(), notes: z.string() }).describe('Whether the connector is verified against a sandbox and against the live marketplace'),
+    limits: z.object({ requestsPerSecond: z.number(), burst: z.number().int(), maxBatchSize: z.number().int() }).describe('Documented platform limits the host enforces per account'),
+    webhooks: z.boolean().describe('The marketplace can push events (orders) to this platform'),
     rating: z.null(), reviewsCount: z.null(), pricing: z.null(),
   })
   .meta({ id: 'HubDirectoryItem' });

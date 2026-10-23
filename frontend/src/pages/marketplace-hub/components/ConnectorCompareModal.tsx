@@ -1,5 +1,7 @@
 import { X } from "lucide-react";
 import type { ConnectorDirectoryItem } from "@/types/connection";
+import { WRITE_REASON } from "@/components/marketplace-hub/accounts/hubFormat";
+import { CAPABILITY_ROWS, FEE_TEXT, accessText, capabilitySupport, environmentText, limitText, regionsText, statusLabel } from "./connectorFacts";
 
 interface ConnectorCompareModalProps {
   isOpen: boolean;
@@ -7,60 +9,16 @@ interface ConnectorCompareModalProps {
   items: ConnectorDirectoryItem[];
   onConnect: (connectorId: string) => void;
   onManage: (connectorId: string) => void;
+  canConnect?: boolean;
 }
 
-const CONNECTOR_PRICING: Record<string, string> = {
-  amazon_in: "₹799 / month · ₹7,999 / year",
-  amazon: "₹799 / month · ₹7,999 / year",
-  flipkart: "₹499 / month · ₹4,999 / year",
-  meesho: "₹299 / month · ₹2,999 / year",
-  shopify: "₹599 / month · ₹5,999 / year",
-  snapdeal: "₹399 / month · ₹3,999 / year",
-  myntra: "₹699 / month · ₹6,999 / year",
-};
-
-// Standard capabilities mapped from matrix
-const CAPABILITY_ROWS = [
-  { key: "product_import", label: "Product import" },
-  { key: "listings", label: "Listings" },
-  { key: "inventory", label: "Inventory" },
-  { key: "orders", label: "Orders" },
-  { key: "returns", label: "Returns" },
-  { key: "reviews", label: "Reviews" },
-  { key: "promotions", label: "Promotions" },
-  { key: "shipping", label: "Shipping" },
+const FACT_ROWS: Array<{ label: string; value: (c: ConnectorDirectoryItem) => string }> = [
+  { label: "Connection", value: accessText },
+  { label: "Regions", value: regionsText },
+  { label: "Environment", value: environmentText },
+  { label: "Request limit", value: limitText },
+  { label: "Connector fee", value: () => FEE_TEXT },
 ];
-
-function getCapabilitySupport(connector: ConnectorDirectoryItem, key: string): "Supported" | "Depends" | "N/A" {
-  const caps = (connector.capabilities || []).map((c) => String(c).toLowerCase());
-  const normalizedKey = key.toLowerCase();
-
-  if (normalizedKey === "reviews") {
-    // Platform does not track or expose review synchronization
-    return "N/A";
-  }
-
-  const isMatched = caps.some((c) => {
-    if (normalizedKey === "product_import") return c.includes("product") || c.includes("catalog");
-    if (normalizedKey === "listings") return c.includes("listing");
-    if (normalizedKey === "inventory") return c.includes("inventory");
-    if (normalizedKey === "orders") return c.includes("order");
-    if (normalizedKey === "shipping") return c.includes("shipping");
-    if (normalizedKey === "returns") return c.includes("return");
-    if (normalizedKey === "promotions") return c.includes("promotion");
-    return c === normalizedKey;
-  });
-
-  if (!isMatched) {
-    return "N/A";
-  }
-
-  if (connector.isPartnerGated || connector.authType === "partner_gated" || connector.authFlow?.partnerGated) {
-    return "Depends";
-  }
-
-  return "Supported";
-}
 
 export function ConnectorCompareModal({
   isOpen,
@@ -68,6 +26,7 @@ export function ConnectorCompareModal({
   items,
   onConnect,
   onManage,
+  canConnect = true,
 }: ConnectorCompareModalProps) {
   if (!isOpen || items.length === 0) return null;
 
@@ -107,8 +66,8 @@ export function ConnectorCompareModal({
             </div>
 
             {items.map((connector) => {
-              const isConnected = connector.status === "connected";
-              const pricing = CONNECTOR_PRICING[connector.id] || "₹499 / month · ₹4,999 / year";
+              const isConnected = connector.status === "connected" || connector.status === "needs_attention";
+              const isUnavailable = connector.status === "unavailable";
 
               return (
                 <div
@@ -120,17 +79,11 @@ export function ConnectorCompareModal({
                       {connector.name}
                     </h3>
                     <p className="text-[11px] font-medium text-[#737373] mt-0.5">
-                      {isConnected ? "Connected" : "Available"}
+                      {statusLabel(connector, connector.accountCount ?? 0)}
                     </p>
                   </div>
 
-                  <p className="text-[11px] text-[#737373]">
-                    {isConnected ? "✓ Connected & Active" : "Available to connect"}
-                  </p>
-
-                  <p className="text-[11px] font-medium text-[#111111]">
-                    {pricing}
-                  </p>
+                  {isUnavailable && connector.statusReason && <p className="text-[11px] text-[#737373]">{connector.statusReason}</p>}
 
                   {isConnected ? (
                     <button
@@ -141,13 +94,16 @@ export function ConnectorCompareModal({
                       Manage
                     </button>
                   ) : (
-                    <button
-                      type="button"
-                      onClick={() => onConnect(connector.id)}
-                      className="w-full h-8 rounded-lg bg-[#000000] text-[12px] font-semibold text-[#FFFFFF] hover:bg-neutral-800 transition-colors shadow-none"
-                    >
-                      Connect
-                    </button>
+                    <span title={canConnect ? undefined : WRITE_REASON} className="block">
+                      <button
+                        type="button"
+                        disabled={isUnavailable || !canConnect}
+                        onClick={() => onConnect(connector.id)}
+                        className="w-full h-8 rounded-lg bg-[#000000] text-[12px] font-semibold text-[#FFFFFF] hover:bg-neutral-800 transition-colors shadow-none disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Connect
+                      </button>
+                    </span>
                   )}
                 </div>
               );
@@ -160,7 +116,7 @@ export function ConnectorCompareModal({
               <div key={row.key} className="grid grid-cols-4 items-center px-4 py-3 hover:bg-[#FAFAFA]">
                 <span className="font-medium text-[#111111]">{row.label}</span>
                 {items.map((connector) => {
-                  const support = getCapabilitySupport(connector, row.key);
+                  const support = capabilitySupport(connector, row.key);
                   return (
                     <div key={connector.id} className="text-[#525252]">
                       {support === "Supported" ? (
@@ -179,9 +135,23 @@ export function ConnectorCompareModal({
             ))}
           </div>
 
+          {/* Access and setup, from the connector directory */}
+          <div className="border border-[#EDEDED] rounded-xl overflow-hidden divide-y divide-[#F0F0F0] text-[12px]">
+            {FACT_ROWS.map((row) => (
+              <div key={row.label} className="grid grid-cols-4 items-start px-4 py-3 hover:bg-[#FAFAFA]">
+                <span className="font-medium text-[#111111]">{row.label}</span>
+                {items.map((connector) => (
+                  <span key={connector.id} className="text-[#525252] pr-2">
+                    {row.value(connector)}
+                  </span>
+                ))}
+              </div>
+            ))}
+          </div>
+
           {/* Disclaimer Footnote */}
           <p className="text-[11px] text-[#737373] leading-relaxed">
-            Demo pricing only. Advanced matrix is illustrative and subject to actual implementation, supported APIs and commercial/API permissions. "Depends" requires a review of the connector's supported access during setup.
+            Capabilities come from each connector's declared capability matrix. "Depends" means the marketplace gives API access only to approved partners, so support is confirmed during setup. Reviews are not synchronized by any connector yet.
           </p>
         </div>
 

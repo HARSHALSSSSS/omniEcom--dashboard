@@ -74,20 +74,21 @@ export interface ConnectorDirectoryItem {
   category: "marketplace" | "storefront" | "shipping";
   authType: AuthType;
   description: string;
-  logoUrl?: string;
-  rating: number;
-  reviewsCount: number;
-  isPopular?: boolean;
+  logoKey?: string;
   isPartnerGated?: boolean;
   status: "available" | "connected" | "needs_attention" | "unavailable";
   statusReason?: string | null;
-  pricing: {
-    freeTrialDays: number;
-    monthlyFeeINR: number;
-    planName: string;
-  };
+  implementation?: "planned" | "beta" | "ga";
+  /** how many accounts of this connector the business has */
+  accountCount?: number;
+  /** screen chips: product_import, listings, inventory, orders, shipping, returns, promotions */
   capabilities: ConnectorCapability[];
+  /** the connector's flat capability list, e.g. orders.fetch */
+  capabilityFlags?: string[];
   supportedRegions: string[];
+  readiness?: { sandbox: boolean; live: boolean; notes: string };
+  limits?: { requestsPerSecond: number; burst: number; maxBatchSize: number };
+  webhooks?: boolean;
   fields?: AuthField[];
   authFlow?: AuthFlow;
 }
