@@ -58,7 +58,8 @@ export const marketplaceHubRoutes: FastifyPluginAsync = async (app) => {
         out.push({
           id: connector.code, name: connector.displayName, category: profile.category, description: profile.description, logoKey: profile.logoKey, supportedRegions: profile.supportedRegions,
           implementation: connector.implementation, status, statusReason: unavailableReason ?? (attention[0]?.card.health.frictionPoints[0] ?? null), accountCount: accounts.length, partnerGated: profile.authFlow.partnerGated,
-          authFlow: profile.authFlow, capabilities: caps, capabilityTags: capabilityTags(caps), rating: null, reviewsCount: null, pricing: null,
+          authFlow: profile.authFlow, capabilities: caps, capabilityTags: capabilityTags(caps),
+          readiness: connector.readiness, limits: connector.capabilities.limits, webhooks: Boolean(connector.verifyWebhook), rating: null, reviewsCount: null, pricing: null,
         });
       }
       return out;
@@ -134,7 +135,7 @@ export const marketplaceHubRoutes: FastifyPluginAsync = async (app) => {
     schema: {
       tags: TAGS,
       summary: 'Connection health of the whole network',
-      description: 'Overall pulse (average account health score), per-lane success rate and throughput from the sync jobs of the last 24 hours, totals, one row per account and the tokens that are expiring or expired. Rate-limit quotas are not tracked, so none are reported.',
+      description: 'Overall pulse (average account health score), per-lane success rate and throughput from the sync jobs of the last 24 hours (network wide and per account), totals, one row per account, the tokens that are expiring or expired, and what the connections that need attention put at risk (stale stock, rejected listings, open orders).',
       response: { 200: successEnvelope(HealthSchema) },
     },
   }, async (req) => {
@@ -154,6 +155,15 @@ export const marketplaceHubRoutes: FastifyPluginAsync = async (app) => {
       dataFlowLanes: buildLanes(counts, WINDOW_HOURS),
       summary: summarize(list.map((x) => x.card)),
       connections: list.map((x) => x.card),
+      generatedAt: now.toISOString(),
+      accountLanes: list.map((x) => ({ accountId: x.card.id, lanes: buildLanes(x.stats.jobCounts, WINDOW_HOURS) })),
+      atRisk: (() => {
+        const accounts = list
+          .filter((x) => x.card.status === 'warning' || x.card.status === 'error')
+          .map((x) => ({ accountId: x.card.id, name: x.card.name, staleStockListings: x.stats.staleStock, problemListings: (x.stats.listingsByStatus.rejected ?? 0) + (x.stats.listingsByStatus.correction_required ?? 0), openOrders: x.stats.pendingOrders }));
+        const sum = (k: 'staleStockListings' | 'problemListings' | 'openOrders') => accounts.reduce((n, a) => n + a[k], 0);
+        return { staleStockListings: sum('staleStockListings'), problemListings: sum('problemListings'), openOrders: sum('openOrders'), accounts };
+      })(),
       tokenWarnings: list.filter((x) => x.card.accountStatus === 'active' || x.card.health.tokenExpiresAt).flatMap((x) => {
         const d = daysLeft(x.row.z?.accessTokenExpiresAt ?? null, now);
         const expired = x.row.z ? ['expired', 'error'].includes(x.row.z.status) || (d !== null && d < 0) : false;

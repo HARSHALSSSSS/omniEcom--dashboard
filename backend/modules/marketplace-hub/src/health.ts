@@ -1,7 +1,7 @@
 /**
  * Pure health rules of the Marketplace Hub: how a connection is scored and described. No I/O, so every number the screens show can be
  * checked in a unit test. Inputs are facts the platform really tracks (connection status, sync job outcomes, token expiry, listing
- * problems); nothing is invented. Rate limits are NOT tracked per account, so none are reported.
+ * problems); nothing is invented. The request allowance is the live fill of the per-account limiter in the connector host (null when the account is not active).
  */
 export type HealthStatus = 'healthy' | 'warning' | 'error' | 'paused';
 export type RiskLevel = 'low' | 'medium' | 'high';

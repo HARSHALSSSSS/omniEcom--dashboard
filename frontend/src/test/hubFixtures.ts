@@ -126,6 +126,9 @@ export const health = (over: Partial<HubHealth> = {}): HubHealth => ({
   summary: summaryOf([card(), FLIPKART]),
   connections: [card(), FLIPKART],
   tokenWarnings: [],
+  generatedAt: new Date().toISOString(),
+  accountLanes: [],
+  atRisk: { staleStockListings: 0, problemListings: 0, openOrders: 0, accounts: [] },
   ...over,
 });
 

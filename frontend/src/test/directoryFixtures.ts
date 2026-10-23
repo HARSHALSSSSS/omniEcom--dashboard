@@ -31,6 +31,9 @@ export const item = (over: Partial<DirectoryItem> = {}): DirectoryItem => ({
   implementation: "beta",
   status: "available",
   statusReason: null,
+  readiness: { sandbox: true, live: false, notes: "Sandbox verified." },
+  limits: { requestsPerSecond: 5, burst: 10, maxBatchSize: 50 },
+  webhooks: false,
   accountCount: 0,
   partnerGated: false,
   authFlow: {

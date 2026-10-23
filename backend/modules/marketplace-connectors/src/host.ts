@@ -36,6 +36,13 @@ export function verifyState(secret: string, state: string, vendorId: string, acc
 // ------------------------------------------------------------------------------------------------
 class TokenBuckets {
   private readonly buckets = new Map<string, { tokens: number; at: number }>();
+  /** Share of the burst allowance still available (0-100); a key that was never used is full. */
+  remainingPct(key: string, rps: number, burst: number): number {
+    const b = this.buckets.get(key);
+    if (!b) return 100;
+    const tokens = Math.min(burst, b.tokens + ((Date.now() - b.at) / 1000) * rps);
+    return Math.max(0, Math.min(100, Math.round((tokens / burst) * 100)));
+  }
   /** Waits (up to maxWaitMs) for a token; throws RATE_LIMITED if the account is saturated. */
   async acquire(key: string, rps: number, burst: number, maxWaitMs = 2_000): Promise<void> {
     const deadline = Date.now() + maxWaitMs;
@@ -75,6 +82,11 @@ const retryFrom = (c: Container, o: HostOptions): RetryOptions => ({
  */
 const SHARED_LIMITER = new TokenBuckets();
 let sharedBreaker: CircuitBreaker | null = null;
+
+/** Live headroom of the per-account request limiter (percent of the burst allowance that is free right now). */
+export function rateLimitRemainingPct(accountId: string, limits: { requestsPerSecond: number; burst: number }): number {
+  return SHARED_LIMITER.remainingPct(accountId, limits.requestsPerSecond, limits.burst);
+}
 
 export class ConnectorHost {
   private readonly limiter = SHARED_LIMITER;

@@ -84,6 +84,11 @@ describe('directory', () => {
     expect(by.shopify.capabilityTags).not.toContain('shipping');
     expect(by.meesho.capabilityTags).toContain('returns');
     expect(by.shopify.authFlow.redirectFields).toHaveLength(1);
+    // what the marketplace screen needs to compare connectors: real readiness, limiter limits and webhook support
+    expect(by.shopify.readiness).toEqual({ sandbox: expect.any(Boolean), live: expect.any(Boolean), notes: expect.any(String) });
+    expect(by.shopify.limits).toEqual({ requestsPerSecond: expect.any(Number), burst: expect.any(Number), maxBatchSize: expect.any(Number) });
+    expect(by.shopify.limits.requestsPerSecond).toBeGreaterThan(0);
+    expect(typeof by.shopify.webhooks).toBe('boolean');
   });
 
   it('merges my accounts: connected, needs attention (not finished / unhealthy), account counts; filters by category and text', async () => {
@@ -111,8 +116,11 @@ describe('account cards', () => {
     let card = await cardOf(acct.id);
     expect(card).toMatchObject({
       marketplace: 'mock', accountIdentifier: acct.sellerId, mode: 'sandbox', status: 'healthy', accountStatus: 'active', connectionStatus: 'connected', syncState: 'idle', syncProgress: null,
-      stats: { activeListings: 0, pendingOrders: 0, syncedInventoryItems: 0, errorCount: 0 }, health: { pulseScore: 100, riskLevel: 'low', frictionPoints: [], rateLimitRemainingPct: null, syncSuccessRate24h: null },
+      stats: { activeListings: 0, pendingOrders: 0, syncedInventoryItems: 0, errorCount: 0 }, health: { pulseScore: 100, riskLevel: 'low', frictionPoints: [], rateLimitRemainingPct: expect.any(Number), syncSuccessRate24h: null },
     });
+    // a live measure of the per-account request limiter, never a placeholder
+    expect(card.health.rateLimitRemainingPct).toBeGreaterThanOrEqual(0);
+    expect(card.health.rateLimitRemainingPct).toBeLessThanOrEqual(100);
     expect(card.capabilities).toEqual(expect.arrayContaining(['orders.fetch', 'inventory.push']));
     expect(card.capabilityTags).toEqual(expect.arrayContaining(['orders', 'inventory', 'listings', 'returns', 'shipping']));
     expect(card.connectedAt).toBeTruthy();
@@ -282,6 +290,9 @@ describe('health', () => {
       syncReliability: { windowHours: 24, finished: 0, failed: 0, successRate: null }, summary: { total: 0 },
     });
     expect(r.body.data.dataFlowLanes.map((l: any) => [l.key, l.status])).toEqual([['orders', 'idle'], ['inventory', 'idle'], ['listings', 'idle'], ['prices', 'idle'], ['returns', 'idle'], ['tracking', 'idle']]);
+    expect(r.body.data.accountLanes).toEqual([]);
+    expect(r.body.data.atRisk).toEqual({ staleStockListings: 0, problemListings: 0, openOrders: 0, accounts: [] });
+    expect(Number.isNaN(Date.parse(r.body.data.generatedAt))).toBe(false);
   });
 
   it('summarises the network: pulse, lanes from the sync jobs of the last 24 hours, totals and one row per account', async () => {
@@ -300,6 +311,11 @@ describe('health', () => {
     expect(lanes.prices).toMatchObject({ status: 'idle' });
     // a routinely renewed access token is not a warning
     expect(h.tokenWarnings).toEqual([]);
+    // lanes per account: the synced account ran jobs, the other did not; nothing is at risk while everything is healthy
+    const perAccount = Object.fromEntries(h.accountLanes.map((a: any) => [a.accountId, Object.fromEntries(a.lanes.map((l: any) => [l.key, l]))]));
+    expect(perAccount[acct.id].orders).toMatchObject({ status: 'healthy', finished: 1 });
+    expect(perAccount[second.id].orders).toMatchObject({ status: 'idle', jobs: 0 });
+    expect(h.atRisk).toEqual({ staleStockListings: 0, problemListings: 0, openOrders: 0, accounts: [] });
   });
 
   it('turns degraded and then critical when runs fail', async () => {
@@ -313,6 +329,11 @@ describe('health', () => {
     expect(h.dataFlowLanes.find((l: any) => l.key === 'orders')).toMatchObject({ status: 'error', successRate: 25, failed: 3 });
     expect(h.overallPulseScore).toBeLessThan(90);
     expect(['degraded', 'critical']).toContain(h.networkStatus);
+    // the failing account shows its own failing lane and is counted as at risk with its open orders
+    const mine = h.accountLanes.find((a: any) => a.accountId === acct.id).lanes.find((l: any) => l.key === 'orders');
+    expect(mine).toMatchObject({ status: 'error', failed: 3 });
+    expect(h.atRisk.accounts.map((a: any) => a.accountId)).toContain(acct.id);
+    expect(h.atRisk.openOrders).toBe(h.atRisk.accounts.reduce((n: number, a: any) => n + a.openOrders, 0));
   });
 
   it('flags a disconnected account as an error and is tenant scoped and readable by a viewer', async () => {
@@ -323,6 +344,8 @@ describe('health', () => {
     expect(h.connectionsCount).toBe(0);
     expect(h.overallPulseScore).toBeNull();
     expect(h.connections[0].health.frictionPoints[0]).toMatch(/disconnected/);
+    // a disconnected account is an error: it is listed as at risk (nothing pending on it here)
+    expect(h.atRisk.accounts).toEqual([{ accountId: acct.id, name: expect.any(String), staleStockListings: 0, problemListings: 0, openOrders: 0 }]);
     expect((await c.get(`${HUB}/health`, other)).body.data.connections).toEqual([]);
   });
 });

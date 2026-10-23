@@ -1,7 +1,7 @@
 import { and, desc, eq, gte, inArray, schema, sql, type Tx } from '@oms/database';
 import { enabledCapabilities, type MarketplaceConnector } from '@oms/marketplace-core';
 import type { ConnectorRegistry } from '@oms/marketplace-core';
-import { connectorProfile } from '@oms/mod-marketplace-connectors';
+import { connectorProfile, rateLimitRemainingPct } from '@oms/mod-marketplace-connectors';
 import type { SyncJobRow } from '@oms/mod-sync';
 import { capabilityTags, daysLeft, frictionPoints, healthScore, healthStatus, riskLevel, successRate, type HealthStatus, type JobCount } from './health';
 
@@ -109,7 +109,7 @@ export function buildCard(a: AccountRow, z: AuthRow | null, stats: AccountStats,
         accountStatus: a.status, connectionStatus: a.connectionStatus, lastFailureMessage: a.lastFailureMessage, lastFailureAt: a.lastFailureAt, token, failedJobs: rate.failed,
         lastJobError: stats.latestFailure?.error?.message ?? null, problemListings, staleStockListings: stats.staleStock,
       }, now),
-      rateLimitRemainingPct: null,
+      rateLimitRemainingPct: connector && a.status === 'active' ? rateLimitRemainingPct(a.id, connector.capabilities.limits) : null,
       tokenExpiresInDays: daysLeft(token.expiresAt, now), tokenExpiresAt: token.expiresAt ? token.expiresAt.toISOString() : null,
       syncSuccessRate24h: rate.rate, syncRuns24h: { finished: rate.finished, failed: rate.failed },
     },

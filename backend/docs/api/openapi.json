@@ -28494,8 +28494,17 @@
                 }
               },
               "rateLimitRemainingPct": {
-                "type": "null",
-                "description": "Always null: marketplace rate-limit quotas are not tracked per account"
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Percent of the per-account request allowance (token bucket, burst) that is free right now; measured in this server process, so it is 100 after a restart. null when the account is not active"
               },
               "tokenExpiresInDays": {
                 "anyOf": [
@@ -28692,6 +28701,54 @@
               "type": "string"
             }
           },
+          "readiness": {
+            "type": "object",
+            "properties": {
+              "sandbox": {
+                "type": "boolean"
+              },
+              "live": {
+                "type": "boolean"
+              },
+              "notes": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "sandbox",
+              "live",
+              "notes"
+            ],
+            "description": "Whether the connector is verified against a sandbox and against the live marketplace"
+          },
+          "limits": {
+            "type": "object",
+            "properties": {
+              "requestsPerSecond": {
+                "type": "number"
+              },
+              "burst": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "maxBatchSize": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "requestsPerSecond",
+              "burst",
+              "maxBatchSize"
+            ],
+            "description": "Documented platform limits the host enforces per account"
+          },
+          "webhooks": {
+            "type": "boolean",
+            "description": "The marketplace can push events (orders) to this platform"
+          },
           "rating": {
             "type": "null"
           },
@@ -28717,6 +28774,9 @@
           "authFlow",
           "capabilities",
           "capabilityTags",
+          "readiness",
+          "limits",
+          "webhooks",
           "rating",
           "reviewsCount",
           "pricing"
@@ -28914,8 +28974,17 @@
                 }
               },
               "rateLimitRemainingPct": {
-                "type": "null",
-                "description": "Always null: marketplace rate-limit quotas are not tracked per account"
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Percent of the per-account request allowance (token bucket, burst) that is free right now; measured in this server process, so it is 100 after a restart. null when the account is not active"
               },
               "tokenExpiresInDays": {
                 "anyOf": [
@@ -29665,6 +29734,157 @@
                 "expired"
               ]
             }
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-01-31T10:15:30.000Z",
+            "description": "When these numbers were computed (the screen shows how fresh they are)"
+          },
+          "accountLanes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "accountId": {
+                  "type": "string"
+                },
+                "lanes": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "key": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "healthy",
+                          "warning",
+                          "error",
+                          "idle"
+                        ]
+                      },
+                      "jobs": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "finished": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "failed": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "successRate": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "itemsProcessed": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "itemsPerHour": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "key",
+                      "label",
+                      "status",
+                      "jobs",
+                      "finished",
+                      "failed",
+                      "successRate",
+                      "itemsProcessed",
+                      "itemsPerHour"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "accountId",
+                "lanes"
+              ]
+            },
+            "description": "The same lanes as dataFlowLanes, per account (sync jobs of the last 24 hours)"
+          },
+          "atRisk": {
+            "type": "object",
+            "properties": {
+              "staleStockListings": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Listings whose stock change has waited more than an hour to reach the marketplace"
+              },
+              "problemListings": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Listings the marketplace rejected or wants corrected"
+              },
+              "openOrders": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Orders still to be worked on accounts that need attention"
+              },
+              "accounts": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "accountId": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "staleStockListings": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "problemListings": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "openOrders": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "accountId",
+                    "name",
+                    "staleStockListings",
+                    "problemListings",
+                    "openOrders"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "staleStockListings",
+              "problemListings",
+              "openOrders",
+              "accounts"
+            ],
+            "description": "What the connections that need attention (warning or error) put at risk; empty when everything is healthy"
           }
         },
         "required": [
@@ -29677,7 +29897,10 @@
           "dataFlowLanes",
           "summary",
           "connections",
-          "tokenWarnings"
+          "tokenWarnings",
+          "generatedAt",
+          "accountLanes",
+          "atRisk"
         ]
       },
       "ProductEditChangesInput": {
@@ -65426,8 +65649,17 @@
                 }
               },
               "rateLimitRemainingPct": {
-                "type": "null",
-                "description": "Always null: marketplace rate-limit quotas are not tracked per account"
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Percent of the per-account request allowance (token bucket, burst) that is free right now; measured in this server process, so it is 100 after a restart. null when the account is not active"
               },
               "tokenExpiresInDays": {
                 "anyOf": [
@@ -65627,6 +65859,56 @@
               "type": "string"
             }
           },
+          "readiness": {
+            "type": "object",
+            "properties": {
+              "sandbox": {
+                "type": "boolean"
+              },
+              "live": {
+                "type": "boolean"
+              },
+              "notes": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "sandbox",
+              "live",
+              "notes"
+            ],
+            "additionalProperties": false,
+            "description": "Whether the connector is verified against a sandbox and against the live marketplace"
+          },
+          "limits": {
+            "type": "object",
+            "properties": {
+              "requestsPerSecond": {
+                "type": "number"
+              },
+              "burst": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "maxBatchSize": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "requestsPerSecond",
+              "burst",
+              "maxBatchSize"
+            ],
+            "additionalProperties": false,
+            "description": "Documented platform limits the host enforces per account"
+          },
+          "webhooks": {
+            "type": "boolean",
+            "description": "The marketplace can push events (orders) to this platform"
+          },
           "rating": {
             "type": "null"
           },
@@ -65652,6 +65934,9 @@
           "authFlow",
           "capabilities",
           "capabilityTags",
+          "readiness",
+          "limits",
+          "webhooks",
           "rating",
           "reviewsCount",
           "pricing"
@@ -65851,8 +66136,17 @@
                 }
               },
               "rateLimitRemainingPct": {
-                "type": "null",
-                "description": "Always null: marketplace rate-limit quotas are not tracked per account"
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Percent of the per-account request allowance (token bucket, burst) that is free right now; measured in this server process, so it is 100 after a restart. null when the account is not active"
               },
               "tokenExpiresInDays": {
                 "anyOf": [
@@ -66618,6 +66912,161 @@
               ],
               "additionalProperties": false
             }
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-01-31T10:15:30.000Z",
+            "description": "When these numbers were computed (the screen shows how fresh they are)"
+          },
+          "accountLanes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "accountId": {
+                  "type": "string"
+                },
+                "lanes": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "key": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "healthy",
+                          "warning",
+                          "error",
+                          "idle"
+                        ]
+                      },
+                      "jobs": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "finished": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "failed": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "successRate": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "itemsProcessed": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "itemsPerHour": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "key",
+                      "label",
+                      "status",
+                      "jobs",
+                      "finished",
+                      "failed",
+                      "successRate",
+                      "itemsProcessed",
+                      "itemsPerHour"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "accountId",
+                "lanes"
+              ],
+              "additionalProperties": false
+            },
+            "description": "The same lanes as dataFlowLanes, per account (sync jobs of the last 24 hours)"
+          },
+          "atRisk": {
+            "type": "object",
+            "properties": {
+              "staleStockListings": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Listings whose stock change has waited more than an hour to reach the marketplace"
+              },
+              "problemListings": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Listings the marketplace rejected or wants corrected"
+              },
+              "openOrders": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Orders still to be worked on accounts that need attention"
+              },
+              "accounts": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "accountId": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "staleStockListings": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "problemListings": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "openOrders": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "accountId",
+                    "name",
+                    "staleStockListings",
+                    "problemListings",
+                    "openOrders"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "staleStockListings",
+              "problemListings",
+              "openOrders",
+              "accounts"
+            ],
+            "additionalProperties": false,
+            "description": "What the connections that need attention (warning or error) put at risk; empty when everything is healthy"
           }
         },
         "required": [
@@ -66630,7 +67079,10 @@
           "dataFlowLanes",
           "summary",
           "connections",
-          "tokenWarnings"
+          "tokenWarnings",
+          "generatedAt",
+          "accountLanes",
+          "atRisk"
         ],
         "additionalProperties": false
       },
@@ -186290,7 +186742,7 @@
         "tags": [
           "Marketplace Hub"
         ],
-        "description": "Overall pulse (average account health score), per-lane success rate and throughput from the sync jobs of the last 24 hours, totals, one row per account and the tokens that are expiring or expired. Rate-limit quotas are not tracked, so none are reported.",
+        "description": "Overall pulse (average account health score), per-lane success rate and throughput from the sync jobs of the last 24 hours (network wide and per account), totals, one row per account, the tokens that are expiring or expired, and what the connections that need attention put at risk (stale stock, rejected listings, open orders).",
         "security": [
           {
             "bearerAuth": []

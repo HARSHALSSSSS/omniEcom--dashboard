@@ -32,7 +32,8 @@ export interface HubAccountCard {
     pulseScore: number;
     riskLevel: "low" | "medium" | "high";
     frictionPoints: string[];
-    rateLimitRemainingPct: null;
+    /** percent of the per-account request allowance free right now (server process measure); null when not active */
+    rateLimitRemainingPct: number | null;
     tokenExpiresInDays: number | null;
     tokenExpiresAt: string | null;
     syncSuccessRate24h: number | null;
@@ -109,6 +110,19 @@ export interface HubHealth {
   summary: HubSummary;
   connections: HubAccountCard[];
   tokenWarnings: Array<{ accountId: string; name: string; marketplace: string; daysLeft: number | null; expired: boolean }>;
+  /** when the server computed these numbers */
+  generatedAt: string;
+  /** the lanes per account (sync jobs of the last 24 hours) */
+  accountLanes: Array<{ accountId: string; lanes: HubLane[] }>;
+  /** what the accounts that need attention put at risk */
+  atRisk: HubAtRisk;
+}
+
+export interface HubAtRisk {
+  staleStockListings: number;
+  problemListings: number;
+  openOrders: number;
+  accounts: Array<{ accountId: string; name: string; staleStockListings: number; problemListings: number; openOrders: number }>;
 }
 
 export interface InventoryPolicy {

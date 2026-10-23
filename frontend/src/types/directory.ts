@@ -43,6 +43,9 @@ export interface DirectoryItem {
   /** flat capability strings, e.g. orders.fetch */
   capabilities: string[];
   capabilityTags: string[];
+  readiness: { sandbox: boolean; live: boolean; notes: string };
+  limits: { requestsPerSecond: number; burst: number; maxBatchSize: number };
+  webhooks: boolean;
 }
 
 export interface DirectorySummary {

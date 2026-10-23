@@ -4,7 +4,7 @@ import { refreshExpiringTokensHandler } from './jobs';
 
 export { manifest };
 export { connectorRoutes, AuthFlowSchema };
-export { ConnectorHost, signState, verifyState, type HostOptions } from './host';
+export { ConnectorHost, rateLimitRemainingPct, signState, verifyState, type HostOptions } from './host';
 export { connectorProfile, splitConnectInput, type AuthFlowDescriptor, type ConnectorProfile, type CredentialField } from './profiles';
 export { refreshExpiringTokensHandler, JOB_REFRESH_EXPIRING } from './jobs';
 
