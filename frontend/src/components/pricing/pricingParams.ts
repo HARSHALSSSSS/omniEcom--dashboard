@@ -43,7 +43,7 @@ export function readUrlState(params: URLSearchParams): PricingUrlState {
   const size = Number(params.get("size"));
   const pageSize = (PAGE_SIZES as readonly number[]).includes(size) ? size : DEFAULT_PAGE_SIZE;
   return {
-    view: oneOf(params.get("view"), PRICING_VIEWS) ?? "proposals",
+    view: oneOf(params.get("view"), PRICING_VIEWS) ?? "overview",
     accountId,
     proposals: {
       tab: oneOf(params.get("tab"), PROPOSAL_TABS) ?? DEFAULT_TAB,

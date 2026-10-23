@@ -10,6 +10,7 @@ interface PricingPaginationProps {
   noun: string;
   onPage: (page: number) => void;
   onPageSize: (size: number) => void;
+  pageSizes?: readonly number[];
 }
 
 /** the pages around the current one: 1 ... 4 5 [6] 7 8 ... 20 */
@@ -26,7 +27,7 @@ function windowOf(page: number, pages: number): Array<number | "gap"> {
 
 const NAV = "h-8 rounded-lg border border-border bg-card px-3 text-xs font-semibold hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50";
 
-export function PricingPagination({ page, pages, total, pageSize, shown, noun, onPage, onPageSize }: PricingPaginationProps) {
+export function PricingPagination({ page, pages, total, pageSize, shown, noun, onPage, onPageSize, pageSizes = PAGE_SIZES }: PricingPaginationProps) {
   const first = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const last = (page - 1) * pageSize + shown;
   return (
@@ -59,8 +60,8 @@ export function PricingPagination({ page, pages, total, pageSize, shown, noun, o
         <button type="button" className={NAV} disabled={page >= pages} onClick={() => onPage(page + 1)}>
           Next
         </button>
-        <select aria-label={`${noun} per page`} value={pageSize} onChange={(e) => onPageSize(Number(e.target.value))} className="h-8 rounded-lg border border-border bg-card px-2 text-xs font-medium">
-          {PAGE_SIZES.map((n) => (
+        <select aria-label={`${noun} per page`} value={pageSize} onChange={(e) => onPageSize(Number(e.target.value))} className="h-8 rounded-lg border border-border bg-card px-2 text-xs font-medium cursor-pointer">
+          {pageSizes.map((n) => (
             <option key={n} value={n}>
               {n} / page
             </option>
