@@ -47,6 +47,11 @@ export const Topbar: React.FC = () => {
   const isEditProduct = location.pathname.endsWith("/edit");
   const isVariantsPage = location.pathname.endsWith("/variants");
   const isListingsRoute = location.pathname.startsWith(ROUTES.LISTINGS);
+  const isMarketplaceHubRoute = location.pathname.startsWith(ROUTES.MARKETPLACE_HUB);
+  const isConnectorMarketplace = location.pathname === ROUTES.MARKETPLACE_HUB_CONNECTORS;
+  const isConnectorSetup = location.pathname.startsWith(`${ROUTES.MARKETPLACE_HUB}/connect/`);
+  const isConnectionHealth = location.pathname === ROUTES.MARKETPLACE_HUB_HEALTH;
+  const isConnectorDetail = location.pathname.startsWith(`${ROUTES.MARKETPLACE_HUB_CONNECTORS}/`);
 
   return (
     <header className="flex h-[72px] items-center justify-between border-b border-[#EAEAEA] bg-white px-8 z-20 shrink-0 font-['Inter',sans-serif]">
@@ -139,6 +144,85 @@ export const Topbar: React.FC = () => {
               <Link to={ROUTES.LISTINGS} className="font-semibold text-[#000000]">
                 Listings
               </Link>
+            )}
+          </>
+        ) : isMarketplaceHubRoute ? (
+          <>
+            <Link
+              to={ROUTES.DASHBOARD}
+              className="text-[#666666] hover:text-[#000000] transition-colors"
+            >
+              Workspace
+            </Link>
+            <span className="text-[#666666]">/</span>
+            {isConnectorMarketplace ? (
+              <>
+                <Link
+                  to={ROUTES.MARKETPLACE_HUB}
+                  className="text-[#666666] hover:text-[#000000] transition-colors"
+                >
+                  Marketplace Hub
+                </Link>
+                <span className="text-[#666666]">/</span>
+                <span className="font-semibold text-[#000000]">
+                  Connector Marketplace
+                </span>
+              </>
+            ) : isConnectorSetup ? (
+              <>
+                <Link
+                  to={ROUTES.MARKETPLACE_HUB}
+                  className="text-[#666666] hover:text-[#000000] transition-colors"
+                >
+                  Marketplace Hub
+                </Link>
+                <span className="text-[#666666]">/</span>
+                <Link
+                  to={ROUTES.MARKETPLACE_HUB_CONNECTORS}
+                  className="text-[#666666] hover:text-[#000000] transition-colors"
+                >
+                  Connector Marketplace
+                </Link>
+                <span className="text-[#666666]">/</span>
+                <span className="font-semibold text-[#000000]">Connect</span>
+              </>
+            ) : isConnectorDetail ? (
+              <>
+                <Link
+                  to={ROUTES.MARKETPLACE_HUB}
+                  className="text-[#666666] hover:text-[#000000] transition-colors"
+                >
+                  Marketplace Hub
+                </Link>
+                <span className="text-[#666666]">/</span>
+                <Link
+                  to={ROUTES.MARKETPLACE_HUB_CONNECTORS}
+                  className="text-[#666666] hover:text-[#000000] transition-colors"
+                >
+                  Connector Marketplace
+                </Link>
+                <span className="text-[#666666]">/</span>
+                <span className="font-semibold text-[#000000] capitalize">
+                  {lastPart}
+                </span>
+              </>
+            ) : isConnectionHealth ? (
+              <>
+                <Link
+                  to={ROUTES.MARKETPLACE_HUB}
+                  className="text-[#666666] hover:text-[#000000] transition-colors"
+                >
+                  Marketplace Hub
+                </Link>
+                <span className="text-[#666666]">/</span>
+                <span className="font-semibold text-[#000000]">
+                  Connection Health
+                </span>
+              </>
+            ) : (
+              <span className="font-semibold text-[#000000]">
+                Marketplace Hub
+              </span>
             )}
           </>
         ) : (

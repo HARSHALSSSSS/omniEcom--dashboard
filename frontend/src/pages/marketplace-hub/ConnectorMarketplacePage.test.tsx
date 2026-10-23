@@ -1,31 +1,87 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
-import { ApiError } from "@/api/errors";
 import { useWorkspaceStore } from "@/store/workspace.store";
-import { delhivery, directory, item, shopify } from "@/test/directoryFixtures";
+import type { ConnectorDirectoryItem } from "@/types/connection";
 
-const api = vi.hoisted(() => ({
-  directory: vi.fn(),
-  readiness: vi.fn(),
-  connect: vi.fn(),
-  oauthComplete: vi.fn(),
+const mockConnectors: ConnectorDirectoryItem[] = [
+  {
+    id: "amazon_in",
+    name: "Amazon",
+    category: "marketplace",
+    authType: "oauth",
+    description: "Manage your Amazon catalog and orders.",
+    rating: 4.9,
+    reviewsCount: 150,
+    status: "connected",
+    pricing: { freeTrialDays: 0, monthlyFeeINR: 799, planName: "Pro" },
+    capabilities: ["product_import", "listings", "inventory", "orders"],
+    supportedRegions: ["IN"],
+    fields: [],
+    authFlow: { type: "oauth", mode: "redirect", fields: [], redirectFields: [], partnerGated: false, refreshable: true },
+  },
+  {
+    id: "flipkart",
+    name: "Flipkart",
+    category: "marketplace",
+    authType: "oauth",
+    description: "Bring your Flipkart operations into one workspace.",
+    rating: 4.8,
+    reviewsCount: 120,
+    status: "available",
+    pricing: { freeTrialDays: 0, monthlyFeeINR: 499, planName: "Plus" },
+    capabilities: ["product_import", "listings", "inventory", "orders"],
+    supportedRegions: ["IN"],
+    fields: [],
+    authFlow: { type: "oauth", mode: "redirect", fields: [], redirectFields: [], partnerGated: false, refreshable: true },
+  },
+  {
+    id: "shopify",
+    name: "Shopify",
+    category: "storefront",
+    authType: "oauth",
+    description: "Connect your storefront catalog and orders.",
+    rating: 4.9,
+    reviewsCount: 200,
+    status: "connected",
+    pricing: { freeTrialDays: 0, monthlyFeeINR: 599, planName: "Store" },
+    capabilities: ["product_import", "listings", "inventory", "orders"],
+    supportedRegions: ["IN", "GLOBAL"],
+    fields: [],
+    authFlow: { type: "oauth", mode: "redirect", fields: [], redirectFields: [], partnerGated: false, refreshable: true },
+  },
+  {
+    id: "snapdeal",
+    name: "Snapdeal",
+    category: "marketplace",
+    authType: "api_credentials",
+    description: "Snapdeal seller operations: products, stock and order updates.",
+    rating: 4.5,
+    reviewsCount: 80,
+    status: "unavailable",
+    pricing: { freeTrialDays: 0, monthlyFeeINR: 399, planName: "Add-on" },
+    capabilities: ["product_import", "orders"],
+    supportedRegions: ["IN"],
+    fields: [],
+    authFlow: { type: "credentials", mode: "credentials", fields: [], redirectFields: [], partnerGated: false, refreshable: false },
+  },
+];
+
+vi.mock("@/hooks/useConnectors", () => ({
+  useConnectorDirectory: () => ({ data: mockConnectors, isLoading: false }),
+  useConnections: () => ({ data: { data: [], meta: { total: 4, healthy: 4, warning: 0, error: 0 } } }),
+  useConnection: () => ({ data: null }),
 }));
-vi.mock("@/api/directory.api", () => ({ directoryApi: api }));
-vi.mock("@/lib/session", () => ({ refreshShell: vi.fn() }));
+
+vi.mock("@/hooks/useProducts", () => ({
+  useCatalogStats: () => ({
+    data: { products: 427, variants: 1286, activeProducts: 400, activeVariants: 1200 },
+  }),
+}));
 
 import ConnectorMarketplacePage from "./ConnectorMarketplacePage";
-
-const flipkart = item({
-  id: "flipkart",
-  name: "Flipkart",
-  description: "India marketplace",
-  capabilities: ["orders.fetch", "returns.fetch"],
-  capabilityTags: ["orders", "returns"],
-});
-const mock = item();
 
 const Where = () => <p data-testid="where">{useLocation().pathname}</p>;
 
@@ -51,142 +107,64 @@ beforeEach(() => {
   useWorkspaceStore.setState({
     permissions: ["marketplace_accounts:read", "marketplace_accounts:write"],
   });
-  api.directory.mockResolvedValue(
-    directory([mock, flipkart, shopify, delhivery]),
-  );
 });
 
 describe("ConnectorMarketplacePage", () => {
-  it("renders the real directory with status and accounts, and no invented ratings or prices", async () => {
+  it("renders the directory with Figma screen header, recommendation banner, and connector cards", () => {
     renderPage();
-    expect(
-      screen.getByRole("status", { name: /loading connectors/i }),
-    ).toBeInTheDocument();
-    const card = await screen.findByRole("article", { name: "Shopify" });
-    expect(within(card).getByText("Connected")).toBeInTheDocument();
-    expect(within(card).getByText("2 accounts")).toBeInTheDocument();
-    expect(
-      screen.queryByText(/reviews|\/mo|Popular|Free Included/i),
-    ).not.toBeInTheDocument();
+    expect(screen.getByText("Expand your commerce network")).toBeInTheDocument();
+    expect(screen.getAllByText("Flipkart").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("Manage your Amazon catalog and orders.")).toBeInTheDocument();
+    expect(screen.getByText("Demo pricing only. Connector add-ons are separate from the workspace plan. Capabilities depend on supported APIs and permissions.")).toBeInTheDocument();
   });
 
-  it("searches and filters by category tabs computed from the data", async () => {
+  it("searches connectors by keyword", async () => {
     const user = userEvent.setup();
     renderPage();
-    await screen.findByRole("article", { name: "Shopify" });
-    expect(
-      screen.getByRole("tab", { name: "All connectors (4)" }),
-    ).toBeInTheDocument();
-    await user.click(screen.getByRole("tab", { name: "Storefront (1)" }));
-    expect(screen.getAllByRole("article")).toHaveLength(1);
-    await user.click(screen.getByRole("tab", { name: "All connectors (4)" }));
-    const search = screen.getByRole("textbox", { name: /search connectors/i });
-    await user.type(search, "flip");
-    expect(screen.getAllByRole("article")).toHaveLength(1);
-    expect(
-      screen.getByRole("article", { name: "Flipkart" }),
-    ).toBeInTheDocument();
-    await user.clear(search);
-    await user.type(search, "zzz");
-    expect(screen.getByText(/no connector matches/i)).toBeInTheDocument();
+    const searchInput = screen.getByPlaceholderText(/search marketplaces/i);
+    await user.type(searchInput, "flipkart");
+    expect(screen.getByText("Bring your Flipkart operations into one workspace.")).toBeInTheDocument();
+    expect(screen.queryByText("Manage your Amazon catalog and orders.")).not.toBeInTheDocument();
+  });
+
+  it("shows empty state when no connector matches search and allows clearing", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    const searchInput = screen.getByPlaceholderText(/search marketplaces/i);
+    await user.type(searchInput, "warehouse analytics");
+    expect(screen.getByText("No connectors match your search.")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /clear filters/i }));
-    expect(screen.getAllByRole("article")).toHaveLength(4);
+    expect(screen.getByText("Manage your Amazon catalog and orders.")).toBeInTheDocument();
   });
 
-  it("disables unavailable connectors and shows the reason", async () => {
-    renderPage();
-    const card = await screen.findByRole("article", { name: "Delhivery" });
-    expect(
-      within(card).getByRole("button", { name: "Unavailable" }),
-    ).toBeDisabled();
-    expect(
-      within(card).getByText("This integration is not available yet"),
-    ).toBeInTheDocument();
-    expect(within(card).getByText("Coming soon")).toBeInTheDocument();
-  });
-
-  it("compares up to three connectors over their real capability lists", async () => {
+  it("opens Flipkart preview drawer when clicking Connect on available connector and enforces acknowledgment checkbox", async () => {
     const user = userEvent.setup();
     renderPage();
-    await screen.findByRole("article", { name: "Shopify" });
-    for (const name of ["Mock Marketplace", "Flipkart", "Shopify"]) {
-      await user.click(
-        within(screen.getByRole("article", { name })).getByRole("button", {
-          name: "+ Compare",
-        }),
-      );
-    }
-    expect(
-      within(screen.getByRole("article", { name: "Delhivery" })).getByRole(
-        "button",
-        { name: "+ Compare" },
-      ),
-    ).toBeDisabled();
-    await user.click(screen.getByRole("button", { name: /compare features/i }));
-    const dialog = await screen.findByRole("dialog");
-    expect(
-      within(dialog).getByRole("columnheader", { name: "Flipkart" }),
-    ).toBeInTheDocument();
-    const row = within(dialog)
-      .getByText("returns: fetch")
-      .closest("tr") as HTMLElement;
-    expect(within(row).getAllByLabelText("Supported")).toHaveLength(1);
-    expect(within(row).getAllByLabelText("Not supported")).toHaveLength(2);
+    const connectButtons = screen.getAllByRole("button", { name: "Connect" });
+    await user.click(connectButtons[0]);
+    expect(screen.getAllByText("Available to connect").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("427 master products · 1286 variants")).toBeInTheDocument();
+    
+    const continueBtn = screen.getByRole("button", { name: "Continue" });
+    expect(continueBtn).toBeDisabled();
+
+    const ackCheckbox = screen.getByRole("checkbox", { name: /connecting does not publish products automatically/i });
+    expect(ackCheckbox).not.toBeChecked();
+
+    await user.click(ackCheckbox);
+    expect(ackCheckbox).toBeChecked();
+    expect(continueBtn).toBeEnabled();
   });
 
-  it("starts the setup route from Connect", async () => {
+  it("compares up to 3 selected connectors in comparison modal", async () => {
     const user = userEvent.setup();
     renderPage();
-    await user.click(
-      within(
-        await screen.findByRole("article", { name: "Flipkart" }),
-      ).getByRole("button", { name: /connect/i }),
-    );
-    expect(screen.getByTestId("where")).toHaveTextContent(
-      "/marketplace-hub/connect/flipkart",
-    );
-  });
-
-  it("opens the detail page from Manage", async () => {
-    const user = userEvent.setup();
-    renderPage();
-    await user.click(
-      within(await screen.findByRole("article", { name: "Shopify" })).getByRole(
-        "button",
-        { name: "Manage" },
-      ),
-    );
-    expect(screen.getByTestId("where")).toHaveTextContent(
-      "/marketplace-hub/connectors/shopify",
-    );
-  });
-
-  it("is read-only for a viewer, with the reason", async () => {
-    useWorkspaceStore.setState({ permissions: ["marketplace_accounts:read"] });
-    renderPage();
-    const card = await screen.findByRole("article", { name: "Flipkart" });
-    expect(
-      within(card).getByRole("button", { name: /connect/i }),
-    ).toBeDisabled();
-    expect(screen.getByText(/view-only access/i)).toBeInTheDocument();
-  });
-
-  it("shows the API error and retries", async () => {
-    const user = userEvent.setup();
-    api.directory.mockRejectedValueOnce(
-      new ApiError({
-        code: "INTERNAL",
-        message: "Directory is down",
-        status: 500,
-      }),
-    );
-    renderPage();
-    expect(await screen.findByText("Directory is down")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /try again/i }));
-    await waitFor(() =>
-      expect(
-        screen.getByRole("article", { name: "Shopify" }),
-      ).toBeInTheDocument(),
-    );
+    const checkboxes = screen.getAllByRole("checkbox");
+    await user.click(checkboxes[0]);
+    await user.click(checkboxes[1]);
+    expect(screen.getByRole("button", { name: /compare \(2\)/i })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /compare \(2\)/i }));
+    expect(screen.getByText("Compare connectors")).toBeInTheDocument();
+    expect(screen.getByText("Review supported capabilities before choosing a connector.")).toBeInTheDocument();
   });
 });

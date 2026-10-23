@@ -38,11 +38,14 @@ import ConnectionSetupPage from "./ConnectionSetupPage";
 const mock = item();
 const Where = () => <p data-testid="where">{useLocation().pathname}</p>;
 
-function renderPage(code = "mock") {
+function renderPage(code = "mock", stepParam = "authorize") {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const path = stepParam
+    ? `/marketplace-hub/connect/${code}?step=${stepParam}`
+    : `/marketplace-hub/connect/${code}`;
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={[`/marketplace-hub/connect/${code}`]}>
+      <MemoryRouter initialEntries={[path]}>
         <Routes>
           <Route
             path="/marketplace-hub/connect/:id"
@@ -358,4 +361,46 @@ describe("ConnectionSetupPage", () => {
     await user.click(screen.getByRole("button", { name: /try again/i }));
     expect(await screen.findByLabelText(/account name/i)).toBeInTheDocument();
   });
+
+  it("renders the Figma Review step and transitions to Authorize step on clicking Continue to authorization", async () => {
+    const user = userEvent.setup();
+    renderPage("mock", ""); // step 0 Review
+    expect(await screen.findByText("Connection summary")).toBeInTheDocument();
+    expect(screen.getByText("Data bridge")).toBeInTheDocument();
+    expect(screen.getByText("What will connect")).toBeInTheDocument();
+    expect(screen.getByText("Review access")).toBeInTheDocument();
+    expect(screen.getByText("Catalog matching")).toBeInTheDocument();
+    expect(screen.getByText("Connection status")).toBeInTheDocument();
+
+    const continueButtons = screen.getAllByRole("button", {
+      name: /continue to authorization/i,
+    });
+    expect(continueButtons.length).toBeGreaterThan(0);
+    await user.click(continueButtons[0]);
+
+    expect(await screen.findByLabelText(/account name/i)).toBeInTheDocument();
+    expect(screen.getByText(/authorize mock marketplace/i)).toBeInTheDocument();
+  });
+
+  it("renders the Verify step and transitions to Sync step", async () => {
+    const user = userEvent.setup();
+    renderPage("mock", "verify");
+    expect(await screen.findByText("Account authorized")).toBeInTheDocument();
+    expect(screen.getByText("Access confirmed")).toBeInTheDocument();
+    expect(screen.getAllByText(/approved/i).length).toBeGreaterThan(0);
+
+    await user.click(screen.getByRole("button", { name: /start sync/i }));
+    expect(await screen.findByText("Ready to sync")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /start initial sync/i })).toBeInTheDocument();
+  });
+
+  it("renders the Ready step when connection is complete", async () => {
+    renderPage("mock", "ready");
+    expect(await screen.findByText("Mock Marketplace is connected.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /manage connection/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /view products/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /view listings/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /view sync activity/i })).toBeInTheDocument();
+  });
 });
+

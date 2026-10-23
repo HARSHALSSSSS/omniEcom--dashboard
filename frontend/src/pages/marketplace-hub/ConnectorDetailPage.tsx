@@ -7,7 +7,7 @@ import { ROUTES } from "@/constants/routes";
 import { errorMessage, isApiError } from "@/api/errors";
 import { useConnector, useHubAccount, useHubAccounts } from "@/hooks/useHub";
 import { AccountDetailView } from "@/components/marketplace-hub/detail/AccountDetailView";
-import { ConnectorInfoView } from "@/components/marketplace-hub/detail/ConnectorInfoView";
+import { ModernConnectorDetailView } from "@/components/marketplace-hub/detail/ModernConnectorDetailView";
 import { LoadError, StateBox } from "@/components/marketplace-hub/accounts/hubUi";
 
 /** account ids are UUIDs, connector codes are words (amazon_in, flipkart): the id tells which page this is */
@@ -60,25 +60,22 @@ function AccountPage({ id }: { id: string }) {
 }
 
 function ConnectorPage({ code }: { code: string }) {
-  const navigate = useNavigate();
   const connector = useConnector(code);
   const accounts = useHubAccounts();
   const mine = accounts.data ? accounts.data.items.filter((a) => a.marketplace === code) : null;
+  const primaryAccount = mine && mine.length > 0 ? mine[0] : null;
+
   return (
     <>
-      <PageHeader
-        eyebrow="CONNECTOR"
-        title={connector.data?.displayName ?? "Connector"}
-        description="What this marketplace supports and how to connect it."
-        actions={
-          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => navigate(ROUTES.MARKETPLACE_HUB_CONNECTORS)}>
-            <ArrowLeft className="h-4 w-4" aria-hidden /> Back to Directory
-          </Button>
-        }
-      />
       {connector.isPending && <Loading />}
       {connector.isError && (isNotFound(connector.error) ? <NotFound what="Connector" /> : <LoadError title="The connector could not be loaded." message={errorMessage(connector.error)} onRetry={() => void connector.refetch()} />)}
-      {connector.data && <ConnectorInfoView connector={connector.data} accounts={mine} />}
+      {connector.data && (
+        <ModernConnectorDetailView
+          connector={connector.data}
+          account={primaryAccount}
+          accounts={mine}
+        />
+      )}
     </>
   );
 }

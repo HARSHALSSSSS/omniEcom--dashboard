@@ -56,6 +56,7 @@ export const ENDPOINTS = {
   ISSUE_ACTION: (id: string, action: "start" | "resolve" | "snooze" | "unsnooze" | "assign") => `${BASE}/issues/${id}/${action}`,
   WORKSPACE_RECOMMENDATIONS: `${BASE}/workspace/recommendations`,
   SYNC_JOB: (id: string) => `${BASE}/sync/jobs/${id}`,
+  SYNC_JOBS: `${BASE}/sync/jobs`,
   SEARCH: `${BASE}/search`,
 
   // Products
