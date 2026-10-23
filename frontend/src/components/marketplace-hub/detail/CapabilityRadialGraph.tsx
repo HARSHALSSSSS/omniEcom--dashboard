@@ -1,27 +1,23 @@
+import type { CapStatus } from "@/pages/marketplace-hub/components/connectorFacts";
+
+export type CapabilityKey = "catalog" | "listings" | "inventory" | "orders" | "shipping" | "returns" | "reviews" | "promotions";
+
 interface CapabilityRadialGraphProps {
   connectorName: string;
-  capabilities: {
-    catalog?: boolean;
-    listings?: boolean;
-    inventory?: boolean;
-    orders?: boolean;
-    shipping?: boolean | "depends";
-    returns?: boolean | "depends";
-    reviews?: boolean | "depends";
-    promotions?: boolean | "depends";
-  };
+  /** what the connector really supports: supported, depends (needs marketplace approval) or unavailable */
+  statuses: Record<CapabilityKey, CapStatus>;
 }
 
 export function CapabilityRadialGraph({
   connectorName,
-  capabilities,
+  statuses,
 }: CapabilityRadialGraphProps) {
  
   const nodes = [
     {
       key: "catalog",
       label: "Catalog",
-      status: capabilities.catalog ? "supported" : "depends",
+      status: statuses.catalog,
       left: 170,
       top: 8,
       connectorPoint: { x: 226, y: 42 },
@@ -30,7 +26,7 @@ export function CapabilityRadialGraph({
     {
       key: "listings",
       label: "Listings",
-      status: capabilities.listings ? "supported" : "depends",
+      status: statuses.listings,
       left: 364,
       top: 8,
       connectorPoint: { x: 420, y: 42 },
@@ -39,7 +35,7 @@ export function CapabilityRadialGraph({
     {
       key: "inventory",
       label: "Inventory",
-      status: capabilities.inventory ? "supported" : "depends",
+      status: statuses.inventory,
       left: 510,
       top: 65,
       connectorPoint: { x: 510, y: 82 },
@@ -48,7 +44,7 @@ export function CapabilityRadialGraph({
     {
       key: "orders",
       label: "Orders",
-      status: capabilities.orders ? "supported" : "depends",
+      status: statuses.orders,
       left: 510,
       top: 150,
       connectorPoint: { x: 510, y: 167 },
@@ -57,7 +53,7 @@ export function CapabilityRadialGraph({
     {
       key: "shipping",
       label: "Shipping",
-      status: capabilities.shipping === true ? "supported" : "depends",
+      status: statuses.shipping,
       left: 364,
       top: 196,
       connectorPoint: { x: 420, y: 196 },
@@ -66,7 +62,7 @@ export function CapabilityRadialGraph({
     {
       key: "returns",
       label: "Returns",
-      status: capabilities.returns === true ? "supported" : "depends",
+      status: statuses.returns,
       left: 170,
       top: 196,
       connectorPoint: { x: 226, y: 196 },
@@ -75,7 +71,7 @@ export function CapabilityRadialGraph({
     {
       key: "reviews",
       label: "Reviews",
-      status: capabilities.reviews === true ? "supported" : "depends",
+      status: statuses.reviews,
       left: 18,
       top: 150,
       connectorPoint: { x: 130, y: 167 },
@@ -84,7 +80,7 @@ export function CapabilityRadialGraph({
     {
       key: "promotions",
       label: "Promotions",
-      status: capabilities.promotions === true ? "supported" : "depends",
+      status: statuses.promotions,
       left: 18,
       top: 65,
       connectorPoint: { x: 130, y: 82 },
@@ -161,15 +157,17 @@ export function CapabilityRadialGraph({
               <div className="flex items-center gap-1.5 leading-[17px]">
                 {isSupported ? (
                   <span className="text-[11px] font-semibold text-[#000000]">✓</span>
-                ) : (
+                ) : n.status === "depends" ? (
                   <span className="inline-block w-2 h-2 rounded-full border border-[#000000] bg-linear-to-r from-[#000000] from-50% to-transparent to-50%" />
+                ) : (
+                  <span className="text-[11px] font-semibold text-[#A3A3A3]">—</span>
                 )}
-                <span className="text-[12px] font-semibold text-[#000000]">
+                <span className={`text-[12px] font-semibold ${n.status === "unavailable" ? "text-[#A3A3A3]" : "text-[#000000]"}`}>
                   {n.label}
                 </span>
               </div>
               <span className="text-[10px] font-normal leading-[15px] text-[#666666]">
-                {isSupported ? "Supported" : "Depends"}
+                {isSupported ? "Supported" : n.status === "depends" ? "Depends" : "Not available"}
               </span>
             </div>
           );

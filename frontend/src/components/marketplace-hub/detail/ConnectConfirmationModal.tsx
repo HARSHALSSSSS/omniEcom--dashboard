@@ -1,12 +1,12 @@
-import { useState } from "react";
 import { X, Check } from "lucide-react";
+import { FEE_NOTE, FEE_TEXT } from "@/pages/marketplace-hub/components/connectorFacts";
 
 interface ConnectConfirmationModalProps {
   isOpen: boolean;
   onClose: () => void;
   connectorName: string;
-  monthlyPrice?: string;
-  annualPrice?: string;
+  /** the capabilities this connector really has, as labels */
+  scopes: string[];
   onConfirm: () => void;
 }
 
@@ -14,27 +14,10 @@ export function ConnectConfirmationModal({
   isOpen,
   onClose,
   connectorName,
-  monthlyPrice = "₹499 / month",
-  annualPrice = "₹4,999 / year",
+  scopes,
   onConfirm,
 }: ConnectConfirmationModalProps) {
-  const [selectedScopes, setSelectedScopes] = useState<Record<string, boolean>>({
-    Products: true,
-    Listings: true,
-    Inventory: true,
-    Orders: true,
-  });
-
   if (!isOpen) return null;
-
-  const toggleScope = (scope: string) => {
-    setSelectedScopes((prev) => ({
-      ...prev,
-      [scope]: !prev[scope],
-    }));
-  };
-
-  const scopes = ["Products", "Listings", "Inventory", "Orders"];
 
   return (
     <div
@@ -68,14 +51,13 @@ export function ConnectConfirmationModal({
 
         {/* Intro */}
         <p className="text-[14px] text-[#000000] leading-[20px] m-0">
-          This will authorize the connector and prepare the initial synchronization.
+          The next step collects the account access this connector needs, verifies it and prepares the first synchronization. Nothing is authorized yet.
         </p>
 
         {/* Pricing details */}
         <div className="space-y-1 text-[14px] leading-[22px] text-[#000000]">
-          <div>{connectorName} connector add-on · {monthlyPrice}</div>
-          <div>Annual option · {annualPrice}</div>
-          <div>Monthly billing · Demo pricing only</div>
+          <div>{connectorName} connector · {FEE_TEXT}</div>
+          <div>{FEE_NOTE}</div>
         </div>
 
         {/* Divider 1 */}
@@ -87,29 +69,17 @@ export function ConnectConfirmationModal({
             You can review before activation
           </h3>
           <div className="flex flex-wrap items-center gap-6 text-[14px]">
-            {scopes.map((scope) => {
-              const isChecked = selectedScopes[scope] ?? true;
-              return (
-                <button
-                  key={scope}
-                  type="button"
-                  onClick={() => toggleScope(scope)}
-                  className="flex items-center gap-2 cursor-pointer select-none text-[#000000] focus:outline-hidden"
-                >
-                  <div
-                    className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${
-                      isChecked
-                        ? "border-[#000000] bg-[#000000] text-white"
-                        : "border-[#777777] bg-white"
-                    }`}
-                  >
-                    {isChecked && <Check className="h-2.5 w-2.5 stroke-[3]" />}
-                  </div>
-                  <span>{scope}</span>
-                </button>
-              );
-            })}
+            {scopes.length === 0 && <span className="text-[#666666]">This connector has no enabled capabilities yet.</span>}
+            {scopes.map((scope) => (
+              <div key={scope} className="flex items-center gap-2 text-[#000000]">
+                <div className="w-4 h-4 rounded-full border border-[#000000] bg-[#000000] text-white flex items-center justify-center">
+                  <Check className="h-2.5 w-2.5 stroke-[3]" />
+                </div>
+                <span>{scope}</span>
+              </div>
+            ))}
           </div>
+          <p className="text-[12px] text-[#666666] m-0">You choose what to synchronize on the next step.</p>
         </div>
 
         {/* Divider 2 */}

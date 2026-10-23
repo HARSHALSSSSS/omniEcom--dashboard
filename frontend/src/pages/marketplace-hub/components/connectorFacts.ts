@@ -85,3 +85,36 @@ export function saveBookmarks(ids: string[]): void {
     /* private mode: bookmarks stay for this visit only */
   }
 }
+
+/** the connector capability groups the screens show as chips (same grouping as the backend's capability tags) */
+const TAG_RULES: Array<{ tag: string; any: string[] }> = [
+  { tag: "product_import", any: ["catalog.import"] },
+  { tag: "listings", any: ["listings.create", "listings.update"] },
+  { tag: "inventory", any: ["inventory.push"] },
+  { tag: "orders", any: ["orders.fetch"] },
+  { tag: "shipping", any: ["shipping.createShipment", "shipping.generateLabel"] },
+  { tag: "returns", any: ["returns.fetch"] },
+  { tag: "promotions", any: ["pricing.push"] },
+];
+export const tagsFromEnabled = (enabled: string[]): string[] => TAG_RULES.filter((r) => r.any.some((a) => enabled.includes(a))).map((r) => r.tag);
+
+export type CapStatus = "supported" | "depends" | "unavailable";
+
+/** what moves in each direction, from the connector's real capability flags */
+export function dataStreams(enabled: string[]): { into: string[]; from: string[] } {
+  const has = (...f: string[]) => f.some((x) => enabled.includes(x));
+  const into = [
+    has("orders.fetch") && "Orders",
+    has("inventory.pull") && "Inventory levels",
+    has("listings.fetch", "listings.statusLookup") && "Marketplace listing status",
+    has("returns.fetch") && "Returns",
+  ].filter(Boolean) as string[];
+  const from = [
+    has("listings.create", "listings.update") && "Product information and listings",
+    has("inventory.push") && "Inventory availability",
+    has("pricing.push") && "Prices",
+    has("orders.updateStatus", "orders.acknowledge") && "Order status",
+    has("shipping.createShipment", "shipping.generateLabel") && "Shipments and labels",
+  ].filter(Boolean) as string[];
+  return { into, from };
+}

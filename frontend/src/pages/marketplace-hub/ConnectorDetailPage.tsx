@@ -5,6 +5,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ROUTES } from "@/constants/routes";
 import { errorMessage, isApiError } from "@/api/errors";
+import { useCan } from "@/hooks/useCan";
 import { useConnector, useHubAccount, useHubAccounts } from "@/hooks/useHub";
 import { AccountDetailView } from "@/components/marketplace-hub/detail/AccountDetailView";
 import { ModernConnectorDetailView } from "@/components/marketplace-hub/detail/ModernConnectorDetailView";
@@ -62,19 +63,25 @@ function AccountPage({ id }: { id: string }) {
 function ConnectorPage({ code }: { code: string }) {
   const connector = useConnector(code);
   const accounts = useHubAccounts();
+  const canWrite = useCan("marketplace_accounts:write");
   const mine = accounts.data ? accounts.data.items.filter((a) => a.marketplace === code) : null;
+  const others = accounts.data ? accounts.data.items.filter((a) => a.marketplace !== code) : null;
   const primaryAccount = mine && mine.length > 0 ? mine[0] : null;
+  // the detail adds the lanes and the recent sync jobs that tell what each stream is doing
+  const detail = useHubAccount(primaryAccount?.id ?? null);
 
   return (
     <>
+      {!canWrite && (
+        <p role="status" className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+          You have read-only access. You can review this connector, but connecting or changing accounts needs the marketplace_accounts:write permission.
+        </p>
+      )}
       {connector.isPending && <Loading />}
       {connector.isError && (isNotFound(connector.error) ? <NotFound what="Connector" /> : <LoadError title="The connector could not be loaded." message={errorMessage(connector.error)} onRetry={() => void connector.refetch()} />)}
-      {connector.data && (
-        <ModernConnectorDetailView
-          connector={connector.data}
-          account={primaryAccount}
-          accounts={mine}
-        />
+      {accounts.isError && <LoadError title="Your accounts could not be loaded." message={errorMessage(accounts.error)} onRetry={() => void accounts.refetch()} />}
+      {connector.data && !accounts.isError && (
+        <ModernConnectorDetailView connector={connector.data} account={detail.data ?? primaryAccount} accounts={mine} otherAccounts={others} />
       )}
     </>
   );

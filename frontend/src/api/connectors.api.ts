@@ -102,7 +102,7 @@ function mapCardToConnection(card: HubAccountCard): ChannelConnection {
   };
 }
 
-const ENTITY_JOB_TYPES = {
+export const ENTITY_JOB_TYPES = {
   products: ["catalog_import"],
   listings: ["listing_publish", "listing_status", "listings"],
   inventory: ["inventory"],
@@ -114,7 +114,7 @@ const ENTITY_LANE = { products: "listings", listings: "listings", inventory: "in
 const clock = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
 /** What one entity's sync is doing, from the newest job of its type (the 10 newest jobs of the account come with the detail), else from its 24 h lane. */
-function entitySync(detail: HubAccountDetail, entity: keyof typeof ENTITY_JOB_TYPES): EntitySync {
+export function entitySync(detail: HubAccountDetail, entity: keyof typeof ENTITY_JOB_TYPES): EntitySync {
   const types = ENTITY_JOB_TYPES[entity] as readonly string[];
   const job = (detail.recentJobs || []).find((j) => types.includes(j.type));
   if (job) {
