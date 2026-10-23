@@ -2,7 +2,8 @@ import { and, asc, desc, eq, inArray, lt, schema, sql, withSystem, writeAudit, w
 import { AppError, Errors } from '@oms/shared';
 import { effects, type Container, type OpCtx } from '@oms/module-kit';
 import { loadSubjects, pairKey, type SubjectRow } from './proposal-context';
-import { marginDeltaBps, projectedSalesDeltaBps } from './proposal-domain';
+import { loadCostFacts, policyTargetBps, priceFacts, proposalReason } from './margins';
+import { marginBps, marginDeltaBps, NO_FEES, projectedSalesDeltaBps } from './proposal-domain';
 import { SyncWork, setMarketplacePrice } from './service';
 
 const PP = schema.pricingProposals;
@@ -22,10 +23,18 @@ const isUuid = (s: string | null | undefined): s is string => !!s && /^[0-9a-f]{
 // ------------------------------------------------------------------------------------------------
 export interface ProposalView {
   p: ProposalRow; sku: string; title: string; accountName: string; marketplace: string; policyName: string | null; decidedByName: string | null;
+  policyTargetMarginMinBps: number | null; policyParams: Record<string, unknown> | null;
 }
+type CostFacts = Awaited<ReturnType<typeof loadCostFacts>>;
 
-export function toProposalDto(v: ProposalView) {
+export function toProposalDto(v: ProposalView, facts: CostFacts) {
   const { p } = v;
+  const cost = facts.costOf(p.variantId);
+  const fees = facts.feesOf(p.accountId);
+  const now = priceFacts(p.currentPriceMinor, cost, fees);
+  const proposedMarginBps = marginBps(p.proposedPriceMinor, cost, fees ?? NO_FEES);
+  const targetMarginBps = v.policyTargetMarginMinBps === null ? null : policyTargetBps({ targetMarginMinBps: v.policyTargetMarginMinBps, params: v.policyParams ?? {} });
+  const reason = proposalReason(p, now.marginBps, targetMarginBps);
   const closed = p.status === 'approved' || p.status === 'auto_applied';
   return {
     id: p.id, status: p.status as Status, strategy: p.strategy as Strategy, variantId: p.variantId, sku: v.sku, productTitle: v.title,
@@ -34,6 +43,9 @@ export function toProposalDto(v: ProposalView) {
     competitorPriceMinor: p.competitorPriceMinor, estMarginDeltaBps: p.estMarginDeltaBps, projectedSalesDeltaBps: p.projectedSalesDeltaBps, reasoning: p.reasoning,
     expiresAt: p.expiresAt ? p.expiresAt.toISOString() : null, createdAt: p.createdAt.toISOString(),
     decidedBy: p.decidedBy, decidedByName: v.decidedByName, decidedAt: p.decidedAt ? p.decidedAt.toISOString() : null, decisionNote: p.decisionNote,
+    /** real inputs behind the numbers (null = unknown, never guessed): cost price, commission + fixed fee at the price the proposal started from, margins in bps of the price */
+    unitCostMinor: now.unitCostMinor, feesMinor: now.feesMinor, currentMarginBps: now.marginBps, proposedMarginBps, targetMarginBps,
+    reasonCode: reason.code, reasonText: reason.text,
     appliedAt: p.appliedAt ? p.appliedAt.toISOString() : null, failureMessage: p.failureMessage,
     /** true when the price is saved here but the marketplace's connector cannot take price updates (the note says what to do) */
     pushSkipped: closed && p.failureMessage !== null, version: p.version,
@@ -42,7 +54,7 @@ export function toProposalDto(v: ProposalView) {
 export type ProposalDto = ReturnType<typeof toProposalDto>;
 
 function viewQuery(tx: Tx) {
-  return tx.select({ p: PP, sku: V.sku, title: P.title, accountName: A.displayName, marketplace: A.marketplace, policyName: POL.name, decidedByName: schema.users.fullName })
+  return tx.select({ p: PP, sku: V.sku, title: P.title, accountName: A.displayName, marketplace: A.marketplace, policyName: POL.name, policyTargetMarginMinBps: POL.targetMarginMinBps, policyParams: POL.params, decidedByName: schema.users.fullName })
     .from(PP)
     .innerJoin(V, and(eq(V.id, PP.variantId), eq(V.vendorId, PP.vendorId)))
     .innerJoin(P, and(eq(P.id, V.productId), eq(P.vendorId, V.vendorId)))
@@ -54,7 +66,7 @@ function viewQuery(tx: Tx) {
 export async function getProposalDto(tx: Tx, vendorId: string, id: string): Promise<ProposalDto> {
   const [row] = await viewQuery(tx).where(and(eq(PP.id, id), eq(PP.vendorId, vendorId)));
   if (!row) throw Errors.notFound('Price proposal', id);
-  return toProposalDto(row);
+  return toProposalDto(row, await loadCostFacts(tx, vendorId, [row.p]));
 }
 
 export interface ProposalQuery { status?: Status; accountId?: string; strategy?: Strategy; q?: string; sort: 'impact' | 'newest' | 'oldest'; limit: number; offset: number }
@@ -75,7 +87,8 @@ export async function listProposals(tx: Tx, vendorId: string, q: ProposalQuery) 
     tx.select({ status: PP.status, n: sql<number>`count(*)::int` }).from(PP).innerJoin(V, and(eq(V.id, PP.variantId), eq(V.vendorId, PP.vendorId))).innerJoin(P, and(eq(P.id, V.productId), eq(P.vendorId, V.vendorId))).where(common).groupBy(PP.status),
   ]);
   const byStatus = Object.fromEntries(schema.PRICE_PROPOSAL_STATUSES.map((s) => [s, counts.find((c) => c.status === s)?.n ?? 0])) as Record<Status, number>;
-  return { items: rows.map(toProposalDto), total: totals[0]?.n ?? 0, counts: { ...byStatus, all: Object.values(byStatus).reduce((a, b) => a + b, 0) } };
+  const facts = await loadCostFacts(tx, vendorId, rows.map((r) => r.p));
+  return { items: rows.map((r) => toProposalDto(r, facts)), total: totals[0]?.n ?? 0, counts: { ...byStatus, all: Object.values(byStatus).reduce((a, b) => a + b, 0) } };
 }
 
 // ------------------------------------------------------------------------------------------------

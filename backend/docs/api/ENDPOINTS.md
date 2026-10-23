@@ -625,6 +625,7 @@ Marketplace prices, sales, price rules, bulk updates and price history
 | DELETE | `/api/v1/pricing/competitor-prices/{id}` | `pricing:write` | Delete a competitor price observation |
 | POST | `/api/v1/pricing/competitor-prices/import` | `pricing:write` | Import competitor prices from CSV |
 | GET | `/api/v1/pricing/history` | `pricing:read` | Price history |
+| GET | `/api/v1/pricing/margin-overview` | `pricing:read` | Margin per channel, from real cost and fee data |
 | GET | `/api/v1/pricing/marketplace-prices` | `pricing:read` | List marketplace prices |
 | PUT | `/api/v1/pricing/marketplace-prices` | `pricing:write` | Set a marketplace price (and optionally a scheduled sale) |
 | DELETE | `/api/v1/pricing/marketplace-prices/{id}` | `pricing:write` | Remove a marketplace price (the listing follows the variant price again) |
@@ -635,6 +636,7 @@ Marketplace prices, sales, price rules, bulk updates and price history
 | GET | `/api/v1/pricing/policies/{id}` | `pricing:read` | One pricing policy |
 | PATCH | `/api/v1/pricing/policies/{id}` | `pricing:write` | Change a pricing policy (pause / resume, thresholds, ...) |
 | POST | `/api/v1/pricing/policies/preview` | `pricing:read` | How many variants a policy would look at |
+| GET | `/api/v1/pricing/price-table` | `pricing:read` | Every listing price with its real cost, fees and margin |
 | GET | `/api/v1/pricing/proposals` | `pricing:read` | Price proposals (the review queue) |
 | GET | `/api/v1/pricing/proposals/{id}` | `pricing:read` | One price proposal |
 | POST | `/api/v1/pricing/proposals/{id}/approve` | `pricing:approve` | Approve a proposal and put the price live |

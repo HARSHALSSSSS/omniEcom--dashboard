@@ -29,10 +29,11 @@ export async function pricingOverview(tx: Tx, vendorId: string, now = new Date()
   const subjects = await loadSubjects(tx, vendorId, pending, now);
   let gain = 0;
   let withoutEstimate = 0;
+  let opportunities = 0;
   for (const p of pending) {
     const s = subjects.get(pairKey(p));
     const g = s ? monthlyGainMinor(s.subject.currentMinor, p.proposed, s.subject.costMinor, s.subject.fees, s.subject.unitsInWindow, p.sales) : null;
-    if (g === null) withoutEstimate++; else gain += g;
+    if (g === null) withoutEstimate++; else { gain += g; if (g > 0) opportunities++; }
   }
   const active = policies.filter((p) => p.status === 'active');
   const covered = active.some((p) => p.accountId === null) ? accounts : accounts.filter((a) => active.some((p) => p.accountId === a.id));
@@ -41,6 +42,10 @@ export async function pricingOverview(tx: Tx, vendorId: string, now = new Date()
     potentialMarginGainMinor: gain,
     proposalsWithoutEstimate: withoutEstimate,
     autoAppliedLast30Days: count(decided, 'auto_applied'),
+    /** approved by a person + applied automatically in the last 30 days */
+    appliedLast30Days: count(decided, 'auto_applied') + count(decided, 'approved'),
+    /** pending proposals whose estimated monthly contribution gain is positive */
+    opportunitiesCount: opportunities,
     approvedLast30Days: count(decided, 'approved'),
     rejectedLast30Days: count(decided, 'rejected'),
     activePolicies: active.length,

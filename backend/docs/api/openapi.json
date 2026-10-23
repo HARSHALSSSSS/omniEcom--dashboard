@@ -14843,6 +14843,87 @@
               "null"
             ]
           },
+          "unitCostMinor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Cost price of the variant; null when not set"
+          },
+          "feesMinor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Marketplace commission + fixed fee at the current price of the proposal; null when the account has no fee profile"
+          },
+          "currentMarginBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Margin at the current price in bps of the price (after cost and fees); null when the cost is unknown"
+          },
+          "proposedMarginBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Margin at the proposed price; null when the cost is unknown"
+          },
+          "targetMarginBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Margin target of the policy that created the proposal; null without a policy or a target"
+          },
+          "reasonCode": {
+            "type": "string",
+            "enum": [
+              "below_margin_target",
+              "competitor_undercut",
+              "competitor_above",
+              "competitor_match",
+              "slow_velocity",
+              "target_margin"
+            ],
+            "description": "Structured reason, from the strategy and the facts stored with the proposal"
+          },
+          "reasonText": {
+            "type": "string",
+            "description": "Short human reason built from the same facts (`reasoning` keeps the full engine explanation)"
+          },
           "appliedAt": {
             "anyOf": [
               {
@@ -14897,6 +14978,13 @@
           "decidedByName",
           "decidedAt",
           "decisionNote",
+          "unitCostMinor",
+          "feesMinor",
+          "currentMarginBps",
+          "proposedMarginBps",
+          "targetMarginBps",
+          "reasonCode",
+          "reasonText",
           "appliedAt",
           "failureMessage",
           "pushSkipped",
@@ -51743,6 +51831,87 @@
               "null"
             ]
           },
+          "unitCostMinor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Cost price of the variant; null when not set"
+          },
+          "feesMinor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Marketplace commission + fixed fee at the current price of the proposal; null when the account has no fee profile"
+          },
+          "currentMarginBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Margin at the current price in bps of the price (after cost and fees); null when the cost is unknown"
+          },
+          "proposedMarginBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Margin at the proposed price; null when the cost is unknown"
+          },
+          "targetMarginBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Margin target of the policy that created the proposal; null without a policy or a target"
+          },
+          "reasonCode": {
+            "type": "string",
+            "enum": [
+              "below_margin_target",
+              "competitor_undercut",
+              "competitor_above",
+              "competitor_match",
+              "slow_velocity",
+              "target_margin"
+            ],
+            "description": "Structured reason, from the strategy and the facts stored with the proposal"
+          },
+          "reasonText": {
+            "type": "string",
+            "description": "Short human reason built from the same facts (`reasoning` keeps the full engine explanation)"
+          },
           "appliedAt": {
             "anyOf": [
               {
@@ -51797,6 +51966,13 @@
           "decidedByName",
           "decidedAt",
           "decisionNote",
+          "unitCostMinor",
+          "feesMinor",
+          "currentMarginBps",
+          "proposedMarginBps",
+          "targetMarginBps",
+          "reasonCode",
+          "reasonText",
           "appliedAt",
           "failureMessage",
           "pushSkipped",
@@ -114955,6 +115131,18 @@
                           "minimum": -9007199254740991,
                           "maximum": 9007199254740991
                         },
+                        "appliedLast30Days": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991,
+                          "description": "approved + auto-applied in the last 30 days"
+                        },
+                        "opportunitiesCount": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991,
+                          "description": "pending proposals with a positive estimated monthly gain"
+                        },
                         "approvedLast30Days": {
                           "type": "integer",
                           "minimum": -9007199254740991,
@@ -115044,6 +115232,8 @@
                         "potentialMarginGainMinor",
                         "proposalsWithoutEstimate",
                         "autoAppliedLast30Days",
+                        "appliedLast30Days",
+                        "opportunitiesCount",
                         "approvedLast30Days",
                         "rejectedLast30Days",
                         "activePolicies",
@@ -115065,6 +115255,588 @@
                     "requestId"
                   ],
                   "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/pricing/margin-overview": {
+      "get": {
+        "summary": "Margin per channel, from real cost and fee data",
+        "tags": [
+          "Pricing"
+        ],
+        "description": "Over active listings that have a price (account marketplace price, else the variant selling price). Margin = price - cost - commission - fixed fee, in bps of the price. Listings whose variant has no cost price are counted in `unknownCostCount` and left out of the averages (null when nothing is known). `belowTargetCount` compares with the strictest active policy target that applies to the channel. `nextAction` is `costs` while costs are missing, else `proposals`.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "query",
+            "name": "filter[accountId]",
+            "required": false
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "pricing:read",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "channels": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "accountId": {
+                                "type": "string"
+                              },
+                              "channel": {
+                                "type": "string"
+                              },
+                              "marketplace": {
+                                "type": "string"
+                              },
+                              "priceCount": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "pricedWithCostCount": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "avgMarginBps": {
+                                "anyOf": [
+                                  {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "belowTargetCount": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "targetMarginBps": {
+                                "anyOf": [
+                                  {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "feeTermsSummary": {
+                                "type": "string"
+                              },
+                              "feesConfigured": {
+                                "type": "boolean"
+                              },
+                              "unknownCostCount": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "nextAction": {
+                                "type": "string",
+                                "enum": [
+                                  "costs",
+                                  "proposals"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "accountId",
+                              "channel",
+                              "marketplace",
+                              "priceCount",
+                              "pricedWithCostCount",
+                              "avgMarginBps",
+                              "belowTargetCount",
+                              "targetMarginBps",
+                              "feeTermsSummary",
+                              "feesConfigured",
+                              "unknownCostCount",
+                              "nextAction"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "totals": {
+                          "type": "object",
+                          "properties": {
+                            "productsInView": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "productChannelPrices": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "avgMarginBps": {
+                              "anyOf": [
+                                {
+                                  "type": "integer",
+                                  "minimum": -9007199254740991,
+                                  "maximum": 9007199254740991
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "belowTargetCount": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "unknownCostCount": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "targetMarginBps": {
+                              "anyOf": [
+                                {
+                                  "type": "integer",
+                                  "minimum": -9007199254740991,
+                                  "maximum": 9007199254740991
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ],
+                              "description": "Strictest active policy target; null without a policy target"
+                            }
+                          },
+                          "required": [
+                            "productsInView",
+                            "productChannelPrices",
+                            "avgMarginBps",
+                            "belowTargetCount",
+                            "unknownCostCount",
+                            "targetMarginBps"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "channels",
+                        "totals"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "requestId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/pricing/price-table": {
+      "get": {
+        "summary": "Every listing price with its real cost, fees and margin",
+        "tags": [
+          "Pricing"
+        ],
+        "description": "One row per active listing with a price. `unitCostMinor`, `feesMinor`, `marginBps`, `belowTarget` are null when unknown (no cost price / no fee profile / no policy target). `proposalState` is `proposed` when a proposal is pending for the listing (`proposalId`, `proposedPriceMinor`). Unknown margins sort last.",
+        "parameters": [
+          {
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000
+            },
+            "in": "query",
+            "name": "page",
+            "required": false
+          },
+          {
+            "schema": {
+              "default": 25,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "in": "query",
+            "name": "pageSize",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "query",
+            "name": "filter[accountId]",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "query",
+            "name": "q",
+            "required": false
+          },
+          {
+            "schema": {
+              "default": "product",
+              "type": "string",
+              "enum": [
+                "product",
+                "margin_asc",
+                "margin_desc",
+                "price_desc"
+              ]
+            },
+            "in": "query",
+            "name": "sort",
+            "required": false
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "pricing:read",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "listingId": {
+                                "type": "string"
+                              },
+                              "variantId": {
+                                "type": "string"
+                              },
+                              "productTitle": {
+                                "type": "string"
+                              },
+                              "sku": {
+                                "type": "string"
+                              },
+                              "accountId": {
+                                "type": "string"
+                              },
+                              "channel": {
+                                "type": "string"
+                              },
+                              "marketplace": {
+                                "type": "string"
+                              },
+                              "currentPriceMinor": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "unitCostMinor": {
+                                "anyOf": [
+                                  {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "feesMinor": {
+                                "anyOf": [
+                                  {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "marginBps": {
+                                "anyOf": [
+                                  {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "targetMarginBps": {
+                                "anyOf": [
+                                  {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "belowTarget": {
+                                "type": [
+                                  "boolean",
+                                  "null"
+                                ]
+                              },
+                              "proposalState": {
+                                "type": "string",
+                                "enum": [
+                                  "none",
+                                  "proposed"
+                                ]
+                              },
+                              "proposalId": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "proposedPriceMinor": {
+                                "anyOf": [
+                                  {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              }
+                            },
+                            "required": [
+                              "listingId",
+                              "variantId",
+                              "productTitle",
+                              "sku",
+                              "accountId",
+                              "channel",
+                              "marketplace",
+                              "currentPriceMinor",
+                              "unitCostMinor",
+                              "feesMinor",
+                              "marginBps",
+                              "targetMarginBps",
+                              "belowTarget",
+                              "proposalState",
+                              "proposalId",
+                              "proposedPriceMinor"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "page": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "pageSize": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "total": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "pages": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "items",
+                        "page",
+                        "pageSize",
+                        "total",
+                        "pages"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "requestId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }

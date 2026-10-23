@@ -7,10 +7,13 @@
 export interface FeeTerms { feeBps: number; fixedMinor: number }
 export const NO_FEES: FeeTerms = { feeBps: 0, fixedMinor: 0 };
 
+/** marketplace commission plus fixed fee on one unit sold at `price` */
+export const feeAmount = (price: number, fees: FeeTerms): number => Math.round((price * fees.feeBps) / 10_000) + fees.fixedMinor;
+
 /** what one unit sold at `price` leaves after cost and marketplace fees; null when the cost is unknown */
 export function unitContribution(price: number, costMinor: number | null, fees: FeeTerms): number | null {
   if (costMinor === null) return null;
-  return price - costMinor - Math.round((price * fees.feeBps) / 10_000) - fees.fixedMinor;
+  return price - costMinor - feeAmount(price, fees);
 }
 
 /** contribution as basis points of the price (can be negative); null when the cost is unknown */

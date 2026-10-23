@@ -7,6 +7,7 @@ import { AppError } from '@oms/shared';
 import { created, ok, opCtxFromRequest, paged, pageWindow, requireVendor, vendorTx, type OpCtx } from '@oms/module-kit';
 import { addCompetitorPrice, deleteCompetitorPrice, getCompetitorDto, importCompetitorPrices, listCompetitorPrices } from './competitors';
 import { SYNC_PAIR_LIMIT, candidatePairs, generateProposals } from './generate';
+import { marginOverview, priceTable } from './margins';
 import { pricingOverview } from './overview';
 import { affectedVariants, createPolicy, deletePolicy, getPolicyDto, listPolicies, updatePolicy } from './policies';
 import { bulkDecide, decideProposal, getProposalDto, listProposals } from './proposals';
@@ -51,6 +52,13 @@ const ProposalSchema = z.object({
   competitorPriceMinor: z.number().int().nullable(), estMarginDeltaBps: z.number().int().nullable().describe('Change of the unit margin; null when the variant has no cost price'),
   projectedSalesDeltaBps: z.number().int().nullable().describe('Projected change of unit sales; null without enough sales history'), reasoning: z.string(),
   expiresAt: IsoDate.nullable(), createdAt: IsoDate, decidedBy: z.string().nullable(), decidedByName: z.string().nullable(), decidedAt: IsoDate.nullable(), decisionNote: z.string().nullable(),
+  unitCostMinor: z.number().int().nullable().describe('Cost price of the variant; null when not set'),
+  feesMinor: z.number().int().nullable().describe('Marketplace commission + fixed fee at the current price of the proposal; null when the account has no fee profile'),
+  currentMarginBps: z.number().int().nullable().describe('Margin at the current price in bps of the price (after cost and fees); null when the cost is unknown'),
+  proposedMarginBps: z.number().int().nullable().describe('Margin at the proposed price; null when the cost is unknown'),
+  targetMarginBps: z.number().int().nullable().describe('Margin target of the policy that created the proposal; null without a policy or a target'),
+  reasonCode: z.enum(['below_margin_target', 'competitor_undercut', 'competitor_above', 'competitor_match', 'slow_velocity', 'target_margin']).describe('Structured reason, from the strategy and the facts stored with the proposal'),
+  reasonText: z.string().describe('Short human reason built from the same facts (`reasoning` keeps the full engine explanation)'),
   appliedAt: IsoDate.nullable(), failureMessage: z.string().nullable(), pushSkipped: z.boolean().describe('Saved here, but the marketplace cannot take price updates through its API'), version: z.number().int(),
 }).meta({ id: 'PriceProposal' });
 const Pushed = z.array(z.object({ accountId: z.string(), skipped: z.string().optional() }));
@@ -83,12 +91,49 @@ export const proposalRoutes: FastifyPluginAsync = async (app) => {
     schema: {
       tags: TAGS, summary: 'Tiles of the pricing screen', description: 'Pending proposals, potential margin gain (monthly contribution gain of the pending proposals weighted by 30-day sales; proposals without a cost price are counted in `proposalsWithoutEstimate`, not guessed), proposals auto-applied in the last 30 days, channels covered and active policies.',
       response: { 200: successEnvelope(z.object({
-        pendingProposals: z.number().int(), potentialMarginGainMinor: z.number().int(), proposalsWithoutEstimate: z.number().int(), autoAppliedLast30Days: z.number().int(), approvedLast30Days: z.number().int(), rejectedLast30Days: z.number().int(),
+        pendingProposals: z.number().int(), potentialMarginGainMinor: z.number().int(), proposalsWithoutEstimate: z.number().int(), autoAppliedLast30Days: z.number().int(), appliedLast30Days: z.number().int().describe('approved + auto-applied in the last 30 days'), opportunitiesCount: z.number().int().describe('pending proposals with a positive estimated monthly gain'), approvedLast30Days: z.number().int(), rejectedLast30Days: z.number().int(),
         activePolicies: z.number().int(), pausedPolicies: z.number().int(), channelsCovered: z.number().int(), channels: z.array(z.object({ accountId: z.string(), name: z.string(), marketplace: z.string() })),
         proposalCounts: z.record(Status, z.number().int()), basis: z.literal('estimated'),
       })) },
     },
   }, async (req) => ok(req, await vendorTx(req, (tx, vendorId) => pricingOverview(tx, vendorId))));
+
+  r.get('/pricing/margin-overview', {
+    config: { access: { permission: 'pricing:read' } },
+    schema: {
+      tags: TAGS, summary: 'Margin per channel, from real cost and fee data',
+      description: 'Over active listings that have a price (account marketplace price, else the variant selling price). Margin = price - cost - commission - fixed fee, in bps of the price. Listings whose variant has no cost price are counted in `unknownCostCount` and left out of the averages (null when nothing is known). `belowTargetCount` compares with the strictest active policy target that applies to the channel. `nextAction` is `costs` while costs are missing, else `proposals`.',
+      querystring: z.object({ 'filter[accountId]': z.uuid().optional() }),
+      response: { 200: successEnvelope(z.object({
+        channels: z.array(z.object({
+          accountId: z.string(), channel: z.string(), marketplace: z.string(), priceCount: z.number().int(), pricedWithCostCount: z.number().int(), avgMarginBps: z.number().int().nullable(),
+          belowTargetCount: z.number().int(), targetMarginBps: z.number().int().nullable(), feeTermsSummary: z.string(), feesConfigured: z.boolean(), unknownCostCount: z.number().int(), nextAction: z.enum(['costs', 'proposals']),
+        })),
+        totals: z.object({ productsInView: z.number().int(), productChannelPrices: z.number().int(), avgMarginBps: z.number().int().nullable(), belowTargetCount: z.number().int(), unknownCostCount: z.number().int(), targetMarginBps: z.number().int().nullable().describe('Strictest active policy target; null without a policy target') }),
+      })) },
+    },
+  }, async (req) => ok(req, await vendorTx(req, (tx, vendorId) => marginOverview(tx, vendorId, { accountId: req.query['filter[accountId]'] }))));
+
+  r.get('/pricing/price-table', {
+    config: { access: { permission: 'pricing:read' } },
+    schema: {
+      tags: TAGS, summary: 'Every listing price with its real cost, fees and margin',
+      description: 'One row per active listing with a price. `unitCostMinor`, `feesMinor`, `marginBps`, `belowTarget` are null when unknown (no cost price / no fee profile / no policy target). `proposalState` is `proposed` when a proposal is pending for the listing (`proposalId`, `proposedPriceMinor`). Unknown margins sort last.',
+      querystring: PageQuerySchema.extend({ 'filter[accountId]': z.uuid().optional(), q: z.string().trim().min(1).max(100).optional(), sort: z.enum(['product', 'margin_asc', 'margin_desc', 'price_desc']).default('product') }),
+      response: { 200: successEnvelope(z.object({
+        items: z.array(z.object({
+          listingId: z.string(), variantId: z.string(), productTitle: z.string(), sku: z.string(), accountId: z.string(), channel: z.string(), marketplace: z.string(), currentPriceMinor: z.number().int(),
+          unitCostMinor: z.number().int().nullable(), feesMinor: z.number().int().nullable(), marginBps: z.number().int().nullable(), targetMarginBps: z.number().int().nullable(), belowTarget: z.boolean().nullable(),
+          proposalState: z.enum(['none', 'proposed']), proposalId: z.string().nullable(), proposedPriceMinor: z.number().int().nullable(),
+        })),
+        page: z.number().int(), pageSize: z.number().int(), total: z.number().int(), pages: z.number().int(),
+      })) },
+    },
+  }, async (req) => {
+    const w = pageWindow(req.query);
+    const res = await vendorTx(req, (tx, vendorId) => priceTable(tx, vendorId, { accountId: req.query['filter[accountId]'], q: req.query.q, sort: req.query.sort, ...w }));
+    return paged(req, res.items, req.query, res.total);
+  });
 
   // ---------------------------------------------------------------- policies
   r.get('/pricing/policies', {
