@@ -4,11 +4,14 @@ import { Plug } from "lucide-react";
 interface MarketplaceHubEmptyStateProps {
   onAddChannel: () => void;
   onBrowseConnectors: () => void;
+  /** names of the connectors the platform offers, from the directory */
+  connectorNames?: string[];
 }
 
 export const MarketplaceHubEmptyState: React.FC<MarketplaceHubEmptyStateProps> = ({
   onAddChannel,
   onBrowseConnectors,
+  connectorNames = [],
 }) => {
   return (
     <div className="w-full">
@@ -48,14 +51,11 @@ export const MarketplaceHubEmptyState: React.FC<MarketplaceHubEmptyStateProps> =
         </div>
 
         {/* Sub-meta */}
-        <div className="space-y-1 pt-6 text-[12px] text-[#666666]">
-          <div>
-            Amazon · Flipkart · Meesho · Shopify · Snapdeal · Social Commerce
+        {connectorNames.length > 0 && (
+          <div className="space-y-1 pt-6 text-[12px] text-[#666666]">
+            <div>{connectorNames.join(" · ")}</div>
           </div>
-          <div className="text-[11px] text-[#8C8C8C]">
-            Social connectors depend on API availability and commercial permissions.
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );

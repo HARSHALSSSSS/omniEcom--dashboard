@@ -14,6 +14,7 @@ export interface AddChannelOption {
   name: string;
   type: string;
   connected: boolean;
+  unavailableReason?: string | null;
   actionText?: string;
 }
 
@@ -32,29 +33,18 @@ export const AddChannelModal: React.FC<AddChannelModalProps> = ({
   onBrowseAll,
   channels: propChannels,
 }) => {
-  const { data: directory = [] } = useConnectorDirectory();
+  const { data: directory = [], isPending, isError } = useConnectorDirectory();
 
   const channelOptions: AddChannelOption[] =
     propChannels ||
-    (directory.length > 0
-      ? directory.map((d) => ({
-          id: d.id,
-          name: d.name,
-          type:
-            d.category === "storefront"
-              ? "Commerce platform"
-              : d.category === "shipping"
-                ? "Logistics network"
-                : "Marketplace",
-          connected: d.status === "connected",
-          actionText: "Connect",
-        }))
-      : [
-          { id: "amazon_in", name: "Amazon India", type: "Marketplace", connected: false, actionText: "Connect" },
-          { id: "flipkart", name: "Flipkart", type: "Marketplace", connected: false, actionText: "Connect" },
-          { id: "myntra", name: "Myntra", type: "Marketplace", connected: false, actionText: "Connect" },
-          { id: "snapdeal", name: "Snapdeal", type: "Marketplace", connected: false, actionText: "Connect" },
-        ]);
+    directory.map((d) => ({
+      id: d.id,
+      name: d.name,
+      type: d.category === "storefront" ? "Commerce platform" : d.category === "shipping" ? "Logistics network" : "Marketplace",
+      connected: d.status === "connected",
+      unavailableReason: d.status === "unavailable" ? (d.statusReason ?? "Not available yet") : null,
+      actionText: "Connect",
+    }));
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -71,6 +61,8 @@ export const AddChannelModal: React.FC<AddChannelModalProps> = ({
 
         {/* Channels List */}
         <div className="divide-y divide-[#EAEAEA] max-h-[380px] overflow-y-auto">
+          {isPending && !propChannels && <div className="px-8 py-6 text-[13px] text-[#666666]">Loading connectors...</div>}
+          {isError && !propChannels && <div role="alert" className="px-8 py-6 text-[13px] text-red-600">The connector list could not be loaded.</div>}
           {channelOptions.map((ch) => (
             <div
               key={ch.id}
@@ -81,12 +73,14 @@ export const AddChannelModal: React.FC<AddChannelModalProps> = ({
                   {ch.name}
                 </div>
                 <div className="text-[12px] text-[#666666]">
-                  {ch.type}
+                  {ch.unavailableReason ?? ch.type}
                 </div>
               </div>
 
               <div className="shrink-0">
-                {ch.connected ? (
+                {ch.unavailableReason ? (
+                  <span className="text-[12px] text-[#737373]">Not available</span>
+                ) : ch.connected ? (
                   <div className="flex items-center gap-1.5 text-[13px] text-[#374151] font-normal">
                     <Check className="w-4 h-4 stroke-[2.2] text-[#374151]" />
                     <span>Connected</span>

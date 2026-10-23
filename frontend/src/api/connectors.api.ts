@@ -2,6 +2,7 @@ import { client, unwrap } from "./client";
 import { ENDPOINTS } from "./endpoints";
 import type {
   ChannelConnection,
+  EntitySync,
   ConnectorDirectoryItem,
   ConnectChannelInput,
 } from "@/types/connection";
@@ -17,6 +18,7 @@ import type {
 } from "@/types/hub";
 import type { Directory, ConnectResult } from "@/types/directory";
 import type { ConnectorCapability, AuthType } from "@/types/connector";
+import { JOB_TYPE_LABEL, describeJob } from "@/components/marketplace-hub/accounts/hubFormat";
 
 export interface ConnectionsListResponse {
   data: ChannelConnection[];
@@ -67,11 +69,8 @@ function mapCardToConnection(card: HubAccountCard): ChannelConnection {
     status: card.status,
     authType: normalizeAuthType(card.authType),
     accountIdentifier:
-      card.accountIdentifier ||
-      (card.mode === "sandbox" ? "Sandbox Account" : "Connected"),
-    connectedAt: card.connectedAt
-      ? new Date(card.connectedAt).toLocaleDateString()
-      : "Connected",
+      card.accountIdentifier || (card.mode === "sandbox" ? "Sandbox account" : card.name),
+    connectedAt: card.connectedAt ?? "",
     lastSyncAt: card.lastSyncAt ? new Date(card.lastSyncAt).toISOString() : "Never",
     nextSyncAt: card.nextSyncAt ? new Date(card.nextSyncAt).toISOString() : undefined,
     syncState: card.syncState,
@@ -86,72 +85,74 @@ function mapCardToConnection(card: HubAccountCard): ChannelConnection {
       pulseScore: card.health?.pulseScore ?? 100,
       riskLevel: card.health?.riskLevel ?? "low",
       frictionPoints: card.health?.frictionPoints ?? [],
-      rateLimitRemainingPct: 85,
+      rateLimitRemainingPct: card.health?.rateLimitRemainingPct ?? null,
       tokenExpiresInDays: card.health?.tokenExpiresInDays ?? undefined,
     },
     capabilities: (card.capabilities || []) as ConnectorCapability[],
+    account: card,
     attentionIssue: isAttention
       ? {
           issueTitle: friction || (card.status === "error" ? "Connection disrupted" : "Needs attention"),
-          issueDescription:
-            card.health.frictionPoints?.join(". ") ||
-            "Synchronization requires verification or credentials update.",
-          affectedAreas: ["Products", "Orders", "Inventory"],
-          lastSuccessfulSync: card.lastSyncAt
-            ? new Date(card.lastSyncAt).toLocaleString()
-            : "Unknown",
-          actionType: card.status === "error" ? "reconnect" : "retry_scheduled",
+          issueDescription: card.health.frictionPoints?.slice(1).join(". ") || "",
+          affectedAreas: [],
+          lastSuccessfulSync: card.lastSyncAt ?? "",
+          actionType: card.accountStatus === "active" ? "retry_scheduled" : "reconnect",
         }
       : undefined,
   };
 }
 
+const ENTITY_JOB_TYPES = {
+  products: ["catalog_import"],
+  listings: ["listing_publish", "listing_status", "listings"],
+  inventory: ["inventory"],
+  orders: ["orders"],
+  shipping: ["order_status", "tracking"],
+} as const;
+const ENTITY_LANE = { products: "listings", listings: "listings", inventory: "inventory", orders: "orders", shipping: "tracking" } as const;
+
+const clock = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+/** What one entity's sync is doing, from the newest job of its type (the 10 newest jobs of the account come with the detail), else from its 24 h lane. */
+function entitySync(detail: HubAccountDetail, entity: keyof typeof ENTITY_JOB_TYPES): EntitySync {
+  const types = ENTITY_JOB_TYPES[entity] as readonly string[];
+  const job = (detail.recentJobs || []).find((j) => types.includes(j.type));
+  if (job) {
+    const at = job.finishedAt ?? job.startedAt ?? job.createdAt;
+    const active = job.status === "queued" || job.status === "running" || job.status === "retrying";
+    const status: EntitySync["status"] = active
+      ? "syncing"
+      : job.status === "succeeded"
+        ? "healthy"
+        : job.status === "partially_failed"
+          ? "warning"
+          : job.status === "cancelled"
+            ? "idle"
+            : "error";
+    const pct = job.status === "succeeded" ? 100 : job.progress.total > 0 ? Math.round((job.progress.done / job.progress.total) * 100) : undefined;
+    return { status, timestamp: clock(at), at, pct };
+  }
+  const lane = detail.lanes?.find((l) => l.key === ENTITY_LANE[entity]);
+  return { status: !lane || lane.status === "idle" ? "idle" : lane.status, timestamp: "" };
+}
+
 function mapDetailToConnection(detail: HubAccountDetail): ChannelConnection {
   const base = mapCardToConnection(detail);
-
-  const getLane = (key: string) => detail.lanes?.find((l) => l.key === key);
-  const catalogLane = getLane("catalog");
-  const listingLane = getLane("listings");
-  const inventoryLane = getLane("inventory");
-  const orderLane = getLane("orders");
-
-  const syncTime = detail.lastSyncAt
-    ? new Date(detail.lastSyncAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-    : "Just now";
-
   return {
     ...base,
     entitySyncStatus: {
-      products: {
-        status: catalogLane?.status === "idle" ? "healthy" : (catalogLane?.status ?? "healthy"),
-        timestamp: syncTime,
-        pct: catalogLane?.successRate ?? undefined,
-      },
-      listings: {
-        status: listingLane?.status === "idle" ? "healthy" : (listingLane?.status ?? "healthy"),
-        timestamp: syncTime,
-      },
-      inventory: {
-        status: inventoryLane?.status === "idle" ? "healthy" : (inventoryLane?.status ?? "healthy"),
-        timestamp: syncTime,
-        pct: inventoryLane?.successRate ?? undefined,
-      },
-      orders: {
-        status: orderLane?.status === "idle" ? "healthy" : (orderLane?.status ?? "healthy"),
-        timestamp: syncTime,
-        pct: orderLane?.successRate ?? undefined,
-      },
-      shipping: {
-        status: "healthy",
-        timestamp: syncTime,
-      },
+      products: entitySync(detail, "products"),
+      listings: entitySync(detail, "listings"),
+      inventory: entitySync(detail, "inventory"),
+      orders: entitySync(detail, "orders"),
+      shipping: entitySync(detail, "shipping"),
     },
     activityHistory: (detail.recentJobs || []).slice(0, 5).map((job) => ({
       id: job.id,
       timeText: job.startedAt
         ? new Date(job.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-        : "Recently",
-      title: `${job.type.charAt(0).toUpperCase() + job.type.slice(1)} sync ${job.status.replace("_", " ")}`,
+        : "Queued",
+      title: `${JOB_TYPE_LABEL[job.type] ?? job.type} ${describeJob(job).label.toLowerCase()}`,
     })),
   };
 }
@@ -303,7 +304,7 @@ export const connectorsApi = {
         lastSyncAt: "Just now",
         syncState: "idle",
         stats: { activeListings: 0, pendingOrders: 0, syncedInventoryItems: 0, errorCount: 0 },
-        health: { pulseScore: 100, riskLevel: "low", frictionPoints: [], rateLimitRemainingPct: 100 },
+        health: { pulseScore: 100, riskLevel: "low", frictionPoints: [], rateLimitRemainingPct: null },
         capabilities: [],
       };
     }
@@ -324,7 +325,7 @@ export const connectorsApi = {
       lastSyncAt: "Never",
       syncState: "idle",
       stats: { activeListings: 0, pendingOrders: 0, syncedInventoryItems: 0, errorCount: 0 },
-      health: { pulseScore: 100, riskLevel: "low", frictionPoints: [], rateLimitRemainingPct: 100 },
+      health: { pulseScore: 100, riskLevel: "low", frictionPoints: [], rateLimitRemainingPct: null },
       capabilities: [],
     };
   },

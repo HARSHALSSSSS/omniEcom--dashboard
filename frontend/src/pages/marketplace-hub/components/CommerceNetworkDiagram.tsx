@@ -1,14 +1,16 @@
 import React from "react";
 import { cn } from "@/utils/cn";
+import { ago } from "@/components/marketplace-hub/accounts/hubFormat";
+import { STATUS_LABEL, listingsText, needsAttention, type ChannelStatus } from "./channelRows";
 
 export interface NetworkChannelNode {
   id: string;
   name: string;
   slug: string;
-  status: "healthy" | "warning" | "error" | "not_connected" | "syncing";
+  status: ChannelStatus;
   connected: boolean;
-  productCount?: number;
-  lastSyncText?: string;
+  listings?: number;
+  lastSyncAt?: string | null;
 }
 
 interface CommerceNetworkDiagramProps {
@@ -49,7 +51,7 @@ export const CommerceNetworkDiagram: React.FC<CommerceNetworkDiagramProps> = ({
         <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 z-10">
           {channels.map((ch) => {
             const isSelected = selectedChannelId === ch.id;
-            const isWarning = ch.status === "warning";
+            const isWarning = needsAttention(ch.status);
             const isConnected = ch.connected;
 
             return (
@@ -68,11 +70,16 @@ export const CommerceNetworkDiagram: React.FC<CommerceNetworkDiagramProps> = ({
                   <span className="text-[13px] font-semibold text-[#121212] truncate">
                     {ch.name}
                   </span>
-                  {isConnected && ch.status === "healthy" && (
-                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0" />
-                  )}
-                  {isConnected && isWarning && (
-                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                  {isConnected && (
+                    <span
+                      className={cn(
+                        "inline-block w-1.5 h-1.5 rounded-full shrink-0",
+                        ch.status === "healthy" && "bg-emerald-600",
+                        isWarning && "bg-amber-500",
+                        ch.status === "syncing" && "bg-blue-600 animate-pulse",
+                        ch.status === "paused" && "bg-[#8C8C8C]",
+                      )}
+                    />
                   )}
                 </div>
 
@@ -86,17 +93,13 @@ export const CommerceNetworkDiagram: React.FC<CommerceNetworkDiagramProps> = ({
                         : "text-[#737373]",
                   )}
                 >
-                  {!isConnected
-                    ? "Not connected"
-                    : isWarning
-                      ? "Needs attention"
-                      : "Connected"}
+                  {STATUS_LABEL[ch.status]}
                 </div>
 
                 <div className="text-[11px] text-[#737373] mt-1 truncate w-full">
-                  {isConnected && ch.productCount !== undefined
-                    ? `${ch.productCount} products · ${ch.lastSyncText ?? "4 min ago"}`
-                    : "— · —"}
+                  {isConnected
+                    ? `${listingsText(ch.listings ?? 0)} · ${ago(ch.lastSyncAt ?? null)}`
+                    : "Available to connect"}
                 </div>
               </button>
             );

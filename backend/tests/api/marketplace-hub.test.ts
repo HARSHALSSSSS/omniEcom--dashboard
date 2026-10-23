@@ -111,8 +111,11 @@ describe('account cards', () => {
     let card = await cardOf(acct.id);
     expect(card).toMatchObject({
       marketplace: 'mock', accountIdentifier: acct.sellerId, mode: 'sandbox', status: 'healthy', accountStatus: 'active', connectionStatus: 'connected', syncState: 'idle', syncProgress: null,
-      stats: { activeListings: 0, pendingOrders: 0, syncedInventoryItems: 0, errorCount: 0 }, health: { pulseScore: 100, riskLevel: 'low', frictionPoints: [], rateLimitRemainingPct: null, syncSuccessRate24h: null },
+      stats: { activeListings: 0, pendingOrders: 0, syncedInventoryItems: 0, errorCount: 0 }, health: { pulseScore: 100, riskLevel: 'low', frictionPoints: [], rateLimitRemainingPct: expect.any(Number), syncSuccessRate24h: null },
     });
+    // a live measure of the per-account request limiter, never a placeholder
+    expect(card.health.rateLimitRemainingPct).toBeGreaterThanOrEqual(0);
+    expect(card.health.rateLimitRemainingPct).toBeLessThanOrEqual(100);
     expect(card.capabilities).toEqual(expect.arrayContaining(['orders.fetch', 'inventory.push']));
     expect(card.capabilityTags).toEqual(expect.arrayContaining(['orders', 'inventory', 'listings', 'returns', 'shipping']));
     expect(card.connectedAt).toBeTruthy();

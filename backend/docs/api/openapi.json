@@ -28494,8 +28494,17 @@
                 }
               },
               "rateLimitRemainingPct": {
-                "type": "null",
-                "description": "Always null: marketplace rate-limit quotas are not tracked per account"
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Percent of the per-account request allowance (token bucket, burst) that is free right now; measured in this server process, so it is 100 after a restart. null when the account is not active"
               },
               "tokenExpiresInDays": {
                 "anyOf": [
@@ -28914,8 +28923,17 @@
                 }
               },
               "rateLimitRemainingPct": {
-                "type": "null",
-                "description": "Always null: marketplace rate-limit quotas are not tracked per account"
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Percent of the per-account request allowance (token bucket, burst) that is free right now; measured in this server process, so it is 100 after a restart. null when the account is not active"
               },
               "tokenExpiresInDays": {
                 "anyOf": [
@@ -65426,8 +65444,17 @@
                 }
               },
               "rateLimitRemainingPct": {
-                "type": "null",
-                "description": "Always null: marketplace rate-limit quotas are not tracked per account"
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Percent of the per-account request allowance (token bucket, burst) that is free right now; measured in this server process, so it is 100 after a restart. null when the account is not active"
               },
               "tokenExpiresInDays": {
                 "anyOf": [
@@ -65851,8 +65878,17 @@
                 }
               },
               "rateLimitRemainingPct": {
-                "type": "null",
-                "description": "Always null: marketplace rate-limit quotas are not tracked per account"
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Percent of the per-account request allowance (token bucket, burst) that is free right now; measured in this server process, so it is 100 after a restart. null when the account is not active"
               },
               "tokenExpiresInDays": {
                 "anyOf": [

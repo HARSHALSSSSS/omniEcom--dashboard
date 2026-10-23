@@ -1,176 +1,132 @@
 import { useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Plus } from "lucide-react";
 import { ROUTES } from "@/constants/routes";
-import {
-  useConnections,
-  useConnection,
-  useConnectorDirectory,
-  useSyncConnection,
-  useDisconnectConnection,
-} from "@/hooks/useConnectors";
+import { errorMessage } from "@/api/errors";
+import { useCan } from "@/hooks/useCan";
+import { useConnections, useConnection, useConnectorDirectory } from "@/hooks/useConnectors";
 import type { ChannelConnection } from "@/types/connection";
+import { LoadError } from "@/components/marketplace-hub/accounts/hubUi";
+import { WRITE_REASON, ago } from "@/components/marketplace-hub/accounts/hubFormat";
+import { useAccountActions } from "@/components/marketplace-hub/accounts/useAccountActions";
 
 // Sub-components
-import {
-  CommerceNetworkDiagram,
-  NetworkChannelNode,
-} from "./components/CommerceNetworkDiagram";
-import {
-  MarketplaceHubToolbar,
-  ChannelSortOption,
-} from "./components/MarketplaceHubToolbar";
-import {
-  MarketplaceHubTable,
-  ChannelRowData,
-} from "./components/MarketplaceHubTable";
+import { CommerceNetworkDiagram, NetworkChannelNode } from "./components/CommerceNetworkDiagram";
+import { MarketplaceHubToolbar, ChannelSortOption } from "./components/MarketplaceHubToolbar";
+import { MarketplaceHubTable } from "./components/MarketplaceHubTable";
 import { AttentionTableView } from "./components/AttentionTableView";
 import { ChannelDetailsDrawer } from "./components/ChannelDetailsDrawer";
 import { AddChannelModal } from "./components/AddChannelModal";
-import { DisconnectChannelModal } from "./components/DisconnectChannelModal";
 import { MarketplaceHubSkeleton } from "./components/MarketplaceHubSkeleton";
 import { MarketplaceHubEmptyState } from "./components/MarketplaceHubEmptyState";
+import { needsAttention, rowFromConnection, rowFromDirectory, type ChannelRowData } from "./components/channelRows";
 
 type TabFilter = "all" | "connected" | "attention" | "not_connected" | "syncing";
+const TABS: TabFilter[] = ["all", "connected", "attention", "not_connected", "syncing"];
+const SORTS: ChannelSortOption[] = ["health", "recent", "products"];
 
-function formatSyncAgo(isoString?: string): string {
-  if (!isoString || isoString === "Never") return "Never synced";
-  const diffMs = Date.now() - new Date(isoString).getTime();
-  if (diffMs < 0 || isNaN(diffMs)) return "Just now";
-  const mins = Math.floor(diffMs / 60000);
-  if (mins < 1) return "Just now";
-  if (mins < 60) return `${mins} min ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours} hr ago`;
-  const days = Math.floor(hours / 24);
-  return `${days} d ago`;
+/** the first connection that needs attention, with the sync retry the old hub tiles had */
+function AttentionAdvisory({ connection, onReview }: { connection: ChannelConnection; onReview: (id: string) => void }) {
+  const a = useAccountActions(connection.account!);
+  const needsReconnect = connection.account!.accountStatus !== "active" && connection.account!.accountStatus !== "paused";
+  const points = connection.health.frictionPoints;
+  return (
+    <>
+      <p className="text-[12px] text-[#737373]">{points.length > 0 ? points.join(". ") : "Synchronization has encountered warnings or needs an update."}</p>
+      <p className="text-[11px] text-[#8C8C8C]">
+        Last successful sync: {connection.lastSyncAt && connection.lastSyncAt !== "Never" ? ago(connection.lastSyncAt) : "never"}
+      </p>
+      <div className="flex items-center gap-4 pt-2 text-[12px]">
+        <button
+          type="button"
+          disabled={needsReconnect ? !a.canWrite : Boolean(a.syncReason) || a.syncing}
+          title={(needsReconnect ? (a.canWrite ? null : WRITE_REASON) : a.syncReason) ?? undefined}
+          onClick={needsReconnect ? () => a.openDialog("reconnect") : a.startSync}
+          className="font-semibold text-[#121212] hover:underline cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {needsReconnect ? "Reconnect" : "Retry sync"}
+        </button>
+        <button type="button" onClick={() => onReview(connection.id)} className="font-medium text-[#121212] hover:underline cursor-pointer">
+          Review issue →
+        </button>
+      </div>
+      {a.dialogs}
+    </>
+  );
 }
 
 export default function MarketplaceHubPage() {
   const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
+  const canWrite = useCan("marketplace_accounts:write");
 
-  // Queries & Mutations
-  const { data: connectionsData, isLoading } = useConnections();
+  // Queries
+  const connectionsQuery = useConnections();
   const { data: directory = [] } = useConnectorDirectory();
-  const syncMutation = useSyncConnection();
-  const disconnectMutation = useDisconnectConnection();
+  const connections = useMemo(() => connectionsQuery.data?.data ?? [], [connectionsQuery.data]);
 
-  const connections = useMemo(() => connectionsData?.data ?? [], [connectionsData]);
+  // Filters live in the URL (tab, q, sort) so a reload or a shared link shows the same list
+  const tabParam = params.get("tab");
+  const activeTab: TabFilter = TABS.includes(tabParam as TabFilter) ? (tabParam as TabFilter) : "all";
+  const searchQuery = params.get("q") ?? "";
+  const sortParam = params.get("sort");
+  const sortBy: ChannelSortOption = SORTS.includes(sortParam as ChannelSortOption) ? (sortParam as ChannelSortOption) : "health";
+  const setFilter = (patch: Record<string, string | null>) => {
+    const next = new URLSearchParams(params);
+    for (const [k, v] of Object.entries(patch)) {
+      if (v) next.set(k, v);
+      else next.delete(k);
+    }
+    setParams(next, { replace: true });
+  };
+  const setActiveTab = (t: TabFilter) => setFilter({ tab: t === "all" ? null : t });
 
-  // Local State
-  const [activeTab, setActiveTab] = useState<TabFilter>("all");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [sortBy, setSortBy] = useState<ChannelSortOption>("health");
+  // Local state
   const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [disconnectCandidate, setDisconnectCandidate] = useState<ChannelConnection | null>(null);
-  const [syncingChannelIds, setSyncingChannelIds] = useState<Set<string>>(new Set());
 
-  // Fetch full detail (entitySyncStatus, activityHistory, capabilities) when drawer opens
+  // Full detail (per-entity sync state, recent jobs) when the drawer opens
   const { data: selectedConnectionDetail } = useConnection(selectedChannelId);
 
-  // Merge live backend connections with un-connected directory suggestions
+  // Real accounts first, then the directory connectors that are not connected yet
   const allChannelRows: ChannelRowData[] = useMemo(() => {
-    const connectedRows: ChannelRowData[] = connections.map((c) => {
-      const isSyncing = syncingChannelIds.has(c.id) || c.syncState === "syncing";
-      return {
-        id: c.id,
-        name: c.name,
-        slug: c.connectorId,
-        connected: true,
-        status: isSyncing
-          ? "syncing"
-          : c.status === "warning"
-            ? "warning"
-            : c.status === "error"
-              ? "error"
-              : "healthy",
-        accountIdentifier: c.accountIdentifier,
-        catalogCount: c.stats.activeListings,
-        ordersToday: c.stats.pendingOrders,
-        inventoryStatus: "Synced",
-        lastSyncText: formatSyncAgo(c.lastSyncAt),
-      };
-    });
-
+    const connectedRows = connections.map(rowFromConnection);
     const connectedMarketplaces = new Set(connections.map((c) => c.connectorId));
-    const unConnectedRows: ChannelRowData[] = directory
-      .filter((d) => !connectedMarketplaces.has(d.id))
-      .map((d) => ({
-        id: `dir-${d.id}`,
-        name: d.name,
-        slug: d.id,
-        connected: false,
-        status: "not_connected",
-        notConnectedText:
-          d.description ||
-          "Connect this channel to bring its catalog, inventory and orders into your workspace.",
-      }));
-
+    const unConnectedRows = directory.filter((d) => !connectedMarketplaces.has(d.id)).map(rowFromDirectory);
     return [...connectedRows, ...unConnectedRows];
-  }, [connections, directory, syncingChannelIds]);
+  }, [connections, directory]);
 
-  // Diagram Nodes
-  const networkNodes: NetworkChannelNode[] = useMemo(() => {
-    return allChannelRows.map((ch) => ({
-      id: ch.id,
-      name: ch.name,
-      slug: ch.slug,
-      status: ch.status,
-      connected: ch.connected,
-      productCount: ch.catalogCount,
-      lastSyncText: ch.lastSyncText,
-    }));
-  }, [allChannelRows]);
+  const networkNodes: NetworkChannelNode[] = useMemo(
+    () => allChannelRows.map((ch) => ({ id: ch.id, name: ch.name, slug: ch.slug, status: ch.status, connected: ch.connected, listings: ch.listings, lastSyncAt: ch.lastSyncAt })),
+    [allChannelRows],
+  );
 
-  // Filtered & Sorted Rows
   const filteredRows = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    const rank = (status: string) => ({ healthy: 1, paused: 2, warning: 3, error: 4, disconnected: 5, syncing: 6 })[status] ?? 7;
     return allChannelRows
       .filter((ch) => {
-        // Tab Filter
-        if (activeTab === "connected") return ch.connected;
-        if (activeTab === "attention") return ch.status === "warning" || ch.status === "error";
-        if (activeTab === "not_connected") return !ch.connected;
+        if (activeTab === "connected") return ch.connected && ch.status !== "disconnected";
+        if (activeTab === "attention") return needsAttention(ch.status);
+        if (activeTab === "not_connected") return !ch.connected || ch.status === "disconnected";
         if (activeTab === "syncing") return ch.status === "syncing";
         return true;
       })
-      .filter((ch) => {
-        // Search Filter
-        if (!searchQuery.trim()) return true;
-        return ch.name.toLowerCase().includes(searchQuery.toLowerCase());
-      })
+      .filter((ch) => !q || ch.name.toLowerCase().includes(q) || (ch.accountIdentifier ?? "").toLowerCase().includes(q))
       .sort((a, b) => {
-        // Sort Option
-        if (sortBy === "products") {
-          return (b.catalogCount ?? 0) - (a.catalogCount ?? 0);
-        }
-        if (sortBy === "recent") {
-          return (b.catalogCount ?? 0) - (a.catalogCount ?? 0);
-        }
-        // "health" default: healthy -> warning -> error -> syncing -> not connected
-        const rank = (status: string) => {
-          if (status === "healthy") return 1;
-          if (status === "warning") return 2;
-          if (status === "error") return 3;
-          if (status === "syncing") return 4;
-          return 5;
-        };
+        if (sortBy === "products") return (b.listings ?? 0) - (a.listings ?? 0);
+        if (sortBy === "recent") return new Date(b.lastSyncAt ?? 0).getTime() - new Date(a.lastSyncAt ?? 0).getTime();
         return rank(a.status) - rank(b.status);
       });
   }, [allChannelRows, activeTab, searchQuery, sortBy]);
 
-  // Active Selected Channel Connection — prefer the full detail when loaded
   const selectedConnection = useMemo(() => {
     if (!selectedChannelId) return null;
     return selectedConnectionDetail ?? connections.find((c) => c.id === selectedChannelId) ?? null;
   }, [connections, selectedChannelId, selectedConnectionDetail]);
 
-  // Attention item for bottom card
-  const attentionCandidate = useMemo(() => {
-    return connections.find((c) => c.status === "warning" || c.status === "error") ?? null;
-  }, [connections]);
+  const attentionCandidate = useMemo(() => connections.find((c) => c.account && needsAttention(rowFromConnection(c).status)) ?? null, [connections]);
 
-  // Suggested next channel from directory
   const suggestedNextChannel = useMemo(() => {
     const connectedMarketplaces = new Set(connections.map((c) => c.connectorId));
     return directory.find((d) => !connectedMarketplaces.has(d.id) && d.status !== "unavailable") ?? null;
@@ -178,43 +134,26 @@ export default function MarketplaceHubPage() {
 
   // Handlers
   const handleSelectChannel = (channelId: string) => {
+    if (channelId.startsWith("dir-")) {
+      handleConnectTrigger(channelId);
+      return;
+    }
     setSelectedChannelId((prev) => (prev === channelId ? null : channelId));
   };
 
-  const handleSyncChannel = (channelId: string) => {
-    setSyncingChannelIds((prev) => new Set(prev).add(channelId));
-    syncMutation.mutate(channelId, {
-      onSettled: () => {
-        setTimeout(() => {
-          setSyncingChannelIds((prev) => {
-            const next = new Set(prev);
-            next.delete(channelId);
-            return next;
-          });
-        }, 2000);
-      },
-    });
-  };
-
   const handleConnectTrigger = (connectorId: string) => {
-    const cleanId = connectorId.replace("ch-", "").replace("dir-", "");
+    const cleanId = connectorId.replace("dir-", "");
     navigate(`${ROUTES.MARKETPLACE_HUB}/connect/${cleanId}`);
   };
-
-  const handleDisconnectConfirm = () => {
-    if (!disconnectCandidate) return;
-    disconnectMutation.mutate(disconnectCandidate.id, {
-      onSuccess: () => {
-        if (selectedChannelId === disconnectCandidate.id) {
-          setSelectedChannelId(null);
-        }
-        setDisconnectCandidate(null);
-      },
-    });
+  const viewListings = (id: string) => navigate(`${ROUTES.LISTINGS}?account=${id}`);
+  const viewOrders = (id: string) => {
+    const marketplace = connections.find((c) => c.id === id)?.connectorId;
+    navigate(marketplace ? `${ROUTES.ORDERS}?marketplace=${marketplace}` : ROUTES.ORDERS);
   };
+  const openDetails = (id: string) => navigate(`${ROUTES.MARKETPLACE_HUB_CONNECTORS}/${id}`);
 
   // 1. Loading State
-  if (isLoading) {
+  if (connectionsQuery.isPending) {
     return (
       <div className="w-full font-['Inter',sans-serif] pb-24 space-y-6">
         <header className="w-full flex justify-between items-start pt-1">
@@ -231,6 +170,18 @@ export default function MarketplaceHubPage() {
           </div>
         </header>
         <MarketplaceHubSkeleton />
+      </div>
+    );
+  }
+
+  // Error with retry
+  if (connectionsQuery.isError) {
+    return (
+      <div className="w-full font-['Inter',sans-serif] pb-24 space-y-6">
+        <header className="space-y-1 pt-1">
+          <h1 className="text-[26px] font-semibold leading-[38px] text-[#000000] tracking-tight">Marketplace hub</h1>
+        </header>
+        <LoadError title="Connections could not be loaded." message={errorMessage(connectionsQuery.error)} onRetry={() => void connectionsQuery.refetch()} />
       </div>
     );
   }
@@ -276,6 +227,7 @@ export default function MarketplaceHubPage() {
         <MarketplaceHubEmptyState
           onAddChannel={() => setIsAddModalOpen(true)}
           onBrowseConnectors={() => navigate(ROUTES.MARKETPLACE_HUB_CONNECTORS)}
+          connectorNames={directory.map((d) => d.name)}
         />
 
         <div className="text-[11px] text-[#737373] max-w-4xl pt-4">
@@ -297,10 +249,11 @@ export default function MarketplaceHubPage() {
     );
   }
 
+  const latestSync = connections.map((c) => c.lastSyncAt).filter((t) => t && t !== "Never").sort().pop();
   const isDrawerOpen = Boolean(selectedChannelId && selectedConnection);
-  const isSyncingAny = syncingChannelIds.size > 0 || connections.some((c) => c.syncState === "syncing");
-  const healthyCount = connections.filter((c) => c.status === "healthy").length;
-  const attentionCount = connections.filter((c) => c.status === "warning" || c.status === "error").length;
+  const isSyncingAny = connections.some((c) => c.syncState === "syncing");
+  const healthyCount = allChannelRows.filter((c) => c.status === "healthy").length;
+  const attentionCount = allChannelRows.filter((c) => needsAttention(c.status)).length;
   const notConnectedCount = allChannelRows.filter((c) => !c.connected).length;
 
   return (
@@ -348,6 +301,12 @@ export default function MarketplaceHubPage() {
         )}
       </header>
 
+      {!canWrite && (
+        <p role="status" className="rounded-lg border border-[#EAEAEA] bg-[#F5F5F5] px-3 py-2 text-[12px] text-[#666666]">
+          You have read-only access. Syncing, testing and changing connections needs the marketplace_accounts:write permission.
+        </p>
+      )}
+
       {/* COMMERCE NETWORK DIAGRAM */}
       {!isDrawerOpen && activeTab !== "attention" && (
         <CommerceNetworkDiagram
@@ -390,7 +349,7 @@ export default function MarketplaceHubPage() {
 
         {!isDrawerOpen && activeTab !== "attention" && !isSyncingAny && (
           <div className="text-[11px] text-[#737373] mt-1 sm:mt-0">
-            {connections[0]?.lastSyncAt ? `Last sync ${formatSyncAgo(connections[0].lastSyncAt)}` : "Live"}
+            {latestSync ? `Last sync ${ago(latestSync)}` : "No sync yet"}
           </div>
         )}
       </div>
@@ -430,9 +389,9 @@ export default function MarketplaceHubPage() {
       {!isDrawerOpen && (
         <MarketplaceHubToolbar
           searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
+          onSearchChange={(q) => setFilter({ q: q || null })}
           sortBy={sortBy}
-          onSortChange={setSortBy}
+          onSortChange={(sort) => setFilter({ sort: sort === "health" ? null : sort })}
         />
       )}
 
@@ -443,7 +402,6 @@ export default function MarketplaceHubPage() {
           {activeTab === "attention" ? (
             <AttentionTableView
               connections={connections}
-              onReconnect={(id) => handleConnectTrigger(id)}
               onViewDetails={(id) => {
                 setSelectedChannelId(id);
                 setActiveTab("all");
@@ -456,11 +414,9 @@ export default function MarketplaceHubPage() {
               selectedChannelId={selectedChannelId}
               onSelectChannel={handleSelectChannel}
               onConnectChannel={handleConnectTrigger}
-              onDisconnectChannel={(id) => {
-                const found = connections.find((c) => c.id === id);
-                if (found) setDisconnectCandidate(found);
-              }}
-              onViewListings={(id) => navigate(`${ROUTES.LISTINGS}?channel=${id}`)}
+              onViewListings={viewListings}
+              onViewOrders={viewOrders}
+              onOpenDetails={openDetails}
             />
           )}
 
@@ -483,34 +439,10 @@ export default function MarketplaceHubPage() {
                       : "All connections healthy"}
                   </span>
                 </div>
-                <p className="text-[12px] text-[#737373]">
-                  {attentionCandidate
-                    ? attentionCandidate.attentionIssue?.issueDescription ||
-                      "Synchronization has encountered warnings or required updates."
-                    : "Data flow pipelines are running normally across all connected marketplaces."}
-                </p>
-                {attentionCandidate && (
-                  <>
-                    <p className="text-[11px] text-[#8C8C8C]">
-                      Last successful sync: {formatSyncAgo(attentionCandidate.lastSyncAt)}
-                    </p>
-                    <div className="flex items-center gap-4 pt-2 text-[12px]">
-                      <button
-                        type="button"
-                        onClick={() => handleSyncChannel(attentionCandidate.id)}
-                        className="font-semibold text-[#121212] hover:underline cursor-pointer"
-                      >
-                        Retry sync
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedChannelId(attentionCandidate.id)}
-                        className="font-medium text-[#121212] hover:underline cursor-pointer"
-                      >
-                        Review issue →
-                      </button>
-                    </div>
-                  </>
+                {attentionCandidate ? (
+                  <AttentionAdvisory connection={attentionCandidate} onReview={setSelectedChannelId} />
+                ) : (
+                  <p className="text-[12px] text-[#737373]">Data flow pipelines are running normally across all connected marketplaces.</p>
                 )}
               </div>
 
@@ -567,16 +499,9 @@ export default function MarketplaceHubPage() {
             connection={selectedConnection}
             isOpen={isDrawerOpen}
             onClose={() => setSelectedChannelId(null)}
-            isSyncing={
-              syncingChannelIds.has(selectedConnection.id) ||
-              selectedConnection.syncState === "syncing"
-            }
-            onTriggerSync={handleSyncChannel}
-            onViewListings={(id) => navigate(`${ROUTES.LISTINGS}?channel=${id}`)}
-            onDisconnect={(id) => {
-              const found = connections.find((c) => c.id === id);
-              if (found) setDisconnectCandidate(found);
-            }}
+            onViewListings={viewListings}
+            onViewOrders={viewOrders}
+            onDeleted={() => setSelectedChannelId(null)}
           />
         )}
       </div>
@@ -601,13 +526,6 @@ export default function MarketplaceHubPage() {
         onBrowseAll={() => navigate(ROUTES.MARKETPLACE_HUB_CONNECTORS)}
       />
 
-      <DisconnectChannelModal
-        channelName={disconnectCandidate?.name ?? "Channel"}
-        isOpen={Boolean(disconnectCandidate)}
-        onClose={() => setDisconnectCandidate(null)}
-        onConfirm={handleDisconnectConfirm}
-        isPending={disconnectMutation.isPending}
-      />
     </div>
   );
 }

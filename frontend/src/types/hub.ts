@@ -32,7 +32,8 @@ export interface HubAccountCard {
     pulseScore: number;
     riskLevel: "low" | "medium" | "high";
     frictionPoints: string[];
-    rateLimitRemainingPct: null;
+    /** percent of the per-account request allowance free right now (server process measure); null when not active */
+    rateLimitRemainingPct: number | null;
     tokenExpiresInDays: number | null;
     tokenExpiresAt: string | null;
     syncSuccessRate24h: number | null;

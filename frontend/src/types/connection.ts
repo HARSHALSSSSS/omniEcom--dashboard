@@ -1,10 +1,21 @@
 import { z } from "zod";
 import { ConnectorCapability, AuthType } from "./connector";
 import type { AuthField, AuthFlow } from "./directory";
+import type { HubAccountCard } from "./hub";
 
 export type ConnectionHealthStatus = "healthy" | "warning" | "error" | "paused";
 
 export type SyncState = "idle" | "syncing" | "error" | "paused";
+
+export interface EntitySync {
+  status: "healthy" | "warning" | "error" | "syncing" | "idle";
+  /** clock time of the run this status comes from; "" when no run is known */
+  timestamp: string;
+  /** ISO time of that run */
+  at?: string;
+  /** progress of a running job, 100 for a finished one */
+  pct?: number;
+}
 
 export interface ChannelConnection {
   id: string;
@@ -29,10 +40,12 @@ export interface ChannelConnection {
     pulseScore: number; // 0-100
     riskLevel: "low" | "medium" | "high";
     frictionPoints: string[];
-    rateLimitRemainingPct: number;
+    rateLimitRemainingPct: number | null;
     tokenExpiresInDays?: number;
   };
   capabilities: ConnectorCapability[];
+  /** the hub card this connection was mapped from (version, account status, mode) for write actions */
+  account?: HubAccountCard;
   configValues?: Record<string, string>;
   attentionIssue?: {
     issueTitle: string;
@@ -42,11 +55,11 @@ export interface ChannelConnection {
     actionType: "reconnect" | "retry_scheduled" | "learn_more";
   };
   entitySyncStatus?: {
-    products: { status: "healthy" | "warning" | "error" | "syncing"; timestamp: string; pct?: number };
-    listings: { status: "healthy" | "warning" | "error" | "syncing"; timestamp: string };
-    inventory: { status: "healthy" | "warning" | "error" | "syncing"; timestamp: string; pct?: number };
-    orders: { status: "healthy" | "warning" | "error" | "syncing"; timestamp: string; pct?: number };
-    shipping: { status: "healthy" | "warning" | "error" | "syncing"; timestamp: string };
+    products: EntitySync;
+    listings: EntitySync;
+    inventory: EntitySync;
+    orders: EntitySync;
+    shipping: EntitySync;
   };
   activityHistory?: Array<{
     id: string;

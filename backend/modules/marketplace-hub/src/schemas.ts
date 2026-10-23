@@ -33,7 +33,7 @@ export const AccountCardSchema = z
       pulseScore: z.number().int().min(0).max(100),
       riskLevel: z.enum(['low', 'medium', 'high']),
       frictionPoints: z.array(z.string()),
-      rateLimitRemainingPct: z.null().describe('Always null: marketplace rate-limit quotas are not tracked per account'),
+      rateLimitRemainingPct: z.number().int().min(0).max(100).nullable().describe('Percent of the per-account request allowance (token bucket, burst) that is free right now; measured in this server process, so it is 100 after a restart. null when the account is not active'),
       tokenExpiresInDays: z.number().int().nullable().describe('null when the credential does not expire'),
       tokenExpiresAt: IsoDate.nullable(),
       syncSuccessRate24h: z.number().nullable().describe('Percent of finished sync runs in the last 24 hours that completed; null when none finished'),

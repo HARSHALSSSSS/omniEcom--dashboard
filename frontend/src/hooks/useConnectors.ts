@@ -10,13 +10,14 @@ import { useToast } from "@/hooks/useToast";
 import { refreshShell } from "@/lib/session";
 import { errorMessage } from "@/api/errors";
 
+/** all under the "hub" prefix, so every hub write (sync, test, disconnect, ...) refreshes these too */
 export const CONNECTOR_KEYS = {
-  all: ["connectors"] as const,
-  connections: () => ["connectors", "connections"] as const,
-  connection: (id: string) => ["connectors", "connection", id] as const,
-  directory: () => ["connectors", "directory"] as const,
-  health: () => ["connectors", "health"] as const,
-  syncJobs: () => ["connectors", "sync-jobs"] as const,
+  all: ["hub", "connectors"] as const,
+  connections: () => ["hub", "connectors", "connections"] as const,
+  connection: (id: string) => ["hub", "connectors", "connection", id] as const,
+  directory: () => ["hub", "connectors", "directory"] as const,
+  health: () => ["hub", "connectors", "health"] as const,
+  syncJobs: () => ["hub", "connectors", "sync-jobs"] as const,
 };
 
 export function useConnections() {

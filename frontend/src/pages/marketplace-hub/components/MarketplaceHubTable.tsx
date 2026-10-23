@@ -7,21 +7,12 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/utils/cn";
+import { formatNumber } from "@/utils/format";
+import { ago, WRITE_REASON } from "@/components/marketplace-hub/accounts/hubFormat";
+import { useAccountActions } from "@/components/marketplace-hub/accounts/useAccountActions";
+import { STATUS_LABEL, listingsText, needsAttention, type ChannelRowData } from "./channelRows";
 
-export interface ChannelRowData {
-  id: string;
-  name: string;
-  slug: string;
-  connected: boolean;
-  status: "healthy" | "warning" | "error" | "not_connected" | "syncing";
-  accountIdentifier?: string;
-  catalogCount?: number;
-  ordersToday?: number;
-  inventoryStatus?: string;
-  lastSyncText?: string;
-  notConnectedText?: string;
-  isAvailableOnly?: boolean;
-}
+export type { ChannelRowData } from "./channelRows";
 
 interface MarketplaceHubTableProps {
   channels: ChannelRowData[];
@@ -29,8 +20,140 @@ interface MarketplaceHubTableProps {
   selectedChannelId?: string | null;
   onSelectChannel: (channelId: string) => void;
   onConnectChannel: (channelId: string) => void;
-  onDisconnectChannel?: (channelId: string) => void;
   onViewListings?: (channelId: string) => void;
+  onViewOrders?: (channelId: string) => void;
+  onOpenDetails?: (channelId: string) => void;
+}
+
+const statusTone = (s: ChannelRowData["status"]) =>
+  s === "healthy" ? "text-emerald-700" : s === "syncing" ? "text-blue-600" : needsAttention(s) ? "text-amber-600" : "text-[#737373]";
+
+function SyncCell({ ch }: { ch: ChannelRowData }) {
+  return (
+    <span className={cn("font-medium", statusTone(ch.status))}>
+      {ch.status === "syncing" && <span className="mr-1.5 inline-block w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse align-middle" />}
+      {STATUS_LABEL[ch.status]}
+      {ch.status === "syncing" && ch.syncProgress != null ? ` ${ch.syncProgress}%` : ""}{" "}
+      <span className="text-[#737373] font-normal">· {ch.lastSyncAt ? ago(ch.lastSyncAt) : "never synced"}</span>
+    </span>
+  );
+}
+
+interface RowProps {
+  ch: ChannelRowData;
+  isSelected: boolean;
+  onSelectChannel: (id: string) => void;
+  onViewListings?: (id: string) => void;
+  onViewOrders?: (id: string) => void;
+  onOpenDetails?: (id: string) => void;
+}
+
+/** A connected account row; it owns the account actions so every row has its own dialogs. */
+function ConnectedRow({ ch, isSelected, onSelectChannel, onViewListings, onViewOrders, onOpenDetails }: RowProps) {
+  const account = ch.account!;
+  const a = useAccountActions(account);
+  const attention = needsAttention(ch.status);
+  const isActive = account.accountStatus === "active" || account.accountStatus === "paused";
+  const item = "px-3 py-2 text-[12px] rounded-lg cursor-pointer hover:bg-[#F5F5F5]";
+  const danger = "px-3 py-2 text-[12px] text-red-600 rounded-lg cursor-pointer hover:bg-red-50";
+
+  return (
+    <div
+      onClick={() => onSelectChannel(ch.id)}
+      className={cn(
+        "grid grid-cols-12 px-6 py-4 items-center transition-colors cursor-pointer group",
+        isSelected ? "bg-[#F9F9F9]" : "hover:bg-[#FAFAFA]",
+      )}
+    >
+      <div className="col-span-3 min-w-0 pr-2">
+        <div className="text-[13px] font-semibold text-[#121212] truncate">{ch.name}</div>
+        <div className="text-[11px] text-[#737373] truncate">
+          {account.connectorName}
+          {ch.accountIdentifier ? ` · ${ch.accountIdentifier}` : ""}
+          {account.mode === "sandbox" ? " · Sandbox" : ""}
+        </div>
+      </div>
+
+      <div className="col-span-1 text-[12px] text-[#121212]">
+        {ch.status === "disconnected" ? "Disconnected" : ch.status === "paused" ? "Paused" : "Connected"}
+      </div>
+      <div className="col-span-2 text-[12px] text-[#121212]">{listingsText(ch.listings ?? 0)}</div>
+      <div className="col-span-1 text-[12px] text-[#121212]">{formatNumber(ch.openOrders ?? 0)} open</div>
+      <div className="col-span-1 text-[12px] text-[#121212]">{formatNumber(ch.stockSynced ?? 0)} synced</div>
+      <div className="col-span-2 text-[12px]">
+        <SyncCell ch={ch} />
+      </div>
+
+      <div className="col-span-2 flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+        <button
+          type="button"
+          onClick={() => onSelectChannel(ch.id)}
+          className="text-[12px] font-semibold text-black hover:underline cursor-pointer flex items-center gap-0.5"
+        >
+          <span>{attention ? "Review" : "Manage"}</span>
+          <span>→</span>
+        </button>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label={`More actions for ${ch.name}`}
+              className="h-6 px-2 rounded border border-[#E5E5E5] text-[11px] font-medium text-black hover:bg-[#F0F0F0] transition-colors cursor-pointer"
+            >
+              More
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="end"
+            className="w-52 bg-white border border-[#EAEAEA] rounded-xl shadow-xl p-1.5 space-y-0.5 z-50 font-['Inter',sans-serif]"
+          >
+            <DropdownMenuItem onSelect={() => onOpenDetails?.(ch.id)} className={item}>
+              Sync history and capabilities
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => onViewListings?.(ch.id)} className={item}>
+              View listings
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => onViewOrders?.(ch.id)} className={item}>
+              View orders
+            </DropdownMenuItem>
+            <DropdownMenuSeparator className="bg-[#EAEAEA] my-1" />
+            <DropdownMenuItem disabled={Boolean(a.testReason) || a.testing} onSelect={a.runTest} className={item}>
+              Test connection
+            </DropdownMenuItem>
+            <DropdownMenuItem disabled={Boolean(a.syncReason) || a.syncing} onSelect={a.startSync} className={item}>
+              Sync now
+            </DropdownMenuItem>
+            <DropdownMenuItem disabled={!a.canWrite} onSelect={() => a.openDialog("rename")} className={item}>
+              Rename
+            </DropdownMenuItem>
+            {isActive ? (
+              <DropdownMenuItem disabled={!a.canWrite || a.pausing} onSelect={a.togglePause} className={item}>
+                {account.accountStatus === "paused" ? "Resume syncing" : "Pause syncing"}
+              </DropdownMenuItem>
+            ) : (
+              <DropdownMenuItem disabled={!a.canWrite} onSelect={() => a.openDialog("reconnect")} className={item}>
+                Reconnect
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuSeparator className="bg-[#EAEAEA] my-1" />
+            {a.hasCredentials && (
+              <DropdownMenuItem disabled={!a.canWrite} onSelect={() => a.openDialog("disconnect")} className={danger}>
+                Disconnect
+              </DropdownMenuItem>
+            )}
+            {account.accountStatus !== "active" && (
+              <DropdownMenuItem disabled={!a.canWrite} onSelect={() => a.openDialog("delete")} className={danger}>
+                Delete account
+              </DropdownMenuItem>
+            )}
+            {!a.canWrite && <p className="px-3 py-1.5 text-[11px] text-[#737373]">{WRITE_REASON}</p>}
+          </DropdownMenuContent>
+        </DropdownMenu>
+        {a.dialogs}
+      </div>
+    </div>
+  );
 }
 
 export const MarketplaceHubTable: React.FC<MarketplaceHubTableProps> = ({
@@ -39,11 +162,11 @@ export const MarketplaceHubTable: React.FC<MarketplaceHubTableProps> = ({
   selectedChannelId,
   onSelectChannel,
   onConnectChannel,
-  onDisconnectChannel,
   onViewListings,
+  onViewOrders,
+  onOpenDetails,
 }) => {
   if (isCompactMode) {
-    // 2-Column Compact Table (Screen 18 — Amazon connection details)
     return (
       <div className="w-full border border-[#EAEAEA] rounded-xl overflow-hidden bg-white">
         <div className="grid grid-cols-2 px-6 py-3 bg-white border-b border-[#EAEAEA] text-[12px] font-normal text-[#666666]">
@@ -52,76 +175,35 @@ export const MarketplaceHubTable: React.FC<MarketplaceHubTableProps> = ({
         </div>
 
         <div className="divide-y divide-[#EAEAEA]">
-          {channels.map((ch) => {
-            const isSelected = selectedChannelId === ch.id;
-            const isWarning = ch.status === "warning";
-            const isSyncing = ch.status === "syncing";
-
-            return (
-              <button
-                key={ch.id}
-                type="button"
-                onClick={() => onSelectChannel(ch.id)}
-                className={cn(
-                  "w-full grid grid-cols-2 px-6 py-4 items-center text-left transition-colors cursor-pointer",
-                  isSelected
-                    ? "bg-[#FAFAFA]"
-                    : "hover:bg-[#FAFAFA]",
-                )}
-              >
-                <div className="space-y-0.5">
-                  <div className="text-[14px] font-semibold text-black">
-                    {ch.name}
-                  </div>
-                  <div className="text-[12px] text-[#666666]">
-                    {ch.connected
-                      ? `${ch.catalogCount ?? 0} products · Connected`
-                      : ch.isAvailableOnly
-                        ? "Available"
-                        : "Not connected"}
-                  </div>
+          {channels.map((ch) => (
+            <button
+              key={ch.id}
+              type="button"
+              onClick={() => (ch.connected ? onSelectChannel(ch.id) : onConnectChannel(ch.id))}
+              className={cn(
+                "w-full grid grid-cols-2 px-6 py-4 items-center text-left transition-colors cursor-pointer",
+                selectedChannelId === ch.id ? "bg-[#FAFAFA]" : "hover:bg-[#FAFAFA]",
+              )}
+            >
+              <div className="space-y-0.5">
+                <div className="text-[14px] font-semibold text-black">{ch.name}</div>
+                <div className="text-[12px] text-[#666666]">
+                  {ch.connected ? listingsText(ch.listings ?? 0) : "Not connected"}
                 </div>
-
-                <div className="flex items-center justify-end text-[13px]">
-                  {isSyncing ? (
-                    <span className="flex items-center gap-1.5 text-blue-600 font-medium">
-                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse" />
-                      Syncing
-                    </span>
-                  ) : ch.connected && isWarning ? (
-                    <span className="font-semibold text-black flex items-center gap-1">
-                      <span>!</span>
-                      <span>Needs attention</span>
-                    </span>
-                  ) : ch.connected ? (
-                    <span className="flex items-center gap-1.5 text-black font-normal">
-                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#666666]" />
-                      Healthy
-                    </span>
-                  ) : ch.isAvailableOnly ? (
-                    <span className="flex items-center gap-1.5 text-[#666666]">
-                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#8C8C8C]" />
-                      Available
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-1.5 text-[#666666]">
-                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#8C8C8C]" />
-                      Not connected
-                    </span>
-                  )}
-                </div>
-              </button>
-            );
-          })}
+              </div>
+              <div className={cn("flex items-center justify-end gap-1.5 text-[13px]", statusTone(ch.status))}>
+                {ch.status === "syncing" && <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse" />}
+                {STATUS_LABEL[ch.status]}
+              </div>
+            </button>
+          ))}
         </div>
       </div>
     );
   }
 
-  // 7-Column Full Table (Screen 18 — Marketplace hub & Screen 18 — Channel row actions)
   return (
     <div className="w-full border border-[#EAEAEA] rounded-xl overflow-hidden bg-white">
-      {/* Table Header */}
       <div className="grid grid-cols-12 px-6 py-3 bg-white border-b border-[#EAEAEA] text-[11px] font-medium text-[#737373]">
         <div className="col-span-3">Channel</div>
         <div className="col-span-1">Connection</div>
@@ -132,174 +214,41 @@ export const MarketplaceHubTable: React.FC<MarketplaceHubTableProps> = ({
         <div className="col-span-2 text-right">Actions</div>
       </div>
 
-      {/* Table Body */}
       <div className="divide-y divide-[#EAEAEA]">
-        {channels.map((ch) => {
-          const isSelected = selectedChannelId === ch.id;
-          const isWarning = ch.status === "warning";
-          const isSyncing = ch.status === "syncing";
-
-          // For Not connected / Available rows
-          if (!ch.connected) {
-            return (
-              <div
-                key={ch.id}
-                className="grid grid-cols-12 px-6 py-4 items-center hover:bg-[#FAFAFA] transition-colors"
-              >
-                <div className="col-span-3">
-                  <div className="text-[13px] font-semibold text-[#121212]">
-                    {ch.name}
-                  </div>
-                  <div className="text-[11px] text-[#737373] mt-0.5">
-                    {ch.isAvailableOnly ? "Available" : "Not connected"}
-                  </div>
-                </div>
-
-                <div className="col-span-7 text-[12px] text-[#737373]">
-                  {ch.notConnectedText ||
-                    (ch.isAvailableOnly
-                      ? "Connect supported social commerce channels where available. Availability depends on APIs and commercial permissions."
-                      : "Connect this channel to bring its catalog, inventory and orders into your workspace.")}
-                </div>
-
-                <div className="col-span-2 flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => onConnectChannel(ch.id)}
-                    className="h-8 px-4 rounded-lg border border-[#BDBDBD] text-[12px] font-medium text-[#121212] hover:bg-neutral-100 transition-colors cursor-pointer"
-                  >
-                    {ch.isAvailableOnly ? "Explore" : "Connect"}
-                  </button>
-                </div>
-              </div>
-            );
-          }
-
-          // Connected rows
-          return (
-            <div
+        {channels.length === 0 && <div className="px-6 py-10 text-center text-[13px] text-[#737373]">No channels match.</div>}
+        {channels.map((ch) =>
+          ch.connected && ch.account ? (
+            <ConnectedRow
               key={ch.id}
-              onClick={() => onSelectChannel(ch.id)}
-              className={cn(
-                "grid grid-cols-12 px-6 py-4 items-center transition-colors cursor-pointer group",
-                isSelected ? "bg-[#F9F9F9]" : "hover:bg-[#FAFAFA]",
-              )}
-            >
-              {/* Channel Name */}
+              ch={ch}
+              isSelected={selectedChannelId === ch.id}
+              onSelectChannel={onSelectChannel}
+              onViewListings={onViewListings}
+              onViewOrders={onViewOrders}
+              onOpenDetails={onOpenDetails}
+            />
+          ) : (
+            <div key={ch.id} className="grid grid-cols-12 px-6 py-4 items-center hover:bg-[#FAFAFA] transition-colors">
               <div className="col-span-3">
-                <div className="text-[13px] font-semibold text-[#121212]">
-                  {ch.name}
-                </div>
+                <div className="text-[13px] font-semibold text-[#121212]">{ch.name}</div>
+                <div className="text-[11px] text-[#737373] mt-0.5">Not connected</div>
               </div>
-
-              {/* Connection Status */}
-              <div className="col-span-1 text-[12px] text-[#121212]">
-                Connected
+              <div className="col-span-7 text-[12px] text-[#737373]">
+                {ch.unavailableReason ?? ch.notConnectedText ?? "Connect this channel to bring its catalog, inventory and orders into your workspace."}
               </div>
-
-              {/* Catalog */}
-              <div className="col-span-2 text-[12px] text-[#121212]">
-                {ch.catalogCount} products
-              </div>
-
-              {/* Orders */}
-              <div className="col-span-1 text-[12px] text-[#121212]">
-                {ch.ordersToday} today
-              </div>
-
-              {/* Inventory */}
-              <div className="col-span-1 text-[12px] text-[#121212]">
-                {ch.inventoryStatus ?? "Synced"}
-              </div>
-
-              {/* Sync Status */}
-              <div className="col-span-2 text-[12px]">
-                {isSyncing ? (
-                  <span className="flex items-center gap-1.5 text-blue-600 font-medium">
-                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse" />
-                    Syncing
-                  </span>
-                ) : isWarning ? (
-                  <span className="text-amber-600 font-medium">
-                    ! Needs attention{" "}
-                    <span className="text-[#737373] font-normal">
-                      · {ch.lastSyncText ?? "18 min ago"}
-                    </span>
-                  </span>
-                ) : (
-                  <span className="text-emerald-700 font-medium">
-                    ✓ Healthy{" "}
-                    <span className="text-[#737373] font-normal">
-                      · {ch.lastSyncText ?? "4 min ago"}
-                    </span>
-                  </span>
-                )}
-              </div>
-
-              {/* Actions Column (Manage link + More dropdown matching Screen 18 — Channel row actions) */}
-              <div
-                className="col-span-2 flex items-center justify-end gap-2"
-                onClick={(e) => e.stopPropagation()}
-              >
+              <div className="col-span-2 flex justify-end">
                 <button
                   type="button"
-                  onClick={() => onSelectChannel(ch.id)}
-                  className="text-[12px] font-semibold text-black hover:underline cursor-pointer flex items-center gap-0.5"
+                  disabled={Boolean(ch.unavailableReason)}
+                  onClick={() => onConnectChannel(ch.id)}
+                  className="h-8 px-4 rounded-lg border border-[#BDBDBD] text-[12px] font-medium text-[#121212] hover:bg-neutral-100 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  <span>{isWarning ? "Review" : "Manage"}</span>
-                  <span>→</span>
+                  Connect
                 </button>
-
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      type="button"
-                      className="h-6 px-2 rounded border border-[#E5E5E5] text-[11px] font-medium text-black hover:bg-[#F0F0F0] transition-colors cursor-pointer"
-                    >
-                      More
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    align="end"
-                    className="w-48 bg-white border border-[#EAEAEA] rounded-xl shadow-xl p-1.5 space-y-0.5 z-50 font-['Inter',sans-serif]"
-                  >
-                    <DropdownMenuItem
-                      onClick={() => onSelectChannel(ch.id)}
-                      className="px-3 py-2 text-[12px] text-black rounded-lg cursor-pointer hover:bg-[#F5F5F5]"
-                    >
-                      Connection details
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => onSelectChannel(ch.id)}
-                      className="px-3 py-2 text-[12px] text-black rounded-lg cursor-pointer hover:bg-[#F5F5F5]"
-                    >
-                      Sync history
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => onSelectChannel(ch.id)}
-                      className="px-3 py-2 text-[12px] text-black rounded-lg cursor-pointer hover:bg-[#F5F5F5]"
-                    >
-                      Capabilities
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => onViewListings?.(ch.id)}
-                      className="px-3 py-2 text-[12px] text-black rounded-lg cursor-pointer hover:bg-[#F5F5F5]"
-                    >
-                      View affected listings
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator className="bg-[#EAEAEA] my-1" />
-                    <DropdownMenuItem
-                      onClick={() => onDisconnectChannel?.(ch.id)}
-                      className="px-3 py-2 text-[12px] text-red-600 rounded-lg cursor-pointer hover:bg-red-50"
-                    >
-                      Disconnect
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
               </div>
             </div>
-          );
-        })}
+          ),
+        )}
       </div>
     </div>
   );

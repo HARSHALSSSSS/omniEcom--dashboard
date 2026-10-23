@@ -18,8 +18,8 @@ interface MarketplaceHubToolbarProps {
 
 const SORT_LABELS: Record<ChannelSortOption, string> = {
   health: "Health",
-  recent: "Recently updated",
-  products: "Product count",
+  recent: "Last synced",
+  products: "Listing count",
 };
 
 export const MarketplaceHubToolbar: React.FC<MarketplaceHubToolbarProps> = ({
@@ -38,6 +38,7 @@ export const MarketplaceHubToolbar: React.FC<MarketplaceHubToolbarProps> = ({
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
           placeholder="Search channels..."
+          aria-label="Search channels"
           className="w-full h-10 pl-9 pr-4 rounded-lg border border-[#E5E5E5] bg-white text-[13px] text-[#121212] placeholder:text-[#8C8C8C] focus:border-[#121212] transition-colors"
         />
       </div>
@@ -61,7 +62,7 @@ export const MarketplaceHubToolbar: React.FC<MarketplaceHubToolbarProps> = ({
             onClick={() => onSortChange("recent")}
             className="flex items-center justify-between px-3 py-2 text-[12px] text-[#121212] rounded cursor-pointer hover:bg-[#F5F5F5]"
           >
-            <span>Recently updated</span>
+            <span>Last synced</span>
             {sortBy === "recent" && <Check className="w-3.5 h-3.5 text-[#121212]" />}
           </DropdownMenuItem>
           <DropdownMenuItem
@@ -75,7 +76,7 @@ export const MarketplaceHubToolbar: React.FC<MarketplaceHubToolbarProps> = ({
             onClick={() => onSortChange("products")}
             className="flex items-center justify-between px-3 py-2 text-[12px] text-[#121212] rounded cursor-pointer hover:bg-[#F5F5F5]"
           >
-            <span>Product count</span>
+            <span>Listing count</span>
             {sortBy === "products" && <Check className="w-3.5 h-3.5 text-[#121212]" />}
           </DropdownMenuItem>
         </DropdownMenuContent>
