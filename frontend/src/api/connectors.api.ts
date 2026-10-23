@@ -11,6 +11,7 @@ import type {
   HubAccountDetail,
   HubAccounts,
   HubHealth,
+  HubAtRisk,
   HubSummary,
   HubLane,
   HubSyncJob,
@@ -32,7 +33,7 @@ export interface ConnectionsListResponse {
 
 export interface HealthOverviewResponse {
   data: {
-    overallPulseScore: number;
+    overallPulseScore: number | null;
     networkStatus: "optimal" | "degraded" | "critical";
     connectionsCount: number;
     totalActiveListings: number;
@@ -48,6 +49,9 @@ export interface HealthOverviewResponse {
     syncReliability?: { windowHours: number; finished: number; failed: number; successRate: number | null };
     tokenWarnings?: Array<{ accountId: string; name: string; marketplace: string; daysLeft: number | null; expired: boolean }>;
     rawLanes?: HubLane[];
+    generatedAt?: string;
+    accountLanes?: Array<{ accountId: string; lanes: HubLane[] }>;
+    atRisk?: HubAtRisk;
   };
 }
 
@@ -337,11 +341,10 @@ export const connectorsApi = {
     const res = await client.get(ENDPOINTS.HUB_HEALTH);
     const health = unwrap<HubHealth>(res);
 
-    const netStatus =
-      health.networkStatus === "not_connected" ? "optimal" : health.networkStatus;
+    const netStatus = health.networkStatus === "not_connected" ? "optimal" : health.networkStatus;
 
     return {
-      overallPulseScore: health.overallPulseScore ?? 100,
+      overallPulseScore: health.overallPulseScore,
       networkStatus: netStatus,
       connectionsCount: health.connectionsCount,
       totalActiveListings: health.totalActiveListings,
@@ -349,25 +352,24 @@ export const connectorsApi = {
       dataFlowLanes: (health.dataFlowLanes || []).map((lane) => ({
         lane: lane.label,
         status: lane.status === "idle" ? "healthy" : lane.status,
-        throughput: `${lane.itemsPerHour || 0} items/hr`,
-        successRate: lane.successRate !== null && lane.successRate !== undefined ? `${lane.successRate}%` : "100%",
+        throughput: `${lane.itemsPerHour} items/hr`,
+        successRate: lane.successRate !== null && lane.successRate !== undefined ? `${lane.successRate}%` : "No runs",
       })),
       connections: (health.connections || []).map(mapCardToConnection),
       summary: health.summary,
       syncReliability: health.syncReliability,
       tokenWarnings: health.tokenWarnings,
       rawLanes: health.dataFlowLanes,
+      generatedAt: health.generatedAt,
+      accountLanes: health.accountLanes,
+      atRisk: health.atRisk,
     };
   },
 
+  /** the 100 newest sync runs; the screens keep the ones of the last 24 hours */
   getRecentSyncJobs: async (): Promise<HubSyncJob[]> => {
-    try {
-      const res = await client.get(`${ENDPOINTS.SYNC_JOBS}?limit=20`);
-      const data = unwrap<HubSyncJob[]>(res);
-      return data || [];
-    } catch {
-      return [];
-    }
+    const res = await client.get(`${ENDPOINTS.SYNC_JOBS}?limit=100`);
+    return unwrap<HubSyncJob[]>(res) ?? [];
   },
 
   retrySyncJob: async (jobId: string): Promise<void> => {

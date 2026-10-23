@@ -80,11 +80,13 @@ export const InventoryPolicySchema = z.object({
   mode: z.enum(['sync', 'paused']), safetyBuffer: z.number().int(), allocationPercent: z.number().int(), maxQuantity: z.number().int().nullable(), warehouseIds: z.array(z.string()), isDefault: z.boolean(),
 });
 
+export const LaneSchema = z.object({ key: z.string(), label: z.string(), status: z.enum(['healthy', 'warning', 'error', 'idle']), jobs: z.number().int(), finished: z.number().int(), failed: z.number().int(), successRate: z.number().nullable(), itemsProcessed: z.number().int(), itemsPerHour: z.number() });
+
 export const AccountDetailSchema = AccountCardSchema.extend({
   capabilityMatrix: z.record(z.string(), z.unknown()).describe('Nested capability flags of the connector'),
   readiness: z.object({ sandbox: z.boolean(), live: z.boolean(), notes: z.string() }),
   recentJobs: z.array(SyncJobSchema),
-  lanes: z.array(z.object({ key: z.string(), label: z.string(), status: z.enum(['healthy', 'warning', 'error', 'idle']), jobs: z.number().int(), finished: z.number().int(), failed: z.number().int(), successRate: z.number().nullable(), itemsProcessed: z.number().int(), itemsPerHour: z.number() })),
+  lanes: z.array(LaneSchema),
   webhook: WebhookStatusSchema,
   inventoryPolicy: InventoryPolicySchema,
   listingsByStatus: z.record(z.string(), z.number().int()),
@@ -152,9 +154,19 @@ export const HealthSchema = z
     totalActiveListings: z.number().int(),
     totalPendingOrders: z.number().int(),
     syncReliability: z.object({ windowHours: z.number().int(), finished: z.number().int(), failed: z.number().int(), successRate: z.number().nullable() }),
-    dataFlowLanes: z.array(z.object({ key: z.string(), label: z.string(), status: z.enum(['healthy', 'warning', 'error', 'idle']), jobs: z.number().int(), finished: z.number().int(), failed: z.number().int(), successRate: z.number().nullable(), itemsProcessed: z.number().int(), itemsPerHour: z.number() })),
+    dataFlowLanes: z.array(LaneSchema),
     summary: SummarySchema,
     connections: z.array(AccountCardSchema),
     tokenWarnings: z.array(z.object({ accountId: z.string(), name: z.string(), marketplace: z.string(), daysLeft: z.number().int().nullable(), expired: z.boolean() })),
+    generatedAt: IsoDate.describe('When these numbers were computed (the screen shows how fresh they are)'),
+    accountLanes: z.array(z.object({ accountId: z.string(), lanes: z.array(LaneSchema) })).describe('The same lanes as dataFlowLanes, per account (sync jobs of the last 24 hours)'),
+    atRisk: z
+      .object({
+        staleStockListings: z.number().int().describe('Listings whose stock change has waited more than an hour to reach the marketplace'),
+        problemListings: z.number().int().describe('Listings the marketplace rejected or wants corrected'),
+        openOrders: z.number().int().describe('Orders still to be worked on accounts that need attention'),
+        accounts: z.array(z.object({ accountId: z.string(), name: z.string(), staleStockListings: z.number().int(), problemListings: z.number().int(), openOrders: z.number().int() })),
+      })
+      .describe('What the connections that need attention (warning or error) put at risk; empty when everything is healthy'),
   })
   .meta({ id: 'HubHealth' });

@@ -2,7 +2,8 @@ export interface FrictionIssue {
   connectionId: string;
   connectionName: string;
   issueTitle: string;
-  affectedCount: number;
+  /** what is affected, from the real counts ("3 listings affected"); empty when nothing countable is */
+  affectedLabel: string | null;
   severity: "warning" | "error";
 }
 
@@ -50,7 +51,7 @@ export function NetworkFrictionCard({ issues, onInspectIssue }: NetworkFrictionC
                 <div className="flex items-center gap-2">
                   <span className={`h-2 w-2 rounded-full ${dotColor}`} />
                   <span className="text-[13px] font-bold text-[#111111]">
-                    {issue.affectedCount > 0 ? `${issue.affectedCount} products affected` : "Synchronization delayed"}
+                    {issue.affectedLabel ?? (issue.severity === "error" ? "Connection unavailable" : "Needs attention")}
                   </span>
                 </div>
                 <div className="text-[11px] font-medium text-[#737373]">

@@ -1,11 +1,17 @@
 import type { ChannelConnection } from "@/types/connection";
+import { connState } from "./healthModel";
 
 interface NetworkPulseBarProps {
   healthyCount: number;
   totalCount: number;
   attentionCount: number;
   criticalCount: number;
+  pausedCount?: number;
+  /** average health score of the active connections; null when none is active */
+  pulseScore?: number | null;
   syncSuccessRate: number | null;
+  /** sync runs that finished in the last 24 hours */
+  finishedRuns?: number;
   connections: ChannelConnection[];
   onSelectNode: (connection: ChannelConnection) => void;
 }
@@ -15,11 +21,14 @@ export function NetworkPulseBar({
   totalCount,
   attentionCount,
   criticalCount,
+  pausedCount = 0,
+  pulseScore = null,
   syncSuccessRate,
+  finishedRuns = 0,
   connections,
   onSelectNode,
 }: NetworkPulseBarProps) {
-  const successPct = syncSuccessRate !== null && syncSuccessRate !== undefined ? `${syncSuccessRate}%` : "99.4%";
+  const successText = syncSuccessRate !== null && syncSuccessRate !== undefined ? `${syncSuccessRate}% sync success · last 24h (${finishedRuns} run${finishedRuns === 1 ? "" : "s"})` : "No sync runs in the last 24h";
 
   return (
     <div className="rounded-2xl border border-[#E5E5E5] bg-[#FFFFFF] p-6 shadow-sm space-y-6">
@@ -54,9 +63,10 @@ export function NetworkPulseBar({
             </span>
           </div>
 
-          <p className="text-[11px] text-[#8A8A8A]">
-            {successPct} sync success · last 24h
-          </p>
+          {pausedCount > 0 && <p className="text-[12px] text-[#737373]">{pausedCount} paused</p>}
+
+          <p className="text-[11px] text-[#8A8A8A]">{successText}</p>
+          {pulseScore !== null && <p className="text-[11px] text-[#8A8A8A]">Pulse score {pulseScore}</p>}
         </div>
 
         {/* Right Pipeline Graph */}
@@ -76,29 +86,15 @@ export function NetworkPulseBar({
 
             {/* Connection Pipeline Nodes */}
             {connections.map((conn) => {
-              const isAttention = conn.status === "warning";
-              const isCritical = conn.status === "error";
+              const st = connState(conn);
+              const isAttention = st === "attention";
+              const isCritical = st === "critical";
+              const isPaused = st === "paused";
               const isSyncing = conn.syncState === "syncing";
 
-              const statusColor = isCritical
-                ? "bg-[#DC2626]"
-                : isAttention
-                ? "bg-[#D97706]"
-                : "bg-[#16A34A]";
-
-              const statusText = isCritical
-                ? "Unavailable"
-                : isAttention
-                ? "⚠ Attention"
-                : isSyncing
-                ? "Healthy · syncing"
-                : "Healthy";
-
-              const textColor = isCritical
-                ? "text-[#DC2626]"
-                : isAttention
-                ? "text-[#D97706]"
-                : "text-[#16A34A]";
+              const statusColor = isCritical ? "bg-[#DC2626]" : isAttention ? "bg-[#D97706]" : isPaused ? "bg-[#8A8A8A]" : "bg-[#16A34A]";
+              const statusText = isCritical ? "Unavailable" : isAttention ? "⚠ Attention" : isPaused ? "Paused" : isSyncing ? "Healthy · syncing" : "Healthy";
+              const textColor = isCritical ? "text-[#DC2626]" : isAttention ? "text-[#D97706]" : isPaused ? "text-[#737373]" : "text-[#16A34A]";
 
               return (
                 <div

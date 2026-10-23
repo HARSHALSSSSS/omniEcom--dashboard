@@ -53,6 +53,9 @@ export function useConnectorHealth() {
     queryKey: CONNECTOR_KEYS.health(),
     queryFn: connectorsApi.getHealthOverview,
     staleTime: 15_000,
+    // the screen is a live monitor: keep it fresh, also when the tab is in the background
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: true,
   });
 }
 
@@ -175,7 +178,8 @@ export function useRecentSyncJobs() {
     queryKey: CONNECTOR_KEYS.syncJobs(),
     queryFn: connectorsApi.getRecentSyncJobs,
     staleTime: 10_000,
-    refetchInterval: 5000,
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: true,
   });
 }
 

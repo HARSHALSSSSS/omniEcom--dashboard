@@ -39,7 +39,7 @@ export function WhatIsAtRiskBar({
             {productsAtRisk}
           </span>
           <span className="text-[12px] text-[#525252] leading-snug">
-            products with potential inventory mismatch
+            listings whose stock change is still waiting to reach the marketplace
           </span>
         </div>
 
@@ -49,7 +49,7 @@ export function WhatIsAtRiskBar({
             {ordersAtRisk}
           </span>
           <span className="text-[12px] text-[#525252] leading-snug">
-            orders potentially affected
+            open orders on connections that need attention
           </span>
         </div>
 
@@ -59,7 +59,7 @@ export function WhatIsAtRiskBar({
             {listingsBlocked}
           </span>
           <span className="text-[12px] text-[#525252] leading-snug">
-            listings currently blocked
+            listings the marketplace rejected or wants corrected
           </span>
         </div>
       </div>
