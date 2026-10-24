@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
@@ -107,8 +107,12 @@ export function RuleFormDialog({ open, onOpenChange, rule, catalog, catalogLoadi
     }
   };
 
+  // a double click can fire the save twice before the buttons re-render as disabled: only the first call goes out
+  const saving = useRef(false);
   const save = (status?: RuleStatus) =>
     handleSubmit(async (values) => {
+      if (saving.current) return;
+      saving.current = true;
       setFormError(null);
       const body = toRuleWrite(status ? { ...values, status } : values);
       try {
@@ -117,6 +121,8 @@ export function RuleFormDialog({ open, onOpenChange, rule, catalog, catalogLoadi
         onSaved(saved);
       } catch (e) {
         applyServerError(e);
+      } finally {
+        saving.current = false;
       }
     })();
 

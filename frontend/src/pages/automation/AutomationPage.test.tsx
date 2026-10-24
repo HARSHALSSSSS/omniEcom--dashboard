@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
@@ -336,6 +336,29 @@ describe("AutomationPage rules", () => {
 });
 
 describe("AutomationPage builder", () => {
+  it("saves a double-clicked Save rule once", async () => {
+    api.create.mockImplementation(() => new Promise((resolve) => setTimeout(() => resolve(rule({ id: R2, name: "Once" })), 50)));
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText("Draft PO on low stock");
+    await user.click(screen.getByRole("button", { name: "New rule" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.type(within(dialog).getByLabelText("Rule name"), "Once");
+    await user.selectOptions(within(dialog).getByLabelText("Trigger"), "inventory.low_stock");
+    await user.selectOptions(within(dialog).getByLabelText("Action"), "draft_purchase_order");
+    await user.type(within(dialog).getByLabelText("Order up to (units)"), "40");
+    await user.type(within(dialog).getByLabelText(/Unit cost/), "125.5");
+    const save = within(dialog).getByRole("button", { name: "Save rule" });
+    // two clicks inside one task, before the button can re-render as disabled
+    act(() => {
+      fireEvent.click(save);
+      fireEvent.click(save);
+    });
+    await waitFor(() => expect(api.create).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "New automation rule" })).not.toBeInTheDocument());
+    expect(api.create).toHaveBeenCalledTimes(1);
+  });
+
   it("creates a rule with typed conditions and action parameters", async () => {
     api.create.mockResolvedValue(rule({ id: R2, name: "Low stock PO" }));
     const user = userEvent.setup();
