@@ -72,6 +72,18 @@ export const NotificationsPanel = () => {
     onError: (e) => setActionError(errorMessage(e)),
   });
 
+  // Escape closes the panel, and keyboard focus moves into it while it is open
+  const panelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!notificationsPanelOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setNotificationsPanelOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    panelRef.current?.focus();
+    return () => window.removeEventListener("keydown", onKey);
+  }, [notificationsPanelOpen, setNotificationsPanelOpen]);
+
   if (!notificationsPanelOpen) return null;
 
   const items = list.data?.pages.flatMap((p) => p.items) ?? [];
@@ -86,7 +98,7 @@ export const NotificationsPanel = () => {
       />
 
       <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
-        <div className="w-screen max-w-[390px] bg-white border-l border-[#EAEAEA] shadow-2xl flex flex-col">
+        <div ref={panelRef} role="dialog" aria-modal="true" aria-label="Notifications" tabIndex={-1} className="w-screen max-w-[390px] bg-white border-l border-[#EAEAEA] shadow-2xl flex flex-col outline-none">
           {/* Header */}
           <div className="h-16 px-5 border-b border-[#EAEAEA] flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2">
