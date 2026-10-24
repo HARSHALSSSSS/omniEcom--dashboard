@@ -8,6 +8,7 @@ import {
   formatPercent,
   formatDelta,
   formatDate,
+  formatRelativeTime,
 } from "@/utils/format";
 import { cn } from "@/utils/cn";
 
@@ -81,5 +82,20 @@ describe("cn utility", () => {
     const isHidden = false;
     expect(cn("p-2 text-sm", "p-4")).toBe("text-sm p-4");
     expect(cn("bg-red-500", isHidden && "bg-blue-500")).toBe("bg-red-500");
+  });
+});
+
+describe("formatRelativeTime", () => {
+  const at = (ms: number) => new Date(Date.now() + ms).toISOString();
+  it("describes the past", () => {
+    expect(formatRelativeTime(at(-30_000))).toBe("just now");
+    expect(formatRelativeTime(at(-5 * 60_000))).toBe("5 min ago");
+    expect(formatRelativeTime(at(-3 * 3_600_000))).toBe("3h ago");
+    expect(formatRelativeTime(at(-2 * 86_400_000))).toBe("2d ago");
+  });
+  it("describes the future instead of saying just now", () => {
+    expect(formatRelativeTime(at(5 * 60_000 + 500))).toBe("in 5 min");
+    expect(formatRelativeTime(at(3 * 3_600_000 + 500))).toBe("in 3h");
+    expect(formatRelativeTime(at(6 * 86_400_000 + 500))).toBe("in 6d");
   });
 });

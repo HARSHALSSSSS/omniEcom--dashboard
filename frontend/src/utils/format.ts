@@ -185,6 +185,16 @@ export function formatInZone(iso: string, options: Intl.DateTimeFormatOptions): 
  */
 export function formatRelativeTime(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime();
+  // a moment still ahead of us ("Expires in 7d"), not "just now"
+  if (diffMs <= -60_000) {
+    const ahead = Math.floor(-diffMs / 60_000);
+    if (ahead < 60) return `in ${ahead} min`;
+    const aheadHr = Math.floor(ahead / 60);
+    if (aheadHr < 24) return `in ${aheadHr}h`;
+    const aheadDay = Math.floor(aheadHr / 24);
+    if (aheadDay < 7) return `in ${aheadDay}d`;
+    return formatDate(iso);
+  }
   const diffMin = Math.floor(diffMs / 60_000);
   const diffHr = Math.floor(diffMin / 60);
   const diffDay = Math.floor(diffHr / 24);
