@@ -2,7 +2,7 @@
 
 Independent multi-vendor commerce operating system. Many vendors connect their own marketplace accounts (Amazon India, Flipkart, Myntra, Snapdeal; more later) and manage products, inventory, orders, fulfilment and more from **one source of truth per vendor**.
 
-**Status: Stage 2 done.** Foundation (Stage 1) + the first business domains: vendor registration, auth/sessions, RBAC, staff invitations, catalogue (products, SKUs, attributes, categories, images/documents, bulk + CSV import/export), marketplace accounts with encrypted credentials, the connector framework (capability matrix, token rotation, retries, health) and a full sandbox marketplace. Orders/inventory/listings are next. See [docs/stages/STAGE-2.md](docs/stages/STAGE-2.md).
+**Status: feature-complete backend for the dashboard screens** (identity, catalogue, marketplaces and the sync engine, orders, inventory, fulfilment and returns, pricing, procurement, reports, notifications, billing, platform administration). Foundation walkthrough: [docs/stages/STAGE-2.md](docs/stages/STAGE-2.md). Deployment, production boot guards and the go-live checklist: [docs/deployment/DEPLOYMENT.md](docs/deployment/DEPLOYMENT.md).
 
 ## Quick start
 
