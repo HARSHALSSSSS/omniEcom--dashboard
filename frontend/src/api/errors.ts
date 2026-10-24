@@ -55,7 +55,8 @@ export function errorMessage(e: unknown, fallback = "Something went wrong. Pleas
   if (!isApiError(e)) return e instanceof Error && e.message ? e.message : fallback;
   switch (e.code) {
     case "INVALID_CREDENTIALS":
-      return "Incorrect email or password.";
+      // the same code also answers "the marketplace rejected these credentials" / "wrong current password": keep their own message
+      return !e.message || /e-?mail or password/i.test(e.message) ? "Incorrect email or password." : e.message;
     case "ACCOUNT_LOCKED":
       return "Too many failed attempts. This account is locked for a while, please try again later.";
     case "RATE_LIMITED":
