@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
@@ -457,6 +457,28 @@ describe("PricingPage policies", () => {
       }),
     );
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "New pricing policy" })).not.toBeInTheDocument());
+  });
+
+  it("sends a double-clicked Create policy once", async () => {
+    const user = userEvent.setup();
+    api.createPolicy.mockImplementation(() => new Promise((resolve) => setTimeout(() => resolve({ ...POLICY, id: "pol3" }), 50)));
+    renderPage("/pricing?view=policies");
+    await screen.findByRole("article", { name: "Defend Amazon" });
+    await user.click(screen.getByRole("button", { name: "New policy" }));
+    const dialog = await screen.findByRole("dialog", { name: "New pricing policy" });
+    await user.type(within(dialog).getByLabelText("Name"), "Once only");
+    await user.selectOptions(within(dialog).getByLabelText("Strategy"), "margin_floor");
+    await user.clear(within(dialog).getByLabelText("Margin floor"));
+    await user.type(within(dialog).getByLabelText("Margin floor"), "20");
+    const create = within(dialog).getByRole("button", { name: "Create policy" });
+    // two clicks inside one task, before the button can re-render as disabled
+    act(() => {
+      fireEvent.click(create);
+      fireEvent.click(create);
+    });
+    await waitFor(() => expect(api.createPolicy).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "New pricing policy" })).not.toBeInTheDocument());
+    expect(api.createPolicy).toHaveBeenCalledTimes(1);
   });
 
   it("puts a server field error on the field and keeps the dialog open", async () => {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm, type FieldPath } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { isApiError } from "@/api/errors";
@@ -64,6 +64,7 @@ export function PolicyDialog({ open, policy, channels, onClose, onConflict }: Po
   const accountId = watch("accountId");
   const preview = usePolicyPreview(accountId || null, open);
   const saving = create.isPending || update.isPending;
+  const sending = useRef(false);
   const message = (name: FieldPath<PolicyFormValues>) => errors[name]?.message;
   /** closing with unsaved edits asks first */
   const requestClose = () => {
@@ -98,6 +99,9 @@ export function PolicyDialog({ open, policy, channels, onClose, onConflict }: Po
   };
 
   const submit = handleSubmit((values) => {
+    // a double click fires the handler twice before the button can re-render as disabled: only the first goes out
+    if (sending.current) return;
+    sending.current = true;
     setFormError(null);
     const body = toWrite(values);
     if (policy) {
@@ -109,6 +113,9 @@ export function PolicyDialog({ open, policy, channels, onClose, onConflict }: Po
             onClose();
           },
           onError,
+          onSettled: () => {
+            sending.current = false;
+          },
         },
       );
     } else {
@@ -118,6 +125,9 @@ export function PolicyDialog({ open, policy, channels, onClose, onConflict }: Po
           onClose();
         },
         onError,
+        onSettled: () => {
+          sending.current = false;
+        },
       });
     }
   });
