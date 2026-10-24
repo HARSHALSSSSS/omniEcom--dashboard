@@ -128,3 +128,19 @@ const CODE_TITLES: Record<string, string> = {
 };
 
 export const codeLabel = (code: string): string => CODE_TITLES[code] ?? code.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
+
+const count = (n: number, noun: string): string => `${num(n)} ${noun}${n === 1 ? "" : "s"}`;
+
+/** what a committed import really did, from the commit job's counters (never "your catalog stays unchanged" once the import ran) */
+export function importOutcomeText(session: Pick<ImportSession, "status" | "results" | "counters">): string {
+  const { results: r, counters: c } = session;
+  const did = [
+    r.productsCreated > 0 && `${count(r.productsCreated, "product")} created`,
+    r.productsUpdated > 0 && `${count(r.productsUpdated, "product")} updated`,
+    r.variantsCreated > 0 && `${count(r.variantsCreated, "variant")} created`,
+    r.variantsUpdated > 0 && `${count(r.variantsUpdated, "variant")} updated`,
+  ].filter(Boolean);
+  const left = [c.skipped + c.ignored > 0 && `${count(c.skipped + c.ignored, "row")} skipped`, c.failed > 0 && `${num(c.failed)} failed`].filter(Boolean);
+  const head = did.length ? `Import finished: ${did.join(", ")}.` : "Import finished: no product or variant was created or updated.";
+  return left.length ? `${head} ${left.join(", ")}.` : head;
+}

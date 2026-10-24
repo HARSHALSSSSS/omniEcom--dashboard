@@ -9,7 +9,7 @@ import { ImportProgress } from "../ImportProgress";
 import { ImportResult } from "../ImportResult";
 import { ImportSummarySidebar } from "../ImportSummarySidebar";
 import { Alert } from "../ImportStates";
-import { canReview, importErrorMessage, num, ruleOf } from "../importFormat";
+import { canReview, importErrorMessage, importOutcomeText, num, ruleOf } from "../importFormat";
 import { planNumbers } from "./exceptions";
 import type { StepProps } from "./stepTypes";
 import { BAR_PRIMARY, BTN_BLACK, BTN_OUTLINE } from "./styles";
@@ -65,7 +65,7 @@ export function ReadyStep({ session, options, canWrite, goTo, onCancel, onSaveDr
         <Link to={processing} className={link}>
           Open import progress
         </Link>
-        <WizardBar status="Your catalog stays unchanged until you confirm import." onCancel={onCancel} onSaveDraft={onSaveDraft} />
+        <WizardBar status={finished ? importOutcomeText(session) : "Import has begun. Records appear in your catalog as they are confirmed."} onCancel={onCancel} onSaveDraft={onSaveDraft} />
       </div>
     );
   }

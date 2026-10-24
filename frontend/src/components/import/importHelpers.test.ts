@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { ApiError } from "@/api/errors";
 import { fileNameFromDisposition } from "@/api/import.api";
 import { session, validated } from "@/test/importFixtures";
-import { formatBytes, formatEta, importErrorMessage } from "./importFormat";
+import type { ImportSession } from "@/types/import";
+import { formatBytes, formatEta, importErrorMessage, importOutcomeText } from "./importFormat";
 import { readIssuesUrl, readWizardUrl, resolveStep, stepBounds } from "./importParams";
 
 describe("import helpers", () => {
@@ -45,5 +46,22 @@ describe("import helpers", () => {
     expect(readWizardUrl(new URLSearchParams("import=11111111-1111-4111-8111-111111111111&step=bogus"))).toMatchObject({ importId: "11111111-1111-4111-8111-111111111111", requestedStep: null });
     expect(readIssuesUrl(new URLSearchParams("status=bogus&severity=error&page=0&size=7&view=rows"))).toMatchObject({ status: "open", severity: "error", page: 1, pageSize: 25, view: "rows" });
     expect(readIssuesUrl(new URLSearchParams("status=all")).status).toBe("all");
+  });
+});
+
+describe("importOutcomeText", () => {
+  const finished = (results: Partial<ImportSession["results"]>, counters: Partial<ImportSession["counters"]> = {}) =>
+    ({
+      status: "committed",
+      results: { productsCreated: 0, productsUpdated: 0, variantsCreated: 0, variantsUpdated: 0, ...results },
+      counters: { total: 10, processed: 10, valid: 10, warning: 0, error: 0, ignored: 0, skipped: 0, committed: 10, failed: 0, percent: 100, etaSeconds: null, ...counters },
+    }) as Pick<ImportSession, "status" | "results" | "counters">;
+
+  it("says what was created, updated, skipped and failed", () => {
+    expect(importOutcomeText(finished({ productsCreated: 1, variantsCreated: 3 }, { skipped: 1, ignored: 1, failed: 2 }))).toBe("Import finished: 1 product created, 3 variants created. 2 rows skipped, 2 failed.");
+  });
+
+  it("is truthful when nothing changed", () => {
+    expect(importOutcomeText(finished({}))).toBe("Import finished: no product or variant was created or updated.");
   });
 });

@@ -570,6 +570,9 @@ describe("ImportWizardPage: import", () => {
     renderPage(`/products/import?import=${IMPORT_ID}`);
     expect(await screen.findByRole("heading", { name: "Import complete" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open import progress" })).toHaveAttribute("href", `/products/import/${IMPORT_ID}/processing`);
+    // the bar says what was done, never that the catalog stays unchanged
+    expect(screen.getByText("Import finished: 80 products created, 5 products updated, 20 variants created, 3 variants updated.")).toBeInTheDocument();
+    expect(screen.queryByText(/stays unchanged/)).not.toBeInTheDocument();
   });
 
   it("is read-only without the write permission", async () => {
