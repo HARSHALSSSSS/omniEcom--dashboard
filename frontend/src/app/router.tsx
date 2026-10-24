@@ -4,6 +4,7 @@ import { ROUTES } from "@/constants/routes";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { PublicOnlyRoute } from "@/components/auth/PublicOnlyRoute";
 import { useWorkspaceStore } from "@/store/workspace.store";
+import { RouteError } from "@/components/common/RouteError";
 
 // Layouts
 const AppShell = lazy(() => import("@/components/layout/AppShell"));
@@ -115,7 +116,11 @@ function withSuspense(Component: React.ComponentType) {
   );
 }
 
+// the pathless root only carries the friendly error screen (unknown address / a page that crashes) for every route below
 export const router = createBrowserRouter([
+  {
+    errorElement: <RouteError />,
+    children: [
   // Auth routes (no shell)
   {
     path: ROUTES.SIGN_UP,
@@ -272,6 +277,9 @@ export const router = createBrowserRouter([
       { path: ROUTES.SETTINGS, element: withSuspense(SettingsPage) },
       // Dev
       { path: "/dev/components", element: withSuspense(ComponentsDevPage) },
+    ],
+  },
+  { path: "*", element: <RouteError notFound /> },
     ],
   },
 ]);
