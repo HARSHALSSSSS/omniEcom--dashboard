@@ -491,6 +491,7 @@ describe('dashboard', () => {
     const v = dAdmin.vendorId!;
     expect((await dash()).body.data.needsAttention).toEqual({ items: [] });
     await addIssue(v, { key: 'stock_below_threshold', area: 'inventory', count: 18 });
+    await addIssue(v, { key: 'stock_single_warehouse', area: 'inventory', count: 4 }); // another inventory issue is not "running low"
     await addIssue(v, { key: 'orders_dispatch_risk', area: 'orders', count: 7, status: 'in_progress' });
     await addIssue(v, { key: 'channel_sync_failing', area: 'channels', count: 2, status: 'snoozed' });
     await addIssue(v, { key: 'listings_incomplete', area: 'listings', count: 0, status: 'open' }); // an open group of unknown size counts as one record
@@ -502,7 +503,7 @@ describe('dashboard', () => {
     await owner(`update issues set status = 'open' where vendor_id = $1 and key = 'channel_sync_failing'`, [v]);
     expect((await dash()).body.data.needsAttention.items.map((i: any) => i.issueKey)).toEqual(['low_stock', 'orders_at_risk', 'listing_issue', 'sync_issue']);
     expect((await dash()).body.data.needsAttention.items[3].summary).toBe('2 channel connections need attention');
-    expect((await shell(dAdmin)).badges).toMatchObject({ needsAttention: 4, returns: 1 }); // groups; and the return waiting for approval
+    expect((await shell(dAdmin)).badges).toMatchObject({ needsAttention: 5, returns: 1 }); // groups; and the return waiting for approval
   });
 
   it('recommendation: the latest open one, or null', async () => {

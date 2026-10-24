@@ -11,16 +11,18 @@ const STAGE_OF: Record<string, string> = { new: 'new', confirmed: 'confirmed', p
 export const STAGES = ['new', 'confirmed', 'picking', 'packing', 'dispatched', 'delivered'] as const;
 
 const ATTENTION_ROWS = [
-  { area: 'inventory', issueKey: 'low_stock', title: 'Low stock', summary: (c: number) => `${c} ${c === 1 ? 'product is' : 'products are'} running low on inventory`, action: { label: 'Review inventory', href: '/inventory?health=low' } },
+  // low stock counts only the stock-threshold issue; other inventory issues (stock concentrated in one warehouse, mismatches) are not "running low"
+  { area: 'inventory', issueKey: 'low_stock', onlyKey: 'stock_below_threshold', title: 'Low stock', summary: (c: number) => `${c} ${c === 1 ? 'product is' : 'products are'} running low on inventory`, action: { label: 'Review inventory', href: '/inventory?health=low' } },
   { area: 'orders', issueKey: 'orders_at_risk', title: 'Orders at risk', summary: (c: number) => `${c} ${c === 1 ? 'order needs' : 'orders need'} action before dispatch`, action: { label: 'View orders', href: '/orders?attention=true' } },
   { area: 'listings', issueKey: 'listing_issue', title: 'Listing issue', summary: (c: number) => `${c} marketplace ${c === 1 ? 'listing needs' : 'listings need'} attention`, action: { label: 'Review listings', href: '/listings?status=attention' } },
   { area: 'channels', issueKey: 'sync_issue', title: 'Sync issue', summary: (c: number) => `${c} channel ${c === 1 ? 'connection needs' : 'connections need'} attention`, action: { label: 'Check connections', href: '/channels' } },
 ] as const;
 
 async function needsAttention(tx: Tx, vendorId: string) {
-  const r = await rows(tx, sql`select area, sum(greatest(count, 1))::int c from issues where vendor_id = ${vendorId} and status in ${ACTIVE_ISSUE} and area in ('inventory','orders','listings','channels') group by area`);
+  const r = await rows(tx, sql`select area, key, sum(greatest(count, 1))::int c from issues where vendor_id = ${vendorId} and status in ${ACTIVE_ISSUE} and area in ('inventory','orders','listings','channels') group by area, key`);
   const items = ATTENTION_ROWS.flatMap((d) => {
-    const count = n(r.find((x) => x.area === d.area)?.c);
+    const only = 'onlyKey' in d ? d.onlyKey : null;
+    const count = r.filter((x) => x.area === d.area && (only === null || x.key === only)).reduce((sum, x) => sum + n(x.c), 0);
     return count > 0 ? [{ issueKey: d.issueKey, area: d.area, title: d.title, summary: d.summary(count), count, action: d.action }] : [];
   });
   return { items };
