@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, useLocation } from "react-router-dom";
@@ -797,6 +797,26 @@ describe("InventoryPage drawer", () => {
     await user.click(within(dialog).getByRole("button", { name: "Transfer Stock" }));
     await waitFor(() => expect(api.transfer).toHaveBeenCalledWith({ variantId: ID.tee, fromWarehouseId: WH.delhi, toWarehouseId: WH.mumbai, quantity: 10 }));
     expect(useToastStore.getState().toasts[0]?.description).toContain("TR-1");
+  });
+
+  it("sends a double-clicked Transfer Stock once", async () => {
+    api.transfer.mockImplementation(() => new Promise((resolve) => setTimeout(() => resolve({ transfer: { id: "t1", number: "TR-1", status: "received" }, variant: { id: ID.tee, sku: "TEE-M", title: "Linen Tee" } }), 50)));
+    const user = userEvent.setup();
+    renderPage(`/inventory?drawer=variant:${ID.tee}`);
+    const drawer = await screen.findByRole("dialog");
+    await user.click(await within(drawer).findByRole("button", { name: "Transfer" }));
+    const dialogs = await screen.findAllByRole("dialog");
+    const dialog = dialogs.find((d) => within(d).queryByText(/Transfer Stock: TEE-M/)) as HTMLElement;
+    await user.type(within(dialog).getByLabelText("Units"), "10");
+    const go = within(dialog).getByRole("button", { name: "Transfer Stock" });
+    // two clicks inside one task, before the button can re-render as disabled
+    act(() => {
+      fireEvent.click(go);
+      fireEvent.click(go);
+    });
+    await waitFor(() => expect(api.transfer).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(useToastStore.getState().toasts[0]?.description).toContain("TR-1"));
+    expect(api.transfer).toHaveBeenCalledTimes(1);
   });
 
   it("opens the transfer from the header and picks the product in the dialog", async () => {

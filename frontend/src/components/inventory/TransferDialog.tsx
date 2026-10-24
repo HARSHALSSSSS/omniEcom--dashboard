@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,6 +50,8 @@ function TransferForm({ target, warehouses, onClose }: { target: StockTarget; wa
   const [to, setTo] = useState(() => warehouses.find((w) => w.id !== from)?.id ?? "");
   const [qty, setQty] = useState("");
   const [serverError, setServerError] = useState<string | null>(null);
+  // a double click can fire the handler twice before the button re-renders as disabled: only the first call goes out
+  const inFlight = useRef(false);
 
   const availableAtSource = target.locations.find((l) => l.warehouseId === from)?.available ?? 0;
   const n = /^\d+$/.test(qty.trim()) ? Number(qty.trim()) : NaN;
@@ -62,7 +64,8 @@ function TransferForm({ target, warehouses, onClose }: { target: StockTarget; wa
 
   const submit = async (ev: React.FormEvent) => {
     ev.preventDefault();
-    if (!ready) return;
+    if (!ready || inFlight.current) return;
+    inFlight.current = true;
     setServerError(null);
     try {
       const res = await transfer.mutateAsync({ variantId: target.variantId, fromWarehouseId: from, toWarehouseId: to, quantity: n });
@@ -70,12 +73,15 @@ function TransferForm({ target, warehouses, onClose }: { target: StockTarget; wa
       onClose();
     } catch (e) {
       setServerError(errorMessage(e, "Could not transfer the stock."));
+    } finally {
+      inFlight.current = false;
     }
   };
 
   /** saves the transfer as a draft: nothing moves until it is submitted from the Draft transfers section */
   const onSaveDraft = async () => {
-    if (!ready) return;
+    if (!ready || inFlight.current) return;
+    inFlight.current = true;
     setServerError(null);
     try {
       const draft = await saveDraft.mutateAsync({ fromWarehouseId: from, toWarehouseId: to, items: [{ variantId: target.variantId, quantity: n }] });
@@ -83,6 +89,8 @@ function TransferForm({ target, warehouses, onClose }: { target: StockTarget; wa
       onClose();
     } catch (e) {
       setServerError(errorMessage(e, "Could not save the draft."));
+    } finally {
+      inFlight.current = false;
     }
   };
 
