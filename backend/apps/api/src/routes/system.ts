@@ -30,7 +30,7 @@ export const systemRoutes: FastifyPluginAsync<{ health: HealthRegistry; metrics:
   }, async (_req, reply) => {
     const { ok, checks } = await opts.health.run();
     // dependency names / latencies are for operators (logs, metrics), not for the internet
-    return reply.code(ok ? 200 : 503).send({ status: ok ? 'ready' : 'degraded', checks: opts.environment === 'production' ? {} : checks });
+    return reply.code(ok ? 200 : 503).send({ status: ok ? 'ready' : 'degraded', checks: opts.environment === 'production' || opts.environment === 'staging' ? {} : checks });
   });
 
   if (opts.metricsEnabled) {
