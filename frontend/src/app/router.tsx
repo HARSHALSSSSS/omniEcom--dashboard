@@ -93,7 +93,10 @@ const AutomationPage = lazy(() => import("@/pages/automation/AutomationPage"));
 // Settings
 const SettingsPage = lazy(() => import("@/pages/settings/SettingsPage"));
 // Dev
-const ComponentsDevPage = lazy(() => import("@/pages/dev/ComponentsDevPage"));
+// only reachable in `vite dev`; the production build never registers the route (the lazy import is tree-shaken away)
+const ComponentsDevPage = import.meta.env.DEV
+  ? lazy(() => import("@/pages/dev/ComponentsDevPage"))
+  : null;
 
 function OnboardingIndex() {
   const step = useWorkspaceStore((s) => s.onboardingResumeStep);
@@ -276,7 +279,9 @@ export const router = createBrowserRouter([
       },
       { path: ROUTES.SETTINGS, element: withSuspense(SettingsPage) },
       // Dev
-      { path: "/dev/components", element: withSuspense(ComponentsDevPage) },
+      ...(ComponentsDevPage
+        ? [{ path: "/dev/components", element: withSuspense(ComponentsDevPage) }]
+        : []),
     ],
   },
   { path: "*", element: <RouteError notFound /> },
