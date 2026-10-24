@@ -11,7 +11,7 @@ import {
 } from './dashboard-query';
 import {
   ADJUSTMENT_TYPES, BULK_ALL_MAX, bulkLimits, BULK_IDS_MAX, CSV_HEADER, EXPORT_MAX, addToGroup, affectedListings, applyAdjustment, channelSync, connectedAccountIds, createGroup, csvRow, deleteGroup,
-  listGroups, masterSummary, previewAdjustment, removeFromGroup, runBulk, toCsv, type SyncAccount, type SyncOutcome,
+  listGroups, masterSummary, previewAdjustment, removeFromGroup, runBulk, searchCatalogVariants, toCsv, type SyncAccount, type SyncOutcome,
 } from './dashboard-ops';
 import { channelRef } from './dashboard-query';
 import { variantOverview } from './service';
@@ -121,7 +121,7 @@ const PanelSchema = z.object({
 }).meta({ id: 'InventoryVariantPanel' });
 
 const AdjustBody = z.object({
-  variantId: z.uuid(), warehouseId: z.uuid(), type: z.enum(ADJUSTMENT_TYPES).describe('damage: available -> damaged (direction increase restores); return: customer return; shrinkage: a loss, removes units (direction decrease only); correction / manual / other: change on-hand'),
+  variantId: z.uuid(), warehouseId: z.uuid(), type: z.enum(ADJUSTMENT_TYPES).describe('damage: available -> damaged (direction increase restores); return: customer return; shrinkage: a loss, removes units (direction decrease only); opening_stock: the first units of a variant in a warehouse (adds units only; creates the stock row); correction / manual / other: change on-hand'),
   quantity: z.number().int().min(1).max(10_000_000).optional(), direction: z.enum(['increase', 'decrease']).optional().describe('required for correction / manual / other'),
   setOnHand: z.number().int().min(0).max(10_000_000).optional().describe('correction only: a physical count (the ledger records the difference)'),
   disposition: z.enum(['hold', 'restock']).optional().describe('return only: hold = returned bucket until inspected (default), restock = sellable immediately'),
@@ -298,6 +298,16 @@ export const inventoryDashboardRoutes: FastifyPluginAsync = async (app) => {
     await assertWarehouseCapability(tx, req.ctx.principal, vendorId, warehouseId, 'adjust');
   };
 
+  r.get('/inventory/catalog-variants', {
+    config: { access: { permission: 'inventory:read' } },
+    schema: {
+      tags: TAGS, summary: 'Search the catalog for variants, also those without a stock row',
+      description: 'Variants of the business by SKU, barcode or product name. A brand-new variant has no stock row, so it is not in `GET /inventory/ledger`; use `unstocked=true` to list only those and give them opening stock with `POST /inventory/adjustments` (`type: opening_stock`). `stocked` says whether the variant has a stock row in any warehouse.',
+      querystring: z.object({ q: z.string().trim().max(100).optional(), unstocked: z.enum(['true', 'false']).optional().describe('true = only variants without any stock row'), limit: z.coerce.number().int().min(1).max(50).default(8) }),
+      response: { 200: successEnvelope(z.array(z.object({ variantId: z.string(), productId: z.string(), sku: z.string(), title: z.string(), variantName: z.string().nullable(), barcode: z.string().nullable(), stocked: z.boolean() })).meta({ id: 'InventoryCatalogVariants' })) },
+    },
+  }, async (req) => ok(req, await vendorTx(req, (tx, vendorId) => searchCatalogVariants(tx, vendorId, { q: req.query.q, unstockedOnly: req.query.unstocked === 'true', limit: req.query.limit }))));
+
   r.post('/inventory/adjustments/preview', {
     config: { access: { permission: 'inventory:write' } },
     schema: {
@@ -313,8 +323,8 @@ export const inventoryDashboardRoutes: FastifyPluginAsync = async (app) => {
   r.post('/inventory/adjustments', {
     config: { access: { permission: 'inventory:write' } },
     schema: {
-      tags: TAGS, summary: 'Adjust stock by type (damage / return / correction / manual / shrinkage / other)',
-      description: 'One ledger movement in the audit trail. `damage` moves available -> damaged (direction `increase` restores); `return` records a customer return (held in the returned bucket unless `disposition: restock`); `shrinkage` writes off lost units as its own movement type (a loss: `quantity` units leave on-hand, `direction` may only be `decrease`); `correction` / `manual` / `other` change on-hand by `quantity` in `direction`, or `correction` can pass a physical count `setOnHand`. `other` requires a `note`.',
+      tags: TAGS, summary: 'Adjust stock by type (damage / return / correction / manual / shrinkage / other / opening_stock)',
+      description: 'One ledger movement in the audit trail. `damage` moves available -> damaged (direction `increase` restores); `return` records a customer return (held in the returned bucket unless `disposition: restock`); `shrinkage` writes off lost units as its own movement type (a loss: `quantity` units leave on-hand, `direction` may only be `decrease`); `opening_stock` adds `quantity` units as the first stock of a variant that has none in that warehouse yet (it creates the stock row; increase only, a warehouse is required); `correction` / `manual` / `other` change on-hand by `quantity` in `direction`, or `correction` can pass a physical count `setOnHand`. `other` requires a `note`.',
       body: AdjustBody,
       response: { 200: successEnvelope(z.object({ duplicate: z.boolean(), movement: z.object({ id: z.number().int() }), type: z.enum(ADJUSTMENT_TYPES), result: PreviewSchema.pick({ currentAvailable: true, adjustment: true, newAvailable: true, warnings: true }), stock: z.object({ warehouseId: z.string(), onHand: z.number().int(), reserved: z.number().int(), available: z.number().int(), incoming: z.number().int(), damaged: z.number().int(), returned: z.number().int(), quarantined: z.number().int() }) })) },
     },

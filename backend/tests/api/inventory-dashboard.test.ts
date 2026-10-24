@@ -588,6 +588,60 @@ describe('adjustments and their preview', () => {
 });
 
 // ================================================================================================
+describe('opening stock for a variant without a stock row', () => {
+  it('finds unstocked variants by SKU / name, and opening_stock creates the row with a ledger entry, a notification and an event', async () => {
+    const { admin, whs, variants } = await plainShop([['OPEN-STOCKED', 5]]);
+    const wh = whs[0]!;
+    const fresh = await c.makeVariant(admin, { sku: 'OPEN-NEW-1', title: 'Fresh Hoodie' });
+    const stocked = variants[0]!;
+
+    // the catalog search sees both; unstocked=true only the one without a stock row
+    const all = (await c.get(`${API}/catalog-variants?q=OPEN-`, admin)).body.data as any[];
+    expect(all.map((v) => [v.sku, v.stocked]).sort()).toEqual([['OPEN-NEW-1', false], ['OPEN-STOCKED', true]]);
+    const unstocked = (await c.get(`${API}/catalog-variants?unstocked=true&q=hoodie`, admin)).body.data as any[];
+    expect(unstocked).toEqual([expect.objectContaining({ variantId: fresh.variantId, sku: 'OPEN-NEW-1', title: 'Fresh Hoodie', stocked: false, variantName: expect.any(String) })]);
+    expect((await c.get(`${API}/catalog-variants?unstocked=true&q=OPEN-STOCKED`, admin)).body.data).toEqual([]);
+    expect((await stockRow(admin, fresh.variantId, wh.id))).toBeUndefined();
+
+    // opening stock is increase-only and needs a warehouse
+    const base = { variantId: fresh.variantId, warehouseId: wh.id, reason: 'Opening count', type: 'opening_stock' };
+    expect((await adjust(admin, { ...base, quantity: 5, direction: 'decrease' })).body.error.details.rule).toBe('opening_stock_requires_increase');
+    expect((await adjust(admin, { ...base, quantity: 5, warehouseId: undefined })).status).toBe(400);
+    expect((await adjust(admin, { ...base })).body.error.details.rule).toBe('quantity_required');
+    const preview = await c.post(`${API}/adjustments/preview`, { ...base, quantity: 12 }, admin);
+    expect(preview.body.data).toMatchObject({ currentAvailable: 0, adjustment: 12, newAvailable: 12 });
+    expect((await stockRow(admin, fresh.variantId, wh.id))).toBeUndefined(); // the preview wrote nothing
+
+    const done = await adjust(admin, { ...base, quantity: 12, direction: 'increase', idempotencyKey: 'opening-key-1' });
+    expect(done.status, JSON.stringify(done.body)).toBe(200);
+    expect(done.body.data).toMatchObject({ duplicate: false, type: 'opening_stock', stock: { warehouseId: wh.id, onHand: 12, available: 12 } });
+    expect((await adjust(admin, { ...base, quantity: 12, idempotencyKey: 'opening-key-1' })).body.data).toMatchObject({ duplicate: true, stock: { onHand: 12 } });
+    expect(await c.available(admin, fresh.variantId)).toBe(12);
+    await ledgerOk(admin);
+
+    // it is now a stocked variant, in the ledger, with one ledger movement of the receive kind and a stock_adjusted notification
+    expect((await c.get(`${API}/catalog-variants?q=OPEN-NEW-1`, admin)).body.data[0]).toMatchObject({ stocked: true });
+    expect(skus(await c.get(`${API}/ledger?q=OPEN-NEW-1`, admin))).toEqual(['OPEN-NEW-1']);
+    const moves = (await c.get(`${API}/movements?filter[variantId]=${fresh.variantId}`, admin)).body.data.items as any[];
+    expect(moves).toHaveLength(1);
+    expect(moves[0]).toMatchObject({ type: 'receive', deltaOnHand: 12 });
+    await t.pump();
+    const notes = (await c.get('/api/v1/notifications?limit=50', admin)).body.data.items as Array<{ type: string; title: string; body: string | null }>;
+    const note = notes.find((n) => n.type === 'inventory.stock_adjusted' && n.title.includes('OPEN-NEW-1'));
+    expect(note?.title).toBe('Stock adjusted (opening stock): OPEN-NEW-1');
+    expect(note?.body).toMatch(/^0 to 12 available/);
+    expect(stocked.sku).toBe('OPEN-STOCKED');
+
+    // viewers read the search but cannot write; other tenants see nothing of it
+    const viewer = await c.addMember(admin, 'vendor_viewer');
+    expect((await c.get(`${API}/catalog-variants?q=OPEN-`, viewer)).status).toBe(200);
+    expect((await adjust(viewer, { ...base, quantity: 1 })).status).toBe(403);
+    const other = await c.registerVendor({ businessName: 'Catalog Spy' });
+    expect((await c.get(`${API}/catalog-variants?q=OPEN-`, other)).body.data).toEqual([]);
+  });
+});
+
+// ================================================================================================
 describe('bulk operations, groups and export', () => {
   it('adjusts a selection per variant and reports partial failures without blocking the others', async () => {
     const { admin, whs, variants } = await plainShop([['BLK-X', 10], ['BLK-Y', 2], ['BLK-Z', 10]]);

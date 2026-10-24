@@ -10858,9 +10858,10 @@
               "correction",
               "manual",
               "shrinkage",
-              "other"
+              "other",
+              "opening_stock"
             ],
-            "description": "damage: available -> damaged (direction increase restores); return: customer return; shrinkage: a loss, removes units (direction decrease only); correction / manual / other: change on-hand"
+            "description": "damage: available -> damaged (direction increase restores); return: customer return; shrinkage: a loss, removes units (direction decrease only); opening_stock: the first units of a variant in a warehouse (adds units only; creates the stock row); correction / manual / other: change on-hand"
           },
           "quantity": {
             "type": "integer",
@@ -11071,7 +11072,8 @@
                   "correction",
                   "manual",
                   "shrinkage",
-                  "other"
+                  "other",
+                  "opening_stock"
                 ]
               },
               "quantity": {
@@ -31501,6 +31503,50 @@
           "warehouses"
         ]
       },
+      "InventoryCatalogVariantsInput": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "variantId": {
+              "type": "string"
+            },
+            "productId": {
+              "type": "string"
+            },
+            "sku": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "variantName": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "barcode": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "stocked": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "variantId",
+            "productId",
+            "sku",
+            "title",
+            "variantName",
+            "barcode",
+            "stocked"
+          ]
+        }
+      },
       "ConnectionTestInput": {
         "type": "object",
         "properties": {
@@ -47772,9 +47818,10 @@
               "correction",
               "manual",
               "shrinkage",
-              "other"
+              "other",
+              "opening_stock"
             ],
-            "description": "damage: available -> damaged (direction increase restores); return: customer return; shrinkage: a loss, removes units (direction decrease only); correction / manual / other: change on-hand"
+            "description": "damage: available -> damaged (direction increase restores); return: customer return; shrinkage: a loss, removes units (direction decrease only); opening_stock: the first units of a variant in a warehouse (adds units only; creates the stock row); correction / manual / other: change on-hand"
           },
           "quantity": {
             "type": "integer",
@@ -47992,7 +48039,8 @@
                   "correction",
                   "manual",
                   "shrinkage",
-                  "other"
+                  "other",
+                  "opening_stock"
                 ]
               },
               "quantity": {
@@ -68833,6 +68881,51 @@
           "warehouses"
         ],
         "additionalProperties": false
+      },
+      "InventoryCatalogVariants": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "variantId": {
+              "type": "string"
+            },
+            "productId": {
+              "type": "string"
+            },
+            "sku": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "variantName": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "barcode": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "stocked": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "variantId",
+            "productId",
+            "sku",
+            "title",
+            "variantName",
+            "barcode",
+            "stocked"
+          ],
+          "additionalProperties": false
+        }
       },
       "ConnectionTest": {
         "type": "object",
@@ -102589,6 +102682,138 @@
         }
       }
     },
+    "/api/v1/inventory/catalog-variants": {
+      "get": {
+        "summary": "Search the catalog for variants, also those without a stock row",
+        "tags": [
+          "Inventory Control Room"
+        ],
+        "description": "Variants of the business by SKU, barcode or product name. A brand-new variant has no stock row, so it is not in `GET /inventory/ledger`; use `unstocked=true` to list only those and give them opening stock with `POST /inventory/adjustments` (`type: opening_stock`). `stocked` says whether the variant has a stock row in any warehouse.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "in": "query",
+            "name": "q",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            },
+            "in": "query",
+            "name": "unstocked",
+            "required": false,
+            "description": "true = only variants without any stock row"
+          },
+          {
+            "schema": {
+              "default": 8,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "inventory:read",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/InventoryCatalogVariants"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "requestId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/inventory/adjustments/preview": {
       "post": {
         "summary": "Preview an adjustment (nothing is written)",
@@ -102698,11 +102923,11 @@
     },
     "/api/v1/inventory/adjustments": {
       "post": {
-        "summary": "Adjust stock by type (damage / return / correction / manual / shrinkage / other)",
+        "summary": "Adjust stock by type (damage / return / correction / manual / shrinkage / other / opening_stock)",
         "tags": [
           "Inventory Control Room"
         ],
-        "description": "One ledger movement in the audit trail. `damage` moves available -> damaged (direction `increase` restores); `return` records a customer return (held in the returned bucket unless `disposition: restock`); `shrinkage` writes off lost units as its own movement type (a loss: `quantity` units leave on-hand, `direction` may only be `decrease`); `correction` / `manual` / `other` change on-hand by `quantity` in `direction`, or `correction` can pass a physical count `setOnHand`. `other` requires a `note`.",
+        "description": "One ledger movement in the audit trail. `damage` moves available -> damaged (direction `increase` restores); `return` records a customer return (held in the returned bucket unless `disposition: restock`); `shrinkage` writes off lost units as its own movement type (a loss: `quantity` units leave on-hand, `direction` may only be `decrease`); `opening_stock` adds `quantity` units as the first stock of a variant that has none in that warehouse yet (it creates the stock row; increase only, a warehouse is required); `correction` / `manual` / `other` change on-hand by `quantity` in `direction`, or `correction` can pass a physical count `setOnHand`. `other` requires a `note`.",
         "requestBody": {
           "required": true,
           "content": {
@@ -102761,7 +102986,8 @@
                             "correction",
                             "manual",
                             "shrinkage",
-                            "other"
+                            "other",
+                            "opening_stock"
                           ]
                         },
                         "result": {

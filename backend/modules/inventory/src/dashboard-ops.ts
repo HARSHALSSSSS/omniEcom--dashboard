@@ -1,7 +1,7 @@
 import { and, asc, eq, inArray, schema, sql, writeOutboxEvent, type SQL, type Tx } from '@oms/database';
 import { AppError, Errors } from '@oms/shared';
 import type { MovementResult } from './ledger';
-import { adjustStock, availabilityFor, createTransfer, markDamaged, receiveReturn, writeOffShrinkage } from './service';
+import { adjustStock, availabilityFor, createTransfer, markDamaged, receiveReturn, receiveStock, writeOffShrinkage } from './service';
 import {
   channelRef, ledgerAll, ledgerForVariants, marketplaceName, type LedgerFilters, type LedgerItem, type Thresholds, type VendorCtx,
 } from './dashboard-query';
@@ -17,9 +17,9 @@ const I = schema.inventory;
 const V = schema.productVariants;
 
 // ================================================================================================
-// adjustments (types: damage | return | correction | manual | shrinkage | other)
+// adjustments (types: damage | return | correction | manual | shrinkage | other | opening_stock)
 // ================================================================================================
-export const ADJUSTMENT_TYPES = ['damage', 'return', 'correction', 'manual', 'shrinkage', 'other'] as const;
+export const ADJUSTMENT_TYPES = ['damage', 'return', 'correction', 'manual', 'shrinkage', 'other', 'opening_stock'] as const;
 export type AdjustmentType = (typeof ADJUSTMENT_TYPES)[number];
 
 export interface AdjustmentInput {
@@ -39,6 +39,7 @@ export function validateAdjustment(a: Pick<AdjustmentInput, 'type' | 'quantity' 
   }
   if (a.quantity === undefined) bad('quantity is required', 'quantity_required');
   if (a.type === 'shrinkage' && a.direction === 'increase') bad('Shrinkage is a loss: it can only remove units', 'shrinkage_requires_decrease');
+  if (a.type === 'opening_stock' && a.direction === 'decrease') bad('Opening stock only adds units: use a correction or shrinkage to remove stock', 'opening_stock_requires_increase');
   if ((a.type === 'correction' || a.type === 'manual' || a.type === 'other') && !a.direction) bad('direction (increase or decrease) is required for this adjustment type', 'direction_required');
 }
 
@@ -67,6 +68,8 @@ async function applyAdjustmentCore(tx: Tx, vendorId: string, actor: Actor, a: Ad
     case 'damage': return markDamaged(tx, { ...base, quantity: q, restore: a.direction === 'increase' });
     case 'return': return receiveReturn(tx, { ...base, quantity: q, disposition: a.disposition ?? 'hold' });
     case 'shrinkage': return writeOffShrinkage(tx, { ...base, quantity: q });
+    // the first units of a variant in a warehouse: the ledger creates the stock row with this movement (a 'receive' entry)
+    case 'opening_stock': return receiveStock(tx, { ...base, quantity: q, referenceType: 'adjustment' });
     default: return adjustStock(tx, { ...base, delta: a.direction === 'decrease' ? -q : q });
   }
 }
@@ -98,6 +101,7 @@ export async function previewAdjustment(tx: Tx, vendorId: string, actor: Actor, 
   else if (s.reorderLevel !== null && result!.availableAfter <= s.reorderLevel) warnings.push({ code: 'low_stock', message: `Available stock will be at or below the reorder level (${s.reorderLevel}).` });
   if (a.type === 'return' && (a.disposition ?? 'hold') === 'hold') warnings.push({ code: 'held_for_inspection', message: 'Returned units are held for inspection and are not sellable yet.' });
   if (a.type === 'damage' && a.direction !== 'increase') warnings.push({ code: 'moves_to_damaged', message: 'Units move to Damaged stock and are no longer sellable.' });
+  if (a.type === 'opening_stock') warnings.push({ code: 'opening_stock', message: 'These units are the first stock of this product in the warehouse; it starts being tracked there.' });
   if (a.type === 'shrinkage') warnings.push({ code: 'recorded_as_loss', message: 'The units are written off as shrinkage (a loss) and leave the books.' });
   return {
     currentAvailable: result!.availableBefore, adjustment: result!.availableAfter - result!.availableBefore, newAvailable: result!.availableAfter, warnings,
@@ -393,3 +397,27 @@ async function topWarehouses(tx: Tx, vendorId: string, ids: string[]): Promise<M
   return out;
 }
 
+// ================================================================================================
+// catalog variant search (variants that may have no stock row yet: the picker of "Opening stock")
+// ================================================================================================
+export interface CatalogVariantHit { variantId: string; productId: string; sku: string; title: string; variantName: string | null; barcode: string | null; stocked: boolean }
+
+/**
+ * Searches the catalog of the business by SKU, barcode or product name. `stocked` tells whether the variant already
+ * has a stock row in any warehouse; `unstockedOnly` keeps only those without one (they are not part of the inventory ledger).
+ */
+export async function searchCatalogVariants(tx: Tx, vendorId: string, o: { q?: string; unstockedOnly?: boolean; limit: number }): Promise<CatalogVariantHit[]> {
+  const like = o.q ? `%${o.q.replace(/[\\%_]/g, '\\$&')}%` : null;
+  const text = like ? sql`and (v.sku ilike ${like} or coalesce(v.barcode, '') ilike ${like} or p.title ilike ${like})` : sql``;
+  const stockedExpr = sql`exists (select 1 from inventory i where i.vendor_id = v.vendor_id and i.variant_id = v.id)`;
+  const only = o.unstockedOnly ? sql`and not ${stockedExpr}` : sql``;
+  const res = await rows(tx, sql`
+    select v.id variant_id, v.product_id, v.sku, v.barcode, p.title, v.option_values, ${stockedExpr} stocked
+    from product_variants v join products p on p.id = v.product_id and p.vendor_id = v.vendor_id
+    where v.vendor_id = ${vendorId}::uuid and v.deleted_at is null and p.deleted_at is null and v.status <> 'archived' ${text} ${only}
+    order by (lower(v.sku) = lower(${o.q ?? ''})) desc, p.title asc, v.sku asc limit ${o.limit}`);
+  return res.map((r) => {
+    const options = Object.values((r.option_values ?? {}) as Record<string, string>).filter(Boolean);
+    return { variantId: String(r.variant_id), productId: String(r.product_id), sku: String(r.sku), title: String(r.title), variantName: options.length ? options.join(' / ') : null, barcode: (r.barcode as string | null) ?? null, stocked: Boolean(r.stocked) };
+  });
+}

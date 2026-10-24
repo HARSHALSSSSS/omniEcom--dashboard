@@ -802,9 +802,10 @@ Audit trail
 
 | Method | Path | Access | Summary |
 |---|---|---|---|
-| POST | `/api/v1/inventory/adjustments` | `inventory:write` | Adjust stock by type (damage / return / correction / manual / shrinkage / other) |
+| POST | `/api/v1/inventory/adjustments` | `inventory:write` | Adjust stock by type (damage / return / correction / manual / shrinkage / other / opening_stock) |
 | POST | `/api/v1/inventory/adjustments/preview` | `inventory:write` | Preview an adjustment (nothing is written) |
 | POST | `/api/v1/inventory/bulk` | `inventory:write` | Bulk action on a selection (adjust / transfer / export / sync / group) |
+| GET | `/api/v1/inventory/catalog-variants` | `inventory:read` | Search the catalog for variants, also those without a stock row |
 | GET | `/api/v1/inventory/channel-sync` | `inventory:read` | Channel synchronisation: master stock, state per marketplace account, incidents |
 | POST | `/api/v1/inventory/channel-sync` | `inventory:write` | Sync inventory to the channels (all connected accounts, or one) |
 | GET | `/api/v1/inventory/channel-sync/{accountId}/affected` | `inventory:read` | SKUs whose last channel push was rejected or differs |
