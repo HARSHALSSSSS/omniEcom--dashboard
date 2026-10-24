@@ -257,7 +257,7 @@ function Body({ returnId, onClose, onStartInspection, onOpenRefund, review }: Om
                 </span>
               )}
             </div>
-            {d.receipt.match === "quantity_mismatch" && d.receipt.mismatch && (
+            {d.receipt.match === "quantity_mismatch" && d.receipt.mismatch && d.details.dates.receivedAt && (
               <p className="rounded-lg border border-[#FDE68A]/60 bg-[#FFFBF5] p-3 text-[12px] text-[#D97706]">
                 Quantity mismatch: {d.receipt.mismatch.expected} expected, {d.receipt.mismatch.received} received.
               </p>

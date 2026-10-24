@@ -79,7 +79,7 @@ function Reconciliation({ row, detail, order }: { row: LedgerRow; detail: Return
                 </td>
                 <td className="px-4 py-3 text-[#666666]">{row.quantity}</td>
                 <td className="px-4 py-3 text-[#666666]">{row.receivedQuantity}</td>
-                <td className={cn("px-4 py-3 font-medium", row.receivedQuantity < row.quantity ? "text-[#D97706]" : "text-[#16A34A]")}>{row.receivedQuantity < row.quantity ? "Quantity mismatch" : "Matched"}</td>
+                <td className={cn("px-4 py-3 font-medium", !row.receivedAt ? "text-[#666666]" : row.receivedQuantity < row.quantity ? "text-[#D97706]" : "text-[#16A34A]")}>{!row.receivedAt ? "Awaiting receipt" : row.receivedQuantity < row.quantity ? "Quantity mismatch" : "Matched"}</td>
               </tr>
             ) : (
               order?.items.map((it) => {

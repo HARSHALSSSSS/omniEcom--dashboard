@@ -498,6 +498,18 @@ describe('analytics and attention', () => {
 });
 
 describe('return detail drawer', () => {
+  it('reports a quantity mismatch only after the goods were received', async () => {
+    const { w, order, wh } = await shippedWorld(5);
+    const requested = await mkReturn(w, order, wh, { qty: 2, approve: false });
+    const approved = await mkReturn(w, order, wh, { qty: 1 });
+    for (const x of [requested, approved]) {
+      const d = (await c.get(`${R}/${x.id}/detail`, w.admin)).body.data;
+      expect(d.receipt).toMatchObject({ received: 0, match: 'awaiting_receipt', mismatch: null });
+    }
+    const received = await mkReturn(w, order, wh, { qty: 2, receive: 1 });
+    expect((await c.get(`${R}/${received.id}/detail`, w.admin)).body.data.receipt).toMatchObject({ match: 'quantity_mismatch', mismatch: { expected: 2, received: 1 } });
+  });
+
   it('header, product, expected vs received, current state and a timeline with future steps pending', async () => {
     const { w, order, wh } = await shippedWorld(5);
     const staff = await c.addMember(w.admin, 'vendor_staff');

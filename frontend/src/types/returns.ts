@@ -150,7 +150,7 @@ export interface ReturnDetail {
     reason: { code: string; label: string; text: string | null };
     dates: { requestedAt: string | null; approvedAt: string | null; receivedAt: string | null; completedAt: string | null };
   };
-  receipt: { expected: number; received: number; match: "matched" | "quantity_mismatch"; mismatch: { expected: number; received: number } | null };
+  receipt: { expected: number; received: number; match: "matched" | "quantity_mismatch" | "awaiting_receipt"; mismatch: { expected: number; received: number } | null };
   currentState: {
     inspection: { status: InspectionStatus; inspector: { id: string; name: string | null } | null };
     refund: { status: RefundStatus; amountMinor: number | null; currency: string | null; source: string | null; error: string | null };

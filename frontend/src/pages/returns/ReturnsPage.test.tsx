@@ -505,9 +505,17 @@ describe("return detail drawer", () => {
     await waitFor(() => expect(loc()).not.toContain("drawer="));
   });
 
+  it("does not report a quantity mismatch before the return was received", async () => {
+    api.detail.mockResolvedValue(detail({ receipt: { expected: 1, received: 0, match: "awaiting_receipt", mismatch: null } }));
+    renderPage("/returns?drawer=return:r1");
+    expect(await screen.findByText("Event timeline")).toBeInTheDocument();
+    expect(screen.queryByText(/Quantity mismatch/)).not.toBeInTheDocument();
+  });
+
   it("shows a quantity mismatch, a failed refund and the pickup", async () => {
     api.detail.mockResolvedValue(
       detail({
+        details: { ...detail().details, dates: { ...detail().details.dates, receivedAt: "2026-10-19T08:00:00.000Z" } },
         receipt: { expected: 2, received: 1, match: "quantity_mismatch", mismatch: { expected: 2, received: 1 } },
         currentState: { inspection: { status: "passed", inspector: { id: "u1", name: "Ravi" } }, refund: { status: "failed", amountMinor: 299900, currency: "INR", source: "connector", error: "Gateway declined" }, disposition: "pending" },
       }),

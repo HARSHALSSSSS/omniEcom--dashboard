@@ -303,7 +303,8 @@ export async function returnDetailView(tx: Tx, c: Container, vendorId: string, i
       dates: { requestedAt: iso(requested?.createdAt ?? r.createdAt), approvedAt: iso(approved?.createdAt), receivedAt: iso(r.receivedAt), completedAt: iso(r.completedAt) },
       customerNote: 'Customer information is shown only when provided by the connected channel. No customer data is inferred.',
     },
-    receipt: { expected: rc.expected, received: rc.received, match: rc.mismatch ? 'quantity_mismatch' : 'matched', mismatch: rc.mismatch },
+    // a shortfall only means something once the goods are in: before that nothing is expected to have arrived
+    receipt: { expected: rc.expected, received: rc.received, match: !r.receivedAt ? 'awaiting_receipt' : rc.mismatch ? 'quantity_mismatch' : 'matched', mismatch: r.receivedAt ? rc.mismatch : null },
     currentState: {
       inspection: { status: r.inspectionStatus, inspector: r.inspectorId ? { id: r.inspectorId, name: users.get(r.inspectorId) ?? null } : null },
       refund: { status: r.refundStatus, amountMinor: r.refundAmountMinor, currency: r.refundCurrency ?? o?.currency ?? null, source: r.refundSource, error: r.refundError },
