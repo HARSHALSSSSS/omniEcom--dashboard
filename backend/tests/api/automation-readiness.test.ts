@@ -159,7 +159,7 @@ describe('Automation screen walkthrough: rules, overview, approvals, runs', () =
     expect(q.total).toBe(1);
     expect(q.items[0]).toMatchObject({
       ruleId: ids.price, triggerType: 'buybox_price_drop', actionType: 'adjust_channel_price', skuOrOrder: w.variant.sku,
-      financialImpact: 45_540 - 49_900, recommendedAction: `Propose INR 455.40 for ${w.variant.sku} (now INR 499.00), competitor at INR 460.00`,
+      financialImpact: 45_540 - 49_900, recommendedAction: `Propose ₹455.40 for ${w.variant.sku} (now ₹499.00), competitor at ₹460.00`,
       facts: { ourPriceMinor: 49_900, competitorPriceMinor: 46_000, gapMinor: 3_900, gapBps: 782, sellerName: 'RivalMart', marketplace: 'mock' },
     });
     expect(await scan(s.w.admin.vendorId!)).toMatchObject({ competitorLower: 0 }); // the same observation is announced once

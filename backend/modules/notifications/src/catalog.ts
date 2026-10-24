@@ -9,7 +9,16 @@ type Severity = (typeof schema.NOTIFICATION_SEVERITIES)[number];
 type Channel = (typeof schema.NOTIFICATION_CHANNELS)[number];
 type P = Record<string, unknown>;
 const s = (v: unknown, d = ''): string => (v === undefined || v === null || v === '' ? d : String(v));
-const money = (minor: unknown, currency = 'INR'): string => (typeof minor === 'number' ? `${currency} ${(minor / 100).toFixed(2)}` : '');
+const SYMBOLS: Record<string, string> = { INR: '₹', USD: '$', EUR: '€', GBP: '£' };
+/** "₹1,234.50" (Indian digit grouping, like the screens); an unknown currency keeps its code in front */
+export const money = (minor: unknown, currency = 'INR'): string => {
+  if (typeof minor !== 'number' || !Number.isFinite(minor)) return '';
+  const amount = (minor / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const symbol = SYMBOLS[currency];
+  return symbol ? `${symbol}${amount}` : `${currency} ${amount}`;
+};
+/** the marketplace as a person reads it: the connector's display name when the service resolved it, the code otherwise */
+const marketplaceName = (p: P): string => s(p.marketplaceName ?? p.marketplace);
 
 export const CATEGORIES = ['order', 'inventory', 'connector', 'security', 'returns', 'system'] as const;
 export type Category = (typeof CATEGORIES)[number];
@@ -34,7 +43,7 @@ export interface Spec {
 export const DEFAULT_CHANNELS: Record<Severity, Channel[]> = { info: ['in_app'], warning: ['in_app', 'email'], critical: ['in_app', 'email', 'push'] };
 
 export const SPECS: Record<string, Spec> = {
-  'order.created': { type: 'order.new', category: 'order', gate: 'orderAlerts', action: (id) => `/orders/${id}`, label: 'New order received', severity: 'info', title: (p) => `New order ${s(p.orderNumber)}`, body: (p) => [s(p.marketplace), money(p.totalMinor)].filter(Boolean).join(' · '), entity: (id) => ({ type: 'order', id }) },
+  'order.created': { type: 'order.new', category: 'order', gate: 'orderAlerts', action: (id) => `/orders/${id}`, label: 'New order received', severity: 'info', title: (p) => `New order ${s(p.orderNumber)}`, body: (p) => [marketplaceName(p), money(p.totalMinor)].filter(Boolean).join(' · '), entity: (id) => ({ type: 'order', id }) },
   'order.needs_attention': { type: 'order.attention', category: 'order', gate: 'orderAlerts', action: (id) => `/orders/${id}`, label: 'An order needs attention', severity: 'warning', title: (p) => `Order needs attention: ${s(p.reason, 'check the order')}`, entity: (id) => ({ type: 'order', id }), dedupe: (id, p) => `order-attention:${id}:${s(p.reason)}` },
   'order.cancellation_requested': { type: 'order.cancellation_requested', category: 'order', gate: 'orderAlerts', action: (id) => `/orders/${id}`, label: 'A cancellation was requested', severity: 'warning', title: (p) => `Cancellation requested for ${s(p.orderNumber)}`, body: (p) => `By ${s(p.initiator)}: ${s(p.reasonCode)}`, entity: (id) => ({ type: 'order', id }) },
   'inventory.low_stock': { type: 'inventory.low_stock', category: 'inventory', gate: 'lowStock', action: (_id, p) => (p.variantId ? `/inventory?search=${encodeURIComponent(s(p.sku ?? p.variantId))}` : '/inventory'), label: 'Low stock', severity: 'warning', title: (p) => `Low stock: ${s(p.available)} left (reorder level ${s(p.reorderLevel)})`, entity: (_id, p) => (p.variantId ? { type: 'variant', id: s(p.variantId) } : null), dedupe: (_id, p) => `low-stock:${s(p.variantId)}:${s(p.warehouseId)}` },

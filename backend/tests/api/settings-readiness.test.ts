@@ -358,6 +358,14 @@ describe('settings screen', () => {
 });
 
 describe('notifications: categories, action links and alert switches', () => {
+  it('writes money with the rupee sign and names the marketplace, never its code', async () => {
+    const admin = await newVendor('Words Co');
+    await emitEvent(admin.vendorId!, 'order.created', '33333333-3333-4333-8333-333333333333', { orderNumber: 'ORD-2', marketplace: 'mock', totalMinor: 51900 });
+    const order = (await inbox(admin)).find((n) => n.type === 'order.new');
+    expect(order?.body).toBe('Mock Marketplace (Sandbox) · ₹519.00');
+    expect(order?.body).not.toMatch(/INR|mock/);
+  });
+
   it('adds category and actionUrl and counts unread per category', async () => {
     const admin = await newVendor('Notify Co');
     await emitEvent(admin.vendorId!, 'order.created', '11111111-1111-4111-8111-111111111111', { orderNumber: 'ORD-1', marketplace: 'amazon_in', totalMinor: 150000 });

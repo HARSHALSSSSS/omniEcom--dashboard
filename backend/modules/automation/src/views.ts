@@ -17,7 +17,7 @@ export const RUN_STATUS_GROUPS = {
 export type RunStatus = keyof typeof RUN_STATUS_GROUPS;
 export const runStatusOf = (s: string): RunStatus => (s === 'pending_approval' ? 'awaiting_approval' : (RUN_STATUS_GROUPS.success as readonly string[]).includes(s) ? 'success' : 'failed');
 
-const money = (minor: number) => `INR ${(minor / 100).toFixed(2)}`;
+const money = (minor: number) => `₹${(minor / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 
 // ------------------------------------------------------------------------------------------------

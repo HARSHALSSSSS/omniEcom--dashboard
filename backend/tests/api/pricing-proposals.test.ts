@@ -220,12 +220,12 @@ describe('approve and reject', () => {
     const waiting = (await notes()).filter((n) => n.type === 'pricing.proposal_created');
     expect(waiting).toHaveLength(1);
     expect(waiting[0]).toMatchObject({ title: 'Price proposals are waiting for your review', actionUrl: '/pricing?view=proposals' });
-    expect(waiting[0]!.body).toContain('INR 499.00 to INR 449.00');
+    expect(waiting[0]!.body).toContain('₹499.00 to ₹449.00');
     expect((await c.post(`${API}/proposals/${p.id}/approve`, {}, w.admin)).status).toBe(200);
     await t.pump();
     const applied = (await notes()).find((n) => n.type === 'pricing.price_applied');
     expect(applied, 'an approval is notified').toMatchObject({ title: 'A price change was approved', actionUrl: '/pricing?view=history' });
-    expect(applied!.body).toContain('INR 499.00 to INR 449.00');
+    expect(applied!.body).toContain('₹499.00 to ₹449.00');
   });
 
   it('approval puts the price live through pricing, is idempotent, and only admins decide', async () => {

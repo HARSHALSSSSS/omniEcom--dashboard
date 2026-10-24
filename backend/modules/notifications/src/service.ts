@@ -34,7 +34,11 @@ export async function notifyEvent(c: Container, e: DomainEventLike): Promise<num
   const spec = SPECS[e.type];
   const vendorId = e.vendorId;
   if (!spec || !vendorId) return 0;
-  const p = (e.payload ?? {}) as Record<string, unknown>;
+  const p = { ...((e.payload ?? {}) as Record<string, unknown>) };
+  // texts name the marketplace the way the screens do ("Mock Marketplace (Sandbox)"), never by its code
+  if (typeof p.marketplace === 'string') {
+    try { p.marketplaceName = c.connectors.get(p.marketplace).displayName; } catch { /* unknown code: the code is shown */ }
+  }
   const pending: Pending[] = [];
   let created = 0;
   await withVendor(c.database.db, vendorId, async (tx) => {
