@@ -4,7 +4,7 @@ import { createMetrics, HealthRegistry, logErrorTracker, startTracing, type Erro
 import { createDatabase, type Database } from '@oms/database';
 import { createRedis, QueueRegistry } from '@oms/messaging';
 import { createStorage } from '@oms/storage';
-import { LogMailer } from '@oms/module-kit';
+import { createMailer } from './mailer';
 import { createConnectorRegistry } from '@oms/connectors';
 import type { Container } from '@oms/module-kit';
 import type { Redis } from 'ioredis';
@@ -53,6 +53,7 @@ export async function createRuntime(service: string): Promise<Runtime> {
   }
   const queues = new QueueRegistry(redis, config.REDIS_KEY_PREFIX);
   const storage = createStorage(config);
+  const mailer = await createMailer(config, logger);
 
   health.register('postgres', () => database.ping());
   health.register('redis', async () => void (await redisFast.ping()));
@@ -68,7 +69,7 @@ export async function createRuntime(service: string): Promise<Runtime> {
       mock: config.mockMarketplaceEnabled,
       amazon: config.AMAZON_IN_LWA_CLIENT_ID && config.AMAZON_IN_LWA_CLIENT_SECRET ? { clientId: config.AMAZON_IN_LWA_CLIENT_ID, clientSecret: config.AMAZON_IN_LWA_CLIENT_SECRET } : undefined,
       flipkart: config.FLIPKART_APP_ID && config.FLIPKART_APP_SECRET ? { appId: config.FLIPKART_APP_ID, appSecret: config.FLIPKART_APP_SECRET } : undefined,
-    }), mailer: new LogMailer(logger, !config.isProd) },
+    }), mailer },
     onShutdown: (name, fn) => void hooks.push({ name, fn }),
     shutdown: (reason) =>
       (shuttingDown ??= (async () => {

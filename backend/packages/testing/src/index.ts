@@ -44,6 +44,8 @@ export const PROD_SAFE_ENV: Record<string, string> = {
   NODE_ENV: 'production', JWT_ACCESS_SECRET: 'Zk3v9qLw1XrT7mNc4HbY8dFs2PjA6eUo0GiKt5RxVnWyQz1B', ENCRYPTION_KEYS: `k2025:${Buffer.alloc(32, 7).toString('base64')}`, METRICS_TOKEN: 'metrics-token-0123456789',
   CORS_ORIGINS: 'https://app.example.com', DATABASE_URL: 'postgres://oms_app:pw@db.example.com:5432/oms', DATABASE_SSL: 'true', STORAGE_DRIVER: 's3', TRUST_PROXY: '1',
   APP_WEB_URL: 'https://app.example.com', PUBLIC_BASE_URL: 'https://api.example.com', PUBLIC_API_URL: 'https://api.example.com', AUTH_RATE_LIMIT_MAX: '10', EMAIL_VERIFICATION_REQUIRED: 'true',
+  SMTP_URL: 'smtps://mailer:pw@smtp.mail-provider.test:465', EMAIL_FROM: 'Omni Ecom <no-reply@mail.acme-shop.in>', REDIS_URL: 'rediss://:pw@cache.acme-shop.in:6379',
+  STORAGE_ENDPOINT: 'https://s3.ap-south-1.amazonaws.com', STORAGE_BUCKET: 'acme-oms-media', STORAGE_ACCESS_KEY_ID: 'AKIAEXAMPLEKEYID0000', STORAGE_SECRET_ACCESS_KEY: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
 };
 
 export const testConfig = (overrides: Record<string, string> = {}): AppConfig => parseConfig({ ...TEST_ENV, ...overrides });

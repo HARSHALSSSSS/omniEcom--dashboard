@@ -7,6 +7,8 @@ const PROD_ENV: Record<string, string | undefined> = {
   ...TEST_ENV, NODE_ENV: 'production', JWT_ACCESS_SECRET: 'Zk3v9qLw1XrT7mNc4HbY8dFs2PjA6eUo0GiKt5RxVnWyQz1B', ENCRYPTION_KEYS: 'k2025:' + Buffer.alloc(32, 7).toString('base64'),
   METRICS_TOKEN: 'metrics-token-0123456789', CORS_ORIGINS: 'https://app.example.com', DATABASE_URL: 'postgres://oms_app:pw@db.example.com:5432/oms', DATABASE_SSL: 'true', STORAGE_DRIVER: 's3',
   TRUST_PROXY: '1', APP_WEB_URL: 'https://app.example.com', PUBLIC_BASE_URL: 'https://api.example.com', PUBLIC_API_URL: 'https://api.example.com', AUTH_RATE_LIMIT_MAX: '10', EMAIL_VERIFICATION_REQUIRED: 'true',
+  SMTP_URL: 'smtps://mailer:pw@smtp.mail-provider.test:465', EMAIL_FROM: 'Omni Ecom <no-reply@mail.acme-shop.in>', REDIS_URL: 'rediss://:pw@cache.acme-shop.in:6379',
+  STORAGE_ENDPOINT: 'https://s3.ap-south-1.amazonaws.com', STORAGE_BUCKET: 'acme-oms-media', STORAGE_ACCESS_KEY_ID: 'AKIAEXAMPLEKEYID0000', STORAGE_SECRET_ACCESS_KEY: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
 };
 
 describe('config', () => {
@@ -43,6 +45,22 @@ describe('config', () => {
     expect(parseConfig(PROD_ENV).isProd).toBe(true);
     // staging is held to the same standard (except TRUST_PROXY)
     expect(() => parseConfig({ ...PROD_ENV, NODE_ENV: 'staging', METRICS_TOKEN: undefined })).toThrow(/METRICS_TOKEN/);
+  });
+  it('production requires real e-mail delivery, a real Redis, complete S3 storage and no sandbox connectors', () => {
+    const bad: Array<[Record<string, string | undefined>, RegExp]> = [
+      [{ SMTP_URL: undefined }, /SMTP_URL is required/], [{ SMTP_URL: 'http://smtp.shop.in' }, /smtp:\/\/ or smtps/], [{ SMTP_URL: 'smtp://localhost:1025' }, /not localhost/],
+      [{ EMAIL_FROM: undefined }, /EMAIL_FROM is required/], [{ EMAIL_FROM: 'not an address' }, /EMAIL_FROM must be/], [{ EMAIL_FROM: 'no-reply@example.com' }, /own sending domain/], [{ EMAIL_FROM: 'Omni <no-reply@localhost>' }, /own sending domain|EMAIL_FROM must be/],
+      [{ REDIS_URL: undefined }, /REDIS_URL must point at the production Redis/], [{ REDIS_URL: 'redis://127.0.0.1:6379' }, /REDIS_URL must point/], [{ REDIS_URL: 'http://cache.acme-shop.in' }, /redis:\/\/ or rediss/],
+      [{ STORAGE_ENDPOINT: undefined }, /STORAGE_ENDPOINT is required/], [{ STORAGE_ENDPOINT: 'http://localhost:9000' }, /STORAGE_ENDPOINT must not be localhost/], [{ STORAGE_BUCKET: ' ' }, /STORAGE_BUCKET is required/],
+      [{ STORAGE_ACCESS_KEY_ID: undefined }, /STORAGE_ACCESS_KEY_ID and STORAGE_SECRET_ACCESS_KEY/], [{ STORAGE_SECRET_ACCESS_KEY: undefined }, /STORAGE_ACCESS_KEY_ID and STORAGE_SECRET_ACCESS_KEY/], [{ STORAGE_ACCESS_KEY_ID: 'minioadmin' }, /MinIO development defaults/],
+      [{ MOCK_MARKETPLACE_ENABLED: 'true' }, /MOCK_MARKETPLACE_ENABLED=true is not allowed/], [{ SANDBOX_COURIER_ENABLED: 'true' }, /SANDBOX_COURIER_ENABLED=true is not allowed/],
+    ];
+    for (const [patch, msg] of bad) expect(() => parseConfig({ ...PROD_ENV, ...patch }), JSON.stringify(patch)).toThrow(msg);
+    // explicit false is fine, and the memory-storage driver is already refused elsewhere
+    expect(parseConfig({ ...PROD_ENV, MOCK_MARKETPLACE_ENABLED: 'false', SANDBOX_COURIER_ENABLED: 'false' }).isProd).toBe(true);
+    // staging keeps its rehearsal conveniences: sandbox connectors allowed, SMTP/Redis not enforced
+    const { SMTP_URL: _s, EMAIL_FROM: _e, ...rest } = PROD_ENV;
+    expect(parseConfig({ ...rest, NODE_ENV: 'staging', SANDBOX_COURIER_ENABLED: 'true', MOCK_MARKETPLACE_ENABLED: 'true', REDIS_URL: 'redis://localhost:6379' }).sandboxCourierEnabled).toBe(true);
   });
   it('splits CORS origins', () => {
     expect(parseConfig({ ...TEST_ENV, CORS_ORIGINS: 'https://a.com, https://b.com' }).CORS_ORIGINS).toEqual(['https://a.com', 'https://b.com']);

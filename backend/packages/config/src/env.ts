@@ -122,7 +122,10 @@ export const envSchema = z.object({
   MYNTRA_PARTNER_SECRET: z.string().optional(),
   SNAPDEAL_PARTNER_ID: z.string().optional(),
   SNAPDEAL_PARTNER_SECRET: z.string().optional(),
+  /** `smtp://user:pass@host:587` (STARTTLS) or `smtps://user:pass@host:465`. Set => real e-mail delivery (SMTP mailer); unset => log mailer (dev/test only). */
   SMTP_URL: z.string().optional(),
+  /** Sender of every platform e-mail, `addr@domain` or `Name <addr@domain>`. Required in production. */
+  EMAIL_FROM: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

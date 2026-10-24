@@ -207,7 +207,7 @@ export async function assertEmailVerified(req: FastifyReqLike, tx: Tx): Promise<
   if (!p || p.userType === 'platform') return;
   if (!(await isEmailVerified(tx, p.actorId))) throw new AppError('EMAIL_NOT_VERIFIED');
 }
-export { LogMailer, MemoryMailer } from './mailers';
+export { LogMailer, MemoryMailer, SmtpMailer, renderMailHtml, scrubMailError, isTransientMailError, type MailTransport, type SmtpMailerOptions } from './mailers';
 
 /**
  * Stricter per-route limiter (login, refresh, password reset...), counted separately from the global limiter.
