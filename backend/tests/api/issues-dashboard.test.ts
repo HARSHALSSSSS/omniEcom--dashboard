@@ -96,25 +96,43 @@ describe('detectors group the right records with the right priority', () => {
     expect(await events(issue.id)).toEqual(['detected', 'updated', 'auto_resolved']);
   });
 
-  it('stock below threshold: critical when a product sold out while selling, plus the recommendation banner', async () => {
+  it('stock below threshold counts the Inventory low-stock products; sold-out products are their own critical issue; plus the recommendation banner', async () => {
     const w = await buildWorld(t, c, { stock: [4] });
     const v2 = await c.makeVariant(w.admin, { title: 'Quiet seller' });
     await c.stock(w.admin, v2.variantId, w.warehouses[0]!.id, 2);
     await refresh(w.admin);
     let issue = await find(w.admin, 'stock_below_threshold');
     expect(issue).toMatchObject({ area: 'inventory', priority: 'high', count: 2, title: '2 products are below their stock threshold', impact: 'Potential stockout' });
+    expect(await find(w.admin, 'stock_out')).toBeUndefined();
     expect(await (await c.get('/api/v1/issues/recommendation', w.admin)).body.data).toBeNull(); // nothing sold yet
 
-    await orderArrives(t, c, w, 4); // sells the last 4 units of the main product
+    await orderArrives(t, c, w, 3); // sells 3 of the 4 units: still low stock, now selling
     await refresh(w.admin);
-    issue = await find(w.admin, 'stock_below_threshold');
-    expect(issue.priority).toBe('critical');
-    const d = await detail(w.admin, issue.id);
-    expect(d.affected.items.map((x: any) => x.label).sort()).toEqual([w.variant.sku, v2.sku].sort());
     const rec = (await c.get('/api/v1/issues/recommendation', w.admin)).body.data;
     expect(rec.text).toBe('1 of the 2 low-stock products has sold at least 3 units in the last 7 days. Consider reviewing replenishment for it first.');
     expect(rec.evidence).toMatchObject({ lowStockProducts: 2, soldAtLeast3: 1 });
     expect(rec.action).toMatchObject({ label: 'Review recommendation' });
+
+    await orderArrives(t, c, w, 1); // sells the last unit of the main product: it is out of stock now, not "low"
+    await refresh(w.admin);
+    issue = await find(w.admin, 'stock_below_threshold');
+    expect(issue).toMatchObject({ priority: 'high', count: 1, title: '1 product is below its stock threshold' });
+    const d = await detail(w.admin, issue.id);
+    expect(d.affected.items.map((x: any) => x.label)).toEqual([v2.sku]);
+    // the sold-out product that was selling is critical, and is what the Inventory "Out of stock" tab lists
+    const out = await find(w.admin, 'stock_out');
+    expect(out).toMatchObject({ area: 'inventory', priority: 'critical', count: 1, title: '1 product is out of stock' });
+    expect((await detail(w.admin, out.id)).affected.items.map((x: any) => x.label)).toEqual([w.variant.sku]);
+    // the inventory screen counts the same products
+    const kpis = (await c.get('/api/v1/inventory/kpis', w.admin)).body.data;
+    expect(kpis.health).toMatchObject({ lowStock: issue.count, outOfStock: out.count });
+    const lowRows = (await c.get('/api/v1/inventory/ledger?filter[stockStatus]=low_stock', w.admin)).body.data.items.map((x: any) => x.sku);
+    expect(lowRows).toEqual([v2.sku]);
+    // the dashboard card says the same number
+    const home = (await c.get('/api/v1/dashboard', w.admin)).body.data;
+    expect(home.inventoryHealth).toMatchObject({ low: issue.count, out: out.count });
+    expect(home.needsAttention.items.find((x: any) => x.issueKey === 'low_stock')).toMatchObject({ count: issue.count });
+    expect((await c.get('/api/v1/issues/recommendation', w.admin)).body.data).toBeNull(); // the one low-stock product has not sold; the sold-out one is not low stock
 
     // a business threshold of 0 and plenty of stock -> back to normal
     expect((await c.patch('/api/v1/vendor/settings', { lowStockThreshold: 0 }, w.admin)).status).toBe(200);

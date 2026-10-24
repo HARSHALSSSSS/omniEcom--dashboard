@@ -1,4 +1,4 @@
-import { sql, type Tx } from '@oms/database';
+import { LOW_STOCK_SALES_WINDOW_DAYS, lowStockRule, sql, type Tx } from '@oms/database';
 import { accountStates } from './channel';
 import type { Can } from './shell';
 import { ACTIVE_ISSUE, addDays, dayIn, marketplaceName, n, pct, rows, vendorFacts, type VendorFacts } from './util';
@@ -34,11 +34,17 @@ async function recommendation(tx: Tx, vendorId: string) {
   return r ? { id: String(r.id), kind: String(r.kind), severity: String(r.severity), title: String(r.title), rationale: String(r.summary), status: String(r.status), actions: ['review', 'dismiss'], recommendationOnly: true } : null;
 }
 
-async function inventoryHealth(tx: Tx, vendorId: string, threshold: number) {
-  const cte = sql`with v as (select pv.id, pv.product_id, pv.sku, coalesce(sum(i.quantity_on_hand - i.quantity_reserved), 0)::int available, max(i.reorder_level) reorder
+/** "low" is the Inventory screen's low stock (the shared `lowStockRule`: something left, at or under the reorder level / threshold, or less cover than the lead time) */
+async function inventoryHealth(tx: Tx, vendorId: string, threshold: number, defaultLeadDays: number) {
+  const WD = sql.raw(String(LOW_STOCK_SALES_WINDOW_DAYS));
+  const low = lowStockRule({ available: sql`v.available`, reorder: sql`v.reorder`, threshold: sql`${threshold}::int`, perDay: sql`(coalesce(sold.units, 0) / ${WD}.0)`, leadDays: sql`v.lead` });
+  const cte = sql`with v as (select pv.id, pv.product_id, pv.sku, coalesce(sum(i.quantity_on_hand - i.quantity_reserved), 0)::int available, max(i.reorder_level)::int reorder, coalesce(pv.lead_time_days, ${defaultLeadDays}::int)::int lead
       from product_variants pv left join inventory i on i.vendor_id = pv.vendor_id and i.variant_id = pv.id
+        and exists (select 1 from warehouses w where w.id = i.warehouse_id and w.vendor_id = i.vendor_id and w.status = 'active' and w.deleted_at is null)
       where pv.vendor_id = ${vendorId} and pv.deleted_at is null and pv.status = 'active' group by pv.id),
-    c as (select *, case when available <= 0 then 'out' when available <= coalesce(reorder, ${threshold}) then 'low' else 'healthy' end st from v)`;
+    sold as (select oi.variant_id, sum(oi.quantity)::int units from order_items oi join orders o on o.id = oi.order_id and o.vendor_id = oi.vendor_id
+      where oi.vendor_id = ${vendorId} and oi.variant_id is not null and o.status <> 'cancelled' and o.placed_at >= now() - make_interval(days => ${WD}) group by oi.variant_id),
+    c as (select v.*, case when v.available <= 0 then 'out' when ${low} then 'low' else 'healthy' end st from v left join sold on sold.variant_id = v.id)`;
   const counts = await rows(tx, sql`${cte} select st, count(*)::int c from c group by st`);
   const worst = await rows(tx, sql`${cte} select c.product_id, c.sku, c.available, c.st, p.title from c join products p on p.id = c.product_id and p.vendor_id = ${vendorId}
     where c.st <> 'healthy' and p.deleted_at is null order by (c.st = 'out') desc, c.available asc, c.sku limit 3`);
@@ -116,7 +122,7 @@ export async function dashboard(tx: Tx, p: { vendorId: string; actorType: string
 
   if (can('issues:read')) out.needsAttention = await needsAttention(tx, p.vendorId);
   if (can('ai:use')) out.recommendation = await recommendation(tx, p.vendorId);
-  const inv = can('inventory:read') ? await inventoryHealth(tx, p.vendorId, facts.lowStockThreshold) : null;
+  const inv = can('inventory:read') ? await inventoryHealth(tx, p.vendorId, facts.lowStockThreshold, facts.defaultLeadDays) : null;
   Object.assign(out, await salesSections(tx, p.vendorId, asOf, days, facts, inv ? inv.low : null));
   if (can('orders:read')) out.orderFlow = await orderFlow(tx, p.vendorId, asOf);
   if (inv) out.inventoryHealth = inv;

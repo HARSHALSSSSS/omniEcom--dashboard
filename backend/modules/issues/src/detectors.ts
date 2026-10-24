@@ -1,4 +1,4 @@
-import { sql, type Tx } from '@oms/database';
+import { DEFAULT_LEAD_TIME_DAYS, LOW_STOCK_SALES_WINDOW_DAYS, lowStockRule, sql, type Tx } from '@oms/database';
 
 /**
  * Detectors: pure READ queries over the other areas' tables. Each one reports the groups it sees right now (none = the condition is gone);
@@ -34,7 +34,7 @@ export interface DetectCtx {
   /** last instant of the business day (23:59:59 local) and of tomorrow */
   dueToday: Date;
   dueTomorrow: Date;
-  settings: { lowStockThreshold: number; atRiskMinutes: number; approachingMinutes: number; inspectionOverdueHours: number; awaitingFirstScanHours: number };
+  settings: { lowStockThreshold: number; defaultLeadDays: number; atRiskMinutes: number; approachingMinutes: number; inspectionOverdueHours: number; awaitingFirstScanHours: number };
 }
 
 export interface Detector { key: string; area: IssueArea; run(tx: Tx, ctx: DetectCtx): Promise<Detection[]> }
@@ -84,35 +84,81 @@ const ordersDispatchRisk: Detector = {
 // inventory
 // ------------------------------------------------------------------------------------------------
 export interface LowStockRow { variantId: string; sku: string; title: string | null; available: number; threshold: number; sold7d: number }
-/** variants whose available stock (all warehouses) is at or under their reorder level / the business threshold, with units sold in the last 7 days */
-export async function lowStockRows(tx: Tx, vendorId: string, defaultThreshold: number): Promise<LowStockRow[]> {
+/**
+ * The low-stock variants, by the SAME rule as the Inventory screen (`lowStockRule`: something left to sell, at or under the reorder level or the
+ * business threshold, or less cover than the lead time), over the same inputs (active warehouses, the 14-day velocity, the variant or default
+ * lead time), so the Inventory tab, the dashboard card, Needs attention and the issue all count the same products. Out of stock is not low
+ * stock: it is counted apart. `sold7d` = units sold in the last 7 days (what the recommendation looks at).
+ */
+export async function lowStockRows(tx: Tx, vendorId: string, defaultThreshold: number, defaultLeadDays: number = DEFAULT_LEAD_TIME_DAYS): Promise<LowStockRow[]> {
+  const WD = sql.raw(String(LOW_STOCK_SALES_WINDOW_DAYS));
+  const rule = lowStockRule({ available: sql`s.available`, reorder: sql`s.reorder`, threshold: sql`${defaultThreshold}::int`, perDay: sql`(coalesce(sold.units, 0) / ${WD}.0)`, leadDays: sql`coalesce(v.lead_time_days, ${defaultLeadDays}::int)` });
   const rs = await rows(tx, sql`with s as (
-      select i.variant_id, sum(i.quantity_on_hand - i.quantity_reserved)::int available, max(i.reorder_level)::int reorder from inventory i where i.vendor_id = ${vendorId} group by i.variant_id
+      select i.variant_id, sum(i.quantity_on_hand - i.quantity_reserved)::int available, max(i.reorder_level)::int reorder
+      from inventory i join warehouses w on w.id = i.warehouse_id and w.vendor_id = i.vendor_id
+      where i.vendor_id = ${vendorId} and w.status = 'active' and w.deleted_at is null group by i.variant_id
     ), sold as (
-      select oi.variant_id, sum(oi.quantity)::int units from order_items oi join orders o on o.id = oi.order_id and o.vendor_id = oi.vendor_id
-      where oi.vendor_id = ${vendorId} and oi.variant_id is not null and o.placed_at >= now() - interval '7 days' and o.status <> 'cancelled' and oi.status <> 'cancelled' group by oi.variant_id
+      select oi.variant_id, sum(oi.quantity)::int units, sum(oi.quantity) filter (where o.placed_at >= now() - interval '7 days')::int units7
+      from order_items oi join orders o on o.id = oi.order_id and o.vendor_id = oi.vendor_id
+      where oi.vendor_id = ${vendorId} and oi.variant_id is not null and o.placed_at >= now() - make_interval(days => ${WD}) and o.status <> 'cancelled' group by oi.variant_id
     )
-    select s.variant_id, v.sku, p.title, s.available, coalesce(s.reorder, ${defaultThreshold}::int) threshold, coalesce(sold.units, 0) sold7d
-    from s join product_variants v on v.id = s.variant_id and v.vendor_id = ${vendorId} join products p on p.id = v.product_id and p.vendor_id = v.vendor_id
+    select s.variant_id, v.sku, p.title, s.available, coalesce(s.reorder, ${defaultThreshold}::int) threshold, coalesce(sold.units7, 0) sold7d
+    from s join product_variants v on v.id = s.variant_id and v.vendor_id = ${vendorId} join products p on p.id = v.product_id and p.vendor_id = v.vendor_id and p.deleted_at is null
     left join sold on sold.variant_id = s.variant_id
-    where v.deleted_at is null and s.available <= coalesce(s.reorder, ${defaultThreshold}::int)
-    order by s.available, coalesce(sold.units, 0) desc, v.sku limit 5000`);
+    where v.deleted_at is null and ${rule}
+    order by s.available, coalesce(sold.units7, 0) desc, v.sku limit 5000`);
   return rs.map((r) => ({ variantId: String(r.variant_id), sku: String(r.sku), title: r.title ? String(r.title) : null, available: num(r.available), threshold: num(r.threshold), sold7d: num(r.sold7d) }));
 }
 
+/** tracked variants with nothing available (active warehouses), with units sold in the last 7 days: the Inventory "Out of stock" tab */
+export async function outOfStockRows(tx: Tx, vendorId: string): Promise<LowStockRow[]> {
+  const rs = await rows(tx, sql`with s as (
+      select i.variant_id, sum(i.quantity_on_hand - i.quantity_reserved)::int available
+      from inventory i join warehouses w on w.id = i.warehouse_id and w.vendor_id = i.vendor_id
+      where i.vendor_id = ${vendorId} and w.status = 'active' and w.deleted_at is null group by i.variant_id
+    ), sold as (
+      select oi.variant_id, sum(oi.quantity)::int units from order_items oi join orders o on o.id = oi.order_id and o.vendor_id = oi.vendor_id
+      where oi.vendor_id = ${vendorId} and oi.variant_id is not null and o.placed_at >= now() - interval '7 days' and o.status <> 'cancelled' group by oi.variant_id
+    )
+    select s.variant_id, v.sku, p.title, s.available, 0 threshold, coalesce(sold.units, 0) sold7d
+    from s join product_variants v on v.id = s.variant_id and v.vendor_id = ${vendorId} join products p on p.id = v.product_id and p.vendor_id = v.vendor_id and p.deleted_at is null
+    left join sold on sold.variant_id = s.variant_id
+    where v.deleted_at is null and s.available <= 0
+    order by coalesce(sold.units, 0) desc, v.sku limit 5000`);
+  return rs.map((r) => ({ variantId: String(r.variant_id), sku: String(r.sku), title: r.title ? String(r.title) : null, available: num(r.available), threshold: num(r.threshold), sold7d: num(r.sold7d) }));
+}
+
+/** the Inventory "Low stock" tab: exactly the products `lowStockRows` finds (nothing available is out of stock, below) */
 const stockBelowThreshold: Detector = {
   key: 'stock_below_threshold', area: 'inventory',
   async run(tx, c) {
-    const low = await lowStockRows(tx, c.vendorId, c.settings.lowStockThreshold);
+    const low = await lowStockRows(tx, c.vendorId, c.settings.lowStockThreshold, c.settings.defaultLeadDays);
     if (low.length === 0) return [];
-    const stockoutWithSales = low.filter((l) => l.available <= 0 && l.sold7d > 0).length;
     return [{
-      key: this.key, scopeHash: '', area: 'inventory', priority: stockoutWithSales > 0 ? 'critical' : 'high',
+      key: this.key, scopeHash: '', area: 'inventory', priority: 'high',
       title: low.length === 1 ? '1 product is below its stock threshold' : `${low.length} products are below their stock threshold`,
       explanation: 'Low stock may lead to missed sales if not replenished soon.', impact: 'Potential stockout', count: low.length,
       affected: low.slice(0, 50).map((l) => ({ type: 'variant', id: l.variantId, label: l.sku })), dueAt: c.dueToday,
       recommendedAction: { text: 'Review stock levels and replenish the products that are selling fastest.', label: 'Review inventory', href: '/inventory?health=low' },
-      details: { whyItMatters: 'Products that run out of stock stop selling and can lose marketplace ranking.', outOfStockWithSales: stockoutWithSales, soldAtLeast3: low.filter((l) => l.sold7d >= 3).length },
+      details: { whyItMatters: 'Products that run out of stock stop selling and can lose marketplace ranking.', soldAtLeast3: low.filter((l) => l.sold7d >= 3).length },
+    }];
+  },
+};
+
+/** the Inventory "Out of stock" tab: tracked products with nothing available; critical when they were selling */
+const stockOut: Detector = {
+  key: 'stock_out', area: 'inventory',
+  async run(tx, c) {
+    const out = await outOfStockRows(tx, c.vendorId);
+    if (out.length === 0) return [];
+    const selling = out.filter((l) => l.sold7d > 0).length;
+    return [{
+      key: this.key, scopeHash: '', area: 'inventory', priority: selling > 0 ? 'critical' : 'high',
+      title: out.length === 1 ? '1 product is out of stock' : `${out.length} products are out of stock`,
+      explanation: selling > 0 ? `${selling} of them sold in the last 7 days.` : 'Nothing is available to sell for them.', impact: 'Lost sales', count: out.length,
+      affected: out.slice(0, 50).map((l) => ({ type: 'variant', id: l.variantId, label: l.sku })), dueAt: c.dueToday,
+      recommendedAction: { text: 'Restock the products that were selling first.', label: 'Review inventory', href: '/inventory?filter[stockStatus]=out_of_stock' },
+      details: { whyItMatters: 'A product with nothing available cannot be sold and can lose marketplace ranking.', soldInLast7Days: selling },
     }];
   },
 };
@@ -433,6 +479,6 @@ const connectorCapabilityLimit: Detector = {
 };
 
 export const DETECTORS: Detector[] = [
-  ordersDispatchRisk, stockBelowThreshold, listingsIncomplete, listingContentReview, listingContentFailed, channelSyncFailing, returnsAwaitingApproval, returnsInspectionOverdue, refundFailed, quantityMismatch, dispositionMissing,
+  ordersDispatchRisk, stockBelowThreshold, stockOut, listingsIncomplete, listingContentReview, listingContentFailed, channelSyncFailing, returnsAwaitingApproval, returnsInspectionOverdue, refundFailed, quantityMismatch, dispositionMissing,
   shippingNoMethod, labelUnavailable, trackingNotReceived, shippingSyncFailed, shippingSlaRisk, connectorCapabilityLimit, inventoryMismatch, warehouseImbalance,
 ];

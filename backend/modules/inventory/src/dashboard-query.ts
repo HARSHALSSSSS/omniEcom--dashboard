@@ -1,4 +1,4 @@
-import { and, desc, eq, escapeLike, inArray, lt, schema, sql, type SQL, type Tx } from '@oms/database';
+import { DEFAULT_LEAD_TIME_DAYS, DEFAULT_LOW_STOCK_THRESHOLD, LOW_STOCK_SALES_WINDOW_DAYS, and, desc, eq, escapeLike, inArray, lowStockRule, lt, schema, sql, type SQL, type Tx } from '@oms/database';
 import { AppError, Errors } from '@oms/shared';
 import { ledgerDrift } from './service';
 
@@ -21,13 +21,12 @@ const iso = (v: unknown): string | null => (v === null || v === undefined ? null
 const uuidList = (ids: string[]): SQL => sql.join(ids.map((i) => sql`${i}::uuid`), sql`, `);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export const WINDOW_DAYS = 14;
+export const WINDOW_DAYS = LOW_STOCK_SALES_WINDOW_DAYS;
 const WD = sql.raw(String(WINDOW_DAYS));
-export const DEFAULT_LEAD_DAYS = 7;
+export const DEFAULT_LEAD_DAYS = DEFAULT_LEAD_TIME_DAYS;
 export const HEALTHS = ['stockout', 'critical', 'attention', 'healthy'] as const;
 export type Health = (typeof HEALTHS)[number];
 /** same default as the business setting (modules/vendors settings-defaults) */
-const DEFAULT_LOW_STOCK_THRESHOLD = 5;
 export const SIGNALS = ['low_stock', 'stockout_risk', 'inventory_mismatch', 'slow_moving', 'high_velocity', 'aging_inventory', 'warehouse_imbalance'] as const;
 export type Signal = (typeof SIGNALS)[number];
 /**
@@ -104,6 +103,8 @@ export function lxCte(o: LxOpts): SQL {
   const drift = o.driftIds?.length ? sql`array[${uuidList(o.driftIds)}]::uuid[]` : sql`array[]::uuid[]`;
   const vid = o.vendorId;
   const thr = o.lowStockThreshold ?? null;
+  // one definition of low stock for the tabs, the KPIs, the signal chip and the issue queue (see @oms/database stock-rules)
+  const LOW = lowStockRule({ available: sql`available`, reorder: sql`reorder`, threshold: sql`${thr}::int`, perDay: sql`per_day`, leadDays: sql`lead` });
   return sql`
   with st as (
     select i.variant_id,
@@ -143,7 +144,7 @@ export function lxCte(o: LxOpts): SQL {
     select lh.*,
       case when per_day > 0 then available / per_day end cover,
       case when available <= 0 then 'stockout' when per_day > 0 and available / per_day < lead / 2.0 then 'critical' when per_day > 0 and available / per_day < lead then 'attention' else 'healthy' end health,
-      ((reorder is not null and available <= reorder) or (available > 0 and ${thr}::int is not null and available <= ${thr}::int)) is_low,
+      ${LOW} is_low,
       (per_day > 0 and available / per_day < lead) is_risk,
       (available > 0 and per_day < 0.1) is_slow,
       (per_day > 0 and per_day >= (select p90 from pct)) is_fast,
@@ -152,7 +153,7 @@ export function lxCte(o: LxOpts): SQL {
       case when listings = 0 then 'not_listed' when ch_failed then 'failed' when ch_dirty or ch_mism then 'attention' else 'healthy' end channel_sync,
       (available > 0 and ((per_day > 0 and available / per_day > ${EXC}) or (per_day = 0 and (last_at is null or last_at < now() - make_interval(days => ${o.agingDays}::int))))) is_excess,
       case when available <= 0 then 'out_of_stock'
-        when (coalesce(reorder, ${thr}::int) is not null and available <= coalesce(reorder, ${thr}::int)) or (per_day > 0 and available / per_day < lead) then 'low_stock'
+        when ${LOW} then 'low_stock'
         when (per_day > 0 and available / per_day > ${EXC}) or (per_day = 0 and (last_at is null or last_at < now() - make_interval(days => ${o.agingDays}::int))) then 'excess'
         else 'healthy' end stock_status
     from lh)`;

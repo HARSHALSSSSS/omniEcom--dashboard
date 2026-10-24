@@ -270,7 +270,7 @@ export async function issueHistory(tx: Tx, vendorId: string, status: 'all' | 're
 export async function recommendation(tx: Tx, vendorId: string) {
   const b = await bounds(tx, vendorId);
   const threshold = typeof b.settings.lowStockThreshold === 'number' ? b.settings.lowStockThreshold : 5;
-  const low = await lowStockRows(tx, vendorId, threshold);
+  const low = await lowStockRows(tx, vendorId, threshold, typeof (b.settings.inventory as { defaultLeadTimeDays?: unknown } | undefined)?.defaultLeadTimeDays === 'number' ? (b.settings.inventory as { defaultLeadTimeDays: number }).defaultLeadTimeDays : undefined);
   const hot = low.filter((l) => l.sold7d >= 3);
   if (low.length === 0 || hot.length === 0) return null;
   return {

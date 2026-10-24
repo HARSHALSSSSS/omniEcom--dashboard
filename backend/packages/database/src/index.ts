@@ -9,3 +9,4 @@ export { createPlatformUser } from './platform-user';
 export { sql, eq, ne, and, or, not, desc, asc, inArray, isNull, isNotNull, gt, lt, gte, lte, ilike, like, count } from 'drizzle-orm';
 export type { SQL } from 'drizzle-orm';
 export { isFeatureEnabled, effectiveFlags } from './feature-flags';
+export { DEFAULT_LEAD_TIME_DAYS, DEFAULT_LOW_STOCK_THRESHOLD, LOW_STOCK_SALES_WINDOW_DAYS, isLowStock, lowStockRule } from './stock-rules';

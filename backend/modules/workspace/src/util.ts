@@ -35,12 +35,12 @@ export function userIdOf(req: { ctx: { principal?: { actorType: string; actorId:
 export async function vendorFacts(tx: Tx, vendorId: string) {
   const [v] = await rows(tx, sql`select id, display_name, plan, team_size, timezone, currency, settings from vendors where id = ${vendorId}`);
   const settings = ((v?.settings ?? {}) as Record<string, unknown>);
-  const inv = (settings.inventory ?? {}) as { mode?: string };
+  const inv = (settings.inventory ?? {}) as { mode?: string; defaultLeadTimeDays?: number };
   const sla = (settings.sla ?? {}) as { atRiskMinutes?: number };
   return {
     id: vendorId, name: String(v?.display_name ?? ''), plan: String(v?.plan ?? 'free'), teamSize: (v?.team_size as string | null) ?? null,
     timezone: String(v?.timezone ?? 'UTC'), currency: String(v?.currency ?? 'INR').trim(),
-    lowStockThreshold: Number(settings.lowStockThreshold ?? 5), numberFormat: resolveSettings(settings).numberFormat, inventoryMode: (inv.mode ?? null) as 'simple' | 'warehouse' | null, atRiskMinutes: Number(sla.atRiskMinutes ?? 90),
+    lowStockThreshold: Number(settings.lowStockThreshold ?? 5), defaultLeadDays: Number(inv.defaultLeadTimeDays ?? 7), numberFormat: resolveSettings(settings).numberFormat, inventoryMode: (inv.mode ?? null) as 'simple' | 'warehouse' | null, atRiskMinutes: Number(sla.atRiskMinutes ?? 90),
   };
 }
 export type VendorFacts = Awaited<ReturnType<typeof vendorFacts>>;

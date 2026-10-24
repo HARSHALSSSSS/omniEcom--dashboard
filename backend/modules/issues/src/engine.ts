@@ -49,7 +49,7 @@ export async function detectCtx(tx: Tx, vendorId: string): Promise<DetectCtx> {
   return {
     vendorId, tz: b.tz, now: b.now, dueToday: new Date(b.endOfToday.getTime() - 1000), dueTomorrow: new Date(b.endOfTomorrow.getTime() - 1000),
     settings: {
-      lowStockThreshold: numSetting(s, 'lowStockThreshold', 5),
+      lowStockThreshold: numSetting(s, 'lowStockThreshold', 5), defaultLeadDays: numSetting(s.inventory, 'defaultLeadTimeDays', 7),
       atRiskMinutes: numSetting(s.sla, 'atRiskMinutes', 90), approachingMinutes: numSetting(s.sla, 'approachingMinutes', 240),
       inspectionOverdueHours: numSetting(s.returns, 'inspectionOverdueHours', 24), awaitingFirstScanHours: numSetting(s.shipping, 'awaitingFirstScanHours', 12),
     },
