@@ -1,0 +1,17 @@
+# Code owners are auto-requested for review. Enable "Require review from Code Owners" in branch protection (docs/BRANCH-PROTECTION.md).
+# The last matching pattern wins.
+
+# everything
+*                          @HARSHALSSSSS
+
+# ---- backend (API, workers, database, infrastructure)
+/backend/                  @HARSHALSSSSS
+/backend/packages/database/migrations/   @HARSHALSSSSS
+/backend/infrastructure/   @HARSHALSSSSS
+
+# ---- frontend (web app)
+/frontend/                 @HARSHALSSSSS
+
+# ---- delivery pipeline and repository policy (changes here can ship to production)
+/.github/                  @HARSHALSSSSS
+/docs/                     @HARSHALSSSSS

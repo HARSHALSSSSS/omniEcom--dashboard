@@ -1,0 +1,36 @@
+version: 2
+updates:
+  # frontend (npm, package-lock.json)
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule: { interval: weekly, day: monday }
+    open-pull-requests-limit: 5
+    groups:
+      frontend-minor-patch: { update-types: [minor, patch] }
+    labels: [dependencies, frontend]
+
+  # backend (pnpm workspace: dependabot's "npm" ecosystem reads pnpm-lock.yaml and updates the workspace)
+  - package-ecosystem: npm
+    directory: /backend
+    schedule: { interval: weekly, day: monday }
+    open-pull-requests-limit: 5
+    groups:
+      backend-minor-patch: { update-types: [minor, patch] }
+    labels: [dependencies, backend]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly, day: monday }
+    groups:
+      actions-minor-patch: { update-types: [minor, patch] }
+    labels: [dependencies, ci]
+
+  - package-ecosystem: docker
+    directory: /backend/infrastructure/docker
+    schedule: { interval: weekly, day: monday }
+    labels: [dependencies, docker]
+
+  - package-ecosystem: docker
+    directory: /frontend
+    schedule: { interval: weekly, day: monday }
+    labels: [dependencies, docker]
