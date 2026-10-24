@@ -1,4 +1,5 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useGuardedMutation } from "@/hooks/useSubmitGuard";
 import { procurementApi } from "@/api/procurement.api";
 import { refreshShell } from "@/lib/session";
 import { useWorkspaceStore } from "@/store/workspace.store";
@@ -113,47 +114,47 @@ function useAfterStockWrite() {
 
 export function useCreatePurchaseOrder() {
   const after = useAfterProcurementWrite();
-  return useMutation({ mutationFn: (input: { body: PoWrite; idempotencyKey: string }) => procurementApi.createOrder(input.body, input.idempotencyKey), onSuccess: after });
+  return useGuardedMutation({ mutationFn: (input: { body: PoWrite; idempotencyKey: string }) => procurementApi.createOrder(input.body, input.idempotencyKey), onSuccess: after });
 }
 
 export function useUpdatePurchaseOrder() {
   const after = useAfterProcurementWrite();
-  return useMutation({ mutationFn: (input: { id: string; body: PoUpdate }) => procurementApi.updateOrder(input.id, input.body), onSuccess: after });
+  return useGuardedMutation({ mutationFn: (input: { id: string; body: PoUpdate }) => procurementApi.updateOrder(input.id, input.body), onSuccess: after });
 }
 
 export function useDeletePurchaseOrder() {
   const after = useAfterProcurementWrite();
-  return useMutation({ mutationFn: (id: string) => procurementApi.deleteOrder(id), onSuccess: after });
+  return useGuardedMutation({ mutationFn: (id: string) => procurementApi.deleteOrder(id), onSuccess: after });
 }
 
 export function useDuplicatePurchaseOrder() {
   const after = useAfterProcurementWrite();
-  return useMutation({ mutationFn: (id: string) => procurementApi.duplicateOrder(id), onSuccess: after });
+  return useGuardedMutation({ mutationFn: (id: string) => procurementApi.duplicateOrder(id), onSuccess: after });
 }
 
 export function useApprovePurchaseOrder() {
   const after = useAfterStockWrite();
-  return useMutation({ mutationFn: (input: { id: string; version?: number; expectedAt?: string }) => procurementApi.approveOrder(input.id, { version: input.version, expectedAt: input.expectedAt }), onSuccess: after });
+  return useGuardedMutation({ mutationFn: (input: { id: string; version?: number; expectedAt?: string }) => procurementApi.approveOrder(input.id, { version: input.version, expectedAt: input.expectedAt }), onSuccess: after });
 }
 
 export function useAcknowledgePurchaseOrder() {
   const after = useAfterProcurementWrite();
-  return useMutation({ mutationFn: (input: { id: string; version?: number; expectedAt?: string }) => procurementApi.acknowledgeOrder(input.id, { version: input.version, expectedAt: input.expectedAt }), onSuccess: after });
+  return useGuardedMutation({ mutationFn: (input: { id: string; version?: number; expectedAt?: string }) => procurementApi.acknowledgeOrder(input.id, { version: input.version, expectedAt: input.expectedAt }), onSuccess: after });
 }
 
 export function useReceivePurchaseOrder() {
   const after = useAfterStockWrite();
-  return useMutation({ mutationFn: (input: { id: string; body: ReceiveInput; receiptKey: string }) => procurementApi.receiveOrder(input.id, input.body, input.receiptKey), onSuccess: after });
+  return useGuardedMutation({ mutationFn: (input: { id: string; body: ReceiveInput; receiptKey: string }) => procurementApi.receiveOrder(input.id, input.body, input.receiptKey), onSuccess: after });
 }
 
 export function useCancelPurchaseOrder() {
   const after = useAfterStockWrite();
-  return useMutation({ mutationFn: (input: { id: string; reason: string; version?: number }) => procurementApi.cancelOrder(input.id, { reason: input.reason, version: input.version }), onSuccess: after });
+  return useGuardedMutation({ mutationFn: (input: { id: string; reason: string; version?: number }) => procurementApi.cancelOrder(input.id, { reason: input.reason, version: input.version }), onSuccess: after });
 }
 
 export function useCreateFromSuggestions() {
   const after = useAfterProcurementWrite();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (input: { warehouseId?: string; variantIds?: string[]; dryRun: boolean }) => procurementApi.fromSuggestions(input),
     onSuccess: (res) => {
       if (!res.dryRun) after();
@@ -163,25 +164,25 @@ export function useCreateFromSuggestions() {
 
 export function useCreateSupplier() {
   const after = useAfterProcurementWrite();
-  return useMutation({ mutationFn: (body: SupplierWrite) => procurementApi.createSupplier(body), onSuccess: after });
+  return useGuardedMutation({ mutationFn: (body: SupplierWrite) => procurementApi.createSupplier(body), onSuccess: after });
 }
 
 export function useUpdateSupplier() {
   const after = useAfterProcurementWrite();
-  return useMutation({ mutationFn: (input: { id: string; body: SupplierUpdate }) => procurementApi.updateSupplier(input.id, input.body), onSuccess: after });
+  return useGuardedMutation({ mutationFn: (input: { id: string; body: SupplierUpdate }) => procurementApi.updateSupplier(input.id, input.body), onSuccess: after });
 }
 
 export function useDeleteSupplier() {
   const after = useAfterProcurementWrite();
-  return useMutation({ mutationFn: (id: string) => procurementApi.deleteSupplier(id), onSuccess: after });
+  return useGuardedMutation({ mutationFn: (id: string) => procurementApi.deleteSupplier(id), onSuccess: after });
 }
 
 export function usePutSupplierProducts() {
   const after = useAfterProcurementWrite();
-  return useMutation({ mutationFn: (input: { id: string; items: SupplierProductInput[] }) => procurementApi.putSupplierProducts(input.id, input.items), onSuccess: after });
+  return useGuardedMutation({ mutationFn: (input: { id: string; items: SupplierProductInput[] }) => procurementApi.putSupplierProducts(input.id, input.items), onSuccess: after });
 }
 
 export function useRemoveSupplierProduct() {
   const after = useAfterProcurementWrite();
-  return useMutation({ mutationFn: (input: { id: string; variantId: string }) => procurementApi.removeSupplierProduct(input.id, input.variantId), onSuccess: after });
+  return useGuardedMutation({ mutationFn: (input: { id: string; variantId: string }) => procurementApi.removeSupplierProduct(input.id, input.variantId), onSuccess: after });
 }

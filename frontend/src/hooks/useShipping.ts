@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useGuardedMutation } from "@/hooks/useSubmitGuard";
 import { shippingApi } from "@/api/shipping.api";
 import { useWorkspaceStore } from "@/store/workspace.store";
 import type {
@@ -152,11 +153,11 @@ export function useShippingRules(enabled: boolean) {
 
 /** labels are fetched for printing: nothing on the screen changes */
 export function useBulkLabels() {
-  return useMutation({ mutationFn: (ids: string[]) => shippingApi.bulkLabels(ids) });
+  return useGuardedMutation({ mutationFn: (ids: string[]) => shippingApi.bulkLabels(ids) });
 }
 
 export function useShipmentLabel() {
-  return useMutation({ mutationFn: (id: string) => shippingApi.label(id) });
+  return useGuardedMutation({ mutationFn: (id: string) => shippingApi.label(id) });
 }
 
 const useInvalidateAll = () => {
@@ -166,7 +167,7 @@ const useInvalidateAll = () => {
 
 export function useAddMethod() {
   const invalidate = useInvalidateAll();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (input: AddMethodInput) => shippingApi.addMethod(input),
     // the method exists even when its check failed: the list must show it
     onSettled: invalidate,
@@ -175,22 +176,22 @@ export function useAddMethod() {
 
 export function usePatchMethod() {
   const invalidate = useInvalidateAll();
-  return useMutation({ mutationFn: (v: { id: string; patch: MethodPatch }) => shippingApi.patchMethod(v.id, v.patch), onSettled: invalidate });
+  return useGuardedMutation({ mutationFn: (v: { id: string; patch: MethodPatch }) => shippingApi.patchMethod(v.id, v.patch), onSettled: invalidate });
 }
 
 export function useVerifyCarrier() {
   const invalidate = useInvalidateAll();
-  return useMutation({ mutationFn: (id: string) => shippingApi.verifyCarrier(id), onSettled: invalidate });
+  return useGuardedMutation({ mutationFn: (id: string) => shippingApi.verifyCarrier(id), onSettled: invalidate });
 }
 
 export function useSelectMethod() {
   const invalidate = useInvalidateAll();
-  return useMutation({ mutationFn: (v: { fulfillmentId: string; input: SelectionInput }) => shippingApi.select(v.fulfillmentId, v.input), onSettled: invalidate });
+  return useGuardedMutation({ mutationFn: (v: { fulfillmentId: string; input: SelectionInput }) => shippingApi.select(v.fulfillmentId, v.input), onSettled: invalidate });
 }
 
 export function useBulkOrders() {
   const invalidate = useInvalidateAll();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (v: { ids: string[]; action: BulkOrderAction; params?: { kind?: MethodKind; providerId?: string | null } }) => shippingApi.bulkOrders(v.ids, v.action, v.params),
     onSettled: invalidate,
   });
@@ -205,7 +206,7 @@ export function useShippingSync() {
   const businessId = useBusinessId();
   const [startedId, setStartedId] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState<string | null>(null);
-  const start = useMutation({
+  const start = useGuardedMutation({
     mutationFn: () => shippingApi.sync(),
     onSuccess: (job) => {
       setStartedId(job.id);
@@ -251,7 +252,7 @@ export function useShipmentRow(id: string | null) {
 /** what the row actions do: book the label of a confirmed order (with the AWB a configured logistics provider issued), hand a labelled one over */
 export function useCreateShipment() {
   const invalidate = useInvalidateAll();
-  return useMutation({ mutationFn: (v: { fulfillmentId: string; providerCode: string; awb?: string }) => shippingApi.createShipment(v), onSettled: invalidate });
+  return useGuardedMutation({ mutationFn: (v: { fulfillmentId: string; providerCode: string; awb?: string }) => shippingApi.createShipment(v), onSettled: invalidate });
 }
 
 export function usePickupSlots(enabled: boolean) {
@@ -261,60 +262,60 @@ export function usePickupSlots(enabled: boolean) {
 
 export function useBookPickupSlot() {
   const invalidate = useInvalidateAll();
-  return useMutation({ mutationFn: (input: PickupSlotInput) => shippingApi.bookPickupSlot(input), onSettled: invalidate });
+  return useGuardedMutation({ mutationFn: (input: PickupSlotInput) => shippingApi.bookPickupSlot(input), onSettled: invalidate });
 }
 
 export function useCancelPickupSlot() {
   const invalidate = useInvalidateAll();
-  return useMutation({ mutationFn: (id: string) => shippingApi.cancelPickupSlot(id), onSettled: invalidate });
+  return useGuardedMutation({ mutationFn: (id: string) => shippingApi.cancelPickupSlot(id), onSettled: invalidate });
 }
 
 export function useDispatchShipment() {
   const invalidate = useInvalidateAll();
-  return useMutation({ mutationFn: (id: string) => shippingApi.dispatchShipment(id), onSettled: invalidate });
+  return useGuardedMutation({ mutationFn: (id: string) => shippingApi.dispatchShipment(id), onSettled: invalidate });
 }
 
 export function useSyncTracking() {
   const invalidate = useInvalidateAll();
-  return useMutation({ mutationFn: (ids?: string[]) => shippingApi.syncTracking(ids), onSettled: invalidate });
+  return useGuardedMutation({ mutationFn: (ids?: string[]) => shippingApi.syncTracking(ids), onSettled: invalidate });
 }
 
 export function useRefreshTracking() {
   const invalidate = useInvalidateAll();
-  return useMutation({ mutationFn: (id: string) => shippingApi.refreshTracking(id), onSettled: invalidate });
+  return useGuardedMutation({ mutationFn: (id: string) => shippingApi.refreshTracking(id), onSettled: invalidate });
 }
 
 export function useCancelShipment() {
   const invalidate = useInvalidateAll();
-  return useMutation({ mutationFn: (v: { id: string; reason?: string }) => shippingApi.cancelShipment(v.id, v.reason), onSettled: invalidate });
+  return useGuardedMutation({ mutationFn: (v: { id: string; reason?: string }) => shippingApi.cancelShipment(v.id, v.reason), onSettled: invalidate });
 }
 
 export function useNdrAction() {
   const invalidate = useInvalidateAll();
-  return useMutation({ mutationFn: (v: { id: string; action: NdrAction; note?: string }) => shippingApi.ndrAction(v.id, v.action, v.note), onSettled: invalidate });
+  return useGuardedMutation({ mutationFn: (v: { id: string; action: NdrAction; note?: string }) => shippingApi.ndrAction(v.id, v.action, v.note), onSettled: invalidate });
 }
 
 export function useCreateRule() {
   const invalidate = useInvalidateAll();
-  return useMutation({ mutationFn: (input: RuleInput) => shippingApi.createRule(input), onSettled: invalidate });
+  return useGuardedMutation({ mutationFn: (input: RuleInput) => shippingApi.createRule(input), onSettled: invalidate });
 }
 
 export function useUpdateRule() {
   const invalidate = useInvalidateAll();
-  return useMutation({ mutationFn: (v: { id: string; input: Partial<RuleInput> }) => shippingApi.updateRule(v.id, v.input), onSettled: invalidate });
+  return useGuardedMutation({ mutationFn: (v: { id: string; input: Partial<RuleInput> }) => shippingApi.updateRule(v.id, v.input), onSettled: invalidate });
 }
 
 export function useDeleteRule() {
   const invalidate = useInvalidateAll();
-  return useMutation({ mutationFn: (id: string) => shippingApi.deleteRule(id), onSettled: invalidate });
+  return useGuardedMutation({ mutationFn: (id: string) => shippingApi.deleteRule(id), onSettled: invalidate });
 }
 
 export function useRuleAction() {
   const invalidate = useInvalidateAll();
-  return useMutation({ mutationFn: (v: { id: string; action: "enable" | "disable" | "duplicate" }) => shippingApi.ruleAction(v.id, v.action), onSettled: invalidate });
+  return useGuardedMutation({ mutationFn: (v: { id: string; action: "enable" | "disable" | "duplicate" }) => shippingApi.ruleAction(v.id, v.action), onSettled: invalidate });
 }
 
 export function useReorderRules() {
   const invalidate = useInvalidateAll();
-  return useMutation({ mutationFn: (ids: string[]) => shippingApi.reorderRules(ids), onSettled: invalidate });
+  return useGuardedMutation({ mutationFn: (ids: string[]) => shippingApi.reorderRules(ids), onSettled: invalidate });
 }

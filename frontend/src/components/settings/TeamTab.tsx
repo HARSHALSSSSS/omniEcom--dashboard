@@ -12,6 +12,7 @@ import { useWorkspaceStore } from "@/store/workspace.store";
 import { formatDate, formatDateTime } from "@/utils/format";
 import { Field, InlineError, ReadOnlyNote, SectionCard, selectClass } from "./fields";
 import type { Invitation, Member, MemberStatus, Role, VendorRoleKey } from "@/types/settings";
+import { useSubmitLock } from "@/hooks/useSubmitGuard";
 
 const ROLE_FALLBACK: Array<{ key: VendorRoleKey; name: string; hint: string }> = [
   { key: "vendor_admin", name: "Administrator", hint: "Full access, including settings, team and billing." },
@@ -46,11 +47,14 @@ function InviteDialog({ roles, onClose }: { roles: Role[] | undefined; onClose: 
   const [fieldError, setFieldError] = useState<string | null>(null);
   const valid = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim());
 
+  const acquire = useSubmitLock();
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!valid || invite.isPending) return;
     setError(null);
     setFieldError(null);
+    const release = acquire();
+    if (!release) return;
     try {
       await invite.mutateAsync({ email: email.trim(), roleKey });
       toast({ title: "Invitation sent", description: `${email.trim()} will get an email with a link that works for 7 days.`, variant: "success" });
@@ -58,6 +62,8 @@ function InviteDialog({ roles, onClose }: { roles: Role[] | undefined; onClose: 
     } catch (err) {
       if (isApiError(err) && err.fields?.email) setFieldError(err.fields.email);
       setError(isApiError(err) && err.code === "EMAIL_NOT_VERIFIED" ? "Verify your own email address before inviting people." : errorMessage(err, "Could not send the invitation."));
+    } finally {
+      release();
     }
   };
 
@@ -118,7 +124,10 @@ export function TeamTab() {
   const rows = useMemo(() => members.data?.pages.flatMap((p) => p.items) ?? [], [members.data]);
   const invites = useMemo(() => invitations.data?.pages.flatMap((p) => p.items) ?? [], [invitations.data]);
 
+  const acquire = useSubmitLock();
   const run = async (id: string, work: () => Promise<unknown>, done: { title: string; description?: string }) => {
+    const release = acquire();
+    if (!release) return;
     setError(null);
     setBusy(id);
     try {
@@ -128,6 +137,7 @@ export function TeamTab() {
       setError(errorMessage(e, "That change could not be saved."));
     } finally {
       setBusy(null);
+      release();
     }
   };
 

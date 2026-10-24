@@ -1,4 +1,5 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useGuardedMutation } from "@/hooks/useSubmitGuard";
 import { dashboardApi } from "@/api/dashboard.api";
 import { useWorkspaceStore } from "@/store/workspace.store";
 import type { Dashboard, SalesPeriod } from "@/types/dashboard";
@@ -22,7 +23,7 @@ export function useDashboard(period: SalesPeriod) {
 /** Dismiss = reject the open recommendation; the card disappears from every cached period at once. */
 export function useDismissRecommendation() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (id: string) => dashboardApi.rejectRecommendation(id),
     onSuccess: () => {
       queryClient.setQueriesData<Dashboard>({ queryKey: DASHBOARD_KEYS.all }, (old) =>

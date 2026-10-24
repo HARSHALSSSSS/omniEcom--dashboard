@@ -1,4 +1,5 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useGuardedMutation } from "@/hooks/useSubmitGuard";
 import { variantsApi } from "@/api/variants.api";
 import type {
   QuickAdjustPayload,
@@ -81,7 +82,7 @@ function useRefresh(productId: string) {
 
 export function useCreateVariant(productId: string) {
   const refresh = useRefresh(productId);
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (body: VariantWritePayload) => variantsApi.create(productId, body),
     onSuccess: refresh,
   });
@@ -99,7 +100,7 @@ export interface UpdateVariantInput {
 /** PATCH the changed fields with the version lock, then PUT the lead time when it changed */
 export function useUpdateVariant(productId: string) {
   const refresh = useRefresh(productId);
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: async ({ variantId, version, patch, leadTimeDays }: UpdateVariantInput) => {
       if (Object.keys(patch).length) await variantsApi.update(variantId, { ...patch, version });
       if (leadTimeDays !== undefined) await variantsApi.setLeadTime(variantId, leadTimeDays);
@@ -111,7 +112,7 @@ export function useUpdateVariant(productId: string) {
 
 export function useDeleteVariant(productId: string) {
   const refresh = useRefresh(productId);
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (variantId: string) => variantsApi.remove(variantId),
     onSuccess: refresh,
   });
@@ -119,7 +120,7 @@ export function useDeleteVariant(productId: string) {
 
 export function useBulkVariants(productId: string) {
   const refresh = useRefresh(productId);
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: ({ ids, action }: { ids: string[]; action: VariantBulkAction }) => variantsApi.bulk(productId, ids, action),
     onSettled: refresh,
   });
@@ -127,7 +128,7 @@ export function useBulkVariants(productId: string) {
 
 export function useQuickAdjust(productId: string) {
   const refresh = useRefresh(productId);
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (body: QuickAdjustPayload) => variantsApi.quickAdjust(body),
     onSuccess: refresh,
   });

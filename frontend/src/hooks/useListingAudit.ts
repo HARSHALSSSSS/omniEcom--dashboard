@@ -1,4 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useGuardedMutation } from "@/hooks/useSubmitGuard";
 import { listingAuditApi } from "@/api/listingAudit.api";
 import { listingStudioApi } from "@/api/listingStudio.api";
 import { errorMessage } from "@/api/errors";
@@ -45,7 +46,7 @@ export interface ApplyOutcome {
 /** confirm a suggestion: the existing PATCH per listing (attribute override); one failure never stops the rest */
 export function useApplySuggestion() {
   const qc = useQueryClient();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: async ({ suggestion, value }: { suggestion: Suggestion; value: string }): Promise<ApplyOutcome> => {
       const out: ApplyOutcome = { done: 0, failed: [] };
       for (const id of suggestion.listingIds) {
@@ -65,7 +66,7 @@ export function useApplySuggestion() {
 /** confirm and publish the ready cohort through POST /listings/bulk-publish */
 export function usePublishCohort() {
   const qc = useQueryClient();
-  return useMutation<BulkPublishSummary, Error, string[]>({
+  return useGuardedMutation<BulkPublishSummary, Error, string[]>({
     mutationFn: (ids) => listingAuditApi.bulkPublish(ids),
     onSettled: () => refreshListings(qc),
   });
@@ -75,7 +76,7 @@ export function usePublishCohort() {
 export function useSyncActions(id: string) {
   const qc = useQueryClient();
   const settle = () => void qc.invalidateQueries({ queryKey: AUDIT_KEYS.sync(id) });
-  const refresh = useMutation({ mutationFn: () => listingStudioApi.refreshStatus(id), onSettled: settle });
-  const content = useMutation({ mutationFn: () => listingStudioApi.contentSync(id), onSettled: settle });
+  const refresh = useGuardedMutation({ mutationFn: () => listingStudioApi.refreshStatus(id), onSettled: settle });
+  const content = useGuardedMutation({ mutationFn: () => listingStudioApi.contentSync(id), onSettled: settle });
   return { refresh, content };
 }

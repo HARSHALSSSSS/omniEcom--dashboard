@@ -8,6 +8,7 @@ import type { Brand } from "@/types/productCreation";
 import { SelectField } from "./fields";
 import { FieldShell } from "./fields";
 import { boxClass, errorClass, linkButton, outlineButton, ghostButton } from "./fieldStyles";
+import { useSubmitLock } from "@/hooks/useSubmitGuard";
 
 const NEW = "__new_brand__";
 const norm = (s: string) => s.trim().replace(/\s+/g, " ").toLowerCase();
@@ -54,12 +55,15 @@ export function BrandField({ value, onChange, brandRecord, disabled, error, maxL
     }
   };
 
+  const acquire = useSubmitLock();
   const create = async () => {
     const name = draft.trim().replace(/\s+/g, " ");
     if (!name) {
       setProblem("Enter a brand name.");
       return;
     }
+    const release = acquire();
+    if (!release) return;
     setBusy(true);
     setProblem(null);
     try {
@@ -81,6 +85,7 @@ export function BrandField({ value, onChange, brandRecord, disabled, error, maxL
       setProblem(errorMessage(e, "Could not add the brand."));
     } finally {
       setBusy(false);
+      release();
     }
   };
 

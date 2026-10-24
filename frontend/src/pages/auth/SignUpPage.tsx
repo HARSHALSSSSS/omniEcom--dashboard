@@ -11,6 +11,7 @@ import { ROUTES } from "@/constants/routes";
 import { useWorkspaceStore } from "@/store/workspace.store";
 import { signUp } from "@/lib/session";
 import { errorMessage, isApiError } from "@/api/errors";
+import { useSubmitLock } from "@/hooks/useSubmitGuard";
 
 /** matches the API: business name 2-120 chars, password 10-128 chars (length is the policy, no composition rules) */
 const signUpSchema = z.object({
@@ -45,7 +46,10 @@ export default function SignUpPage() {
     defaultValues: { fullName: "", businessName: "", email: "", password: "" },
   });
 
+  const acquire = useSubmitLock();
   const onSubmit = async (data: SignUpFormData) => {
+    const release = acquire();
+    if (!release) return;
     setServerError(null);
     try {
       await signUp({ businessName: data.businessName, fullName: data.fullName, email: data.email, password: data.password });
@@ -62,8 +66,10 @@ export default function SignUpPage() {
         }
       }
       if (!placed) setServerError(errorMessage(e));
+      release();
       return;
     }
+    release();
     const { onboardingResumeStep } = useWorkspaceStore.getState();
     navigate(`${ROUTES.ONBOARDING}/${onboardingResumeStep}`, { replace: true });
   };

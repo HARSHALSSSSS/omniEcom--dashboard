@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useBlocker } from "react-router-dom";
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useGuardedMutation } from "@/hooks/useSubmitGuard";
 import { settingsApi } from "@/api/settings.api";
 import { errorMessage, isApiError } from "@/api/errors";
 import { useCan, useFeature } from "@/hooks/useCan";
@@ -256,10 +257,10 @@ export const useGstinCheck = (gstin: string, enabled: boolean) =>
 export function useGstinActions() {
   const qc = useQueryClient();
   const refresh = () => qc.invalidateQueries({ queryKey: SETTINGS_KEYS.overview });
-  const add = useMutation({ mutationFn: (b: GstinCreateBody) => settingsApi.addGstin(b), onSuccess: refresh });
-  const update = useMutation({ mutationFn: (a: { id: string; body: GstinPatchBody }) => settingsApi.updateGstin(a.id, a.body), onSuccess: refresh });
-  const makePrimary = useMutation({ mutationFn: (id: string) => settingsApi.setPrimaryGstin(id), onSuccess: refresh });
-  const remove = useMutation({ mutationFn: (id: string) => settingsApi.deleteGstin(id), onSuccess: refresh });
+  const add = useGuardedMutation({ mutationFn: (b: GstinCreateBody) => settingsApi.addGstin(b), onSuccess: refresh });
+  const update = useGuardedMutation({ mutationFn: (a: { id: string; body: GstinPatchBody }) => settingsApi.updateGstin(a.id, a.body), onSuccess: refresh });
+  const makePrimary = useGuardedMutation({ mutationFn: (id: string) => settingsApi.setPrimaryGstin(id), onSuccess: refresh });
+  const remove = useGuardedMutation({ mutationFn: (id: string) => settingsApi.deleteGstin(id), onSuccess: refresh });
   return { add, update, makePrimary, remove };
 }
 
@@ -314,14 +315,14 @@ export const useRoles = (enabled: boolean) => useQuery({ queryKey: SETTINGS_KEYS
 export function useTeamActions() {
   const qc = useQueryClient();
   const refresh = () => Promise.all([qc.invalidateQueries({ queryKey: ["settings", "members"] }), qc.invalidateQueries({ queryKey: SETTINGS_KEYS.invitations })]);
-  const invite = useMutation({ mutationFn: (b: { email: string; roleKey: VendorRoleKey }) => settingsApi.invite(b), onSuccess: refresh });
-  const update = useMutation({
+  const invite = useGuardedMutation({ mutationFn: (b: { email: string; roleKey: VendorRoleKey }) => settingsApi.invite(b), onSuccess: refresh });
+  const update = useGuardedMutation({
     mutationFn: (a: { id: string; body: { roleKey?: VendorRoleKey; status?: "active" | "disabled"; fullName?: string } }) => settingsApi.updateMember(a.id, a.body),
     onSuccess: refresh,
   });
-  const remove = useMutation({ mutationFn: (id: string) => settingsApi.removeMember(id), onSuccess: refresh });
-  const resend = useMutation({ mutationFn: (id: string) => settingsApi.resendInvitation(id), onSuccess: refresh });
-  const revoke = useMutation({ mutationFn: (id: string) => settingsApi.revokeInvitation(id), onSuccess: refresh });
+  const remove = useGuardedMutation({ mutationFn: (id: string) => settingsApi.removeMember(id), onSuccess: refresh });
+  const resend = useGuardedMutation({ mutationFn: (id: string) => settingsApi.resendInvitation(id), onSuccess: refresh });
+  const revoke = useGuardedMutation({ mutationFn: (id: string) => settingsApi.revokeInvitation(id), onSuccess: refresh });
   return { invite, update, remove, resend, revoke };
 }
 
@@ -332,8 +333,8 @@ export const useSessions = () => useQuery({ queryKey: SETTINGS_KEYS.sessions, qu
 export function useSecurityActions() {
   const qc = useQueryClient();
   const refresh = () => qc.invalidateQueries({ queryKey: SETTINGS_KEYS.sessions });
-  const changePassword = useMutation({ mutationFn: (b: { currentPassword: string; newPassword: string }) => settingsApi.changePassword(b), onSuccess: refresh });
-  const revoke = useMutation({ mutationFn: (id: string) => settingsApi.revokeSession(id), onSuccess: refresh });
-  const revokeOthers = useMutation({ mutationFn: () => settingsApi.revokeOtherSessions(), onSettled: refresh });
+  const changePassword = useGuardedMutation({ mutationFn: (b: { currentPassword: string; newPassword: string }) => settingsApi.changePassword(b), onSuccess: refresh });
+  const revoke = useGuardedMutation({ mutationFn: (id: string) => settingsApi.revokeSession(id), onSuccess: refresh });
+  const revokeOthers = useGuardedMutation({ mutationFn: () => settingsApi.revokeOtherSessions(), onSettled: refresh });
   return { changePassword, revoke, revokeOthers };
 }

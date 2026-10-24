@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
-import { keepPreviousData, useMutation, useQueries, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQueries, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { useGuardedMutation } from "@/hooks/useSubmitGuard";
 import { importApi } from "@/api/import.api";
 import { isBusy, isNotFound } from "@/components/import/importFormat";
 import { saveBlob } from "@/components/products/list/saveBlob";
@@ -206,7 +207,7 @@ function useSessionCache() {
 
 export function useCreateImport() {
   const cache = useSessionCache();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (input: { source: ImportSource; fileName: string; fileSizeBytes: number }) => importApi.create(input),
     onSuccess: (session) => {
       cache.put(session);
@@ -218,7 +219,7 @@ export function useCreateImport() {
 /** starts an import from a connected marketplace account (the rows are pulled by the server) */
 export function useImportFromMarketplace() {
   const cache = useSessionCache();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (accountId: string) => importApi.fromMarketplace(accountId),
     onSuccess: (session) => {
       cache.put(session);
@@ -231,7 +232,7 @@ export function useUploadImportFile() {
   const b = useBusinessId();
   const qc = useQueryClient();
   const cache = useSessionCache();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: ({ id, file, onProgress, signal }: { id: string; file: Blob; onProgress?: (percent: number) => void; signal?: AbortSignal }) =>
       importApi.upload(id, file, { onProgress, signal }),
     onSuccess: ({ session }) => {
@@ -246,7 +247,7 @@ export function useUploadImportFile() {
 export function useUpdateMapping(id: string) {
   const b = useBusinessId();
   const qc = useQueryClient();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (change: MappingChange) => importApi.updateMapping(id, change),
     onSuccess: (view) => {
       qc.setQueryData(importKeys.mapping(b, id), view);
@@ -260,18 +261,18 @@ export function useUpdateMapping(id: string) {
 
 export function useUpdateSettings(id: string) {
   const cache = useSessionCache();
-  return useMutation({ mutationFn: (patch: SettingsPatch) => importApi.updateSettings(id, patch), onSuccess: cache.put });
+  return useGuardedMutation({ mutationFn: (patch: SettingsPatch) => importApi.updateSettings(id, patch), onSuccess: cache.put });
 }
 
 /** saves settings of an import that may have only just been created (the id comes with the call) */
 export function useSaveSettings() {
   const cache = useSessionCache();
-  return useMutation({ mutationFn: ({ id, patch }: { id: string; patch: SettingsPatch }) => importApi.updateSettings(id, patch), onSuccess: cache.put });
+  return useGuardedMutation({ mutationFn: ({ id, patch }: { id: string; patch: SettingsPatch }) => importApi.updateSettings(id, patch), onSuccess: cache.put });
 }
 
 export function useValidateImport(id: string) {
   const cache = useSessionCache();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: () => importApi.validate(id),
     onSuccess: (session) => {
       cache.put(session);
@@ -282,7 +283,7 @@ export function useValidateImport(id: string) {
 
 export function useRevalidateImport(id: string) {
   const cache = useSessionCache();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: () => importApi.revalidate(id),
     onSuccess: (res) => {
       cache.put(res.session);
@@ -306,7 +307,7 @@ export function useCommitPreview(id: string | undefined, enabled = true) {
 
 export function useCommitImport(id: string) {
   const cache = useSessionCache();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (mode: CommitMode) => importApi.commit(id, mode),
     onSuccess: (res) => {
       cache.put(res.session);
@@ -317,7 +318,7 @@ export function useCommitImport(id: string) {
 
 export function useCancelImport(id: string) {
   const cache = useSessionCache();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: () => importApi.cancel(id),
     onSuccess: (session) => {
       cache.put(session);
@@ -328,7 +329,7 @@ export function useCancelImport(id: string) {
 
 export function useResolveIssue(id: string) {
   const cache = useSessionCache();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (input: ResolveInput) => importApi.resolve(id, input),
     onSuccess: (res) => {
       cache.patch(id, { issues: res.issues, counters: res.counters });
@@ -339,7 +340,7 @@ export function useResolveIssue(id: string) {
 
 export function useBulkResolve(id: string) {
   const cache = useSessionCache();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (input: BulkResolveInput) => importApi.bulkResolve(id, input),
     onSuccess: (res) => {
       cache.patch(id, { issues: res.issues, counters: res.counters });
@@ -351,7 +352,7 @@ export function useBulkResolve(id: string) {
 // ---------------------------------------------------------------- downloads
 
 export function useDownloadTemplate() {
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: async (format: "csv" | "xlsx") => {
       const file = await importApi.template(format);
       saveBlob(file.blob, file.fileName);
@@ -360,7 +361,7 @@ export function useDownloadTemplate() {
 }
 
 export function useDownloadErrors(id: string) {
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: async () => {
       const file = await importApi.errorsCsv(id);
       saveBlob(file.blob, file.fileName);

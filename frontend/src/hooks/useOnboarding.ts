@@ -1,4 +1,5 @@
-import { useQuery, useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { useGuardedMutation } from "@/hooks/useSubmitGuard";
 import {
   onboardingApi,
   SYNC_JOB_TERMINAL,
@@ -47,7 +48,7 @@ export const useOnboardingOptions = () =>
 
 function useStateMutation<TVars, TResult>(fn: (vars: TVars) => Promise<TResult>, pick: (result: TResult) => OnboardingProgress) {
   const qc = useQueryClient();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: fn,
     onSuccess: (result) => {
       applyState(qc, pick(result));
@@ -81,7 +82,7 @@ export const useConnectorForm = (code: string | null) =>
  */
 export function useConnectChannel() {
   const qc = useQueryClient();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: async (v: { code: string; displayName?: string; credentials: Record<string, string> }) => {
       const account = await onboardingApi.connectChannel(v.code, v.displayName ? { displayName: v.displayName } : {});
       return onboardingApi.authorizeAccount(account.accountId, v.credentials);
@@ -105,7 +106,7 @@ export const useCatalog = () =>
 
 export function useRefreshCounts() {
   const qc = useQueryClient();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (accountId?: string) => onboardingApi.refreshCounts(accountId),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: ONBOARDING_KEYS.products });
@@ -115,7 +116,7 @@ export function useRefreshCounts() {
 
 export function useImportCatalog() {
   const qc = useQueryClient();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (accountId: string) => onboardingApi.importCatalog(accountId),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ONBOARDING_KEYS.products });
@@ -149,7 +150,7 @@ export const useReadiness = () => useQuery({ queryKey: ONBOARDING_KEYS.readiness
 /** "Go to dashboard": finishes onboarding on the server, then re-reads it so the guards let the user into the workspace */
 export function useCompleteOnboarding() {
   const qc = useQueryClient();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: async () => {
       await onboardingApi.complete();
       return refreshOnboarding();

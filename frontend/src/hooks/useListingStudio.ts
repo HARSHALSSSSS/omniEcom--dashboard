@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useBlocker } from "react-router-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useGuardedMutation } from "@/hooks/useSubmitGuard";
 import { listingStudioApi } from "@/api/listingStudio.api";
 import { errorMessage, isApiError } from "@/api/errors";
 import { useCan } from "@/hooks/useCan";
@@ -164,7 +165,7 @@ export function useStudioController(id: string) {
   }, [id, qc]);
 
   // ---------------------------------------------------------------- save
-  const saveMutation = useMutation({ mutationFn: (patch: ListingPatch) => listingStudioApi.save(id, patch) });
+  const saveMutation = useGuardedMutation({ mutationFn: (patch: ListingPatch) => listingStudioApi.save(id, patch) });
 
   const failSave = useCallback((e: unknown): SaveOutcome => {
     if (isApiError(e)) {
@@ -247,8 +248,8 @@ export function useStudioController(id: string) {
     setJobRef({ id: j.id, action });
   }, []);
 
-  const flowMutation = useMutation({ mutationFn: () => listingStudioApi.publishFlow(id) });
-  const actionMutation = useMutation({
+  const flowMutation = useGuardedMutation({ mutationFn: () => listingStudioApi.publishFlow(id) });
+  const actionMutation = useGuardedMutation({
     mutationFn: async (action: Exclude<StudioActionKey, "edit" | "publish_flow" | "resolve_review" | "sync_inventory" | "delete" | "approve" | "publish">) => {
       if (action === "validate") return { kind: "validate" as const, res: await listingStudioApi.validate(id) };
       if (action === "unpublish") return { kind: "job" as const, action: "unpublish" as const, res: await listingStudioApi.unpublish(id) };
@@ -297,7 +298,7 @@ export function useStudioController(id: string) {
     [actionMutation, canWrite, refreshAll, startJob, toast],
   );
 
-  const resolveMutation = useMutation({ mutationFn: (body: ReviewResolution) => listingStudioApi.resolveReview(id, body) });
+  const resolveMutation = useGuardedMutation({ mutationFn: (body: ReviewResolution) => listingStudioApi.resolveReview(id, body) });
   const resolveReview = useCallback(
     async (body: ReviewResolution): Promise<boolean> => {
       if (!canWrite) return false;
@@ -400,7 +401,7 @@ export type StudioController = ReturnType<typeof useStudioController>;
 export function useActivityTimeline(id: string, studio: ListingStudio | undefined) {
   const [extra, setExtra] = useState<{ stamp: number; pages: number; items: ActivityItem[] }>({ stamp: 0, pages: 1, items: [] });
   const stamp = studio ? Date.parse(studio.listing.updatedAt) + studio.activity.total : 0;
-  const mutation = useMutation({ mutationFn: (page: number) => listingStudioApi.getActivity(id, page) });
+  const mutation = useGuardedMutation({ mutationFn: (page: number) => listingStudioApi.getActivity(id, page) });
   // a fresh studio read (after a write) starts the timeline over
   const current = useMemo(() => (extra.stamp === stamp ? extra : { stamp, pages: 1, items: [] as ActivityItem[] }), [extra, stamp]);
   const items = useMemo(() => [...(studio?.activity.items ?? []), ...current.items], [studio, current.items]);

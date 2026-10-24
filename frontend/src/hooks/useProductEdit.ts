@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useBlocker } from "react-router-dom";
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useGuardedMutation } from "@/hooks/useSubmitGuard";
 import { productEditApi } from "@/api/productEdit.api";
 import { isApiError, errorMessage } from "@/api/errors";
 import { useCan } from "@/hooks/useCan";
@@ -58,7 +59,7 @@ export function useDebounced<T>(value: T, ms: number): T {
 // ------------------------------------------------------------------------------------------------ insights + AI
 export function useInsightDecision(id: string) {
   const qc = useQueryClient();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: ({ key, action }: { key: InsightKey; action: "dismiss" | "restore" }) =>
       action === "dismiss" ? productEditApi.dismissInsight(id, key) : productEditApi.restoreInsight(id, key),
     onSuccess: (decision) => {
@@ -69,7 +70,7 @@ export function useInsightDecision(id: string) {
 }
 
 export const useAiSuggest = (id: string) =>
-  useMutation({
+  useGuardedMutation({
     mutationFn: ({ mode, text }: { mode: AiMode; text: string }) => {
       const also: AiMode | null = mode === "rewrite" ? "concise" : mode === "concise" ? "rewrite" : null;
       return productEditApi.suggestDescription(id, {
@@ -79,8 +80,8 @@ export const useAiSuggest = (id: string) =>
       });
     },
   });
-export const useAiAccept = (id: string) => useMutation({ mutationFn: (suggestionId: string) => productEditApi.acceptDescription(id, suggestionId) });
-export const useAiDismiss = (id: string) => useMutation({ mutationFn: (suggestionId: string) => productEditApi.dismissDescription(id, suggestionId) });
+export const useAiAccept = (id: string) => useGuardedMutation({ mutationFn: (suggestionId: string) => productEditApi.acceptDescription(id, suggestionId) });
+export const useAiDismiss = (id: string) => useGuardedMutation({ mutationFn: (suggestionId: string) => productEditApi.dismissDescription(id, suggestionId) });
 
 // ------------------------------------------------------------------------------------------------ the page controller
 export type SaveOutcome = "saved" | "nochange" | "confirm" | "conflict" | "error";
@@ -188,7 +189,7 @@ export function useEditController(id: string) {
     setBanner(null);
   }, [base]);
 
-  const saveMutation = useMutation({
+  const saveMutation = useGuardedMutation({
     mutationFn: (args: { version: number; changes: EditChanges; confirm: boolean }) =>
       productEditApi.save(id, { version: args.version, changes: args.changes, ...(args.confirm ? { confirm: true } : {}) }),
   });

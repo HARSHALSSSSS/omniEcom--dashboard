@@ -11,6 +11,7 @@ import { adjustFields, initialAdjustState, isAdjustReady, noteProblem, qtyProble
 import { InlineError } from "./inventoryUi";
 import { ProductField } from "./ProductField";
 import type { StockTarget } from "./stockTarget";
+import { useSubmitLock } from "@/hooks/useSubmitGuard";
 
 const FIELD = "w-full h-8 px-2.5 border border-[#E5E5E5] rounded-lg text-[12px] font-normal text-[#111111] focus:outline-none focus:border-black";
 const LABEL = "text-[11px] font-semibold text-[#111111]";
@@ -71,9 +72,12 @@ function AdjustForm({ target, warehouses, onPick, onCancel, onDone }: AdjustPane
   const preview = useAdjustmentPreview(body && bodyKey === settledKey ? body : null);
   const warehouseName = warehouses.find((w) => w.id === warehouseId)?.name;
 
+  const acquire = useSubmitLock();
   const submit = async (ev: React.FormEvent) => {
     ev.preventDefault();
     if (!body || !target) return;
+    const release = acquire();
+    if (!release) return;
     setServerError(null);
     try {
       const res = await adjust.mutateAsync({ ...body, idempotencyKey: key });
@@ -86,6 +90,8 @@ function AdjustForm({ target, warehouses, onPick, onCancel, onDone }: AdjustPane
     } catch (e) {
       // 409 (below what is reserved / would go negative) and 400 come back with a readable message
       setServerError(errorMessage(e, "Could not change the stock."));
+    } finally {
+      release();
     }
   };
 

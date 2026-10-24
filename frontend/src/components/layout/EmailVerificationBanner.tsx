@@ -3,6 +3,7 @@ import { MailWarning } from "lucide-react";
 import { useWorkspaceStore } from "@/store/workspace.store";
 import { authApi } from "@/api/auth.api";
 import { errorMessage } from "@/api/errors";
+import { useSubmitLock } from "@/hooks/useSubmitGuard";
 
 /**
  * Connecting marketplaces and inviting people need a verified email (the API answers EMAIL_NOT_VERIFIED otherwise),
@@ -13,10 +14,13 @@ export function EmailVerificationBanner() {
   const email = useWorkspaceStore((s) => s.user?.email);
   const [state, setState] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [message, setMessage] = useState("");
+  const acquire = useSubmitLock();
 
   if (verified !== false) return null;
 
   const resend = async () => {
+    const release = acquire();
+    if (!release) return;
     setState("sending");
     try {
       await authApi.resendVerification();
@@ -24,6 +28,8 @@ export function EmailVerificationBanner() {
     } catch (e) {
       setMessage(errorMessage(e));
       setState("error");
+    } finally {
+      release();
     }
   };
 

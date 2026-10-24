@@ -1,4 +1,5 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useGuardedMutation } from "@/hooks/useSubmitGuard";
 import { ordersApi } from "@/api/orders.api";
 import { refreshShell } from "@/lib/session";
 import { useWorkspaceStore } from "@/store/workspace.store";
@@ -69,7 +70,7 @@ export function useOrderViews() {
 
 export function useCreateOrderView() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (input: Parameters<typeof ordersApi.createView>[0]) => ordersApi.createView(input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["orders", "views"] }),
   });
@@ -77,7 +78,7 @@ export function useCreateOrderView() {
 
 export function useDeleteOrderView() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (view: OrderSavedView) => ordersApi.deleteView(view.id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["orders", "views"] }),
   });
@@ -125,29 +126,29 @@ function useAfterWrite() {
 
 export function useTransitionOrder() {
   const afterWrite = useAfterWrite();
-  return useMutation({ mutationFn: (input: TransitionInput) => ordersApi.transition(input), onSuccess: afterWrite, onError: afterWrite });
+  return useGuardedMutation({ mutationFn: (input: TransitionInput) => ordersApi.transition(input), onSuccess: afterWrite, onError: afterWrite });
 }
 
 export function useCancelOrder() {
   const afterWrite = useAfterWrite();
-  return useMutation({ mutationFn: (input: CancelInput) => ordersApi.cancel(input), onSuccess: afterWrite });
+  return useGuardedMutation({ mutationFn: (input: CancelInput) => ordersApi.cancel(input), onSuccess: afterWrite });
 }
 
 export function useAllocateOrder() {
   const afterWrite = useAfterWrite();
-  return useMutation({ mutationFn: (id: string) => ordersApi.allocate(id), onSuccess: afterWrite });
+  return useGuardedMutation({ mutationFn: (id: string) => ordersApi.allocate(id), onSuccess: afterWrite });
 }
 
 export function useBulkOrders() {
   const afterWrite = useAfterWrite();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (input: { action: BulkOrderAction; ids: string[]; params?: BulkOrderParams }) => ordersApi.bulk(input.action, input.ids, input.params),
     onSuccess: afterWrite,
   });
 }
 
 export function useExportOrders() {
-  return useMutation({ mutationFn: (input: { filters: OrderFilters; sort?: OrderSort }) => ordersApi.exportCsv(input.filters, input.sort) });
+  return useGuardedMutation({ mutationFn: (input: { filters: OrderFilters; sort?: OrderSort }) => ordersApi.exportCsv(input.filters, input.sort) });
 }
 
 const TERMINAL: ReadonlyArray<SyncJob["status"]> = ["succeeded", "partially_failed", "failed", "dead_lettered", "cancelled"];
@@ -165,7 +166,7 @@ export interface SyncOutcome {
 /** queues the order import of each account (202), follows every job until it ends, then refreshes the screen */
 export function useSyncOrders() {
   const afterWrite = useAfterWrite();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: async (accounts: OrderAccount[]): Promise<SyncOutcome[]> =>
       Promise.all(
         accounts.map(async (account): Promise<SyncOutcome> => {

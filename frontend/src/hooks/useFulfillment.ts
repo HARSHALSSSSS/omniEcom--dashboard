@@ -1,4 +1,5 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useGuardedMutation } from "@/hooks/useSubmitGuard";
 import { fulfillmentApi } from "@/api/fulfillment.api";
 import { refreshShell } from "@/lib/session";
 import { useWorkspaceStore } from "@/store/workspace.store";
@@ -70,7 +71,7 @@ function useAfterWrite() {
 export function useFulfillmentAction() {
   const queryClient = useQueryClient();
   const afterWrite = useAfterWrite();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (input: ActionInput) => fulfillmentApi.act(input),
     onSuccess: (res, input) => {
       queryClient.setQueryData(FULFILLMENT_KEYS.workspace(input.orderId, input.fulfillmentId), res.workspace);
@@ -82,15 +83,15 @@ export function useFulfillmentAction() {
 
 export function useBatchHandover() {
   const afterWrite = useAfterWrite();
-  return useMutation({ mutationFn: (input: { carrier: string; orderIds: string[] }) => fulfillmentApi.batchHandover(input.carrier, input.orderIds), onSuccess: afterWrite });
+  return useGuardedMutation({ mutationFn: (input: { carrier: string; orderIds: string[] }) => fulfillmentApi.batchHandover(input.carrier, input.orderIds), onSuccess: afterWrite });
 }
 
 export function useCreatePickList() {
   const afterWrite = useAfterWrite();
-  return useMutation({ mutationFn: (fulfillmentIds: string[]) => fulfillmentApi.createPickList(fulfillmentIds), onSuccess: afterWrite });
+  return useGuardedMutation({ mutationFn: (fulfillmentIds: string[]) => fulfillmentApi.createPickList(fulfillmentIds), onSuccess: afterWrite });
 }
 
 export function useResolveException() {
   const afterWrite = useAfterWrite();
-  return useMutation({ mutationFn: (input: ResolveInput) => fulfillmentApi.resolveException(input), onSuccess: afterWrite });
+  return useGuardedMutation({ mutationFn: (input: ResolveInput) => fulfillmentApi.resolveException(input), onSuccess: afterWrite });
 }

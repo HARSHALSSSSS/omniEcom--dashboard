@@ -1,4 +1,5 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useGuardedMutation } from "@/hooks/useSubmitGuard";
 import { useEffect, useState } from "react";
 import { productDetailApi, type UploadProgress } from "@/api/productDetail.api";
 import type { ActivityScope } from "@/types/productDetail";
@@ -84,7 +85,7 @@ function useRefreshProduct(id: string) {
 
 export function useDuplicateProduct(id: string) {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: () => productDetailApi.duplicate(id),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["products"] }),
   });
@@ -93,7 +94,7 @@ export function useDuplicateProduct(id: string) {
 /** the bulk action answers 200 even when the id fails: turn a failed item into an error */
 export function useArchiveProduct(id: string) {
   const refresh = useRefreshProduct(id);
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: async (action: "archive" | "unarchive") => {
       const res = await productDetailApi.bulkAction(id, action);
       const item = res.results[0];
@@ -105,7 +106,7 @@ export function useArchiveProduct(id: string) {
 }
 
 export function useExportProduct() {
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: async ({ href, fileName }: { href: string; fileName: string }) => {
       const blob = await productDetailApi.exportCsv(href);
       const url = URL.createObjectURL(blob);
@@ -122,13 +123,13 @@ export function useExportProduct() {
 
 export function useSetPrimaryImage(id: string) {
   const refresh = useRefreshProduct(id);
-  return useMutation({ mutationFn: (documentId: string) => productDetailApi.updateDocument(documentId, { isPrimary: true }), onSuccess: refresh });
+  return useGuardedMutation({ mutationFn: (documentId: string) => productDetailApi.updateDocument(documentId, { isPrimary: true }), onSuccess: refresh });
 }
 
 /** writes the new position (sortOrder = index) of every image whose position changed */
 export function useReorderImages(id: string) {
   const refresh = useRefreshProduct(id);
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: async (changes: Array<{ documentId: string; sortOrder: number }>) => {
       for (const c of changes) await productDetailApi.updateDocument(c.documentId, { sortOrder: c.sortOrder });
     },
@@ -138,7 +139,7 @@ export function useReorderImages(id: string) {
 
 export function useUploadImages(id: string) {
   const refresh = useRefreshProduct(id);
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: async ({ files, onProgress }: { files: File[]; onProgress?: UploadProgress }) => {
       for (const file of files) await productDetailApi.uploadImage(id, file, onProgress);
     },
@@ -164,7 +165,7 @@ export function usePublishVariants(id: string, enabled: boolean) {
  */
 export function usePublishProduct(id: string) {
   const refresh = useRefreshProduct(id);
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: async ({ marketplaceAccountId, variantIds }: { marketplaceAccountId: string; variantIds: string[] }) => {
       const created: Array<{ id: string; variantId: string }> = [];
       const failed: Array<{ variantId: string; error: unknown }> = [];

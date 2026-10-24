@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { ROUTES } from "@/constants/routes";
 import { authApi } from "@/api/auth.api";
 import { errorMessage } from "@/api/errors";
+import { useSubmitLock } from "@/hooks/useSubmitGuard";
 
 const schema = z.object({ email: z.string().trim().email("Please enter a valid work email") });
 type FormData = z.infer<typeof schema>;
@@ -23,14 +24,19 @@ export default function ForgotPasswordPage() {
     formState: { errors, isSubmitting },
   } = useForm<FormData>({ resolver: zodResolver(schema), defaultValues: { email: "" } });
 
+  const acquire = useSubmitLock();
   const onSubmit = async ({ email }: FormData) => {
     setServerError(null);
+    const release = acquire();
+    if (!release) return;
     try {
       // the API answers the same way whether or not the address has an account
       await authApi.forgotPassword(email);
       setSentTo(email);
     } catch (e) {
       setServerError(errorMessage(e));
+    } finally {
+      release();
     }
   };
 

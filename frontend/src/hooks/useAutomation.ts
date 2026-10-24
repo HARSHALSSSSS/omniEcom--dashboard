@@ -1,4 +1,5 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useGuardedMutation } from "@/hooks/useSubmitGuard";
 import { automationApi } from "@/api/automation.api";
 import { useWorkspaceStore } from "@/store/workspace.store";
 import type { ApprovalsQuery, RuleWrite, RulesQuery, RunsQuery } from "@/types/automation";
@@ -64,17 +65,17 @@ function useAfterActionRun() {
 
 export function useCreateRule() {
   const after = useAfterRuleWrite();
-  return useMutation({ mutationFn: (body: RuleWrite) => automationApi.create(body), onSuccess: after });
+  return useGuardedMutation({ mutationFn: (body: RuleWrite) => automationApi.create(body), onSuccess: after });
 }
 
 export function useUpdateRule() {
   const after = useAfterRuleWrite();
-  return useMutation({ mutationFn: (input: { id: string; body: Partial<RuleWrite> & { version?: number } }) => automationApi.update(input.id, input.body), onSuccess: after });
+  return useGuardedMutation({ mutationFn: (input: { id: string; body: Partial<RuleWrite> & { version?: number } }) => automationApi.update(input.id, input.body), onSuccess: after });
 }
 
 export function useSetRuleActive() {
   const after = useAfterRuleWrite();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (input: { id: string; active: boolean }) => (input.active ? automationApi.activate(input.id) : automationApi.disable(input.id)),
     onSettled: after,
   });
@@ -82,24 +83,24 @@ export function useSetRuleActive() {
 
 export function useDeleteRule() {
   const after = useAfterRuleWrite();
-  return useMutation({ mutationFn: (id: string) => automationApi.remove(id), onSettled: after });
+  return useGuardedMutation({ mutationFn: (id: string) => automationApi.remove(id), onSettled: after });
 }
 
 export function useTestRule() {
-  return useMutation({ mutationFn: (input: { id: string; payload: Record<string, unknown> }) => automationApi.test(input.id, input.payload) });
+  return useGuardedMutation({ mutationFn: (input: { id: string; payload: Record<string, unknown> }) => automationApi.test(input.id, input.payload) });
 }
 
 export function useApproveExecution() {
   const after = useAfterActionRun();
-  return useMutation({ mutationFn: (id: string) => automationApi.approve(id), onSettled: after });
+  return useGuardedMutation({ mutationFn: (id: string) => automationApi.approve(id), onSettled: after });
 }
 
 export function useDismissExecution() {
   const after = useAfterRuleWrite();
-  return useMutation({ mutationFn: (input: { id: string; note?: string }) => automationApi.dismiss(input.id, input.note), onSettled: after });
+  return useGuardedMutation({ mutationFn: (input: { id: string; note?: string }) => automationApi.dismiss(input.id, input.note), onSettled: after });
 }
 
 export function useRollbackExecution() {
   const after = useAfterActionRun();
-  return useMutation({ mutationFn: (id: string) => automationApi.rollback(id), onSettled: after });
+  return useGuardedMutation({ mutationFn: (id: string) => automationApi.rollback(id), onSettled: after });
 }

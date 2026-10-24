@@ -10,6 +10,7 @@ import { cn } from "@/utils/cn";
 import { filterBody, type InventoryFilters, type InventoryPreset } from "@/types/inventory";
 import { describeFilters, isActivePreset, presetToPatch, type Patch } from "./inventoryParams";
 import { NO_VIEWS_REASON } from "./inventoryLabels";
+import { useSubmitLock } from "@/hooks/useSubmitGuard";
 
 const BUTTON = "h-[36px] px-3 flex flex-row items-center gap-2 bg-white border border-[#EAEAEA] rounded-lg hover:bg-neutral-50 transition-colors cursor-pointer shadow-2xs";
 
@@ -148,12 +149,15 @@ function SaveViewForm({ filters, sort, nameOf, onClose }: Omit<SaveViewDialogPro
   const lines = describeFilters(filterBody(filters), nameOf);
   const trimmed = name.trim();
 
+  const acquire = useSubmitLock();
   const submit = async (ev: React.FormEvent) => {
     ev.preventDefault();
     if (!trimmed) {
       setError("Give the saved filter a name.");
       return;
     }
+    const release = acquire();
+    if (!release) return;
     setError(null);
     try {
       await create.mutateAsync({ name: trimmed, filters: filterBody(filters), sort: sort || null, shared });
@@ -162,6 +166,8 @@ function SaveViewForm({ filters, sort, nameOf, onClose }: Omit<SaveViewDialogPro
     } catch (e) {
       if (isApiError(e) && e.rule === "saved_view_name_taken") setError("You already have a saved filter with this name. Choose another name.");
       else setError(errorMessage(e, "The view could not be saved."));
+    } finally {
+      release();
     }
   };
 

@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useGuardedMutation, useSubmitLock } from "@/hooks/useSubmitGuard";
 import { Laptop, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,15 +20,18 @@ function ProfileCard() {
   const toast = useToastStore.getState().addToast;
   const [name, setName] = useState(user?.fullName ?? "");
   const [error, setError] = useState<string | null>(null);
-  const save = useMutation({ mutationFn: (fullName: string) => settingsApi.updateProfile(fullName) });
+  const save = useGuardedMutation({ mutationFn: (fullName: string) => settingsApi.updateProfile(fullName) });
   const trimmed = name.trim();
   const valid = trimmed.length >= 2 && trimmed.length <= 120;
   const changed = trimmed !== (user?.fullName ?? "");
 
+  const acquire = useSubmitLock();
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!valid || !changed || !user) return;
     setError(null);
+    const release = acquire();
+    if (!release) return;
     try {
       await save.mutateAsync(trimmed);
       setUser({ ...user, fullName: trimmed });
@@ -36,6 +39,8 @@ function ProfileCard() {
       toast({ title: "Profile updated", variant: "success" });
     } catch (err) {
       setError(errorMessage(err, "Could not update your name."));
+    } finally {
+      release();
     }
   };
 
@@ -77,11 +82,14 @@ function PasswordCard() {
   const sameAsOld = next.length > 0 && next === current;
   const ready = current.length > 0 && next.length >= MIN_PASSWORD && confirm === next && !sameAsOld;
 
+  const acquire = useSubmitLock();
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!ready || changePassword.isPending) return;
     setError(null);
     setFields({});
+    const release = acquire();
+    if (!release) return;
     try {
       await changePassword.mutateAsync({ currentPassword: current, newPassword: next });
       setCurrent("");
@@ -91,6 +99,8 @@ function PasswordCard() {
     } catch (err) {
       if (isApiError(err) && err.fields) setFields(err.fields);
       setError(isApiError(err) && err.code === "INVALID_CREDENTIALS" ? "Your current password is not correct." : errorMessage(err, "Could not change your password."));
+    } finally {
+      release();
     }
   };
 
@@ -149,7 +159,10 @@ function SessionsCard() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const others = (sessions.data ?? []).filter((s) => !s.current);
 
+  const acquireSignOut = useSubmitLock();
   const signOut = async (s: AccountSession) => {
+    const release = acquireSignOut();
+    if (!release) return;
     setError(null);
     setBusyId(s.id);
     try {
@@ -159,16 +172,22 @@ function SessionsCard() {
       setError(errorMessage(e, "Could not sign that device out."));
     } finally {
       setBusyId(null);
+      release();
     }
   };
 
+  const acquire = useSubmitLock();
   const signOutOthers = async () => {
     setError(null);
+    const release = acquire();
+    if (!release) return;
     try {
       const res = await revokeOthers.mutateAsync();
       toast({ title: "Other devices signed out", description: `${res.revoked} session${res.revoked === 1 ? "" : "s"} ended.`, variant: "success" });
     } catch (e) {
       setError(errorMessage(e, "Could not sign the other devices out."));
+    } finally {
+      release();
     }
   };
 

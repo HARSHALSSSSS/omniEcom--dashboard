@@ -1,4 +1,5 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useGuardedMutation } from "@/hooks/useSubmitGuard";
 import { catalogApi, productsApi, type DownloadedFile } from "@/api/products";
 import { isApiError } from "@/api/errors";
 import { useWorkspaceStore } from "@/store/workspace.store";
@@ -91,7 +92,7 @@ export function useSavedViews() {
 
 export function useCreateView() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (input: Parameters<typeof catalogApi.createView>[0]) => catalogApi.createView(input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["products", "views"] }),
   });
@@ -99,7 +100,7 @@ export function useCreateView() {
 
 export function useDeleteView() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (view: SavedView) => catalogApi.deleteView(view.id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["products", "views"] }),
   });
@@ -108,7 +109,7 @@ export function useDeleteView() {
 /** archive / unarchive / duplicate / check_publish_readiness: HTTP 200 with a result per product (partial success) */
 export function useBulkProducts() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: ({ ids, action }: { ids: string[]; action: BulkProductAction }) => catalogApi.bulk(ids, action),
     onSuccess: (res) => {
       if (res.action !== "check_publish_readiness") void queryClient.invalidateQueries({ queryKey: PRODUCT_QUERY_KEYS.all });
@@ -118,7 +119,7 @@ export function useBulkProducts() {
 
 export function useDuplicateProduct() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (id: string) => catalogApi.duplicate(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: PRODUCT_QUERY_KEYS.all }),
   });
@@ -126,7 +127,7 @@ export function useDuplicateProduct() {
 
 export function useDeleteProduct() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (id: string) => catalogApi.remove(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: PRODUCT_QUERY_KEYS.all }),
   });
@@ -145,7 +146,7 @@ const canQueueExport = (f: CatalogFilters) => !f.channel && !f.inventory && !f.p
  * downloaded (`onQueued` lets the screen say so), when the filters allow it.
  */
 export function useExportCatalog() {
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: async ({ query, onQueued }: { query: CatalogQuery; onQueued?: () => void }): Promise<DownloadedFile> => {
       try {
         return await catalogApi.exportCsv(query);
@@ -178,7 +179,7 @@ export function useProduct(id: string) {
 export function useCreateProduct() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (input: CreateProductInput) => productsApi.createProduct(input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: PRODUCT_QUERY_KEYS.all });
@@ -189,7 +190,7 @@ export function useCreateProduct() {
 export function useUpdateProduct(id: string) {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (input: Partial<Product>) => productsApi.updateProduct(id, input),
     onSuccess: (data) => {
       queryClient.setQueryData(PRODUCT_QUERY_KEYS.detail(id), data);
@@ -199,7 +200,7 @@ export function useUpdateProduct(id: string) {
 }
 
 export function useProductAiSuggest() {
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: ({ title, description }: { title: string; description: string }) =>
       productsApi.getAiSuggestions(title, description),
   });

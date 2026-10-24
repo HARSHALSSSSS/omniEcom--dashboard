@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { ROUTES } from "@/constants/routes";
 import { authApi } from "@/api/auth.api";
 import { errorMessage } from "@/api/errors";
+import { useSubmitLock } from "@/hooks/useSubmitGuard";
 
 const schema = z
   .object({
@@ -31,13 +32,18 @@ export default function ResetPasswordPage() {
     formState: { errors, isSubmitting },
   } = useForm<FormData>({ resolver: zodResolver(schema), defaultValues: { password: "", confirm: "" } });
 
+  const acquire = useSubmitLock();
   const onSubmit = async ({ password }: FormData) => {
     setServerError(null);
+    const release = acquire();
+    if (!release) return;
     try {
       await authApi.resetPassword(token, password);
       setDone(true);
     } catch (e) {
       setServerError(errorMessage(e, "This reset link is invalid or has expired. Request a new one."));
+    } finally {
+      release();
     }
   };
 

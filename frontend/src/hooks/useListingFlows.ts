@@ -1,4 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useGuardedMutation } from "@/hooks/useSubmitGuard";
 import { listingFlowsApi } from "@/api/listingFlows.api";
 import { listingStudioApi } from "@/api/listingStudio.api";
 import { refreshShell } from "@/lib/session";
@@ -49,7 +50,7 @@ export interface BulkContentInput {
 /** edits the content of many listings; a real run refreshes every list and the badges, a preview (dryRun) changes nothing */
 export function useBulkContentEdit() {
   const qc = useQueryClient();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (input: BulkContentInput) => listingFlowsApi.bulkContent(input),
     onSuccess: async (res) => {
       if (res.dryRun) return;
@@ -101,7 +102,7 @@ function useRefreshAfterWrite(listingId?: string) {
 /** starts the listing of a variant on an account (a draft the Studio takes over) */
 export function usePrepareListing() {
   const refresh = useRefreshAfterWrite();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (input: { variantId: string; accountId: string }) => listingFlowsApi.prepare(input.variantId, input.accountId),
     onSuccess: refresh,
   });
@@ -120,7 +121,7 @@ export interface FixAttributeInput {
  */
 export function useFixAttribute(listingId: string) {
   const refresh = useRefreshAfterWrite(listingId);
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: async (input: FixAttributeInput) => {
       const saved = await listingStudioApi.save(listingId, { version: input.version, attributeOverrides: { [input.key]: input.value } });
       const validation = await listingStudioApi
@@ -136,5 +137,5 @@ export function useFixAttribute(listingId: string) {
 /** publish-flow for one listing (validate, approve, publish) */
 export function usePublishListing(listingId: string) {
   const refresh = useRefreshAfterWrite(listingId);
-  return useMutation({ mutationFn: () => listingStudioApi.publishFlow(listingId), onSettled: refresh });
+  return useGuardedMutation({ mutationFn: () => listingStudioApi.publishFlow(listingId), onSettled: refresh });
 }

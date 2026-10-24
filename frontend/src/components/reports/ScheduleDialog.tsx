@@ -15,6 +15,7 @@ import { FREQUENCIES, SCHEDULE_STATUSES, type Catalog, type CatalogEntry, type F
 import { ParamFields } from "./ParamFields";
 import { buildParams, valuesOf, type ParamValues } from "./reportParamsForm";
 import { FORMAT_LABEL, FREQUENCY_LABEL, reportErrorMessage, SCHEDULE_STATUS_LABEL, WEEKDAYS } from "./reportsFormat";
+import { useSubmitLock } from "@/hooks/useSubmitGuard";
 
 export type ScheduleFormTarget = { kind: "create"; entry?: CatalogEntry } | { kind: "edit"; schedule: ReportSchedule };
 
@@ -168,6 +169,7 @@ function ScheduleForm({ target, catalog, timezone, onDirty, onCancel, onSaved }:
     return { ok: Object.keys(next).length === 0, params: built.params };
   };
 
+  const acquire = useSubmitLock();
   const submit = async (ev: React.FormEvent) => {
     ev.preventDefault();
     setServerError(null);
@@ -187,6 +189,8 @@ function ScheduleForm({ target, catalog, timezone, onDirty, onCancel, onSaved }:
       recipients: parseRecipients(form.recipients),
       status: form.status,
     };
+    const release = acquire();
+    if (!release) return;
     try {
       if (schedule) {
         const saved = await update.mutateAsync({ id: schedule.id, body: { ...body, version: version.current } });
@@ -206,6 +210,8 @@ function ScheduleForm({ target, catalog, timezone, onDirty, onCancel, onSaved }:
       setServerFields(fields);
       const named = fields !== null && Object.keys(fields).some((k) => k in form || k.startsWith("params."));
       setServerError(named ? null : reportErrorMessage(e, "Could not save the schedule."));
+    } finally {
+      release();
     }
   };
 

@@ -7,6 +7,7 @@ import { useToastStore } from "@/hooks/useToast";
 import { GstinDialog } from "./GstinDialog";
 import { InlineError, ReadOnlyNote, SectionCard } from "./fields";
 import type { Gstin, GstinStatus } from "@/types/settings";
+import { useSubmitLock } from "@/hooks/useSubmitGuard";
 
 const STATUS_CLASS: Record<GstinStatus, string> = {
   active: "border-emerald-200 bg-emerald-50 text-emerald-700",
@@ -24,7 +25,10 @@ export function GstinTab({ gstins, canWrite }: { gstins: Gstin[]; canWrite: bool
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
+  const acquire = useSubmitLock();
   const makePrimary = async (g: Gstin) => {
+    const release = acquire();
+    if (!release) return;
     setError(null);
     setBusyId(g.id);
     try {
@@ -34,11 +38,14 @@ export function GstinTab({ gstins, canWrite }: { gstins: Gstin[]; canWrite: bool
       setError(gstinErrorMessage(e));
     } finally {
       setBusyId(null);
+      release();
     }
   };
 
   const confirmRemove = async () => {
     if (!removing) return;
+    const release = acquire();
+    if (!release) return;
     setError(null);
     try {
       await actions.remove.mutateAsync(removing.id);
@@ -47,6 +54,7 @@ export function GstinTab({ gstins, canWrite }: { gstins: Gstin[]; canWrite: bool
       setError(gstinErrorMessage(e));
     } finally {
       setRemoving(null);
+      release();
     }
   };
 

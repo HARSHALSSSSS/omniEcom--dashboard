@@ -1,4 +1,5 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useGuardedMutation } from "@/hooks/useSubmitGuard";
 import { attentionApi } from "@/api/attention.api";
 import { errorMessage, isApiError } from "@/api/errors";
 import { refreshShell } from "@/lib/session";
@@ -91,14 +92,14 @@ export function useIssueActions() {
     toast({ title, description, variant: "destructive", duration: 7000 });
   };
 
-  const start = useMutation({
+  const start = useGuardedMutation({
     mutationFn: (id: string) => attentionApi.start(id),
     onSuccess: (i: Issue) => toast({ title: "Marked in progress", description: i.title, variant: "success" }),
     onError: fail,
     onSettled: after,
   });
 
-  const resolve = useMutation({
+  const resolve = useGuardedMutation({
     mutationFn: ({ id, mode }: { id: string; mode: "manual" | "attempt" }) => attentionApi.resolve(id, mode),
     onSuccess: (i: Issue, v) =>
       toast({
@@ -110,7 +111,7 @@ export function useIssueActions() {
     onSettled: after,
   });
 
-  const snooze = useMutation({
+  const snooze = useGuardedMutation({
     mutationFn: ({ id, until }: { id: string; until: SnoozePreset }) => attentionApi.snooze(id, until),
     onSuccess: (i: Issue, v) =>
       toast({ title: `Issue snoozed until ${SNOOZE_LABEL[v.until]}`, description: `${i.title} left the active queue. It returns ${SNOOZE_LABEL[v.until]}.`, variant: "success" }),
@@ -118,14 +119,14 @@ export function useIssueActions() {
     onSettled: after,
   });
 
-  const unsnooze = useMutation({
+  const unsnooze = useGuardedMutation({
     mutationFn: (id: string) => attentionApi.unsnooze(id),
     onSuccess: (i: Issue) => toast({ title: "Back in the queue", description: i.title, variant: "success" }),
     onError: fail,
     onSettled: after,
   });
 
-  const assign = useMutation({
+  const assign = useGuardedMutation({
     mutationFn: ({ id, userId }: { id: string; userId: string }) => attentionApi.assign(id, userId),
     onSuccess: (i: Issue) =>
       toast({ title: "Issue assigned", description: i.assigneeName ? `${i.title} is now assigned to ${i.assigneeName}.` : i.title, variant: "success" }),
@@ -133,7 +134,7 @@ export function useIssueActions() {
     onSettled: after,
   });
 
-  const bulk = useMutation({
+  const bulk = useGuardedMutation({
     mutationFn: (input: BulkInput) => attentionApi.bulk(input),
     onSuccess: (r: BulkResult, input) => {
       const verb = input.action === "resolve" ? "resolved" : input.action === "snooze" ? "snoozed" : "assigned";
@@ -150,7 +151,7 @@ export function useIssueActions() {
     onSettled: after,
   });
 
-  const refresh = useMutation({
+  const refresh = useGuardedMutation({
     mutationFn: () => attentionApi.refresh(),
     onSuccess: (r) => toast({ title: "Queue checked", description: `${r.open} open ${r.open === 1 ? "issue" : "issues"} right now.`, variant: "success" }),
     onError: fail,

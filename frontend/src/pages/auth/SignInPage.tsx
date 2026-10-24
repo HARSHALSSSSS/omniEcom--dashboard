@@ -12,6 +12,7 @@ import { ROUTES } from "@/constants/routes";
 import { useWorkspaceStore } from "@/store/workspace.store";
 import { signIn } from "@/lib/session";
 import { errorMessage } from "@/api/errors";
+import { useSubmitLock } from "@/hooks/useSubmitGuard";
 
 const signInSchema = z.object({
   email: z.string().email("Please enter a valid work email"),
@@ -40,14 +41,19 @@ export default function SignInPage() {
 
   const rememberMe = watch("rememberMe");
 
+  const acquire = useSubmitLock();
   const onSubmit = async (data: SignInFormData) => {
+    const release = acquire();
+    if (!release) return;
     setServerError(null);
     try {
       await signIn(data.email, data.password, data.rememberMe ?? false);
     } catch (e) {
       setServerError(errorMessage(e));
+      release();
       return;
     }
+    release();
 
     // back to where the visitor was heading; otherwise the workspace, or the wizard while onboarding is open
     const { onboardingComplete, onboardingResumeStep } = useWorkspaceStore.getState();

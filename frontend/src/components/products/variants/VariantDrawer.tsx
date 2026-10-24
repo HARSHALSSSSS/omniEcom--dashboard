@@ -21,6 +21,7 @@ import {
   type VariantFormValues,
 } from "./variantForm";
 import { looksLikeBadGtin } from "./variantUtils";
+import { useSubmitLock } from "@/hooks/useSubmitGuard";
 
 const label = "text-[12px] font-medium text-[#000000]";
 const hint = "text-[11px] text-[#666666]";
@@ -96,8 +97,11 @@ function VariantForm({ productId, base, initial, leadBefore, readOnly, onDone, o
     if (!placed) setFormError(errorMessage(e, "Could not save the variant."));
   };
 
+  const acquire = useSubmitLock();
   const submit = handleSubmit(async (values) => {
     setFormError(null);
+    const release = acquire();
+    if (!release) return;
     try {
       if (!base) {
         const v = await create.mutateAsync(createPayload(values));
@@ -115,6 +119,8 @@ function VariantForm({ productId, base, initial, leadBefore, readOnly, onDone, o
       onDone();
     } catch (e) {
       showServerError(e);
+    } finally {
+      release();
     }
   });
 

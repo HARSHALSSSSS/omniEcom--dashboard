@@ -11,6 +11,7 @@ import type { LedgerRow, StockTransfer, Warehouse } from "@/types/inventory";
 import { InlineError } from "./inventoryUi";
 import { NO_WRITE_REASON } from "./inventoryLabels";
 import { ProductField } from "./ProductField";
+import { useSubmitLock } from "@/hooks/useSubmitGuard";
 
 const SELECT = "h-9 w-full rounded-md border border-input bg-background px-3 text-xs";
 const units = (d: StockTransfer) => d.items.reduce((sum, i) => sum + i.quantity, 0);
@@ -206,25 +207,34 @@ function DraftEditor({ draft, warehouses, canWrite, onClose, onSubmit, submittin
       patch: { fromWarehouseId: from, toWarehouseId: to, items: parsed.map((l) => ({ variantId: l.variantId, quantity: l.n })), notes: notes.trim() || null, version: draft.version },
     });
 
+  const acquire = useSubmitLock();
   const onSave = async () => {
+    const release = acquire();
+    if (!release) return;
     setServerError(null);
     try {
       await save();
       toast({ title: "Draft saved", description: `${draft.number} was updated. No stock has moved.`, variant: "success" });
     } catch (e) {
       setServerError(errorMessage(e, "The draft could not be saved."));
+    } finally {
+      release();
     }
   };
 
   const onSubmitClick = async () => {
+    const release = acquire();
+    if (!release) return;
     setServerError(null);
     try {
       if (dirty) await save();
     } catch (e) {
       setServerError(errorMessage(e, "The draft could not be saved."));
+      release();
       return;
     }
     onSubmit(draft);
+    release();
   };
 
   const busy = update.isPending || submitting;

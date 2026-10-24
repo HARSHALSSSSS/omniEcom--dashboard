@@ -17,6 +17,7 @@ import { fieldError } from "./procurementErrors";
 import { PoLinePicker } from "./PoLinePicker";
 import { VersionConflictDialog } from "./VersionConflictDialog";
 import { isVersionConflict } from "./procurementErrors";
+import { useSubmitLock } from "@/hooks/useSubmitGuard";
 
 export type PoFormTarget = { kind: "create"; supplierId?: string } | { kind: "edit"; id: string };
 
@@ -288,12 +289,15 @@ function PoForm({ order, presetSupplierId, refetch, onDirty, onCancel, onSaved }
     lines: rows.flatMap((r) => (r.qty !== null && r.cost !== null ? [{ variantId: r.line.variantId, quantity: r.qty, unitCostMinor: r.cost }] : [])),
   });
 
+  const acquire = useSubmitLock();
   const submit = async (ev: React.FormEvent) => {
     ev.preventDefault();
     setServerError(null);
     setServerFields(null);
     if (!validate()) return;
     const payload = body();
+    const release = acquire();
+    if (!release) return;
     try {
       if (order) {
         const saved = await update.mutateAsync({ id: order.id, body: { ...payload, version: version.current } });
@@ -314,6 +318,8 @@ function PoForm({ order, presetSupplierId, refetch, onDirty, onCancel, onSaved }
       }
       setServerFields(isApiError(e) ? e.fields : null);
       setServerError(errorMessage(e, "Could not save the purchase order."));
+    } finally {
+      release();
     }
   };
 

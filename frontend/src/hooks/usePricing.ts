@@ -1,4 +1,5 @@
-import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useGuardedMutation } from "@/hooks/useSubmitGuard";
 import { pricingApi } from "@/api/pricing.api";
 import { refreshShell } from "@/lib/session";
 import { useWorkspaceStore } from "@/store/workspace.store";
@@ -105,7 +106,7 @@ function useAfterDecision() {
 
 export function useDecideProposal() {
   const afterWrite = useAfterDecision();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (input: { id: string; action: DecisionAction; version: number; note?: string }) => pricingApi.decide(input.id, input.action, { version: input.version, note: input.note }),
     onSettled: afterWrite,
   });
@@ -113,7 +114,7 @@ export function useDecideProposal() {
 
 export function useBulkDecide() {
   const afterWrite = useAfterDecision();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (input: { ids: string[]; action: DecisionAction; note?: string }) => pricingApi.bulkDecide(input.ids, input.action, input.note),
     onSettled: afterWrite,
   });
@@ -121,7 +122,7 @@ export function useBulkDecide() {
 
 export function useGenerateProposals() {
   const afterWrite = useAfterDecision();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (input: GenerateInput) => pricingApi.generate(input),
     // a dry run writes nothing
     onSuccess: (_res, input) => {
@@ -137,12 +138,12 @@ function useAfterPolicy() {
 
 export function useCreatePolicy() {
   const after = useAfterPolicy();
-  return useMutation({ mutationFn: (body: PolicyWrite) => pricingApi.createPolicy(body), onSuccess: after });
+  return useGuardedMutation({ mutationFn: (body: PolicyWrite) => pricingApi.createPolicy(body), onSuccess: after });
 }
 
 export function useUpdatePolicy() {
   const after = useAfterPolicy();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (input: { id: string; patch: Partial<PolicyWrite>; version: number }) => pricingApi.updatePolicy(input.id, input.patch, input.version),
     onSettled: after,
   });
@@ -150,13 +151,13 @@ export function useUpdatePolicy() {
 
 export function useDeletePolicy() {
   const after = useAfterPolicy();
-  return useMutation({ mutationFn: (id: string) => pricingApi.deletePolicy(id), onSuccess: after });
+  return useGuardedMutation({ mutationFn: (id: string) => pricingApi.deletePolicy(id), onSuccess: after });
 }
 
 /** new fees change every margin: the overview, the price table and the proposals all reload */
 export function useSetFeeProfile() {
   const after = useAfterPolicy();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (input: { accountId: string; feePercentBps: number; fixedFeeMinor: number }) => pricingApi.setFeeProfile(input.accountId, { feePercentBps: input.feePercentBps, fixedFeeMinor: input.fixedFeeMinor }),
     onSuccess: after,
   });
@@ -164,15 +165,15 @@ export function useSetFeeProfile() {
 
 export function useAddCompetitor() {
   const after = useAfterPolicy();
-  return useMutation({ mutationFn: (body: CompetitorWrite) => pricingApi.addCompetitor(body), onSuccess: after });
+  return useGuardedMutation({ mutationFn: (body: CompetitorWrite) => pricingApi.addCompetitor(body), onSuccess: after });
 }
 
 export function useImportCompetitors() {
   const after = useAfterPolicy();
-  return useMutation({ mutationFn: (csv: string) => pricingApi.importCompetitors(csv), onSuccess: after });
+  return useGuardedMutation({ mutationFn: (csv: string) => pricingApi.importCompetitors(csv), onSuccess: after });
 }
 
 export function useDeleteCompetitor() {
   const after = useAfterPolicy();
-  return useMutation({ mutationFn: (id: string) => pricingApi.deleteCompetitor(id), onSuccess: after });
+  return useGuardedMutation({ mutationFn: (id: string) => pricingApi.deleteCompetitor(id), onSuccess: after });
 }

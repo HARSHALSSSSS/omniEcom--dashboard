@@ -1,4 +1,5 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useGuardedMutation } from "@/hooks/useSubmitGuard";
 import { profitabilityApi } from "@/api/profitability.api";
 import { useWorkspaceStore } from "@/store/workspace.store";
 import type { DateRange, ImportUnit, SpendQuery, SpendWrite, WaterfallQuery } from "@/types/profitability";
@@ -62,23 +63,23 @@ function useAfterWrite() {
 
 export function useCreateSpend() {
   const afterWrite = useAfterWrite();
-  return useMutation({ mutationFn: (body: SpendWrite) => profitabilityApi.createSpend(body), onSuccess: afterWrite });
+  return useGuardedMutation({ mutationFn: (body: SpendWrite) => profitabilityApi.createSpend(body), onSuccess: afterWrite });
 }
 
 export function useUpdateSpend() {
   const afterWrite = useAfterWrite();
-  return useMutation({ mutationFn: (input: { id: string; body: Partial<SpendWrite> }) => profitabilityApi.updateSpend(input.id, input.body), onSuccess: afterWrite });
+  return useGuardedMutation({ mutationFn: (input: { id: string; body: Partial<SpendWrite> }) => profitabilityApi.updateSpend(input.id, input.body), onSuccess: afterWrite });
 }
 
 export function useDeleteSpend() {
   const afterWrite = useAfterWrite();
-  return useMutation({ mutationFn: (id: string) => profitabilityApi.deleteSpend(id), onSuccess: afterWrite });
+  return useGuardedMutation({ mutationFn: (id: string) => profitabilityApi.deleteSpend(id), onSuccess: afterWrite });
 }
 
 /** a dry run saves nothing, so only a real import refreshes the screen */
 export function useImportSpend() {
   const afterWrite = useAfterWrite();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (input: { csv: string; unit: ImportUnit; dryRun: boolean }) => profitabilityApi.importSpend(input.csv, { unit: input.unit, dryRun: input.dryRun }),
     onSuccess: (res) => {
       if (!res.dryRun) afterWrite();

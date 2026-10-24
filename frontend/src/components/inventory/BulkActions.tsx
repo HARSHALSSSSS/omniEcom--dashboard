@@ -13,6 +13,7 @@ import { AdjustFields } from "./adjustForm";
 import { adjustFields, initialAdjustState, isAdjustReady, noteProblem, qtyProblem, reasonProblem, type AdjustFormState } from "./adjustModel";
 import { InlineError } from "./inventoryUi";
 import { NO_WRITE_REASON, ONE_WAREHOUSE_REASON } from "./inventoryLabels";
+import { useSubmitLock } from "@/hooks/useSubmitGuard";
 
 const SELECT = "h-9 w-full rounded-md border border-input bg-background px-3 text-xs";
 const BAR_BUTTON = "cursor-pointer whitespace-nowrap border-none bg-transparent p-0 text-[13px] font-normal text-[#000000] hover:underline disabled:cursor-not-allowed disabled:opacity-50 disabled:no-underline";
@@ -203,14 +204,19 @@ function BulkAdjustForm({ count, selection, warehouses, onClose, onResult }: Omi
   const [serverError, setServerError] = useState<string | null>(null);
   const ready = isAdjustReady(state, null);
 
+  const acquire = useSubmitLock();
   const submit = async (ev: React.FormEvent) => {
     ev.preventDefault();
     if (!ready) return;
+    const release = acquire();
+    if (!release) return;
     setServerError(null);
     try {
       onResult(await bulk.mutateAsync({ selection, action: "adjust", params: { ...adjustFields(state), ...(warehouseId ? { warehouseId } : {}) } }));
     } catch (e) {
       setServerError(errorMessage(e, "The adjustment could not be applied."));
+    } finally {
+      release();
     }
   };
 
@@ -278,26 +284,33 @@ function BulkTransferForm({ count, selection, warehouses, onClose, onResult }: O
   const ready = from !== "" && to !== "" && from !== to && qty.trim() !== "" && !qtyError;
 
   /** "draft": saved for review, nothing moves. "now": the draft is submitted straight away. */
+  const acquire = useSubmitLock();
   const run = async (mode: "draft" | "now") => {
     if (!ready) return;
-    setServerError(null);
-    let res: BulkResult;
+    const release = acquire();
+    if (!release) return;
     try {
-      res = await bulk.mutateAsync({ selection, action: "transfer", params: { fromWarehouseId: from, toWarehouseId: to, quantity: n } });
-    } catch (e) {
-      setServerError(errorMessage(e, "The transfer could not be created."));
-      return;
-    }
-    if (mode === "now" && res.transfer) {
+      setServerError(null);
+      let res: BulkResult;
       try {
-        await submitDraft.mutateAsync(res.transfer.id);
-        onResult(res, { submitted: true });
+        res = await bulk.mutateAsync({ selection, action: "transfer", params: { fromWarehouseId: from, toWarehouseId: to, quantity: n } });
       } catch (e) {
-        onResult(res, { submitted: false, submitError: errorMessage(e, "It could not be submitted.") });
+        setServerError(errorMessage(e, "The transfer could not be created."));
+        return;
       }
-      return;
+      if (mode === "now" && res.transfer) {
+        try {
+          await submitDraft.mutateAsync(res.transfer.id);
+          onResult(res, { submitted: true });
+        } catch (e) {
+          onResult(res, { submitted: false, submitError: errorMessage(e, "It could not be submitted.") });
+        }
+        return;
+      }
+      onResult(res, { submitted: false });
+    } finally {
+      release();
     }
-    onResult(res, { submitted: false });
   };
   const submit = (ev: React.FormEvent) => {
     ev.preventDefault();
@@ -390,14 +403,19 @@ function BulkGroupForm({ count, selection, groups, onClose, onResult }: Omit<Dia
   const isNew = groupId === NEW_GROUP;
   const ready = isNew ? name.trim().length > 0 : groupId !== "";
 
+  const acquire = useSubmitLock();
   const submit = async (ev: React.FormEvent) => {
     ev.preventDefault();
     if (!ready) return;
+    const release = acquire();
+    if (!release) return;
     setServerError(null);
     try {
       onResult(await bulk.mutateAsync({ selection, action: "group", params: isNew ? { groupName: name.trim() } : { groupId } }));
     } catch (e) {
       setServerError(errorMessage(e, "The group could not be saved."));
+    } finally {
+      release();
     }
   };
 

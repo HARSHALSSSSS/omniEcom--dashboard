@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useBulkContentEdit } from "@/hooks/useListingFlows";
 import { MAX_SELECTION, type BulkContentEdits, type BulkContentResult } from "@/types/listingFlows";
 import { buildBulkContentEdits, emptyBulkForm, type BulkContentForm } from "./flowFormat";
+import { useSubmitLock } from "@/hooks/useSubmitGuard";
 
 const SELECT = "h-8 rounded border border-neutral-300 bg-white px-2 text-xs text-black focus:outline-none focus:ring-1 focus:ring-black";
 const FIELD = "w-full rounded border border-neutral-300 bg-white px-2.5 py-1.5 text-xs text-black focus:outline-none focus:ring-1 focus:ring-black";
@@ -72,12 +73,15 @@ function Editor({ listingIds, onClose, onDone }: Omit<Props, "open">) {
   const ids = useMemo(() => [...new Set(listingIds)], [listingIds]);
   const set = <K extends keyof BulkContentForm>(k: K, patch: Partial<BulkContentForm[K]>) => setForm((f) => ({ ...f, [k]: { ...f[k], ...patch } }));
 
+  const acquire = useSubmitLock();
   const run = async (dryRun: boolean) => {
     const built = buildBulkContentEdits(form);
     if (built.error) {
       setError(built.error);
       return;
     }
+    const release = acquire();
+    if (!release) return;
     setError(null);
     setBusy(dryRun ? "preview" : "apply");
     try {
@@ -96,6 +100,7 @@ function Editor({ listingIds, onClose, onDone }: Omit<Props, "open">) {
       setError(errorMessage(e, "The content could not be changed. Please try again."));
     } finally {
       setBusy(null);
+      release();
     }
   };
 

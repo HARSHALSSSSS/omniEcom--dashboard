@@ -1,4 +1,5 @@
-import { keepPreviousData, useInfiniteQuery, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useGuardedMutation } from "@/hooks/useSubmitGuard";
 import { useEffect, useRef } from "react";
 import { inventoryApi } from "@/api/inventory.api";
 import { useWorkspaceStore } from "@/store/workspace.store";
@@ -185,28 +186,28 @@ function useRefreshAfterWrite() {
 
 export function useAdjustStock() {
   const refresh = useRefreshAfterWrite();
-  return useMutation({ mutationFn: (body: AdjustmentBody) => inventoryApi.adjust(body), onSuccess: refresh });
+  return useGuardedMutation({ mutationFn: (body: AdjustmentBody) => inventoryApi.adjust(body), onSuccess: refresh });
 }
 
 /** adjust / transfer / export / sync / group on a selection (ids, or every product the filters match) */
 export function useBulkAction() {
   const refresh = useRefreshAfterWrite();
-  return useMutation({ mutationFn: (body: BulkBody) => inventoryApi.bulk(body), onSuccess: refresh });
+  return useGuardedMutation({ mutationFn: (body: BulkBody) => inventoryApi.bulk(body), onSuccess: refresh });
 }
 
 export function useCreateGroup() {
   const qc = useQueryClient();
-  return useMutation({ mutationFn: (name: string) => inventoryApi.createGroup(name), onSuccess: () => void qc.invalidateQueries({ queryKey: ["inventory", "groups"] }) });
+  return useGuardedMutation({ mutationFn: (name: string) => inventoryApi.createGroup(name), onSuccess: () => void qc.invalidateQueries({ queryKey: ["inventory", "groups"] }) });
 }
 
 export function useDeleteGroup() {
   const qc = useQueryClient();
-  return useMutation({ mutationFn: (id: string) => inventoryApi.deleteGroup(id), onSuccess: () => void qc.invalidateQueries({ queryKey: ["inventory", "groups"] }) });
+  return useGuardedMutation({ mutationFn: (id: string) => inventoryApi.deleteGroup(id), onSuccess: () => void qc.invalidateQueries({ queryKey: ["inventory", "groups"] }) });
 }
 
 export function useTransferNow() {
   const refresh = useRefreshAfterWrite();
-  return useMutation({ mutationFn: (body: TransferBody) => inventoryApi.transfer(body), onSuccess: refresh });
+  return useGuardedMutation({ mutationFn: (body: TransferBody) => inventoryApi.transfer(body), onSuccess: refresh });
 }
 
 /** the draft stock transfers: saved, not yet submitted (nothing has moved) */
@@ -222,23 +223,23 @@ function useRefreshDrafts() {
 
 export function useCreateDraftTransfer() {
   const refresh = useRefreshDrafts();
-  return useMutation({ mutationFn: (body: TransferDraftBody) => inventoryApi.createDraft(body), onSuccess: refresh });
+  return useGuardedMutation({ mutationFn: (body: TransferDraftBody) => inventoryApi.createDraft(body), onSuccess: refresh });
 }
 
 export function useUpdateDraftTransfer() {
   const refresh = useRefreshDrafts();
-  return useMutation({ mutationFn: (v: { id: string; patch: TransferDraftPatch }) => inventoryApi.updateDraft(v.id, v.patch), onSuccess: refresh });
+  return useGuardedMutation({ mutationFn: (v: { id: string; patch: TransferDraftPatch }) => inventoryApi.updateDraft(v.id, v.patch), onSuccess: refresh });
 }
 
 /** submitting moves the stock: the numbers of the whole screen change */
 export function useSubmitDraftTransfer() {
   const refresh = useRefreshAfterWrite();
-  return useMutation({ mutationFn: (id: string) => inventoryApi.submitDraft(id), onSuccess: refresh });
+  return useGuardedMutation({ mutationFn: (id: string) => inventoryApi.submitDraft(id), onSuccess: refresh });
 }
 
 export function useDiscardDraftTransfer() {
   const refresh = useRefreshDrafts();
-  return useMutation({ mutationFn: (id: string) => inventoryApi.discardDraft(id), onSuccess: refresh });
+  return useGuardedMutation({ mutationFn: (id: string) => inventoryApi.discardDraft(id), onSuccess: refresh });
 }
 
 /** the saved filters (presets) of this screen: the person's own and the shared ones */
@@ -249,7 +250,7 @@ export function useInventoryPresets() {
 
 export function useCreateInventoryPreset() {
   const qc = useQueryClient();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (input: Parameters<typeof inventoryApi.createPreset>[0]) => inventoryApi.createPreset(input),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["inventory", "presets"] }),
   });
@@ -257,16 +258,16 @@ export function useCreateInventoryPreset() {
 
 export function useDeleteInventoryPreset() {
   const qc = useQueryClient();
-  return useMutation({ mutationFn: (id: string) => inventoryApi.deletePreset(id), onSuccess: () => void qc.invalidateQueries({ queryKey: ["inventory", "presets"] }) });
+  return useGuardedMutation({ mutationFn: (id: string) => inventoryApi.deletePreset(id), onSuccess: () => void qc.invalidateQueries({ queryKey: ["inventory", "presets"] }) });
 }
 
 export function useSetReorderLevel() {
   const refresh = useRefreshAfterWrite();
-  return useMutation({ mutationFn: (body: { variantId: string; warehouseId: string; reorderLevel: number | null }) => inventoryApi.setReorderLevel(body), onSuccess: refresh });
+  return useGuardedMutation({ mutationFn: (body: { variantId: string; warehouseId: string; reorderLevel: number | null }) => inventoryApi.setReorderLevel(body), onSuccess: refresh });
 }
 
 export function useExportInventory() {
-  return useMutation({ mutationFn: (filters: InventoryFilters) => inventoryApi.exportCsv(filters) });
+  return useGuardedMutation({ mutationFn: (filters: InventoryFilters) => inventoryApi.exportCsv(filters) });
 }
 
 const SYNC_POLL_MS = 1500;
@@ -277,7 +278,7 @@ const SYNC_POLL_MS = 1500;
  */
 export function useChannelSync() {
   const qc = useQueryClient();
-  const start = useMutation({ mutationFn: (accountId?: string) => inventoryApi.startChannelSync(accountId) });
+  const start = useGuardedMutation({ mutationFn: (accountId?: string) => inventoryApi.startChannelSync(accountId) });
   const jobIds = start.data?.results.flatMap((r) => (r.jobId ? [r.jobId] : [])) ?? [];
   const jobs = useQueries({
     queries: jobIds.map((id) => ({

@@ -1,4 +1,5 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useGuardedMutation } from "@/hooks/useSubmitGuard";
 import {
   connectorsApi,
   ConnectionsListResponse,
@@ -63,7 +64,7 @@ export function useSyncConnection() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (connectionId: string) =>
       connectorsApi.syncConnection(connectionId),
     onSuccess: (res) => {
@@ -93,7 +94,7 @@ export function useSyncConnection() {
 export function useTestConnection() {
   const { toast } = useToast();
 
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (connectionId: string) =>
       connectorsApi.testConnection(connectionId),
     onSuccess: (res) => {
@@ -117,7 +118,7 @@ export function useCreateConnection() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (payload: ConnectChannelInput) =>
       connectorsApi.createConnection(payload),
     onSuccess: (newConn) => {
@@ -147,7 +148,7 @@ export function useDisconnectConnection() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (connectionId: string) =>
       connectorsApi.disconnect(connectionId),
     onSuccess: () => {
@@ -187,7 +188,7 @@ export function useRetrySyncJob() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (jobId: string) => connectorsApi.retrySyncJob(jobId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: CONNECTOR_KEYS.syncJobs() });

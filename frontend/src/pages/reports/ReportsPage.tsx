@@ -22,6 +22,7 @@ import { useWorkspaceStore } from "@/store/workspace.store";
 import { cn } from "@/utils/cn";
 import { formatDateTime, formatNumber } from "@/utils/format";
 import type { CatalogEntry, FeaturedReport, ReportFormat, ReportRun, ReportSchedule, ReportsTab } from "@/types/reports";
+import { useSubmitLock } from "@/hooks/useSubmitGuard";
 
 const TAB_LABEL: Record<ReportsTab, string> = { reports: "Reports", history: "History", schedules: "Schedules" };
 
@@ -80,7 +81,10 @@ export default function ReportsPage() {
   const generateFromDialog = (entry: CatalogEntry, format: ReportFormat, params: Record<string, unknown>, background: boolean) =>
     exporter.start({ type: entry.type, format, params, background }, "dialog");
 
+  const acquire = useSubmitLock();
   const toggle = async (s: ReportSchedule) => {
+    const release = acquire();
+    if (!release) return;
     setBusyScheduleId(s.id);
     const action = s.status === "active" ? "pause" : "resume";
     try {
@@ -90,10 +94,13 @@ export default function ReportsPage() {
       toast({ title: `Could not ${action} the schedule`, description: reportErrorMessage(e, "Try again."), variant: "destructive" });
     } finally {
       setBusyScheduleId(null);
+      release();
     }
   };
 
   const runNow = async (s: ReportSchedule) => {
+    const release = acquire();
+    if (!release) return;
     setBusyScheduleId(s.id);
     try {
       const run = (await scheduleAction.mutateAsync({ id: s.id, action: "run-now" })) as ReportRun;
@@ -103,11 +110,14 @@ export default function ReportsPage() {
       toast({ title: "Could not run the schedule", description: reportErrorMessage(e, "Try again."), variant: "destructive" });
     } finally {
       setBusyScheduleId(null);
+      release();
     }
   };
 
   const confirmDelete = async () => {
     if (!removing) return;
+    const release = acquire();
+    if (!release) return;
     try {
       await deleteSchedule.mutateAsync(removing.id);
       toast({ title: "Schedule deleted", description: `${removing.name}. Its past runs stay in History.`, variant: "success" });
@@ -115,6 +125,8 @@ export default function ReportsPage() {
     } catch (e) {
       toast({ title: "Could not delete the schedule", description: reportErrorMessage(e, "Try again."), variant: "destructive" });
       setRemoving(null);
+    } finally {
+      release();
     }
   };
 

@@ -1,4 +1,5 @@
-import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useGuardedMutation } from "@/hooks/useSubmitGuard";
 import { promotionsApi } from "@/api/promotions.api";
 import { useWorkspaceStore } from "@/store/workspace.store";
 import type {
@@ -105,12 +106,12 @@ function useAfterWrite() {
 
 export function useCreateCampaign() {
   const afterWrite = useAfterWrite();
-  return useMutation({ mutationFn: (body: CampaignWrite & { selection?: ProductSelection }) => promotionsApi.create(body), onSuccess: afterWrite });
+  return useGuardedMutation({ mutationFn: (body: CampaignWrite & { selection?: ProductSelection }) => promotionsApi.create(body), onSuccess: afterWrite });
 }
 
 export function useUpdateCampaign() {
   const afterWrite = useAfterWrite();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (input: { id: string; body: Partial<CampaignWrite> & { version: number } }) => promotionsApi.update(input.id, input.body),
     onSuccess: afterWrite,
   });
@@ -118,12 +119,12 @@ export function useUpdateCampaign() {
 
 export function useDeleteCampaign() {
   const afterWrite = useAfterWrite();
-  return useMutation({ mutationFn: (input: { id: string; version?: number }) => promotionsApi.remove(input.id, input.version), onSuccess: afterWrite });
+  return useGuardedMutation({ mutationFn: (input: { id: string; version?: number }) => promotionsApi.remove(input.id, input.version), onSuccess: afterWrite });
 }
 
 export function useCampaignLifecycle() {
   const afterWrite = useAfterWrite();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (input: { id: string; action: PromotionLifecycleAction; version?: number }) => promotionsApi.lifecycle(input.id, input.action, input.version),
     // a refused action (stale version, wrong state) still means the screen is out of date
     onSettled: afterWrite,
@@ -132,17 +133,17 @@ export function useCampaignLifecycle() {
 
 export function useDuplicateCampaign() {
   const afterWrite = useAfterWrite();
-  return useMutation({ mutationFn: (id: string) => promotionsApi.duplicate(id), onSuccess: afterWrite });
+  return useGuardedMutation({ mutationFn: (id: string) => promotionsApi.duplicate(id), onSuccess: afterWrite });
 }
 
 export function useEvaluateCampaign() {
   const afterWrite = useAfterWrite();
-  return useMutation({ mutationFn: (id: string) => promotionsApi.evaluate(id), onSuccess: afterWrite });
+  return useGuardedMutation({ mutationFn: (id: string) => promotionsApi.evaluate(id), onSuccess: afterWrite });
 }
 
 export function useSetCampaignProducts() {
   const afterWrite = useAfterWrite();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (input: { id: string; selection: ProductSelection; mode: "replace" | "add" }) => promotionsApi.setProducts(input.id, input.selection, input.mode),
     onSuccess: afterWrite,
   });
@@ -150,10 +151,10 @@ export function useSetCampaignProducts() {
 
 export function useRemoveCampaignProducts() {
   const afterWrite = useAfterWrite();
-  return useMutation({ mutationFn: (input: { id: string; variantIds: string[] }) => promotionsApi.removeProducts(input.id, input.variantIds), onSuccess: afterWrite });
+  return useGuardedMutation({ mutationFn: (input: { id: string; variantIds: string[] }) => promotionsApi.removeProducts(input.id, input.variantIds), onSuccess: afterWrite });
 }
 
 export function useProcessPromotions() {
   const afterWrite = useAfterWrite();
-  return useMutation({ mutationFn: promotionsApi.process, onSuccess: afterWrite });
+  return useGuardedMutation({ mutationFn: promotionsApi.process, onSuccess: afterWrite });
 }

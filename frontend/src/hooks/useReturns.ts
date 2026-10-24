@@ -1,4 +1,5 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useGuardedMutation } from "@/hooks/useSubmitGuard";
 import { returnsApi } from "@/api/returns.api";
 import { refreshShell } from "@/lib/session";
 import { useWorkspaceStore } from "@/store/workspace.store";
@@ -98,21 +99,21 @@ function useAfterWrite() {
 /** approve, receive, inspection, disposition, refund, complete, reject, cancel; a failed write also refreshes (the state may have moved) */
 export function useRunReturnAction() {
   const afterWrite = useAfterWrite();
-  return useMutation({ mutationFn: (input: RunActionInput) => returnsApi.run(input), onSuccess: afterWrite, onError: afterWrite });
+  return useGuardedMutation({ mutationFn: (input: RunActionInput) => returnsApi.run(input), onSuccess: afterWrite, onError: afterWrite });
 }
 
 export function useCreateReturn() {
   const afterWrite = useAfterWrite();
-  return useMutation({ mutationFn: (input: CreateReturnInput) => returnsApi.create(input), onSuccess: afterWrite });
+  return useGuardedMutation({ mutationFn: (input: CreateReturnInput) => returnsApi.create(input), onSuccess: afterWrite });
 }
 
 export function useExportReturns() {
-  return useMutation({ mutationFn: (query: LedgerQuery) => returnsApi.exportCsv(query) });
+  return useGuardedMutation({ mutationFn: (query: LedgerQuery) => returnsApi.exportCsv(query) });
 }
 
 /** looks an order up by number and says which units can still come back */
 export function useFindEligibleOrder() {
-  return useMutation({ mutationFn: (order: string) => returnsApi.eligibility(order) });
+  return useGuardedMutation({ mutationFn: (order: string) => returnsApi.eligibility(order) });
 }
 
 /** why products come back (reason shares, concentration, recommendation-only notes) */
@@ -153,12 +154,12 @@ export function useReturnMembers(enabled: boolean) {
 /** saves an inspection (checklist + result) */
 export function useSaveInspection() {
   const afterWrite = useAfterWrite();
-  return useMutation({ mutationFn: (input: SaveInspectionInput) => returnsApi.saveInspection(input), onSuccess: afterWrite, onError: afterWrite });
+  return useGuardedMutation({ mutationFn: (input: SaveInspectionInput) => returnsApi.saveInspection(input), onSuccess: afterWrite, onError: afterWrite });
 }
 
 export function useAssignInspection() {
   const afterWrite = useAfterWrite();
-  return useMutation({ mutationFn: ({ ids, userId }: { ids: string[]; userId: string }) => returnsApi.assignInspection(ids, userId), onSuccess: afterWrite });
+  return useGuardedMutation({ mutationFn: ({ ids, userId }: { ids: string[]; userId: string }) => returnsApi.assignInspection(ids, userId), onSuccess: afterWrite });
 }
 
 /** how often the running sync jobs are looked at, and how long we wait before leaving them to finish in the background */
@@ -179,7 +180,7 @@ export interface SyncReturnsInput {
  */
 export function useSyncReturns() {
   const afterWrite = useAfterWrite();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: async ({ onUpdate, since }: SyncReturnsInput = {}): Promise<SyncReport> => {
       const startedAt = Date.now();
       const started = await returnsApi.sync(since ? { since } : {});
@@ -210,15 +211,15 @@ export function useSyncReturns() {
 
 /** every row of the current filters, for "Select all (N)" */
 export function useSelectAllReturns() {
-  return useMutation({ mutationFn: (query: LedgerQuery) => returnsApi.ledgerAll(query) });
+  return useGuardedMutation({ mutationFn: (query: LedgerQuery) => returnsApi.ledgerAll(query) });
 }
 
 /** pass / fail / needs review on several returns at once (no checklist; never a refund or a disposition) */
 export function useMarkInspection() {
   const afterWrite = useAfterWrite();
-  return useMutation({ mutationFn: ({ ids, result, note }: { ids: string[]; result: InspectionResult; note?: string }) => returnsApi.markInspection(ids, result, note), onSuccess: afterWrite });
+  return useGuardedMutation({ mutationFn: ({ ids, result, note }: { ids: string[]; result: InspectionResult; note?: string }) => returnsApi.markInspection(ids, result, note), onSuccess: afterWrite });
 }
 
 export function useExportAttention() {
-  return useMutation({ mutationFn: () => returnsApi.exportAttention() });
+  return useGuardedMutation({ mutationFn: () => returnsApi.exportAttention() });
 }

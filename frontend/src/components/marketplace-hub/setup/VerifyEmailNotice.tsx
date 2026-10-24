@@ -3,6 +3,7 @@ import { MailWarning } from "lucide-react";
 import { authApi } from "@/api/auth.api";
 import { errorMessage } from "@/api/errors";
 import { Button } from "@/components/ui/button";
+import { useSubmitLock } from "@/hooks/useSubmitGuard";
 
 /** shown when the API refuses a connection because the owner's email is not verified yet (403 EMAIL_NOT_VERIFIED) */
 export function VerifyEmailNotice({ message }: { message?: string }) {
@@ -11,7 +12,10 @@ export function VerifyEmailNotice({ message }: { message?: string }) {
   );
   const [problem, setProblem] = useState("");
 
+  const acquire = useSubmitLock();
   const resend = async () => {
+    const release = acquire();
+    if (!release) return;
     setState("sending");
     try {
       await authApi.resendVerification();
@@ -19,6 +23,8 @@ export function VerifyEmailNotice({ message }: { message?: string }) {
     } catch (e) {
       setProblem(errorMessage(e));
       setState("error");
+    } finally {
+      release();
     }
   };
 

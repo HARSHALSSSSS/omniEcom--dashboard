@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useGuardedMutation } from "@/hooks/useSubmitGuard";
 import { hubApi } from "@/api/hub.api";
 import { refreshShell } from "@/lib/session";
 import { useWorkspaceStore } from "@/store/workspace.store";
@@ -76,7 +77,7 @@ export function useAccountSync(accountId: string) {
   const refresh = useRefreshHub();
   const [started, setStarted] = useState<SyncStart | null>(null);
 
-  const start = useMutation({
+  const start = useGuardedMutation({
     mutationFn: (scopes?: SyncScope[]) => hubApi.startSync(accountId, scopes),
     onSuccess: (data) => {
       setStarted(data);
@@ -110,22 +111,22 @@ export function useAccountSync(accountId: string) {
 
 export function useTestConnection() {
   const refresh = useRefreshHub();
-  return useMutation({ mutationFn: (id: string) => hubApi.test(id), onSettled: refresh });
+  return useGuardedMutation({ mutationFn: (id: string) => hubApi.test(id), onSettled: refresh });
 }
 
 export function useDisconnectAccount() {
   const refresh = useRefreshHub();
-  return useMutation({ mutationFn: (id: string) => hubApi.disconnect(id), onSuccess: refresh });
+  return useGuardedMutation({ mutationFn: (id: string) => hubApi.disconnect(id), onSuccess: refresh });
 }
 
 export function useReconnectAccount() {
   const refresh = useRefreshHub();
-  return useMutation({ mutationFn: (v: { id: string; credentials: Record<string, string> }) => hubApi.reconnect(v.id, v.credentials), onSuccess: refresh });
+  return useGuardedMutation({ mutationFn: (v: { id: string; credentials: Record<string, string> }) => hubApi.reconnect(v.id, v.credentials), onSuccess: refresh });
 }
 
 export function useUpdateAccount() {
   const refresh = useRefreshHub();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (v: { id: string; displayName?: string; status?: "active" | "paused"; version: number }) => {
       const { id, ...body } = v;
       return hubApi.update(id, body);
@@ -136,12 +137,12 @@ export function useUpdateAccount() {
 
 export function useDeleteAccount() {
   const refresh = useRefreshHub();
-  return useMutation({ mutationFn: (id: string) => hubApi.remove(id), onSuccess: refresh });
+  return useGuardedMutation({ mutationFn: (id: string) => hubApi.remove(id), onSuccess: refresh });
 }
 
 export function useJobAction() {
   const refresh = useRefreshHub();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (v: { id: string; action: "retry" | "cancel" }) => (v.action === "retry" ? hubApi.retryJob(v.id) : hubApi.cancelJob(v.id)),
     onSettled: refresh,
   });
@@ -155,7 +156,7 @@ export function useSetupSync(accountId: string | null, seed: string[]) {
   const refresh = useRefreshHub();
   const [started, setStarted] = useState<SyncStart | null>(null);
 
-  const start = useMutation({
+  const start = useGuardedMutation({
     mutationFn: (scopes?: SyncScope[]) => hubApi.startSync(accountId as string, scopes),
     onSuccess: (data) => {
       setStarted(data);

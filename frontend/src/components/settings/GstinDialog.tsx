@@ -8,6 +8,7 @@ import { isApiError } from "@/api/errors";
 import { gstinErrorMessage, useGstinActions, useGstinCheck, useGstStates } from "@/hooks/useSettings";
 import { Field, selectClass } from "./fields";
 import type { Gstin, GstinCheck, GstinStatus } from "@/types/settings";
+import { useSubmitLock } from "@/hooks/useSubmitGuard";
 
 const PROBLEM_TEXT: Record<NonNullable<GstinCheck["problem"]>, string> = {
   format: "This is not in the GSTIN format: 15 characters, for example 27AABCN8412P1Z1.",
@@ -98,11 +99,14 @@ export function GstinDialog({ editing, hasRegistrations, onClose }: { editing: G
   const canSubmit = gstin.length === 15 && !blocked && !checking && !busy;
   const isFirst = !hasRegistrations && !editing;
 
+  const acquire = useSubmitLock();
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!canSubmit) return;
     setError(null);
     setFieldError(null);
+    const release = acquire();
+    if (!release) return;
     try {
       if (editing) {
         await actions.update.mutateAsync({
@@ -132,6 +136,8 @@ export function GstinDialog({ editing, hasRegistrations, onClose }: { editing: G
     } catch (err) {
       if (isApiError(err) && err.fields?.gstin) setFieldError(err.fields.gstin);
       setError(gstinErrorMessage(err));
+    } finally {
+      release();
     }
   };
 

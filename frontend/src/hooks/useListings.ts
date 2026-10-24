@@ -1,4 +1,5 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useGuardedMutation } from "@/hooks/useSubmitGuard";
 import { listingsApi } from "@/api/listings.api";
 import { refreshShell } from "@/lib/session";
 import { useWorkspaceStore } from "@/store/workspace.store";
@@ -117,7 +118,7 @@ function useAfterWrite() {
 
 export function useBulkListings() {
   const afterWrite = useAfterWrite();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (input: { action: ListingBulkAction; ids: string[] }) => listingsApi.bulk(input.action, input.ids),
     onSuccess: afterWrite,
   });
@@ -126,7 +127,7 @@ export function useBulkListings() {
 /** master products x marketplace accounts in one call: a draft listing for every pair that has none (idempotent) */
 export function useBulkCreateListings() {
   const afterWrite = useAfterWrite();
-  return useMutation({ mutationFn: (input: BulkCreateInput) => listingsApi.bulkCreate(input), onSettled: afterWrite });
+  return useGuardedMutation({ mutationFn: (input: BulkCreateInput) => listingsApi.bulkCreate(input), onSettled: afterWrite });
 }
 
 const CREATE_CONCURRENCY = 5;
@@ -134,7 +135,7 @@ const CREATE_CONCURRENCY = 5;
 /** starts a draft listing for each variant x account pair; a failure of one never stops the rest */
 export function useCreateListings() {
   const afterWrite = useAfterWrite();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: async (targets: CreateTarget[]): Promise<CreateOutcome[]> => {
       const out: CreateOutcome[] = [];
       for (let i = 0; i < targets.length; i += CREATE_CONCURRENCY) {

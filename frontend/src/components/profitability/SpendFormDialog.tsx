@@ -12,6 +12,7 @@ import { currencySymbol } from "@/utils/format";
 import type { SpendAccount, SpendRow } from "@/types/profitability";
 import { isoDay } from "./profitFormat";
 import { NOT_TIED, emptySpendForm, formFromSpend, serverFieldErrors, spendFormSchema, toSpendWrite, type SpendFormValues } from "./spendForm";
+import { useSubmitLock } from "@/hooks/useSubmitGuard";
 
 function Field({ label, error, hint, children, htmlFor }: { label: string; error?: string; hint?: string; children: React.ReactNode; htmlFor: string }) {
   return (
@@ -70,9 +71,12 @@ export function SpendFormDialog({ open, onOpenChange, row, accounts, onSaved }: 
     onOpenChange(false);
   };
 
+  const acquire = useSubmitLock();
   const save = handleSubmit(async (values) => {
     setFormError(null);
     const body = toSpendWrite(values);
+    const release = acquire();
+    if (!release) return;
     try {
       const saved = row ? await update.mutateAsync({ id: row.id, body }) : await create.mutateAsync(body);
       onOpenChange(false);
@@ -85,6 +89,8 @@ export function SpendFormDialog({ open, onOpenChange, row, accounts, onSaved }: 
         if (e.status === 404) return setFormError("This row no longer exists. Close the dialog and refresh.");
       }
       setFormError(errorMessage(e));
+    } finally {
+      release();
     }
   });
 

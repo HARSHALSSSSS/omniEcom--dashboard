@@ -1,4 +1,5 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useGuardedMutation } from "@/hooks/useSubmitGuard";
 import { assistantApi } from "@/api/assistant.api";
 import { useWorkspaceStore } from "@/store/workspace.store";
 import type { ConversationDetail, ConversationsQuery, ConversationStatus, SendMessageResult } from "@/types/assistant";
@@ -25,7 +26,7 @@ export function useAssistantSettings(enabled: boolean) {
 
 export function useEnableAssistant() {
   const qc = useQueryClient();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: assistantApi.enable,
     onSuccess: () => void qc.invalidateQueries({ queryKey: assistantKeys.all }),
   });
@@ -77,7 +78,7 @@ export function useCreateConversation() {
   const qc = useQueryClient();
   const b = useBusinessId();
   const refresh = useRefreshLists();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (title?: string) => assistantApi.create(title),
     onSuccess: (conv) => {
       // seed the detail so opening it does not race the first answer with an empty read
@@ -91,7 +92,7 @@ export function useSendMessage() {
   const qc = useQueryClient();
   const b = useBusinessId();
   const refresh = useRefreshLists();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: ({ id, text }: { id: string; text: string }) => assistantApi.send(id, text),
     onSuccess: (res: SendMessageResult, { id }) => {
       const key = assistantKeys.conversation(b, id);
@@ -112,7 +113,7 @@ export function useRenameConversation() {
   const qc = useQueryClient();
   const b = useBusinessId();
   const refresh = useRefreshLists();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: ({ id, title }: { id: string; title: string }) => assistantApi.rename(id, title),
     onSuccess: (conv) => {
       qc.setQueryData<ConversationDetail>(assistantKeys.conversation(b, conv.id), (old) => (old ? { ...old, ...conv } : old));
@@ -125,7 +126,7 @@ export function useSetConversationStatus() {
   const qc = useQueryClient();
   const b = useBusinessId();
   const refresh = useRefreshLists();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: ({ id, status }: { id: string; status: ConversationStatus }) => assistantApi.setStatus(id, status),
     onSuccess: (conv) => {
       qc.setQueryData<ConversationDetail>(assistantKeys.conversation(b, conv.id), (old) => (old ? { ...old, ...conv } : old));
@@ -138,7 +139,7 @@ export function useDeleteConversation() {
   const qc = useQueryClient();
   const b = useBusinessId();
   const refresh = useRefreshLists();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (id: string) => assistantApi.remove(id),
     onSuccess: (_r, id) => {
       qc.removeQueries({ queryKey: assistantKeys.conversation(b, id) });

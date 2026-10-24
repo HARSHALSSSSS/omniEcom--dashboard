@@ -1,4 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useGuardedMutation } from "@/hooks/useSubmitGuard";
 import { directoryApi } from "@/api/directory.api";
 import { refreshShell } from "@/lib/session";
 import type { ConnectInput, OauthCompleteInput } from "@/types/directory";
@@ -33,7 +34,7 @@ function useRefreshAfterConnect() {
 /** the guided connect: a failed attempt resolves with status "failed" (the API answers 200), real errors reject */
 export function useConnect() {
   const refresh = useRefreshAfterConnect();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: ({
       input,
       idempotencyKey,
@@ -47,7 +48,7 @@ export function useConnect() {
 
 export function useCompleteOauth() {
   const refresh = useRefreshAfterConnect();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (input: OauthCompleteInput) =>
       directoryApi.oauthComplete(input),
     onSuccess: refresh,

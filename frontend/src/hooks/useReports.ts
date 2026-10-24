@@ -1,4 +1,5 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useGuardedMutation } from "@/hooks/useSubmitGuard";
 import { reportsApi } from "@/api/reports.api";
 import { useWorkspaceStore } from "@/store/workspace.store";
 import type { ExportRequest, ReportRun, ReportSchedule, RunQuery, SchedulePatch, ScheduleQuery, ScheduleWrite } from "@/types/reports";
@@ -77,27 +78,27 @@ function useRefreshReports() {
 
 export function useExportReport() {
   const refresh = useRefreshReports();
-  return useMutation({ mutationFn: (body: ExportRequest) => reportsApi.exportReport(body), onSuccess: refresh });
+  return useGuardedMutation({ mutationFn: (body: ExportRequest) => reportsApi.exportReport(body), onSuccess: refresh });
 }
 
 export function useCreateSchedule() {
   const refresh = useRefreshReports();
-  return useMutation({ mutationFn: (body: ScheduleWrite) => reportsApi.createSchedule(body), onSuccess: refresh });
+  return useGuardedMutation({ mutationFn: (body: ScheduleWrite) => reportsApi.createSchedule(body), onSuccess: refresh });
 }
 
 export function useUpdateSchedule() {
   const refresh = useRefreshReports();
-  return useMutation({ mutationFn: ({ id, body }: { id: string; body: SchedulePatch }) => reportsApi.updateSchedule(id, body), onSuccess: refresh });
+  return useGuardedMutation({ mutationFn: ({ id, body }: { id: string; body: SchedulePatch }) => reportsApi.updateSchedule(id, body), onSuccess: refresh });
 }
 
 export function useDeleteSchedule() {
   const refresh = useRefreshReports();
-  return useMutation({ mutationFn: (id: string) => reportsApi.deleteSchedule(id), onSuccess: refresh });
+  return useGuardedMutation({ mutationFn: (id: string) => reportsApi.deleteSchedule(id), onSuccess: refresh });
 }
 
 export function useScheduleAction() {
   const refresh = useRefreshReports();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: ({ id, action }: { id: string; action: "pause" | "resume" | "run-now" }): Promise<ReportSchedule | ReportRun> =>
       action === "pause" ? reportsApi.pauseSchedule(id) : action === "resume" ? reportsApi.resumeSchedule(id) : reportsApi.runScheduleNow(id),
     onSuccess: refresh,

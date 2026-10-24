@@ -14,6 +14,7 @@ import { Field, FIELD_SELECT, InlineError } from "./procurementUi";
 import { fieldError } from "./procurementErrors";
 import { VersionConflictDialog } from "./VersionConflictDialog";
 import { isVersionConflict } from "./procurementErrors";
+import { useSubmitLock } from "@/hooks/useSubmitGuard";
 
 export type SupplierFormTarget = { kind: "create" } | { kind: "edit"; supplier: Supplier | SupplierDetail };
 
@@ -157,11 +158,14 @@ function SupplierForm({ supplier, onDirty, onCancel, onSaved }: { supplier: Supp
     };
   };
 
+  const acquire = useSubmitLock();
   const submit = async (ev: React.FormEvent) => {
     ev.preventDefault();
     setServerError(null);
     setServerFields(null);
     if (!validate()) return;
+    const release = acquire();
+    if (!release) return;
     try {
       if (supplier) {
         const saved = await update.mutateAsync({ id: supplier.id, body: { ...body(), version: version.current } });
@@ -181,6 +185,8 @@ function SupplierForm({ supplier, onDirty, onCancel, onSaved }: { supplier: Supp
       // a duplicate code or a GSTIN refusal names its field: the message goes under it, the banner stays for the rest
       const named = isApiError(e) && e.fields !== null && Object.keys(e.fields).some((k) => k in blank);
       setServerError(named ? null : errorMessage(e, "Could not save the supplier."));
+    } finally {
+      release();
     }
   };
 

@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { useWorkspaceStore } from "@/store/workspace.store";
 import { Link } from "react-router-dom";
 import { Bell, Loader2, X } from "lucide-react";
-import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
+import { useGuardedMutation } from "@/hooks/useSubmitGuard";
 import { formatDistanceToNowStrict } from "date-fns";
 import { useUiStore } from "@/store/ui.store";
 import { workspaceApi, type NotificationItem } from "@/api/workspace.api";
@@ -61,12 +62,12 @@ export const NotificationsPanel = () => {
     await refreshShell().catch(() => undefined);
   };
 
-  const markRead = useMutation({
+  const markRead = useGuardedMutation({
     mutationFn: (ids: string[]) => workspaceApi.markRead(ids),
     onSuccess: afterChange,
     onError: (e) => setActionError(errorMessage(e)),
   });
-  const markAll = useMutation({
+  const markAll = useGuardedMutation({
     mutationFn: () => workspaceApi.markAllRead(),
     onSuccess: afterChange,
     onError: (e) => setActionError(errorMessage(e)),

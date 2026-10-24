@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useGuardedMutation } from "@/hooks/useSubmitGuard";
 import { importProcessingApi } from "@/api/importProcessing.api";
 import { useWorkspaceStore } from "@/store/workspace.store";
 import type { ImportSession } from "@/types/import";
@@ -103,7 +104,7 @@ export function useIssuesList(id: string | null, query: IssuesListQuery, enabled
 export function useUploadIssueImage(id: string) {
   const business = useWorkspaceStore((s) => s.shell?.business.id);
   const qc = useQueryClient();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: ({ issueId, file, onProgress }: { issueId: string; file: File; onProgress?: (percent: number) => void }) => importProcessingApi.uploadImage(id, issueId, file, { onProgress }),
     onSuccess: (res) => {
       qc.setQueryData<ImportSession>(["imports", "session", business, id], (old) => (old ? { ...old, issues: res.issues, counters: res.counters } : old));

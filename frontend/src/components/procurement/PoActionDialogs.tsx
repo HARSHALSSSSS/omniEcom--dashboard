@@ -13,6 +13,7 @@ import { dateOrDash, dayToIso, parseQty, todayDay } from "./procurementFormat";
 import { Field, InlineError } from "./procurementUi";
 import { VersionConflictDialog } from "./VersionConflictDialog";
 import { isVersionConflict } from "./procurementErrors";
+import { useSubmitLock } from "@/hooks/useSubmitGuard";
 
 interface BaseProps {
   order: PurchaseOrder | null;
@@ -56,10 +57,13 @@ function DateActionForm({ order, mode, onClose }: { order: PurchaseOrder; mode: 
   const pending = approve.isPending || acknowledge.isPending;
   const approving = mode === "approve";
 
+  const acquire = useSubmitLock();
   const submit = async (ev: React.FormEvent) => {
     ev.preventDefault();
     setError(null);
     const input = { id: order.id, version: order.version, expectedAt: day ? dayToIso(day) : undefined };
+    const release = acquire();
+    if (!release) return;
     try {
       const po = approving ? await approve.mutateAsync(input) : await acknowledge.mutateAsync(input);
       toast({
@@ -71,6 +75,8 @@ function DateActionForm({ order, mode, onClose }: { order: PurchaseOrder; mode: 
     } catch (e) {
       if (isVersionConflict(e)) conflict.show();
       else setError(errorMessage(e, approving ? "Could not approve the purchase order." : "Could not record the confirmation."));
+    } finally {
+      release();
     }
   };
 
@@ -124,10 +130,13 @@ function CancelForm({ order, onClose }: { order: PurchaseOrder; onClose: () => v
   const tooShort = reason !== "" && trimmed.length < 3;
   const received = order.unitsReceived + order.unitsDamaged > 0;
 
+  const acquire = useSubmitLock();
   const submit = async (ev: React.FormEvent) => {
     ev.preventDefault();
     if (trimmed.length < 3) return;
     setError(null);
+    const release = acquire();
+    if (!release) return;
     try {
       const res = await cancel.mutateAsync({ id: order.id, reason: trimmed, version: order.version });
       toast({ title: "Purchase order cancelled", description: res.releasedUnits > 0 ? `${res.purchaseOrder.poNumber}: ${formatNumber(res.releasedUnits)} units are no longer expected.` : `${res.purchaseOrder.poNumber} was cancelled.`, variant: "success" });
@@ -135,6 +144,8 @@ function CancelForm({ order, onClose }: { order: PurchaseOrder; onClose: () => v
     } catch (e) {
       if (isVersionConflict(e)) conflict.show();
       else setError(errorMessage(e, "Could not cancel the purchase order."));
+    } finally {
+      release();
     }
   };
 
@@ -208,10 +219,13 @@ function ReceiveForm({ order, onClose }: { order: PurchaseOrder; onClose: () => 
     setBad({});
   };
 
+  const acquire = useSubmitLock();
   const submit = async (ev: React.FormEvent) => {
     ev.preventDefault();
     if (!ready) return;
     setError(null);
+    const release = acquire();
+    if (!release) return;
     try {
       const res = await receive.mutateAsync({
         id: order.id,
@@ -230,6 +244,8 @@ function ReceiveForm({ order, onClose }: { order: PurchaseOrder; onClose: () => 
     } catch (e) {
       if (isVersionConflict(e)) conflict.show();
       else setError(errorMessage(e, "Could not record the receipt."));
+    } finally {
+      release();
     }
   };
 

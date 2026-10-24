@@ -15,6 +15,7 @@ import { AdjustPanel } from "./AdjustPanel";
 import { InlineError, InventoryThumb } from "./inventoryUi";
 import { HEALTH_ICON, HEALTH_LABEL, NO_WRITE_REASON, ONE_WAREHOUSE_REASON, TONE_HEX, TONE_OF_HEALTH } from "./inventoryLabels";
 import { targetOfPanel, type StockTarget } from "./stockTarget";
+import { useSubmitLock } from "@/hooks/useSubmitGuard";
 
 const RULE = "h-[1px] w-full bg-[#EAEAEA]";
 const H4 = "text-[13px] font-semibold text-[#000000]";
@@ -26,13 +27,18 @@ function ReorderLevel({ variantId, warehouseId, current, canWrite }: { variantId
   const valid = value.trim() === "" || /^\d{1,9}$/.test(value.trim());
   const dirty = value.trim() !== (current === null ? "" : String(current));
 
+  const acquire = useSubmitLock();
   const onSave = async () => {
+    const release = acquire();
+    if (!release) return;
     setError(null);
     try {
       await save.mutateAsync({ variantId, warehouseId, reorderLevel: value.trim() === "" ? null : Number(value.trim()) });
       toast({ title: "Reorder level saved", variant: "success" });
     } catch (e) {
       setError(errorMessage(e, "Could not save the reorder level."));
+    } finally {
+      release();
     }
   };
 

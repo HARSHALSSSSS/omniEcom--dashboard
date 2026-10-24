@@ -7,6 +7,7 @@ import { useQuickAdjust, useWarehouses } from "@/hooks/useVariants";
 import { errorMessage } from "@/api/errors";
 import type { StockReason, VariantGridItem } from "@/types/variants";
 import { formatNumber } from "@/utils/format";
+import { useSubmitLock } from "@/hooks/useSubmitGuard";
 
 export type StockMode = "adjust" | "receive";
 
@@ -60,16 +61,21 @@ function StockForm({ productId, variant, mode, onClose }: { productId: string; v
   const delta = ready ? (sign === "minus" ? -n : n) : 0;
   const reasons = mode === "receive" ? REASONS.filter((r) => r.value === "manual_addition") : REASONS;
 
+  const acquire = useSubmitLock();
   const submit = async (ev: React.FormEvent) => {
     ev.preventDefault();
     if (!ready) return;
     setServerError(null);
+    const release = acquire();
+    if (!release) return;
     try {
       const res = await adjust.mutateAsync({ variantId: variant.id, reason, quantityDelta: delta, warehouseId: warehouseId || undefined, notes: notes.trim() || undefined, idempotencyKey: key });
       toast({ title: mode === "receive" ? "Stock received" : "Stock adjusted", description: `${variant.sku}: ${formatNumber(res.result.newAvailable)} available in ${res.warehouse.name}.`, variant: "success" });
       onClose();
     } catch (e) {
       setServerError(errorMessage(e, "Could not change the stock."));
+    } finally {
+      release();
     }
   };
 

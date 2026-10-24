@@ -1,4 +1,5 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useGuardedMutation } from "@/hooks/useSubmitGuard";
 import { productIntelligenceApi } from "@/api/productIntelligence.api";
 import { useWorkspaceStore } from "@/store/workspace.store";
 import type { ProductIntelligenceQuery } from "@/types/intelligence";
@@ -39,7 +40,7 @@ export function useIntelWarehouses(enabled = true) {
 /** reorder: draft purchase orders for one variant; the procurement screens and these recommendations change with it */
 export function useDraftPurchaseOrders() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (input: { variantIds: string[]; warehouseId?: string }) => productIntelligenceApi.draftPurchaseOrders(input.variantIds, input.warehouseId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: procurementKeys.all });
@@ -51,7 +52,7 @@ export function useDraftPurchaseOrders() {
 /** raise_price / liquidate: ask the pricing policies for a proposal */
 export function useGeneratePriceProposals() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useGuardedMutation({
     mutationFn: (variantIds: string[]) => productIntelligenceApi.generatePriceProposals(variantIds),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: pricingKeys.all });

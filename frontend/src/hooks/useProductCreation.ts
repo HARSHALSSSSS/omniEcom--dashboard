@@ -21,6 +21,7 @@ import {
   type FormFieldKey,
 } from "@/components/products/create/formModel";
 import type { CreationDto, CreationReadiness, DraftValues, FormOptions, StepIssue } from "@/types/productCreation";
+import { useSubmitLock } from "@/hooks/useSubmitGuard";
 
 export const CREATION_KEYS = {
   all: ["productCreation"] as const,
@@ -134,6 +135,8 @@ export function useProductCreation({ canWrite, formOptions }: Options): ProductC
   const [warnings, setWarnings] = useState<StepIssue[]>([]);
   const [moreInfoOpen, setMoreInfoOpen] = useState(false);
   const [continuing, setContinuing] = useState(false);
+  const acquireSaveDraft = useSubmitLock();
+  const acquireContinue = useSubmitLock();
   const [savingDraft, setSavingDraft] = useState(false);
   const [discarding, setDiscarding] = useState(false);
   const [leave, setLeave] = useState<{ open: boolean; error: string | null }>({ open: false, error: null });
@@ -439,6 +442,8 @@ export function useProductCreation({ canWrite, formOptions }: Options): ProductC
   // ------------------------------------------------------------------------------------------ explicit save
   const saveDraft = useCallback(async (): Promise<boolean> => {
     if (!canWrite || savingDraft) return false;
+    const release = acquireSaveDraft();
+    if (!release) return false;
     setAttempted(true);
     setSavingDraft(true);
     try {
@@ -457,8 +462,9 @@ export function useProductCreation({ canWrite, formOptions }: Options): ProductC
       return false;
     } finally {
       setSavingDraft(false);
+      release();
     }
-  }, [canWrite, focusField, form, save, savingDraft, setErrors]);
+  }, [acquireSaveDraft, canWrite, focusField, form, save, savingDraft, setErrors]);
 
   const resolveConflict = useCallback(
     async (choice: "reload" | "keep") => {
@@ -487,6 +493,8 @@ export function useProductCreation({ canWrite, formOptions }: Options): ProductC
   // ------------------------------------------------------------------------------------------ Continue
   const continueToVariants = useCallback(async () => {
     if (!canWrite || continuing) return;
+    const release = acquireContinue();
+    if (!release) return;
     setContinuing(true);
     setAttempted(true);
     setWarnings([]);
@@ -554,8 +562,9 @@ export function useProductCreation({ canWrite, formOptions }: Options): ProductC
       toast({ title: "Could not continue", description: errorMessage(e), variant: "destructive" });
     } finally {
       setContinuing(false);
+      release();
     }
-  }, [adoptDto, canWrite, continuing, focusField, form, navigate, qc, save, setErrors, showFieldErrors]);
+  }, [acquireContinue, adoptDto, canWrite, continuing, focusField, form, navigate, qc, save, setErrors, showFieldErrors]);
 
   // ------------------------------------------------------------------------------------------ leaving
   const guardActive = unsaved && canWrite && !notADraft;

@@ -28,6 +28,7 @@ import { useVariantsUrlState } from "@/components/products/variants/useVariantsU
 import { buildVariantsCsv, downloadText } from "@/components/products/variants/variantUtils";
 import type { VariantBulkAction, VariantGridItem } from "@/types/variants";
 import { formatNumber } from "@/utils/format";
+import { useSubmitLock } from "@/hooks/useSubmitGuard";
 
 interface Report {
   title: string;
@@ -73,7 +74,10 @@ export default function VariantsPage() {
   const productPath = `${ROUTES.PRODUCTS}/${id}`;
   const anyFilter = !!params.q || !!params.channel || !!params.inventory || Object.keys(params.options).length > 0 || params.tab !== "all";
 
+  const acquire = useSubmitLock();
   const runBulk = async (ids: string[], action: VariantBulkAction) => {
+    const release = acquire();
+    if (!release) return;
     setReport(null);
     try {
       const res = await bulk.mutateAsync({ ids, action });
@@ -87,6 +91,8 @@ export default function VariantsPage() {
       if (failures.length) setReport({ title: `${formatNumber(failures.length)} of ${formatNumber(res.summary.total)} could not be ${ACTION_DONE[action]}`, failures });
     } catch (e) {
       toast({ title: "Bulk action failed", description: errorMessage(e), variant: "destructive" });
+    } finally {
+      release();
     }
   };
 
@@ -109,11 +115,14 @@ export default function VariantsPage() {
     }
   };
 
+  const acquireDelete = useSubmitLock();
   const confirmDelete = async () => {
     if (!confirm) return;
     const { ids } = confirm;
     const only = ids.length === 1 ? ids[0] : undefined;
     if (only) {
+      const release = acquireDelete();
+      if (!release) return;
       setReport(null);
       try {
         await remove.mutateAsync(only);
@@ -121,6 +130,8 @@ export default function VariantsPage() {
         toast({ title: "Variant deleted", variant: "success" });
       } catch (e) {
         setReport({ title: "The variant could not be deleted", failures: [{ sku: skuOf.get(only) ?? "Variant", message: errorMessage(e) }] });
+      } finally {
+        release();
       }
     } else {
       await runBulk(ids, "delete");
