@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
@@ -57,6 +57,8 @@ export function CampaignFormDialog({ open, onOpenChange, campaign, accounts, onS
   const [formError, setFormError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
+  // a double click can fire the save twice before the buttons re-render as disabled: only the first call goes out
+  const saving = useRef(false);
 
   const form = useForm<CampaignFormValues>({ resolver: zodResolver(campaignFormSchema), defaultValues: EMPTY_FORM, mode: "onTouched" });
   const { register, handleSubmit, reset, watch, setValue, setError, formState } = form;
@@ -121,6 +123,8 @@ export function CampaignFormDialog({ open, onOpenChange, campaign, accounts, onS
         if (!body.endsAt) setError("endsAt", { type: "required", message: "A scheduled campaign needs an end" });
         return;
       }
+      if (saving.current) return;
+      saving.current = true;
       try {
         let saved: PromotionCampaign;
         if (base) {
@@ -143,6 +147,8 @@ export function CampaignFormDialog({ open, onOpenChange, campaign, accounts, onS
         onSaved(saved);
       } catch (e) {
         applyServerError(e);
+      } finally {
+        saving.current = false;
       }
     })();
 

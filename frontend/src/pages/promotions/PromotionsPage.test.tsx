@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
@@ -270,6 +270,25 @@ describe("PromotionsPage", () => {
     });
     expect(api.create.mock.calls[0]?.[0].selection).toBeUndefined();
     await waitFor(() => expect(loc()).toContain("open=55555555-5555-4555-8555-555555555555"));
+  });
+
+  it("saves a double-clicked Save draft once", async () => {
+    api.create.mockImplementation(() => new Promise((resolve) => setTimeout(() => resolve({ campaign: campaign({ id: "66666666-6666-4666-8666-666666666666", name: "Once" }), products: null }), 50)));
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText("Festive Flash");
+    await user.click(screen.getByRole("button", { name: "Create campaign" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.type(within(dialog).getByLabelText("Campaign name"), "Once");
+    await user.type(within(dialog).getByLabelText("Discount (%)"), "10");
+    const save = within(dialog).getByRole("button", { name: "Save draft" });
+    // two clicks inside one task, before the button can re-render as disabled
+    act(() => {
+      fireEvent.click(save);
+      fireEvent.click(save);
+    });
+    await waitFor(() => expect(loc()).toContain("open=66666666-6666-4666-8666-666666666666"));
+    expect(api.create).toHaveBeenCalledTimes(1);
   });
 
   it("sends the picked products and shows a duplicate code on the code field", async () => {
