@@ -363,7 +363,7 @@ describe('notifications: categories, action links and alert switches', () => {
     await emitEvent(admin.vendorId!, 'order.created', '33333333-3333-4333-8333-333333333333', { orderNumber: 'ORD-2', marketplace: 'mock', totalMinor: 51900 });
     const order = (await inbox(admin)).find((n) => n.type === 'order.new');
     expect(order?.body).toBe('Mock Marketplace (Sandbox) · ₹519.00');
-    expect(order?.body).not.toMatch(/INR|mock/);
+    expect(order?.body).not.toMatch(/INR|\bmock\b/);
   });
 
   it('adds category and actionUrl and counts unread per category', async () => {
