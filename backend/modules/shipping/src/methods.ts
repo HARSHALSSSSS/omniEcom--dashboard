@@ -62,9 +62,31 @@ export function flagsFor(c: Container, m: Pick<MethodRow, 'kind' | 'providerCode
 
 export const isVerified = (m: Pick<MethodRow, 'verification'>): boolean => (m.verification as { state?: string }).state === 'verified';
 
+/**
+ * "Requires configuration" has to mean something is missing. A method counts as configured once its safe capability check was run (verified), or
+ * when there is nothing to configure: active, declaring a shipping capability, and either a live connector, the seller's own shipping, or a provider
+ * with no required setting (the sandbox courier). Such a method no longer reads "Requires configuration" while it works. A provider that asks for
+ * settings (a courier account, a custom logistics provider) still has to be verified after they are entered. (The account connection itself is
+ * health, not configuration: it is checked by Verify and by the Hub.)
+ */
+export function isConfigured(c: Container, m: MethodRow): boolean {
+  if (isVerified(m)) return true;
+  if (m.status !== 'active') return false;
+  if (!Object.values(flagsFor(c, m).flags).some(Boolean)) return false;
+  if (m.kind === 'marketplace') { try { return c.connectors.get(m.channelCode ?? '').implementation !== 'planned'; } catch { return false; } }
+  if (m.kind === 'third_party' || m.kind === 'custom') {
+    try {
+      const p = getProvider(m.providerCode);
+      assertProviderAllowed(c, m.providerCode);
+      return p.configFields.every((f) => !f.required);
+    } catch { return false; }
+  }
+  return true;
+}
+
 export function capabilitiesOf(c: Container, m: MethodRow): CapSet {
   const { flags } = flagsFor(c, m);
-  const verified = isVerified(m);
+  const verified = isConfigured(c, m);
   return Object.fromEntries(CAPABILITY_KEYS.map((k) => [k, !flags[k] ? 'not_supported' : verified ? 'supported' : 'requires_configuration'])) as CapSet;
 }
 
@@ -118,7 +140,8 @@ export const methodName = (c: Container, m: Pick<MethodRow, 'kind' | 'label' | '
 export function toMethodDto(c: Container, m: MethodRow, mc: MethodContext) {
   const caps = capabilitiesOf(c, m);
   const account = m.kind === 'marketplace' ? mc.accounts.find((a) => a.marketplace === m.channelCode) : undefined;
-  const state = m.status === 'disabled' ? 'disabled' as const : isVerified(m) ? 'configured' as const : 'requires_configuration' as const;
+  const configured = isConfigured(c, m);
+  const state = m.status === 'disabled' ? 'disabled' as const : configured ? 'configured' as const : 'requires_configuration' as const;
   const v = m.verification as { verifiedAt?: string };
   let connectorLive = false;
   try { connectorLive = m.channelCode ? c.connectors.get(m.channelCode).implementation !== 'planned' : false; } catch { /* unknown channel */ }
@@ -131,7 +154,7 @@ export function toMethodDto(c: Container, m: MethodRow, mc: MethodContext) {
     provider, state, active: m.status === 'active', isDefault: m.isDefault, preferredFor: preferred,
     lastSyncAt: (account?.lastSyncedAt ?? (v.verifiedAt ? new Date(v.verifiedAt) : null))?.toISOString() ?? null,
     supportedOrderTypes: m.supportedOrderTypes.length ? m.supportedOrderTypes : DEFAULT_ORDER_TYPES, capabilities: caps,
-    verification: { state: isVerified(m) ? 'verified' as const : 'unverified' as const, verifiedAt: v.verifiedAt ?? null },
+    verification: { state: configured ? 'verified' as const : 'unverified' as const, verifiedAt: v.verifiedAt ?? null },
     config: visibleConfig(m), version: m.version, createdAt: m.createdAt.toISOString(),
   };
 }
@@ -234,7 +257,7 @@ export async function capabilityDetail(tx: Tx, c: Container, vendorId: string, i
     statusSync: flags.statusSync ? 'Delivery status can be synchronised' : 'Not supported by connector',
   };
   return {
-    methodId: m.id, kind: m.kind as ProviderKind, name: methodName(c, m), verified: isVerified(m), verifiedAt: (m.verification as { verifiedAt?: string }).verifiedAt ?? null, source,
+    methodId: m.id, kind: m.kind as ProviderKind, name: methodName(c, m), verified: isConfigured(c, m), verifiedAt: (m.verification as { verifiedAt?: string }).verifiedAt ?? null, source,
     capabilities: CAPABILITY_KEYS.map((k) => ({ key: k, value: caps[k], declared: flags[k], note: caps[k] === 'requires_configuration' ? 'Supported only after verification' : note[k] })), declared: raw,
   };
 }

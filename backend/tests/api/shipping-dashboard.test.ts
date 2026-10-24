@@ -35,19 +35,20 @@ const selectIt = (w: World, fid: string, body: Record<string, unknown>) => c.pos
 const prefs = (w: World, body: Record<string, unknown>) => c.put('/api/v1/onboarding/fulfillment', { defaultPreference: 'recommended', overrides: {}, ...body }, w.admin);
 
 describe('shipping methods: list, add, capabilities, verify', () => {
-  it('lists third-party / seller / marketplace methods, derives capabilities and stays unverified until verified', async () => {
+  it('lists third-party / seller / marketplace methods, derives capabilities; a method with nothing to configure is configured, one that asks for settings needs verifying', async () => {
     const w = await buildWorld(t, c, { warehouses: 1, stock: [20] });
     // the legacy provider (enabled by buildWorld) shows up as a third-party method
     let list = (await c.get('/api/v1/shipping/methods', w.admin)).body.data;
     expect(list.items).toHaveLength(1);
-    expect(list.items[0]).toMatchObject({ kind: 'third_party', providerCode: 'sandbox', state: 'requires_configuration', active: true, verification: { state: 'unverified' } });
+    // the sandbox courier asks for no setting: it works, so it does not read "Requires configuration" (it was never verified by hand)
+    expect(list.items[0]).toMatchObject({ kind: 'third_party', providerCode: 'sandbox', state: 'configured', active: true, verification: { state: 'verified', verifiedAt: null } });
     expect(list.summary).toBe('1 active method');
     // the matrix is complete: every kind has a row, unconfigured kinds "require configuration"
     expect(list.capabilityMatrix.map((m: any) => m.method).sort()).toEqual(['marketplace', 'seller', 'third_party']);
     expect(list.capabilityMatrix.find((m: any) => m.method === 'seller')).toMatchObject({ methodId: null, label: 'requires_configuration', tracking: 'requires_configuration' });
 
     const seller = await addMethod(w, { kind: 'seller' });
-    expect(seller).toMatchObject({ kind: 'seller', name: 'Seller Shipping', providerCode: 'seller', state: 'requires_configuration', supportedOrderTypes: ['prepaid', 'cod'] });
+    expect(seller).toMatchObject({ kind: 'seller', name: 'Seller Shipping', providerCode: 'seller', state: 'configured', supportedOrderTypes: ['prepaid', 'cod'] });
     const mk = await addMethod(w, { kind: 'marketplace', channelCode: 'mock' });
     expect(mk).toMatchObject({ kind: 'marketplace', providerCode: 'marketplace:mock', channel: { code: 'mock', availability: 'live' } });
     expect(mk.channel.accountId).toBe(w.account.id);
@@ -69,8 +70,16 @@ describe('shipping methods: list, add, capabilities, verify', () => {
     expect(byKey.label.declared).toBe(Boolean(conn.shipping.generateLabel));
     expect(byKey.dispatchUpdate.declared).toBe(Boolean(conn.orders.updateStatus));
     expect(byKey.statusSync.declared).toBe(Boolean(conn.orders.fetch || conn.orders.webhook));
-    expect(caps.verified).toBe(false);
-    for (const x of caps.capabilities) expect(x.value).toBe(x.declared ? 'requires_configuration' : 'not_supported');
+    // a live connector has nothing to configure: what it declares is supported (nobody had to click Verify)
+    expect(caps.verified).toBe(true);
+    for (const x of caps.capabilities) expect(x.value).toBe(x.declared ? 'supported' : 'not_supported');
+
+    // a courier that asks for settings reads "Requires configuration" until they are entered and the check passes
+    const dh = await addMethod(w, { kind: 'third_party', providerCode: 'delhivery' });
+    expect(dh).toMatchObject({ state: 'requires_configuration', verification: { state: 'unverified' } });
+    expect((await c.get(`/api/v1/shipping/methods/${dh.id}/capabilities`, w.admin)).body.data).toMatchObject({ verified: false });
+    expect((await c.post(`/api/v1/shipping/methods/${dh.id}/verify`, {}, w.admin)).body.data).toMatchObject({ ok: false, verification: { state: 'unverified' } });
+    await c.patch(`/api/v1/shipping/methods/${dh.id}`, { active: false }, w.admin); // keep the counts below about the other methods
 
     // verify the seller method: a safe check, stored with the capabilities
     const v = await c.post(`/api/v1/shipping/methods/${seller.id}/verify`, {}, w.admin);
@@ -82,9 +91,9 @@ describe('shipping methods: list, add, capabilities, verify', () => {
     const vt = (await c.post(`/api/v1/shipping/methods/${tp.id}/verify`, {}, w.admin)).body.data;
     expect(vt.method.capabilities).toMatchObject({ label: 'supported', tracking: 'supported', dispatchUpdate: 'supported', statusSync: 'not_supported' });
 
-    // PATCH: default, disable, config (a changed config must be verified again)
+    // PATCH: default, disable, config. A changed config drops the stored verification; the manual provider asks for no setting, so it stays configured
     const patched = (await c.patch(`/api/v1/shipping/methods/${manual.id}`, { isDefault: true, config: { defaultCarrier: 'Delhivery' } }, w.admin)).body.data;
-    expect(patched).toMatchObject({ isDefault: true, config: { defaultCarrier: 'Delhivery' }, verification: { state: 'unverified' } });
+    expect(patched).toMatchObject({ isDefault: true, config: { defaultCarrier: 'Delhivery' }, state: 'configured', verification: { state: 'verified', verifiedAt: null } });
     list = (await c.get('/api/v1/shipping/methods', w.admin)).body.data;
     expect(list.items.filter((i: any) => i.isDefault)).toHaveLength(1); // only one default
     expect((await c.patch(`/api/v1/shipping/methods/${manual.id}`, { active: false }, w.admin)).body.data).toMatchObject({ active: false, isDefault: false, state: 'disabled' });
@@ -374,14 +383,13 @@ describe('overview, snapshots and "since last sync"', () => {
     expect(ov.attention.total).toBe(1);
     // comparison rows: one channel x (marketplace, seller, third party)
     const cmp = ov.availabilityComparison;
-    // ... plus a "label generation" row while no verified method can make labels
-    expect(cmp.filter((x: any) => x.channel.code === 'mock').map((x: any) => x.method).sort()).toEqual(['label_generation', 'marketplace', 'seller', 'third_party']);
-    expect(cmp.find((x: any) => x.method === 'label_generation')).toMatchObject({ provider: 'No verified provider', availability: 'requires_configuration', default: 'unavailable', override: 'unavailable' });
-    expect(cmp.find((x: any) => x.method === 'seller')).toMatchObject({ availability: 'requires_configuration', default: 'preferred', override: 'verify_capability' });
+    // the seller's own shipping and the sandbox courier have nothing to configure, so they are ready and a label can be made: no "label generation" row
+    expect(cmp.filter((x: any) => x.channel.code === 'mock').map((x: any) => x.method).sort()).toEqual(['marketplace', 'seller', 'third_party']);
+    expect(cmp.find((x: any) => x.method === 'seller')).toMatchObject({ availability: 'ready', default: 'preferred', override: 'where_supported' });
     await c.post(`/api/v1/shipping/methods/${seller.id}/verify`, {}, w.admin);
     const verified = (await c.get('/api/v1/shipping/overview', w.admin)).body.data.availabilityComparison;
     expect(verified.find((x: any) => x.method === 'seller')).toMatchObject({ availability: 'ready', override: 'where_supported' });
-    expect(verified.some((x: any) => x.method === 'label_generation')).toBe(false); // a verified method can make labels now
+    expect(verified.some((x: any) => x.method === 'label_generation')).toBe(false);
     expect((await c.get('/api/v1/shipping/overview?asOf=nonsense', w.admin)).status).toBe(400);
     expect((await c.get('/api/v1/shipping/overview?asOf=2026-10-05', w.admin)).status).toBe(200);
 

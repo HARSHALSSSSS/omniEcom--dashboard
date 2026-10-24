@@ -1,7 +1,7 @@
 import { and, count, desc, eq, gt, ilike, inArray, isNull, lte, or, schema, sql, withSystem, withVendor, type SQL, type Tx } from '@oms/database';
 import { effects, type Container, type JobHandler, type OpCtx } from '@oms/module-kit';
 import { CANDIDATE_STATUSES, candidateRows, flagsOfSelection, loadBase, loadOrderInfo, loadThresholds, optionsFor, recommend, selectedName, slaOf, statusCounts, toCsv, toDecisionItem, type Base, type Candidate, type DecisionStatus } from './decision';
-import { connectorName, decisionKind, flagsFor, isVerified, methodName, type MethodKind } from './methods';
+import { connectorName, decisionKind, flagsFor, isConfigured, methodName, type MethodKind } from './methods';
 import { IN_FLIGHT } from './domain';
 import { refreshTracking } from './service';
 import { pulseAt } from './pulse-history';
@@ -286,8 +286,8 @@ export async function overview(tx: Tx, c: Container, vendorId: string, allowed: 
     const preferred = (base.pref?.overrides[channel] ?? base.pref?.defaultMethod) === kind;
     rows.push({
       channel: { code: channel, name: connectorName(c, channel) }, method: kind, provider: label, methodId: m?.id ?? null,
-      availability: !usable ? 'unavailable' : isVerified(m!) ? 'ready' : 'requires_configuration', default: preferred ? 'preferred' : ruleKinds.has(kind) ? 'order_specific' : 'not_set',
-      override: !usable ? 'unavailable' : isVerified(m!) ? 'where_supported' : 'verify_capability',
+      availability: !usable ? 'unavailable' : isConfigured(c, m!) ? 'ready' : 'requires_configuration', default: preferred ? 'preferred' : ruleKinds.has(kind) ? 'order_specific' : 'not_set',
+      override: !usable ? 'unavailable' : isConfigured(c, m!) ? 'where_supported' : 'verify_capability',
     });
   };
   for (const ch of channels) {
@@ -298,7 +298,7 @@ export async function overview(tx: Tx, c: Container, vendorId: string, allowed: 
     for (const m of tps) cmp(ch, 'third_party', m, methodName(c, m));
     // label generation: shown while no verified method can produce a label for this channel (a connector that declares no label support reads "not supported")
     const labelling = base.methods.filter((m) => m.status === 'active' && (m.kind !== 'marketplace' || m.channelCode === ch) && flagsFor(c, m).flags.label);
-    if (!labelling.some((m) => isVerified(m))) {
+    if (!labelling.some((m) => isConfigured(c, m))) {
       rows.push({
         channel: { code: ch, name: connectorName(c, ch) }, method: 'label_generation', provider: 'No verified provider', methodId: null,
         availability: labelling.length > 0 ? 'requires_configuration' : 'unsupported', default: 'unavailable', override: 'unavailable',

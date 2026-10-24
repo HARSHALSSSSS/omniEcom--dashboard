@@ -285,7 +285,8 @@ describe('shipping screen', () => {
 
     const car = (await c.get('/api/v1/shipping/carriers', w.admin)).body.data;
     const sandbox = car.items.find((i: any) => i.providerCode === 'sandbox');
-    expect(sandbox).toMatchObject({ kind: 'third_party', status: 'needs_configuration', shipmentsLast30d: 4, inTransit: 1, isDefault: true });
+    // the sandbox courier asks for no setting and has shipped 4 parcels: it is active, not "needs configuration"
+    expect(sandbox).toMatchObject({ kind: 'third_party', status: 'active', shipmentsLast30d: 4, inTransit: 1, isDefault: true });
     expect(car.availableProviders.map((p: any) => p.code)).toContain('manual');
     expect(car.availableProviders.map((p: any) => p.code)).not.toContain('sandbox');
 

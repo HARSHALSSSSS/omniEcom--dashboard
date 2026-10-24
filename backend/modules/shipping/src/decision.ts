@@ -5,7 +5,7 @@ import { getFulfillment } from '@oms/mod-fulfillment';
 import { effects, type Container, type OpCtx } from '@oms/module-kit';
 import { PINCODE, zoneOf } from './providers/common';
 import { upcomingSlotMap, type PickupRow } from './pickup-core';
-import { connectorName, decisionKind, flagsFor, isVerified, methodName, type CapFlags, type MethodKind, type MethodRow, METHOD_KINDS } from './methods';
+import { connectorName, decisionKind, flagsFor, isConfigured, methodName, type CapFlags, type MethodKind, type MethodRow, METHOD_KINDS } from './methods';
 
 /**
  * The shipping DECISION per order: which kind of method moves a packed parcel, before a label exists.
@@ -116,7 +116,7 @@ export function flagsOfSelection(c: Container, methods: MethodRow[], kind: Metho
   const m = (providerId ? methods.find((x) => x.id === providerId && decisionKind(x.kind) === kind && x.status === 'active') : undefined)
     ?? methods.find((x) => decisionKind(x.kind) === kind && x.status === 'active' && (kind !== 'marketplace' || x.channelCode === marketplace));
   if (!m) return null;
-  return { flags: flagsFor(c, m).flags, verified: isVerified(m) };
+  return { flags: flagsFor(c, m).flags, verified: isConfigured(c, m) };
 }
 
 // ------------------------------------------------------------------------------------------------
