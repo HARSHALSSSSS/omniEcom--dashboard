@@ -10,7 +10,7 @@ import { errorMessage, isApiError } from "@/api/errors";
 import { toast } from "@/hooks/useToast";
 import { useAllocations, useSetReorderLevel, useVariantPanel, useVariantStock } from "@/hooks/useInventory";
 import { formatInZone, formatNumber, formatRelativeTime } from "@/utils/format";
-import type { LedgerRow, VariantPanel, Warehouse } from "@/types/inventory";
+import type { CatalogVariant, LedgerRow, VariantPanel, Warehouse } from "@/types/inventory";
 import { AdjustPanel } from "./AdjustPanel";
 import { InlineError, InventoryThumb } from "./inventoryUi";
 import { HEALTH_ICON, HEALTH_LABEL, NO_WRITE_REASON, ONE_WAREHOUSE_REASON, TONE_HEX, TONE_OF_HEALTH } from "./inventoryLabels";
@@ -344,18 +344,19 @@ interface InventoryDrawerProps {
   onAdjust: (target: StockTarget) => void;
   onTransfer: (target: StockTarget) => void;
   onPickAdjust: (row: LedgerRow) => void;
+  onPickAdjustCatalog?: (variant: CatalogVariant) => void;
   onAdjustCancel: () => void;
   onAdjustDone: () => void;
 }
 
 /** the side drawer of the Inventory screen: product context, and the Adjust stock form in place of it */
-export function InventoryDrawer({ variantId, adjustOpen, adjustTarget, warehouses, canWrite, multiWarehouse, onClose, onAdjust, onTransfer, onPickAdjust, onAdjustCancel, onAdjustDone }: InventoryDrawerProps) {
+export function InventoryDrawer({ variantId, adjustOpen, adjustTarget, warehouses, canWrite, multiWarehouse, onClose, onAdjust, onTransfer, onPickAdjust, onPickAdjustCatalog, onAdjustCancel, onAdjustDone }: InventoryDrawerProps) {
   const open = variantId !== null || adjustOpen;
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
       <SheetContent side="right" className="flex w-[420px] max-w-full flex-col gap-0 overflow-hidden border-[#EAEAEA] bg-white p-0 shadow-[-6px_0_20px_rgba(0,0,0,0.03)]">
         {adjustOpen ? (
-          <AdjustPanel target={adjustTarget} warehouses={warehouses} onPick={onPickAdjust} onCancel={onAdjustCancel} onDone={onAdjustDone} />
+          <AdjustPanel target={adjustTarget} warehouses={warehouses} onPick={onPickAdjust} onPickCatalog={onPickAdjustCatalog} onCancel={onAdjustCancel} onDone={onAdjustDone} />
         ) : (
           variantId !== null && <Context key={variantId} variantId={variantId} canWrite={canWrite} multiWarehouse={multiWarehouse} onAdjust={onAdjust} onTransfer={onTransfer} />
         )}

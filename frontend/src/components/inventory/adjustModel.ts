@@ -8,6 +8,7 @@ export const ADJUST_TYPES: ReadonlyArray<{ id: AdjustmentType; label: string; re
   { id: "manual", label: "Manual adjustment", reason: "Manual adjustment" },
   { id: "shrinkage", label: "Shrinkage", reason: "Inventory shrinkage" },
   { id: "other", label: "Other", reason: "" },
+  { id: "opening_stock", label: "Opening stock", reason: "Opening stock" },
 ];
 
 export interface AdjustFormState {
@@ -30,9 +31,9 @@ export function withType(state: AdjustFormState, type: AdjustmentType): AdjustFo
   return { ...state, type, direction: type === "damage" || type === "shrinkage" ? "decrease" : "increase", reason: keepReason ? state.reason : next };
 }
 
-/** a return always adds units and shrinkage (a loss) always removes them; every other type has a direction */
-export const hasDirection = (type: AdjustmentType) => type !== "return" && type !== "shrinkage";
-export const effectiveDirection = (s: AdjustFormState): AdjustDirection => (s.type === "return" ? "increase" : s.type === "shrinkage" ? "decrease" : s.direction);
+/** a return and opening stock always add units and shrinkage (a loss) always removes them; every other type has a direction */
+export const hasDirection = (type: AdjustmentType) => type !== "return" && type !== "shrinkage" && type !== "opening_stock";
+export const effectiveDirection = (s: AdjustFormState): AdjustDirection => (s.type === "return" || s.type === "opening_stock" ? "increase" : s.type === "shrinkage" ? "decrease" : s.direction);
 
 export const parseQty = (qty: string): number => (/^\d+$/.test(qty.trim()) ? Number(qty.trim()) : NaN);
 

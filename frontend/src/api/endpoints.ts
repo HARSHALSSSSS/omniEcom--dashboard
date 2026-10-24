@@ -192,6 +192,7 @@ export const ENDPOINTS = {
   // Inventory
   INVENTORY_KPIS: `${BASE}/inventory/kpis`,
   INVENTORY_LEDGER: `${BASE}/inventory/ledger`,
+  INVENTORY_CATALOG_VARIANTS: `${BASE}/inventory/catalog-variants`,
   INVENTORY_EXPORT: `${BASE}/inventory/export`,
   INVENTORY_VARIANT: (variantId: string) => `${BASE}/inventory/variants/${variantId}`,
   INVENTORY_VARIANT_PANEL: (variantId: string) => `${BASE}/inventory/variants/${variantId}/panel`,

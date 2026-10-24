@@ -22,6 +22,7 @@ export const INVENTORY_KEYS = {
   all: ["inventory"] as const,
   kpis: (b: string | undefined, warehouseId: string | undefined) => ["inventory", "kpis", b, warehouseId] as const,
   ledger: (b: string | undefined, q: LedgerQuery) => ["inventory", "ledger", b, q] as const,
+  catalogVariants: (b: string | undefined, q: string, unstocked: boolean) => ["inventory", "catalog-variants", b, q, unstocked] as const,
   allocations: (b: string | undefined, ids: string[]) => ["inventory", "allocations", b, ids] as const,
   panel: (b: string | undefined, id: string) => ["inventory", "panel", b, id] as const,
   variantStock: (b: string | undefined, id: string) => ["inventory", "variant", b, id] as const,
@@ -119,6 +120,17 @@ export function useInventoryLedger(query: LedgerQuery, enabled = true) {
     enabled,
     staleTime: 30_000,
     placeholderData: keepPreviousData,
+  });
+}
+
+/** variants of the catalog that have no stock row yet (a brand-new variant): they get their first units as "Opening stock" */
+export function useUnstockedVariants(q: string, enabled = true) {
+  const b = useBusinessId();
+  return useQuery({
+    queryKey: INVENTORY_KEYS.catalogVariants(b, q, true),
+    queryFn: ({ signal }) => inventoryApi.catalogVariants({ q, unstocked: true, limit: 8 }, signal),
+    enabled,
+    staleTime: 10_000,
   });
 }
 

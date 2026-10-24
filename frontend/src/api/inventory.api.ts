@@ -1,6 +1,7 @@
 import { client, unwrap } from "./client";
 import { ENDPOINTS } from "./endpoints";
 import type {
+  CatalogVariant,
   AdjustmentBody,
   AdjustmentPreview,
   AdjustmentResult,
@@ -76,6 +77,10 @@ export const inventoryApi = {
     if (query.sort) params.sort = query.sort;
     return unwrap<LedgerPage>(await client.get(ENDPOINTS.INVENTORY_LEDGER, { params, signal }));
   },
+
+  /** variants of the catalog by SKU / barcode / name; `unstocked` keeps only those that have no stock row yet */
+  catalogVariants: async (query: { q?: string; unstocked?: boolean; limit?: number }, signal?: AbortSignal) =>
+    unwrap<CatalogVariant[]>(await client.get(ENDPOINTS.INVENTORY_CATALOG_VARIANTS, { params: { ...(query.q ? { q: query.q } : {}), ...(query.unstocked ? { unstocked: "true" } : {}), ...(query.limit ? { limit: query.limit } : {}) }, signal })),
 
   /** the whole filtered ledger as CSV (413 when too many rows match) */
   exportCsv: async (filters: InventoryFilters): Promise<DownloadedFile> => {

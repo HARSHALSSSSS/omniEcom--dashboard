@@ -17,6 +17,7 @@ vi.mock("@/api/inventory.api", () => ({
     kpis: vi.fn(),
     overview: vi.fn(),
     ledger: vi.fn(),
+    catalogVariants: vi.fn(),
     exportCsv: vi.fn(),
     panel: vi.fn(),
     variantStock: vi.fn(),
@@ -234,6 +235,7 @@ beforeEach(() => {
   api.overview.mockResolvedValue(OVERVIEW);
   api.channelSyncState.mockResolvedValue(CHANNEL_STATE);
   api.ledger.mockResolvedValue(ledgerPage(ROWS));
+  api.catalogVariants.mockResolvedValue([]);
   api.allocations.mockResolvedValue([
     { variantId: ID.tee, available: 40, buffer: 4, channels: [{ channel: { code: "amazon_in", name: "Amazon", accountId: "acc1", accountName: "Amazon IN" }, listingId: "l1", allocated: 30, pushed: 30, dirty: false, mode: "sync", allocationPercent: 100, safetyBuffer: 4, maxQuantity: null }] },
   ]);
@@ -703,6 +705,38 @@ describe("InventoryPage adjust stock", () => {
     await user.click(await within(drawer).findByRole("button", { name: /Linen Tee.*TEE-M · 40 available/ }));
     expect(within(drawer).getByLabelText("SKU")).toHaveValue("TEE-M");
     expect(within(drawer).getByText("25 available here")).toBeInTheDocument();
+  });
+
+  it("finds a variant without stock rows and gives it opening stock in a chosen warehouse", async () => {
+    api.catalogVariants.mockResolvedValue([{ variantId: ID.bag, productId: "p-2222", sku: "NEW-HOODIE-M", title: "Fresh Hoodie", variantName: "Black / M", barcode: null, stocked: false }]);
+    api.adjust.mockResolvedValue({ ...RESULT, type: "opening_stock" });
+    const user = userEvent.setup();
+    renderPage();
+    await (await withTable()).findByRole("button", { name: "Linen Tee" });
+    await user.click(screen.getAllByRole("button", { name: "Adjust stock" })[0] as HTMLElement);
+    const drawer = await screen.findByRole("dialog", { name: "Adjust stock" });
+    await user.type(within(drawer).getByLabelText("Search for a product"), "hoodie");
+    await waitFor(() => expect(api.catalogVariants.mock.calls.some(([q]) => q.q === "hoodie" && q.unstocked === true)).toBe(true));
+    await user.click(await within(drawer).findByRole("button", { name: /Fresh Hoodie \(Black \/ M\).*NEW-HOODIE-M · no stock yet/ }));
+    expect(within(drawer).getByLabelText("SKU")).toHaveValue("NEW-HOODIE-M");
+    // starts on Opening stock: no direction to pick, only adds units
+    expect(within(drawer).getByRole("button", { name: "Opening stock" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(drawer).queryByText("Direction")).not.toBeInTheDocument();
+    expect(within(drawer).getByLabelText("Reason")).toHaveValue("Opening stock");
+    await user.selectOptions(within(drawer).getByLabelText("Location"), WH.mumbai);
+    await user.type(within(drawer).getByLabelText("Quantity"), "12");
+    await waitFor(() => expect(within(drawer).getByRole("button", { name: "Confirm adjustment" })).toBeEnabled());
+    await user.click(within(drawer).getByRole("button", { name: "Confirm adjustment" }));
+    await waitFor(() => expect(api.adjust).toHaveBeenCalledTimes(1));
+    const body = api.adjust.mock.calls[0]?.[0];
+    expect(body).toMatchObject({ variantId: ID.bag, warehouseId: WH.mumbai, type: "opening_stock", quantity: 12, reason: "Opening stock" });
+    expect(body).not.toHaveProperty("direction");
+  });
+
+  it("offers Opening stock only for a variant that has no stock yet", async () => {
+    const user = userEvent.setup();
+    const drawer = await openAdjust(user);
+    expect(within(drawer).queryByRole("button", { name: "Opening stock" })).not.toBeInTheDocument();
   });
 
   it("cancel goes back to the product context when opened from the drawer", async () => {

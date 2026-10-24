@@ -1,4 +1,5 @@
 import { cn } from "@/utils/cn";
+import type { AdjustmentType } from "@/types/inventory";
 import { ADJUST_TYPES, hasDirection, withType, type AdjustFormState } from "./adjustModel";
 
 const INPUT = "w-full h-8 px-2.5 border border-[#E5E5E5] rounded-lg bg-white text-[12px] font-normal text-[#111111] focus:outline-none focus:border-black";
@@ -14,10 +15,12 @@ interface AdjustFieldsProps {
   disabled?: boolean;
   /** the quantity placeholder */
   hint?: string;
+  /** types that make no sense here (opening stock needs a product that has no stock yet: not for a bulk selection) */
+  hideTypes?: AdjustmentType[];
 }
 
 /** type pills, direction, quantity, reason and note: shared by the Adjust stock drawer and the bulk dialog */
-export function AdjustFields({ idPrefix, state, onChange, qtyError, noteError, reasonError, disabled, hint }: AdjustFieldsProps) {
+export function AdjustFields({ idPrefix, state, onChange, qtyError, noteError, reasonError, disabled, hint, hideTypes }: AdjustFieldsProps) {
   const set = (patch: Partial<AdjustFormState>) => onChange({ ...state, ...patch });
   const minus = state.type === "damage" ? "Mark as damaged" : "Remove units";
   const plus = state.type === "damage" ? "Restore from damaged" : "Add units";
@@ -28,7 +31,7 @@ export function AdjustFields({ idPrefix, state, onChange, qtyError, noteError, r
           Adjustment type
         </span>
         <div role="group" aria-labelledby={`${idPrefix}-type`} className="flex w-full flex-wrap items-center gap-1.5">
-          {ADJUST_TYPES.map((t) => (
+          {ADJUST_TYPES.filter((t) => !hideTypes?.includes(t.id)).map((t) => (
             <button
               key={t.id}
               type="button"

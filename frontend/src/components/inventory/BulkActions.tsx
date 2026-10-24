@@ -242,7 +242,7 @@ function BulkAdjustForm({ count, selection, warehouses, onClose, onResult }: Omi
           </select>
         </div>
       )}
-      <AdjustFields idPrefix="bulk-adj" state={state} onChange={setState} qtyError={qtyProblem(state, null)} noteError={noteProblem(state)} reasonError={reasonProblem(state)} />
+      <AdjustFields hideTypes={["opening_stock"]} idPrefix="bulk-adj" state={state} onChange={setState} qtyError={qtyProblem(state, null)} noteError={noteProblem(state)} reasonError={reasonProblem(state)} />
       <DialogFooter className="gap-2 sm:gap-0">
         <Button type="button" variant="outline" size="sm" disabled={bulk.isPending} onClick={onClose}>
           Cancel

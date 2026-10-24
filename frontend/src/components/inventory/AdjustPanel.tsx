@@ -5,9 +5,9 @@ import { errorMessage } from "@/api/errors";
 import { toast } from "@/hooks/useToast";
 import { useAdjustStock, useAdjustmentPreview } from "@/hooks/useInventory";
 import { formatNumber } from "@/utils/format";
-import type { AdjustmentBody, LedgerRow, Warehouse } from "@/types/inventory";
+import type { AdjustmentBody, CatalogVariant, LedgerRow, Warehouse } from "@/types/inventory";
 import { AdjustFields } from "./adjustForm";
-import { adjustFields, initialAdjustState, isAdjustReady, noteProblem, qtyProblem, reasonProblem, type AdjustFormState } from "./adjustModel";
+import { adjustFields, initialAdjustState, isAdjustReady, noteProblem, qtyProblem, reasonProblem, withType, type AdjustFormState } from "./adjustModel";
 import { InlineError } from "./inventoryUi";
 import { ProductField } from "./ProductField";
 import type { StockTarget } from "./stockTarget";
@@ -29,6 +29,8 @@ interface AdjustPanelProps {
   target: StockTarget | null;
   warehouses: Warehouse[];
   onPick: (row: LedgerRow) => void;
+  /** a variant without a stock row was picked (it takes opening stock) */
+  onPickCatalog?: (variant: CatalogVariant) => void;
   /** back to the product context (or closes the drawer when it was opened from the header) */
   onCancel: () => void;
   /** after the stock was changed */
@@ -36,7 +38,7 @@ interface AdjustPanelProps {
 }
 
 /** "Adjust stock" as the design shows it, inside the side drawer. POST /inventory/adjustments, with a dry run (POST /inventory/adjustments/preview) for the numbers. Needs inventory:write. */
-export function AdjustPanel({ target, warehouses, onPick, onCancel, onDone }: AdjustPanelProps) {
+export function AdjustPanel({ target, warehouses, onPick, onPickCatalog, onCancel, onDone }: AdjustPanelProps) {
   return (
     <>
       <div className="box-border flex w-full shrink-0 flex-col items-start gap-0.5 border-b border-[#EAEAEA] px-5 py-3 pr-12">
@@ -44,18 +46,19 @@ export function AdjustPanel({ target, warehouses, onPick, onCancel, onDone }: Ad
         <SheetTitle className="m-0 text-[20px] font-bold leading-tight text-[#000000]">Adjust stock</SheetTitle>
         <SheetDescription className="sr-only">Change the available stock of one product in one warehouse. The change is recorded in the audit trail.</SheetDescription>
       </div>
-      <AdjustForm key={target?.variantId ?? "none"} target={target} warehouses={warehouses} onPick={onPick} onCancel={onCancel} onDone={onDone} />
+      <AdjustForm key={target?.variantId ?? "none"} target={target} warehouses={warehouses} onPick={onPick} onPickCatalog={onPickCatalog} onCancel={onCancel} onDone={onDone} />
     </>
   );
 }
 
-function AdjustForm({ target, warehouses, onPick, onCancel, onDone }: AdjustPanelProps) {
+function AdjustForm({ target, warehouses, onPick, onPickCatalog, onCancel, onDone }: AdjustPanelProps) {
   const adjust = useAdjustStock();
   const [warehouseId, setWarehouseId] = useState(() => {
     const stocked = target?.locations.find((l) => l.available > 0)?.warehouseId;
     return warehouses.find((w) => w.id === stocked)?.id ?? warehouses.find((w) => w.isDefault)?.id ?? warehouses[0]?.id ?? "";
   });
-  const [state, setState] = useState<AdjustFormState>(initialAdjustState);
+  // a variant that has no stock yet starts on "Opening stock"
+  const [state, setState] = useState<AdjustFormState>(() => (target && target.stocked === false ? withType(initialAdjustState(), "opening_stock") : initialAdjustState()));
   const [serverError, setServerError] = useState<string | null>(null);
   // one key per product: a retry after a network blip never moves the stock twice
   const key = useMemo(() => `inventory-ui-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`}`, []);
@@ -108,7 +111,7 @@ function AdjustForm({ target, warehouses, onPick, onCancel, onDone }: AdjustPane
             <label htmlFor="adj-product" className={LABEL}>
               Product
             </label>
-            <ProductField id="adj-product" value={target} onPick={onPick} />
+            <ProductField id="adj-product" value={target} onPick={onPick} onPickCatalog={onPickCatalog} />
           </div>
 
           <div className="flex w-full flex-col items-start gap-1">
@@ -136,7 +139,7 @@ function AdjustForm({ target, warehouses, onPick, onCancel, onDone }: AdjustPane
             {target && <p className="m-0 text-[11px] text-[#737373]">{formatNumber(availableHere)} available here</p>}
           </div>
 
-          <AdjustFields idPrefix="adj" state={state} onChange={setState} qtyError={qtyError} noteError={noteError} reasonError={reasonError} disabled={!target} />
+          <AdjustFields idPrefix="adj" state={state} onChange={setState} hideTypes={target?.stocked === false ? undefined : ["opening_stock"]} qtyError={qtyError} noteError={noteError} reasonError={reasonError} disabled={!target} />
 
           <div className="mt-1 flex w-full flex-col items-start gap-1.5 rounded-xl border border-[#F0F0F0] bg-[#F8F8F8] p-3" aria-live="polite">
             <span className="text-[12px] font-semibold text-[#000000]">{target ? `${target.title} stock adjustment preview` : "Stock adjustment preview"}</span>

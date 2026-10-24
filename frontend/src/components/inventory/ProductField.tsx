@@ -1,19 +1,21 @@
 import { useEffect, useState } from "react";
 import { ChevronDown, Search } from "lucide-react";
-import { useInventoryLedger } from "@/hooks/useInventory";
+import { useInventoryLedger, useUnstockedVariants } from "@/hooks/useInventory";
 import { formatNumber } from "@/utils/format";
-import type { LedgerRow } from "@/types/inventory";
+import type { CatalogVariant, LedgerRow } from "@/types/inventory";
 
 interface ProductFieldProps {
   id: string;
   /** the product the form acts on (null = nothing picked yet) */
   value: { title: string; sku: string } | null;
   onPick: (row: LedgerRow) => void;
+  /** also search variants without a stock row (not in the ledger); picking one calls this. Only the Adjust form offers it. */
+  onPickCatalog?: (variant: CatalogVariant) => void;
   disabled?: boolean;
 }
 
 /** the "Product" control of the Adjust and Transfer forms: shows the picked product and searches the stock ledger (by SKU, name or barcode) to change it */
-export function ProductField({ id, value, onPick, disabled }: ProductFieldProps) {
+export function ProductField({ id, value, onPick, onPickCatalog, disabled }: ProductFieldProps) {
   const [searching, setSearching] = useState(value === null);
   const [text, setText] = useState("");
   const [q, setQ] = useState("");
@@ -22,6 +24,8 @@ export function ProductField({ id, value, onPick, disabled }: ProductFieldProps)
     return () => window.clearTimeout(t);
   }, [text]);
   const results = useInventoryLedger({ q, page: 1, pageSize: 8 }, searching && q !== "");
+  const unstocked = useUnstockedVariants(q, Boolean(onPickCatalog) && searching && q !== "");
+  const unstockedItems = onPickCatalog ? (unstocked.data ?? []) : [];
 
   if (!searching && value) {
     return (
@@ -45,7 +49,7 @@ export function ProductField({ id, value, onPick, disabled }: ProductFieldProps)
       </div>
       {q !== "" && results.isPending && <p className="m-0 text-[11px] text-[#737373]">Searching...</p>}
       {q !== "" && results.isError && <p role="alert" className="m-0 text-[11px] text-red-700">The search failed. Try again.</p>}
-      {results.data && results.data.items.length === 0 && <p className="m-0 text-[11px] text-[#737373]">No product matches &quot;{q}&quot;.</p>}
+      {results.data && results.data.items.length === 0 && unstockedItems.length === 0 && !unstocked.isPending && <p className="m-0 text-[11px] text-[#737373]">No product matches &quot;{q}&quot;.</p>}
       {results.data && results.data.items.length > 0 && q !== "" && (
         <ul className="m-0 max-h-48 list-none divide-y divide-[#F0F0F0] overflow-auto rounded-lg border border-[#EAEAEA] bg-white p-0">
           {results.data.items.map((r) => (
@@ -68,6 +72,30 @@ export function ProductField({ id, value, onPick, disabled }: ProductFieldProps)
             </li>
           ))}
         </ul>
+      )}
+      {unstockedItems.length > 0 && q !== "" && (
+        <div className="flex flex-col gap-1">
+          <p className="m-0 text-[11px] font-semibold text-[#555555]">No stock yet (give it opening stock)</p>
+          <ul aria-label="Products without stock" className="m-0 max-h-48 list-none divide-y divide-[#F0F0F0] overflow-auto rounded-lg border border-[#EAEAEA] bg-white p-0">
+            {unstockedItems.map((v) => (
+              <li key={v.variantId}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onPickCatalog?.(v);
+                    setSearching(false);
+                    setText("");
+                    setQ("");
+                  }}
+                  className="flex w-full cursor-pointer items-center justify-between gap-2 border-none bg-transparent px-2.5 py-1.5 text-left text-[12px] hover:bg-neutral-50"
+                >
+                  <span className="truncate font-medium text-[#111111]">{v.variantName ? `${v.title} (${v.variantName})` : v.title}</span>
+                  <span className="shrink-0 text-[11px] text-[#737373]">{v.sku} · no stock yet</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
       {value && (
         <button type="button" onClick={() => setSearching(false)} className="w-fit cursor-pointer border-none bg-transparent p-0 text-[11px] text-[#737373] hover:text-black">

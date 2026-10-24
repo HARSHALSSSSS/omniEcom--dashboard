@@ -460,7 +460,19 @@ export interface AffectedPage {
 
 // ---- adjustments by type (POST /inventory/adjustments[/preview])
 
-export type AdjustmentType = "damage" | "return" | "correction" | "manual" | "shrinkage" | "other";
+export type AdjustmentType = "damage" | "return" | "correction" | "manual" | "shrinkage" | "other" | "opening_stock";
+
+/** a catalog variant from GET /inventory/catalog-variants (it may have no stock row yet, so it is not in the ledger) */
+export interface CatalogVariant {
+  variantId: string;
+  productId: string;
+  sku: string;
+  title: string;
+  variantName: string | null;
+  barcode: string | null;
+  /** has a stock row in at least one warehouse */
+  stocked: boolean;
+}
 export type AdjustDirection = "increase" | "decrease";
 
 export interface AdjustmentBody {

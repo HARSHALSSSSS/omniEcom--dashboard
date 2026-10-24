@@ -25,7 +25,7 @@ import { StockPulse } from "@/components/inventory/StockPulse";
 import { TransferDialog } from "@/components/inventory/TransferDialog";
 import { HEALTH_OPTIONS, hasActiveFilters, useInventoryUrlState } from "@/components/inventory/inventoryParams";
 import { NO_VIEWS_REASON, NO_WRITE_REASON, ONE_WAREHOUSE_REASON } from "@/components/inventory/inventoryLabels";
-import { targetOfRow, type StockTarget } from "@/components/inventory/stockTarget";
+import { targetOfCatalogVariant, targetOfRow, type StockTarget } from "@/components/inventory/stockTarget";
 import { filterBody, type BulkSelection, type InventoryGroup, type LedgerRow } from "@/types/inventory";
 import { formatINR, formatNumber } from "@/utils/format";
 
@@ -367,6 +367,7 @@ export default function InventoryPage() {
         onAdjust={openAdjust}
         onTransfer={openTransfer}
         onPickAdjust={(row) => setAdjustTarget(targetOfRow(row))}
+        onPickAdjustCatalog={(variant) => setAdjustTarget(targetOfCatalogVariant(variant))}
         onAdjustCancel={() => setAdjustOpen(false)}
         onAdjustDone={closeDrawer}
       />
