@@ -5,12 +5,16 @@ import fs from "fs";
 
 // The MSW service worker is only needed when mocks are switched on; keep it out of a normal production build.
 function dropMockServiceWorker(useMocks: boolean) {
+  let outDir = path.resolve(__dirname, "dist");
   return {
     name: "drop-mock-service-worker",
     apply: "build" as const,
+    configResolved(config: { root: string; build: { outDir: string } }) {
+      outDir = path.resolve(config.root, config.build.outDir);
+    },
     closeBundle() {
       if (useMocks) return;
-      fs.rmSync(path.resolve(__dirname, "dist/mockServiceWorker.js"), { force: true });
+      fs.rmSync(path.join(outDir, "mockServiceWorker.js"), { force: true });
     },
   };
 }

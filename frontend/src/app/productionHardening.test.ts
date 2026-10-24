@@ -18,7 +18,7 @@ describe("production hardening", () => {
 
   it("drops the mock service worker from production builds unless mocks are on", () => {
     const config = read("vite.config.ts");
-    expect(config).toContain("dist/mockServiceWorker.js");
+    expect(config).toContain("mockServiceWorker.js");
     expect(config).toContain('VITE_USE_MOCKS === "true"');
   });
 });
