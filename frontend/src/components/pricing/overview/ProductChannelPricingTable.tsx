@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
+import { ROUTES } from "@/constants/routes";
 import { Search, ChevronRight, ChevronDown, ArrowUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -177,8 +179,26 @@ export function ProductChannelPricingTable({ channels, totals, onSelectPriceItem
                   </td>
                   <td className="py-3 font-medium text-foreground">{item.channel}</td>
                   <td className="py-3 font-semibold text-foreground">{formatINR(item.currentPriceMinor)}</td>
-                  <td className="py-3 text-muted-foreground" title={item.unitCostMinor === null ? "No cost price set" : undefined}>
-                    {moneyText(item.unitCostMinor)}
+                  <td className="py-3 text-muted-foreground">
+                    {item.unitCostMinor === null ? (
+                      <Link
+                        to={`${ROUTES.PRODUCTS}/${item.productId}/variants`}
+                        onClick={(e) => e.stopPropagation()}
+                        title="No cost price set: add it on the product's variants"
+                        className="font-medium text-foreground underline"
+                      >
+                        Set cost
+                      </Link>
+                    ) : (
+                      <Link
+                        to={`${ROUTES.PRODUCTS}/${item.productId}/variants`}
+                        onClick={(e) => e.stopPropagation()}
+                        title="Edit the cost price on the product's variants"
+                        className="hover:text-foreground hover:underline"
+                      >
+                        {moneyText(item.unitCostMinor)}
+                      </Link>
+                    )}
                   </td>
                   <td className="py-3 text-muted-foreground" title={item.feesMinor === null ? "Channel fees are not configured" : undefined}>
                     {moneyText(item.feesMinor)}

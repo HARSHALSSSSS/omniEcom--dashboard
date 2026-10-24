@@ -3,6 +3,7 @@ import { errorMessage } from "@/api/errors";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LoadError, StateBox } from "@/components/pricing/PricingStates";
 import { ROUTES } from "@/constants/routes";
+import { pricingApi } from "@/api/pricing.api";
 import { useMarginOverview, useProposals } from "@/hooks/usePricing";
 import type { PriceProposal, PriceTableRow, PricingOverview, ChannelMargin } from "@/types/pricing";
 import { PricingPulseKpiBar } from "./PricingPulseKpiBar";
@@ -60,8 +61,18 @@ export function PricingOverviewView({ overview, onReviewProposals }: PricingOver
   const reviewPrice = (item: PriceTableRow) => {
     if (item.proposalState === "proposed") onReviewProposals({ accountId: item.accountId, q: item.sku });
   };
-  // unit costs are edited on the product's variants, from the product list
-  const reviewCosts = (_row: ChannelMargin) => navigate(ROUTES.PRODUCTS);
+  // unit costs are edited on a product's variants: open the first product of this channel that has no cost price
+  const reviewCosts = async (row: ChannelMargin) => {
+    try {
+      const page = await pricingApi.priceTable({ accountId: row.accountId, state: "unknown_cost", sort: "product", page: 1, pageSize: 1 });
+      const first = page.items[0];
+      navigate(first ? `${ROUTES.PRODUCTS}/${first.productId}/variants` : ROUTES.PRODUCTS);
+    } catch {
+      navigate(ROUTES.PRODUCTS);
+    }
+  };
+  // there is no fee editor in the dashboard yet: the channel's connection lives in the Marketplace hub
+  const reviewFees = (_row: ChannelMargin) => navigate(ROUTES.MARKETPLACE_HUB);
 
   return (
     <div className="space-y-6">
@@ -107,7 +118,8 @@ export function PricingOverviewView({ overview, onReviewProposals }: PricingOver
         items={channels}
         targetMarginBps={totals.targetMarginBps}
         onReviewProposals={(row) => onReviewProposals({ accountId: row.accountId })}
-        onReviewCosts={reviewCosts}
+        onReviewCosts={(row) => void reviewCosts(row)}
+        onReviewFees={reviewFees}
       />
     </div>
   );

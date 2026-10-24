@@ -35,7 +35,7 @@ describe('margin overview and price table', () => {
     });
     expect(res.body.data.totals).toEqual({ productsInView: 1, productChannelPrices: 1, avgMarginBps: 2988, belowTargetCount: 0, unknownCostCount: 0, withProposalCount: 0, targetMarginBps: null });
     const row = (await c.get(`${API}/price-table`, viewer)).body.data.items[0];
-    expect(row).toMatchObject({ variantId: w.variant.variantId, listingId: w.variant.listingId, sku: w.variant.sku, accountId: w.account.id, currentPriceMinor: 49_900, unitCostMinor: 30_000, feesMinor: 4_990, marginBps: 2988, belowTarget: null, proposalState: 'none', proposalId: null, proposedPriceMinor: null });
+    expect(row).toMatchObject({ variantId: w.variant.variantId, listingId: w.variant.listingId, productId: expect.any(String), sku: w.variant.sku, accountId: w.account.id, currentPriceMinor: 49_900, unitCostMinor: 30_000, feesMinor: 4_990, marginBps: 2988, belowTarget: null, proposalState: 'none', proposalId: null, proposedPriceMinor: null });
   });
 
   it('counts listings below the policy target; the strictest target wins', async () => {
@@ -57,10 +57,18 @@ describe('margin overview and price table', () => {
     expect(o.channels[0]).toMatchObject({ priceCount: 1, pricedWithCostCount: 0, avgMarginBps: null, belowTargetCount: 0, unknownCostCount: 1, feeTermsSummary: 'fees not configured', nextAction: 'costs' });
     expect(o.totals).toMatchObject({ avgMarginBps: null, belowTargetCount: 0, unknownCostCount: 1, productChannelPrices: 1 });
     expect((await table(w)).items[0]).toMatchObject({ currentPriceMinor: 49_900, unitCostMinor: null, feesMinor: null, marginBps: null, belowTarget: null });
+    expect((await table(w, '?filter[state]=unknown_cost')).total).toBe(1);
     // fees known, cost unknown: the fee amount is real, the margin still unknown
     expect((await c.put(`/api/v1/analytics/fee-profiles/${w.account.id}`, { feePercentBps: 1200, fixedFeeMinor: 2500 }, w.admin)).status).toBe(200);
     expect((await overview(w)).channels[0].feeTermsSummary).toBe('12% commission + Rs 25.00 fixed');
     expect((await table(w)).items[0]).toMatchObject({ unitCostMinor: null, feesMinor: 8_488, marginBps: null });
+  });
+
+  it('asks for fees when costs are known but the channel has no fee profile', async () => {
+    const w = await world({ fee: false });
+    expect((await overview(w)).channels[0]).toMatchObject({ unknownCostCount: 0, feesConfigured: false, feeTermsSummary: 'fees not configured', nextAction: 'fees' });
+    expect((await c.put(`/api/v1/analytics/fee-profiles/${w.account.id}`, { feePercentBps: 1000, fixedFeeMinor: 0 }, w.admin)).status).toBe(200);
+    expect((await overview(w)).channels[0].nextAction).toBe('proposals');
   });
 
   it('proposals carry real cost, fees, margins and a structured reason; the overview counts applied ones', async () => {
@@ -72,6 +80,7 @@ describe('margin overview and price table', () => {
     expect(list.total).toBe(1);
     const p = list.items[0];
     expect(p).toMatchObject({ unitCostMinor: 30_000, feesMinor: 4_990, currentMarginBps: 2988, targetMarginBps: 3500, reasonCode: 'below_margin_target' });
+    expect(p.proposedFeesMinor).toBeGreaterThan(4_990);
     expect(p.proposedMarginBps).toBeGreaterThanOrEqual(3500);
     expect(p.reasonText).toContain('35%');
     expect((await c.get(`${API}/proposals/${p.id}`, w.admin)).body.data).toMatchObject({ currentMarginBps: 2988, reasonCode: 'below_margin_target' });

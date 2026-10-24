@@ -14869,6 +14869,19 @@
             ],
             "description": "Marketplace commission + fixed fee at the current price of the proposal; null when the account has no fee profile"
           },
+          "proposedFeesMinor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Commission + fixed fee at the proposed price; null when the account has no fee profile"
+          },
           "currentMarginBps": {
             "anyOf": [
               {
@@ -14980,6 +14993,7 @@
           "decisionNote",
           "unitCostMinor",
           "feesMinor",
+          "proposedFeesMinor",
           "currentMarginBps",
           "proposedMarginBps",
           "targetMarginBps",
@@ -51857,6 +51871,19 @@
             ],
             "description": "Marketplace commission + fixed fee at the current price of the proposal; null when the account has no fee profile"
           },
+          "proposedFeesMinor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Commission + fixed fee at the proposed price; null when the account has no fee profile"
+          },
           "currentMarginBps": {
             "anyOf": [
               {
@@ -51968,6 +51995,7 @@
           "decisionNote",
           "unitCostMinor",
           "feesMinor",
+          "proposedFeesMinor",
           "currentMarginBps",
           "proposedMarginBps",
           "targetMarginBps",
@@ -115308,7 +115336,7 @@
         "tags": [
           "Pricing"
         ],
-        "description": "Over active listings that have a price (account marketplace price, else the variant selling price). Margin = price - cost - commission - fixed fee, in bps of the price. Listings whose variant has no cost price are counted in `unknownCostCount` and left out of the averages (null when nothing is known). `belowTargetCount` compares with the strictest active policy target that applies to the channel. `nextAction` is `costs` while costs are missing, else `proposals`.",
+        "description": "Over active listings that have a price (account marketplace price, else the variant selling price). Margin = price - cost - commission - fixed fee, in bps of the price. Listings whose variant has no cost price are counted in `unknownCostCount` and left out of the averages (null when nothing is known). `belowTargetCount` compares with the strictest active policy target that applies to the channel. `nextAction` is `costs` while costs are missing, `fees` when costs are known but the channel has no fee profile, else `proposals`.",
         "parameters": [
           {
             "schema": {
@@ -115412,6 +115440,7 @@
                                 "type": "string",
                                 "enum": [
                                   "costs",
+                                  "fees",
                                   "proposals"
                                 ]
                               }
@@ -115618,13 +115647,14 @@
               "type": "string",
               "enum": [
                 "below_target",
-                "proposed"
+                "proposed",
+                "unknown_cost"
               ]
             },
             "in": "query",
             "name": "filter[state]",
             "required": false,
-            "description": "below_target = margin under the policy target; proposed = a proposal is pending"
+            "description": "below_target = margin under the policy target; proposed = a proposal is pending; unknown_cost = the variant has no cost price"
           },
           {
             "schema": {
@@ -115684,6 +115714,9 @@
                                 "type": "string"
                               },
                               "variantId": {
+                                "type": "string"
+                              },
+                              "productId": {
                                 "type": "string"
                               },
                               "productTitle": {
@@ -115789,6 +115822,7 @@
                             "required": [
                               "listingId",
                               "variantId",
+                              "productId",
                               "productTitle",
                               "sku",
                               "accountId",

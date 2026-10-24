@@ -10,10 +10,11 @@ interface MarginContextTableProps {
   items: ChannelMargin[];
   targetMarginBps?: number | null;
   onReviewCosts?: (row: ChannelMargin) => void;
+  onReviewFees?: (row: ChannelMargin) => void;
   onReviewProposals?: (row: ChannelMargin) => void;
 }
 
-export function MarginContextTable({ items, targetMarginBps, onReviewCosts, onReviewProposals }: MarginContextTableProps) {
+export function MarginContextTable({ items, targetMarginBps, onReviewCosts, onReviewFees, onReviewProposals }: MarginContextTableProps) {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(5);
 
@@ -75,6 +76,15 @@ export function MarginContextTable({ items, targetMarginBps, onReviewCosts, onRe
                           className="inline-flex items-center gap-1 font-semibold text-foreground hover:underline cursor-pointer text-xs"
                         >
                           <span>Review proposals</span>
+                          <ArrowRight className="h-3 w-3" />
+                        </button>
+                      ) : row.nextAction === "fees" ? (
+                        <button
+                          type="button"
+                          onClick={() => onReviewFees?.(row)}
+                          className="inline-flex items-center gap-1 font-semibold text-foreground hover:underline cursor-pointer text-xs"
+                        >
+                          <span>Set channel fees</span>
                           <ArrowRight className="h-3 w-3" />
                         </button>
                       ) : (

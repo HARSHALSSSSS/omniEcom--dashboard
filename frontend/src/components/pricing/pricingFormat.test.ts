@@ -33,6 +33,7 @@ const proposal = (over: Partial<PriceProposal> = {}): PriceProposal => ({
   failureMessage: null,
   unitCostMinor: null,
   feesMinor: null,
+  proposedFeesMinor: null,
   currentMarginBps: null,
   proposedMarginBps: null,
   targetMarginBps: null,

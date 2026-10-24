@@ -146,7 +146,7 @@ export async function marginOverview(tx: Tx, vendorId: string, f: { accountId?: 
       accountId: a.accountId, channel: a.channel, marketplace: a.marketplace, priceCount: rows.length, pricedWithCostCount: known.length,
       avgMarginBps: avg(known.map((r) => r.marginBps as number)), belowTargetCount: rows.filter((r) => r.belowTarget === true).length,
       targetMarginBps: a.targetMarginBps, feeTermsSummary: feeTermsSummary(a.fees), feesConfigured: a.fees !== null, unknownCostCount,
-      nextAction: (unknownCostCount > 0 ? 'costs' : 'proposals') as 'costs' | 'proposals',
+      nextAction: (unknownCostCount > 0 ? 'costs' : a.fees === null ? 'fees' : 'proposals') as 'costs' | 'fees' | 'proposals',
     };
   });
   const known = view.rows.filter((r) => r.marginBps !== null);
@@ -159,13 +159,13 @@ export async function marginOverview(tx: Tx, vendorId: string, f: { accountId?: 
   };
 }
 
-export interface PriceTableQuery { accountId?: string; q?: string; state?: 'below_target' | 'proposed'; sort: 'product' | 'margin_asc' | 'margin_desc' | 'price_desc'; limit: number; offset: number }
+export interface PriceTableQuery { accountId?: string; q?: string; state?: 'below_target' | 'proposed' | 'unknown_cost'; sort: 'product' | 'margin_asc' | 'margin_desc' | 'price_desc'; limit: number; offset: number }
 
 /** numbered-page list of every listing price with its real cost, fees, margin and the pending proposal if any */
 export async function priceTable(tx: Tx, vendorId: string, q: PriceTableQuery) {
   const view = await loadMarginView(tx, vendorId, { accountId: q.accountId });
   const needle = q.q?.toLowerCase();
-  const byState = q.state === 'below_target' ? view.rows.filter((r) => r.belowTarget === true) : q.state === 'proposed' ? view.rows.filter((r) => r.proposalId !== null) : view.rows;
+  const byState = q.state === 'below_target' ? view.rows.filter((r) => r.belowTarget === true) : q.state === 'proposed' ? view.rows.filter((r) => r.proposalId !== null) : q.state === 'unknown_cost' ? view.rows.filter((r) => r.unitCostMinor === null) : view.rows;
   const rows = needle ? byState.filter((r) => r.sku.toLowerCase().includes(needle) || r.productTitle.toLowerCase().includes(needle)) : byState.slice();
   // unknown margins always last, whatever the direction; ties keep the product / sku order of the loader
   const byMargin = (dir: 1 | -1) => (a: PricedListing, b: PricedListing): number => {
@@ -176,7 +176,7 @@ export async function priceTable(tx: Tx, vendorId: string, q: PriceTableQuery) {
   else if (q.sort === 'margin_desc') rows.sort(byMargin(-1));
   else if (q.sort === 'price_desc') rows.sort((a, b) => b.currentPriceMinor - a.currentPriceMinor);
   const items = rows.slice(q.offset, q.offset + q.limit).map((r) => ({
-    listingId: r.listingId, variantId: r.variantId, productTitle: r.productTitle, sku: r.sku, accountId: r.accountId, channel: r.channel, marketplace: r.marketplace,
+    listingId: r.listingId, variantId: r.variantId, productId: r.productId, productTitle: r.productTitle, sku: r.sku, accountId: r.accountId, channel: r.channel, marketplace: r.marketplace,
     currentPriceMinor: r.currentPriceMinor, unitCostMinor: r.unitCostMinor, feesMinor: r.feesMinor, marginBps: r.marginBps, targetMarginBps: r.targetMarginBps, belowTarget: r.belowTarget,
     proposalState: (r.proposalId ? 'proposed' : 'none') as 'none' | 'proposed', proposalId: r.proposalId, proposedPriceMinor: r.proposedPriceMinor,
   }));

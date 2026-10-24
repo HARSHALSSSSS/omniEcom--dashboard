@@ -66,6 +66,7 @@ function proposal(over: Partial<PriceProposal> = {}): PriceProposal {
     failureMessage: null,
     unitCostMinor: null,
     feesMinor: null,
+    proposedFeesMinor: null,
     currentMarginBps: null,
     proposedMarginBps: null,
     targetMarginBps: null,
@@ -155,7 +156,7 @@ function renderPage(url = "/pricing?view=proposals") {
 
 const grant = (...permissions: string[]) => useWorkspaceStore.setState({ permissions });
 const loc = () => screen.getByTestId("loc").textContent;
-const lastQuery = () => api.proposals.mock.calls.at(-1)?.[0];
+const lastQuery = () => api.proposals.mock.calls.map((c) => c[0]).filter((q) => q.pageSize !== 100).at(-1);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -192,6 +193,34 @@ describe("PricingPage proposals", () => {
     await user.click(within(r1).getByText("Cotton Kurta"));
     expect(await screen.findByText("The competitor raised its price by 5%.")).toBeInTheDocument();
     expect(screen.getByText("₹1,350")).toBeInTheDocument();
+  });
+
+  it("counts the pending proposals below their target and reviews the real numbers", async () => {
+    const user = userEvent.setup();
+    const real = proposal({ id: "p3", sku: "REAL-1", productTitle: "Real Tee", unitCostMinor: 30000, feesMinor: 4990, proposedFeesMinor: 5460, currentMarginBps: 2988, proposedMarginBps: 3500, targetMarginBps: 3500, reasonCode: "below_margin_target", reasonText: "Margin is under the target." });
+    const fine = proposal({ id: "p4", sku: "FINE-1", productTitle: "Fine Tee", currentMarginBps: 4100, proposedMarginBps: 4300, targetMarginBps: 3500 });
+    api.proposals.mockResolvedValue(page([real, fine, P2]));
+    renderPage();
+    const tile = (await screen.findByText("Below margin target")).parentElement as HTMLElement;
+    await waitFor(() => expect(tile).toHaveTextContent("1"));
+    expect(screen.getByText("Target ≥ 35% · Per channel")).toBeInTheDocument();
+    // the review card shows the first proposal; Next walks to the following one
+    expect(await screen.findByText("Real Tee · REAL-1")).toBeInTheDocument();
+    expect(screen.getByText("Margin is under the target.")).toBeInTheDocument();
+    expect(screen.getByText("Confirm the ₹300 unit cost.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Next proposal/ }));
+    expect(await screen.findByText("Fine Tee · FINE-1")).toBeInTheDocument();
+    // the review card approves through the same confirmation as the table
+    await user.click(screen.getByRole("button", { name: "Approve proposal" }));
+    expect(await screen.findByRole("dialog", { name: /Approve this price/ })).toBeInTheDocument();
+    expect(api.decide).not.toHaveBeenCalled();
+  });
+
+  it("disables the review card decisions for a viewer", async () => {
+    grant("pricing:read");
+    renderPage();
+    expect(await screen.findByText("Cotton Kurta · KURTA-M")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Approve proposal" })).toBeDisabled();
   });
 
   it("approves only after a confirmation, sends the version and note, and reports the result", async () => {

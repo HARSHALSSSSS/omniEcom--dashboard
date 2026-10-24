@@ -18,7 +18,7 @@ import { ProposalDrawer } from "./ProposalDrawer";
 import { ProposalFilters } from "./ProposalFilters";
 import { ProposalFootnote, ProposalTable } from "./ProposalTable";
 import { ProposalKpiStrip } from "./ProposalKpiStrip";
-import { ProposalDetailReviewCard, type ProposalDetailData } from "./ProposalDetailReviewCard";
+import { ProposalDetailReviewCard } from "./ProposalDetailReviewCard";
 
 /** the API decides at most this many proposals per bulk call (the page size never exceeds it) */
 const BULK_MAX = 100;
@@ -35,11 +35,16 @@ interface ProposalsTabProps {
 export function ProposalsTab({ url, channels, canApprove, canWrite, onGenerate }: ProposalsTabProps) {
   const { proposals: query, update, clearFilters } = url;
   const list = useProposals(query);
+  // the pending proposals (same channel filter) behind the "below margin target" tile
+  const pendingQuery = useMemo(() => ({ tab: "pending_review" as const, accountId: query.accountId, sort: DEFAULT_SORT, page: 1, pageSize: 100 }), [query.accountId]);
+  const pendingList = useProposals(pendingQuery);
   const decide = useDecideProposal();
   const bulk = useBulkDecide();
 
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [openId, setOpenId] = useState<string | null>(null);
+  // the proposal shown in the review card (the first one until another is picked)
+  const [reviewId, setReviewId] = useState<string | null>(null);
   const [decision, setDecision] = useState<DecisionTarget | null>(null);
   const [decisionMessage, setDecisionMessage] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
@@ -146,40 +151,22 @@ export function ProposalsTab({ url, channels, canApprove, canWrite, onGenerate }
   const busyId = decide.isPending && decision?.kind === "one" ? decision.proposal.id : null;
   const pending = decide.isPending || bulk.isPending;
 
-  const activeProposal = open ?? rows[0];
-  const activeProposalData: ProposalDetailData | null = useMemo(() => {
-    if (!activeProposal) return null;
-    const cur = activeProposal.currentPriceMinor / 100;
-    const prop = activeProposal.proposedPriceMinor / 100;
-    const deltaPp = (activeProposal.estMarginDeltaBps ?? 380) / 100;
-    const curMargin = 29.9;
-    return {
-      id: activeProposal.id,
-      productTitle: activeProposal.productTitle,
-      sku: activeProposal.sku,
-      channel: activeProposal.channelName,
-      marketplace: activeProposal.channelName.toLowerCase().includes("flipkart") ? "flipkart" : "amazon",
-      currentPrice: cur,
-      proposedPrice: prop,
-      unitCost: Math.round(cur * 0.46),
-      feesAndShipping: Math.round(cur * 0.24),
-      currentMarginPct: curMargin,
-      proposedMarginPct: curMargin + deltaPp,
-      targetMarginPct: 30.0,
-      reason: "Below margin target",
-      reasonDescription:
-        "The current price yields a 29.9% estimated margin. Increasing the price brings it above the 30% target, using the same costs and fees.",
-      version: activeProposal.version,
-    };
-  }, [activeProposal]);
+  const activeProposal = rows.find((r) => r.id === reviewId) ?? rows[0];
+
+  const pendingRows = pendingList.data?.items;
+  const belowTarget = pendingRows?.filter((r) => r.currentMarginBps !== null && r.targetMarginBps !== null && r.currentMarginBps < r.targetMarginBps).length;
+  const targets = pendingRows?.flatMap((r) => (r.targetMarginBps === null ? [] : [r.targetMarginBps])) ?? [];
+  const counts = list.data?.counts;
 
   return (
     <div className="space-y-6">
       {/* 1. Top KPI strip matching Figma Screen 2 */}
       <ProposalKpiStrip
-        pendingCount={list.data?.counts?.pending_review ?? 3}
-        belowTargetCount={2}
-        appliedCount={(list.data?.counts?.approved ?? 0) + (list.data?.counts?.auto_applied ?? 0)}
+        pendingCount={counts?.pending_review}
+        belowTargetCount={belowTarget}
+        belowTargetCapped={(pendingList.data?.total ?? 0) > (pendingRows?.length ?? 0)}
+        targetMarginBps={pendingRows ? (targets.length ? Math.max(...targets) : null) : undefined}
+        appliedCount={counts ? (counts.approved ?? 0) + (counts.auto_applied ?? 0) : undefined}
       />
 
       {/* 2. Proposal Filters */}
@@ -233,7 +220,10 @@ export function ProposalsTab({ url, channels, canApprove, canWrite, onGenerate }
         )
       ) : (
         <>
-          <ProposalTable rows={rows} selected={selected} canApprove={canApprove} refreshing={refreshing} busyId={busyId} onToggle={toggle} onToggleAll={toggleAll} onOpen={(r) => setOpenId(r.id)} onDecide={startDecision} />
+          <ProposalTable rows={rows} selected={selected} canApprove={canApprove} refreshing={refreshing} busyId={busyId} onToggle={toggle} onToggleAll={toggleAll} onOpen={(r) => {
+              setOpenId(r.id);
+              setReviewId(r.id);
+            }} onDecide={startDecision} />
           <ProposalFootnote total={total} />
           <PricingPagination
             page={list.data?.page ?? query.page}
@@ -247,27 +237,21 @@ export function ProposalsTab({ url, channels, canApprove, canWrite, onGenerate }
           />
 
           {/* 3. Interactive PROPOSAL REVIEW detailed pane at bottom matching Figma */}
-          {activeProposalData && (
+          {activeProposal && (
             <div className="pt-2">
               <ProposalDetailReviewCard
-                proposal={activeProposalData}
-                currentIndex={rows.findIndex((r) => r.id === activeProposal?.id) + 1 || 1}
+                key={activeProposal.id}
+                proposal={activeProposal}
+                currentIndex={rows.findIndex((r) => r.id === activeProposal.id) + 1 || 1}
                 totalCount={rows.length}
+                canApprove={canApprove}
                 isSubmitting={pending}
                 onNextProposal={() => {
-                  const idx = rows.findIndex((r) => r.id === activeProposal?.id);
-                  if (idx >= 0 && idx < rows.length - 1) {
-                    setOpenId(rows[idx + 1].id);
-                  } else if (rows.length > 0) {
-                    setOpenId(rows[0].id);
-                  }
+                  const idx = rows.findIndex((r) => r.id === activeProposal.id);
+                  setReviewId(rows[(idx + 1) % rows.length].id);
                 }}
-                onApproveProposal={() => {
-                  if (activeProposal) startDecision(activeProposal, "approve");
-                }}
-                onRejectProposal={() => {
-                  if (activeProposal) startDecision(activeProposal, "reject");
-                }}
+                onApproveProposal={() => startDecision(activeProposal, "approve")}
+                onRejectProposal={() => startDecision(activeProposal, "reject")}
               />
             </div>
           )}

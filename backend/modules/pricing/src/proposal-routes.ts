@@ -54,6 +54,7 @@ const ProposalSchema = z.object({
   expiresAt: IsoDate.nullable(), createdAt: IsoDate, decidedBy: z.string().nullable(), decidedByName: z.string().nullable(), decidedAt: IsoDate.nullable(), decisionNote: z.string().nullable(),
   unitCostMinor: z.number().int().nullable().describe('Cost price of the variant; null when not set'),
   feesMinor: z.number().int().nullable().describe('Marketplace commission + fixed fee at the current price of the proposal; null when the account has no fee profile'),
+  proposedFeesMinor: z.number().int().nullable().describe('Commission + fixed fee at the proposed price; null when the account has no fee profile'),
   currentMarginBps: z.number().int().nullable().describe('Margin at the current price in bps of the price (after cost and fees); null when the cost is unknown'),
   proposedMarginBps: z.number().int().nullable().describe('Margin at the proposed price; null when the cost is unknown'),
   targetMarginBps: z.number().int().nullable().describe('Margin target of the policy that created the proposal; null without a policy or a target'),
@@ -102,12 +103,12 @@ export const proposalRoutes: FastifyPluginAsync = async (app) => {
     config: { access: { permission: 'pricing:read' } },
     schema: {
       tags: TAGS, summary: 'Margin per channel, from real cost and fee data',
-      description: 'Over active listings that have a price (account marketplace price, else the variant selling price). Margin = price - cost - commission - fixed fee, in bps of the price. Listings whose variant has no cost price are counted in `unknownCostCount` and left out of the averages (null when nothing is known). `belowTargetCount` compares with the strictest active policy target that applies to the channel. `nextAction` is `costs` while costs are missing, else `proposals`.',
+      description: 'Over active listings that have a price (account marketplace price, else the variant selling price). Margin = price - cost - commission - fixed fee, in bps of the price. Listings whose variant has no cost price are counted in `unknownCostCount` and left out of the averages (null when nothing is known). `belowTargetCount` compares with the strictest active policy target that applies to the channel. `nextAction` is `costs` while costs are missing, `fees` when costs are known but the channel has no fee profile, else `proposals`.',
       querystring: z.object({ 'filter[accountId]': z.uuid().optional() }),
       response: { 200: successEnvelope(z.object({
         channels: z.array(z.object({
           accountId: z.string(), channel: z.string(), marketplace: z.string(), priceCount: z.number().int(), pricedWithCostCount: z.number().int(), avgMarginBps: z.number().int().nullable(),
-          belowTargetCount: z.number().int(), targetMarginBps: z.number().int().nullable(), feeTermsSummary: z.string(), feesConfigured: z.boolean(), unknownCostCount: z.number().int(), nextAction: z.enum(['costs', 'proposals']),
+          belowTargetCount: z.number().int(), targetMarginBps: z.number().int().nullable(), feeTermsSummary: z.string(), feesConfigured: z.boolean(), unknownCostCount: z.number().int(), nextAction: z.enum(['costs', 'fees', 'proposals']),
         })),
         totals: z.object({ productsInView: z.number().int(), productChannelPrices: z.number().int(), avgMarginBps: z.number().int().nullable(), belowTargetCount: z.number().int(), unknownCostCount: z.number().int(), withProposalCount: z.number().int().describe('Listings with a pending proposal'), targetMarginBps: z.number().int().nullable().describe('Strictest active policy target; null without a policy target') }),
       })) },
@@ -119,10 +120,10 @@ export const proposalRoutes: FastifyPluginAsync = async (app) => {
     schema: {
       tags: TAGS, summary: 'Every listing price with its real cost, fees and margin',
       description: 'One row per active listing with a price. `unitCostMinor`, `feesMinor`, `marginBps`, `belowTarget` are null when unknown (no cost price / no fee profile / no policy target). `proposalState` is `proposed` when a proposal is pending for the listing (`proposalId`, `proposedPriceMinor`). Unknown margins sort last.',
-      querystring: PageQuerySchema.extend({ 'filter[accountId]': z.uuid().optional(), 'filter[state]': z.enum(['below_target', 'proposed']).optional().describe('below_target = margin under the policy target; proposed = a proposal is pending'), q: z.string().trim().min(1).max(100).optional(), sort: z.enum(['product', 'margin_asc', 'margin_desc', 'price_desc']).default('product') }),
+      querystring: PageQuerySchema.extend({ 'filter[accountId]': z.uuid().optional(), 'filter[state]': z.enum(['below_target', 'proposed', 'unknown_cost']).optional().describe('below_target = margin under the policy target; proposed = a proposal is pending; unknown_cost = the variant has no cost price'), q: z.string().trim().min(1).max(100).optional(), sort: z.enum(['product', 'margin_asc', 'margin_desc', 'price_desc']).default('product') }),
       response: { 200: successEnvelope(z.object({
         items: z.array(z.object({
-          listingId: z.string(), variantId: z.string(), productTitle: z.string(), sku: z.string(), accountId: z.string(), channel: z.string(), marketplace: z.string(), currentPriceMinor: z.number().int(),
+          listingId: z.string(), variantId: z.string(), productId: z.string(), productTitle: z.string(), sku: z.string(), accountId: z.string(), channel: z.string(), marketplace: z.string(), currentPriceMinor: z.number().int(),
           unitCostMinor: z.number().int().nullable(), feesMinor: z.number().int().nullable(), marginBps: z.number().int().nullable(), targetMarginBps: z.number().int().nullable(), belowTarget: z.boolean().nullable(),
           proposalState: z.enum(['none', 'proposed']), proposalId: z.string().nullable(), proposedPriceMinor: z.number().int().nullable(),
         })),

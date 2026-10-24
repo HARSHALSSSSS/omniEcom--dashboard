@@ -20,6 +20,7 @@ export type PricingView = (typeof PRICING_VIEWS)[number];
 export interface PriceTableRow {
   listingId: string;
   variantId: string;
+  productId: string;
   productTitle: string;
   sku: string;
   accountId: string;
@@ -39,7 +40,7 @@ export interface PriceTableRow {
 export const PRICE_TABLE_SORTS = ["product", "margin_asc", "margin_desc", "price_desc"] as const;
 export type PriceTableSort = (typeof PRICE_TABLE_SORTS)[number];
 
-export type PriceTableState = "below_target" | "proposed";
+export type PriceTableState = "below_target" | "proposed" | "unknown_cost";
 
 export interface PriceTableQuery {
   state?: PriceTableState;
@@ -71,7 +72,7 @@ export interface ChannelMargin {
   feeTermsSummary: string;
   feesConfigured: boolean;
   unknownCostCount: number;
-  nextAction: "costs" | "proposals";
+  nextAction: "costs" | "fees" | "proposals";
 }
 
 export interface MarginOverview {
@@ -135,6 +136,8 @@ export interface PriceProposal {
   /** real inputs behind the margins; null = unknown (no cost price / no fee profile / no policy target) */
   unitCostMinor: number | null;
   feesMinor: number | null;
+  /** commission + fixed fee at the proposed price; null = no fee profile */
+  proposedFeesMinor: number | null;
   currentMarginBps: number | null;
   proposedMarginBps: number | null;
   targetMarginBps: number | null;

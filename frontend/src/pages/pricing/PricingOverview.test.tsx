@@ -59,7 +59,7 @@ const marginData = (): MarginOverview => ({
 });
 
 const row = (over: Partial<PriceTableRow> = {}): PriceTableRow => ({
-  listingId: "l1", variantId: "v1", productTitle: "Cotton Kurta", sku: "KURTA-M", accountId: AMAZON, channel: "Amazon", marketplace: "amazon",
+  listingId: "l1", variantId: "v1", productId: "prod1", productTitle: "Cotton Kurta", sku: "KURTA-M", accountId: AMAZON, channel: "Amazon", marketplace: "amazon",
   currentPriceMinor: 49900, unitCostMinor: 30000, feesMinor: 4990, marginBps: 2988, targetMarginBps: 3500, belowTarget: true, proposalState: "proposed", proposalId: "p1", proposedPriceMinor: 54600,
   ...over,
 });
@@ -69,7 +69,7 @@ const tablePage = (items: PriceTableRow[], over: Partial<PriceTablePage> = {}): 
 const proposal = (over: Partial<PriceProposal> = {}): PriceProposal => ({
   id: "p1", status: "pending_review", strategy: "margin_floor", variantId: "v1", sku: "KURTA-M", productTitle: "Cotton Kurta", accountId: AMAZON, channelName: "Amazon", marketplace: "amazon",
   policyId: "pol", policyName: "Floor", currentPriceMinor: 49900, proposedPriceMinor: 54600, currency: "INR", priceChangeBps: 942, competitorPriceMinor: null, estMarginDeltaBps: 512,
-  projectedSalesDeltaBps: null, reasoning: "Floor", unitCostMinor: 30000, feesMinor: 4990, currentMarginBps: 2988, proposedMarginBps: 3500, targetMarginBps: 3500, reasonCode: "below_margin_target",
+  projectedSalesDeltaBps: null, reasoning: "Floor", unitCostMinor: 30000, feesMinor: 4990, proposedFeesMinor: 5460, currentMarginBps: 2988, proposedMarginBps: 3500, targetMarginBps: 3500, reasonCode: "below_margin_target",
   reasonText: "Current margin is 29.88%, below the 35% target.", expiresAt: null, createdAt: "2026-10-01T00:00:00.000Z", decidedBy: null, decidedByName: null, decidedAt: null, decisionNote: null,
   appliedAt: null, failureMessage: null, pushSkipped: false, version: 1, ...over,
 });
@@ -106,7 +106,7 @@ beforeEach(() => {
   api.marginOverview.mockResolvedValue(marginData());
   api.priceTable.mockResolvedValue(tablePage([
     row(),
-    row({ listingId: "l2", variantId: "v2", productTitle: "Canvas Shoes", sku: "SHOE-9", accountId: FLIPKART, channel: "Flipkart", marketplace: "flipkart", currentPriceMinor: 159900, unitCostMinor: null, feesMinor: null, marginBps: null, belowTarget: null, proposalState: "none", proposalId: null, proposedPriceMinor: null }),
+    row({ listingId: "l2", variantId: "v2", productId: "prod2", productTitle: "Canvas Shoes", sku: "SHOE-9", accountId: FLIPKART, channel: "Flipkart", marketplace: "flipkart", currentPriceMinor: 159900, unitCostMinor: null, feesMinor: null, marginBps: null, belowTarget: null, proposalState: "none", proposalId: null, proposedPriceMinor: null }),
   ]));
   api.proposals.mockResolvedValue(proposalsPage([proposal()]));
   api.policies.mockResolvedValue([]);
@@ -163,7 +163,8 @@ describe("Pricing overview tab (real data)", () => {
     expect(within(kurta).getByText("29.88%")).toHaveClass("text-amber-600");
     expect(within(kurta).getByText(/Proposed · ₹546/)).toBeInTheDocument();
     const shoes = screen.getByText("SHOE-9").closest("tr") as HTMLElement;
-    expect(within(shoes).getAllByText("—")).toHaveLength(3);
+    expect(within(shoes).getAllByText("—")).toHaveLength(2);
+    expect(within(shoes).getByRole("link", { name: "Set cost" })).toBeInTheDocument();
     expect(within(shoes).getByText("No proposal")).toBeInTheDocument();
     expect(api.priceTable.mock.calls[0][0]).toMatchObject({ sort: "product", page: 1, pageSize: 10 });
 
@@ -202,11 +203,27 @@ describe("Pricing overview tab (real data)", () => {
     expect(loc().searchParams.get("account")).toBe(AMAZON);
   });
 
-  it("sends a channel without costs to the product list", async () => {
+  it("sends a channel without costs to the first product missing a cost price", async () => {
     const user = userEvent.setup();
+    api.priceTable.mockImplementation(async (q: { state?: string }) =>
+      q.state === "unknown_cost" ? tablePage([row({ productId: "prod2", unitCostMinor: null })]) : tablePage([row()])
+    );
     renderOverviewPage();
     await user.click(await screen.findByRole("button", { name: /Review costs/ }));
-    await waitFor(() => expect(loc().pathname).toBe("/products"));
+    await waitFor(() => expect(loc().pathname).toBe("/products/prod2/variants"));
+    expect(api.priceTable.mock.calls.some((c) => c[0].state === "unknown_cost" && c[0].accountId === FLIPKART)).toBe(true);
+  });
+
+  it("links the cost cell to the product's variants, and a channel without fees to the Marketplace hub", async () => {
+    const user = userEvent.setup();
+    const m = marginData();
+    m.channels[1] = { ...m.channels[1], unknownCostCount: 0, pricedWithCostCount: 2, avgMarginBps: 3000, nextAction: "fees" };
+    api.marginOverview.mockResolvedValue(m);
+    renderOverviewPage();
+    const shoes = (await screen.findByText("SHOE-9")).closest("tr") as HTMLElement;
+    expect(within(shoes).getByRole("link", { name: "Set cost" })).toHaveAttribute("href", "/products/prod2/variants");
+    await user.click(screen.getByRole("button", { name: /Set channel fees/ }));
+    await waitFor(() => expect(loc().pathname).toBe("/marketplace-hub"));
   });
 
   it("offers the Marketplace hub when no channel is connected", async () => {

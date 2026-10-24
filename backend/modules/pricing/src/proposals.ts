@@ -3,7 +3,7 @@ import { AppError, Errors } from '@oms/shared';
 import { effects, type Container, type OpCtx } from '@oms/module-kit';
 import { loadSubjects, pairKey, type SubjectRow } from './proposal-context';
 import { loadCostFacts, policyTargetBps, priceFacts, proposalReason } from './margins';
-import { marginBps, marginDeltaBps, NO_FEES, projectedSalesDeltaBps } from './proposal-domain';
+import { feeAmount, marginBps, marginDeltaBps, NO_FEES, projectedSalesDeltaBps } from './proposal-domain';
 import { SyncWork, setMarketplacePrice } from './service';
 
 const PP = schema.pricingProposals;
@@ -44,7 +44,7 @@ export function toProposalDto(v: ProposalView, facts: CostFacts) {
     expiresAt: p.expiresAt ? p.expiresAt.toISOString() : null, createdAt: p.createdAt.toISOString(),
     decidedBy: p.decidedBy, decidedByName: v.decidedByName, decidedAt: p.decidedAt ? p.decidedAt.toISOString() : null, decisionNote: p.decisionNote,
     /** real inputs behind the numbers (null = unknown, never guessed): cost price, commission + fixed fee at the price the proposal started from, margins in bps of the price */
-    unitCostMinor: now.unitCostMinor, feesMinor: now.feesMinor, currentMarginBps: now.marginBps, proposedMarginBps, targetMarginBps,
+    unitCostMinor: now.unitCostMinor, feesMinor: now.feesMinor, proposedFeesMinor: fees ? feeAmount(p.proposedPriceMinor, fees) : null, currentMarginBps: now.marginBps, proposedMarginBps, targetMarginBps,
     reasonCode: reason.code, reasonText: reason.text,
     appliedAt: p.appliedAt ? p.appliedAt.toISOString() : null, failureMessage: p.failureMessage,
     /** true when the price is saved here but the marketplace's connector cannot take price updates (the note says what to do) */
