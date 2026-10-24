@@ -407,6 +407,12 @@ describe("InventoryPage ledger", () => {
     expect(api.overview).toHaveBeenCalledWith(WH.delhi, expect.anything());
   });
 
+  it("maps the shell's ?health=low deep link to the low-stock tab", async () => {
+    renderPage("/inventory?health=low");
+    await waitFor(() => expect(lastLedger()?.stockStatus).toBe("low_stock"));
+    expect(lastLedger()?.health).toBeUndefined();
+  });
+
   it("sorts from a column header, pages and changes the page size", async () => {
     api.ledger.mockImplementation(async (q) => ledgerPage(ROWS, { total: 60, pages: 3, page: q.page ?? 1 }));
     const user = userEvent.setup();

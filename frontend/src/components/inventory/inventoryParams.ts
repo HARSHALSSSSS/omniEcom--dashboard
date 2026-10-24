@@ -75,7 +75,10 @@ export function readUrlState(params: URLSearchParams): InventoryUrlState {
   return {
     filters: {
       q: params.get("q")?.trim() || undefined,
-      stockStatus: oneOf(params.get("status"), STATUS_TABS.filter((t): t is { id: StockStatus; label: string } => t.id !== "all")),
+      // the shell's "Review inventory" links (dashboard, needs-attention) arrive as `?health=low`: that means the low-stock tab
+      stockStatus:
+        oneOf(params.get("status"), STATUS_TABS.filter((t): t is { id: StockStatus; label: string } => t.id !== "all")) ??
+        (params.get("health") === "low" ? "low_stock" : undefined),
       warehouse: warehouse && UUID.test(warehouse) ? warehouse : undefined,
       channel: params.get("channel") || undefined,
       health: oneOf(params.get("health"), HEALTH_OPTIONS),
