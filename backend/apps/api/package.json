@@ -22,7 +22,7 @@
     "@fastify/cors": "^11.3.0",
     "@fastify/rate-limit": "^11.2.0",
     "@fastify/sensible": "^6.0.6",
-    "zod": "^4.6.5",
+    "zod": "^4.6.6",
     "@oms/shared": "workspace:*",
     "@oms/config": "workspace:*",
     "@oms/logging": "workspace:*",
