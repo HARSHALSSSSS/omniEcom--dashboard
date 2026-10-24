@@ -124,7 +124,11 @@ export async function setMarketplacePrice(tx: Tx, ctx: OpCtx, work: SyncWork, in
     ? await tx.update(MP).set({ ...values, version: sql`${MP.version} + 1` }).where(eq(MP.id, cur.id)).returning()
     : await tx.insert(MP).values({ vendorId: ctx.vendorId, variantId: input.variantId, marketplaceAccountId: input.accountId, ...values }).returning();
   const h = { variantId: input.variantId, accountId: input.accountId, source, ruleId: input.ruleId, batchId: input.batchId, reason: input.reason, actorId: ctx.actor.id };
-  await history(tx, ctx.vendorId, { ...h, field: 'marketplace', oldMinor: cur?.priceMinor ?? null, newMinor: next.price });
+  // the previous EFFECTIVE price: the first explicit price replaces what the listing showed (its own price, else the variant's), never "nothing"
+  const [listed] = await tx.select({ priceMinor: schema.marketplaceListings.priceMinor }).from(schema.marketplaceListings)
+    .where(and(eq(schema.marketplaceListings.vendorId, ctx.vendorId), eq(schema.marketplaceListings.variantId, input.variantId), eq(schema.marketplaceListings.marketplaceAccountId, input.accountId))).limit(1);
+  const previousPrice = next.price === null ? (cur?.priceMinor ?? null) : (cur?.priceMinor ?? listed?.priceMinor ?? v.sellingPriceMinor);
+  await history(tx, ctx.vendorId, { ...h, field: 'marketplace', oldMinor: previousPrice, newMinor: next.price });
   await history(tx, ctx.vendorId, { ...h, field: 'mrp', oldMinor: cur?.mrpMinor ?? null, newMinor: next.mrp });
   await history(tx, ctx.vendorId, { ...h, field: 'sale', oldMinor: cur?.salePriceMinor ?? null, newMinor: next.sale });
   const changed = await reconcile(tx, ctx, work, row!, v.sku);

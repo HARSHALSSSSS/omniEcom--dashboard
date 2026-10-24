@@ -249,7 +249,8 @@ describe('approve and reject', () => {
     const priced = (await c.get(`${API}/variants/${w.variant.variantId}`, w.admin)).body.data;
     expect(priced.marketplacePrices[0]).toMatchObject({ priceMinor: 44_900, effectivePriceMinor: 44_900, source: 'manual' });
     const hist = (await c.get(`${API}/history?filter[variantId]=${w.variant.variantId}&filter[field]=marketplace`, w.admin)).body.data.items;
-    expect(hist[0]).toMatchObject({ oldPriceMinor: null, newPriceMinor: 44_900, reason: `proposal:${p.id}` });
+    // the first explicit marketplace price replaces what the listing showed (the variant's price), so the previous price is real, not "nothing"
+    expect(hist[0]).toMatchObject({ oldPriceMinor: 49_900, newPriceMinor: 44_900, reason: `proposal:${p.id}` });
 
     // repeating does nothing; the opposite decision is refused
     const again = await c.post(`${API}/proposals/${p.id}/approve`, {}, w.admin);
