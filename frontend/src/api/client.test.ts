@@ -112,6 +112,19 @@ describe("api client", () => {
     expect(getRefreshToken()).toBe("refresh-0");
   });
 
+  it("words a gateway or proxy failure (no API envelope) instead of the raw axios text", async () => {
+    fakeServer(() => ({ status: 502, data: "<html>Bad Gateway</html>" }));
+    const bad = (await client.get(`${API_BASE}/orders`).catch((e: unknown) => e)) as ApiError;
+    expect(bad.status).toBe(502);
+    expect(bad.message).toBe("The service is temporarily unavailable. Please try again in a moment.");
+    fakeServer(() => ({ status: 500, data: "" }));
+    const boom = (await client.get(`${API_BASE}/orders`).catch((e: unknown) => e)) as ApiError;
+    expect(boom.message).toBe("The server had a problem. Please try again in a moment.");
+    // the API's own message still wins
+    fakeServer(() => ({ status: 500, data: failure("INTERNAL", "Something broke on our side") }));
+    expect(((await client.get(`${API_BASE}/orders`).catch((e: unknown) => e)) as ApiError).message).toBe("Something broke on our side");
+  });
+
   it("turns validation details into per-field messages", async () => {
     fakeServer(() => ({
       status: 400,
