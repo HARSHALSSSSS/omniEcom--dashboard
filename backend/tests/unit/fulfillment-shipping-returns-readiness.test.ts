@@ -135,6 +135,7 @@ describe('returns stage and next actions', () => {
     expect(by(inspected, 'disposition')).toMatchObject({ enabled: true });
     expect(by(inspected, 'disposition').inputs.find((i) => i.name === 'kind')).toMatchObject({ default: 'sellable' });
     expect(by(inspected, 'refund')).toMatchObject({ enabled: true, permission: 'returns:refund' });
+    expect(by(inspected, 'refund').inputs.find((i) => i.name === 'amountMinor')?.note).toBe('at most the order total (1000.00)'); // rupees, not minor units
     expect(by(inspected, 'complete').disabledReason).toBe('Some received units have no decision yet');
     const decided = nextActions(facts({ status: 'inspecting', inspectionStatus: 'passed', warehouseId: 'w1', items: [{ id: 'i1', sku: 'S', quantity: 2, received: 2, decided: 2 }] }));
     expect(by(decided, 'disposition').done).toBe(true);

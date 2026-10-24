@@ -160,7 +160,7 @@ export function nextActions(f: Facts): NextAction[] {
     f.refundStatus === 'not_applicable' ? 'No refund is due for this return' : !refundable ? (inWarehouse || f.status === 'completed' ? 'Finish the inspection before refunding' : 'Receive and inspect the return first') : null,
     retry ? [] : [
       { name: 'mode', type: 'enum', required: true, default: 'manual', options: [{ value: 'manual', label: 'Record manually' }, ...(f.connectorRefund ? [{ value: 'connector', label: `Ask ${f.marketplace} to refund` }] : [])] },
-      { name: 'amountMinor', type: 'integer', required: false, default: f.refundAmountMinor, note: `at most the order total (${f.orderTotalMinor})` }, { name: 'reference', type: 'string', required: false },
+      { name: 'amountMinor', type: 'integer', required: false, default: f.refundAmountMinor, note: `at most the order total (${(f.orderTotalMinor / 100).toFixed(2)})` }, { name: 'reference', type: 'string', required: false },
     ]);
   const complete = step('complete', 'Complete return', 'complete', 'returns:write', f.status === 'completed', !inWarehouse ? 'Receive the goods first' : undecided > 0 ? 'Some received units have no decision yet' : null, [{ name: 'acceptShort', type: 'enum', required: false, options: [{ value: 'true', label: 'Accept missing units' }], note: expected > received ? `${expected - received} unit(s) never arrived` : undefined }]);
   return [approve, receive, inspection, disposition, refund, complete];
