@@ -169,6 +169,13 @@
       "when": 1792171940735,
       "tag": "0023_shipping_pickup_slots",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1792171950735,
+      "tag": "0024_global_table_privileges",
+      "breakpoints": true
     }
   ]
 }
