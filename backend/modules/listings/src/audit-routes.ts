@@ -44,7 +44,7 @@ export const auditRoutes: FastifyPluginAsync = async (app) => {
     config: { access: { permission: 'listings:read' } },
     schema: {
       tags: TAGS, summary: 'Catalogue readiness audit',
-      description: 'Computed from the stored readiness of every listing (no marketplace call). overall.readinessPct = listings that can still be published and have no blocking check / all of them (null: none to publish). spectrum counts listings by state (ready = live, ready to publish or syncing; needs_review; blocked = blocking errors or rejected) plus the not-listed candidates. health scores each readiness group (pass 1, warn 0.5, fail 0) and, computed from the master catalogue, Variants (options set, SKU, barcode, price, an image per variant, every variant listed on the account) and Compliance (HSN code, GST rate, country of origin, manufacturer or brand, weight, MRP present, price within MRP, category attributes once validated); each check scores the share of variants or listings that pass it. Order: content, attributes, media, variants, compliance, then price, stock, category, marketplace. coverage = active products with a live listing per connected marketplace. journey = the steps of one sample listing that needs attention. suggestions = missing category attributes, with a value the same product already has elsewhere (apply with PATCH /listings/{id} attributeOverrides).',
+      description: 'Computed from the stored readiness of every listing; a publishable listing that was never validated is validated live with the same validation as the publish flow (no write, at most 100 per call), so a listing counted ready can be published. overall.readinessPct = listings that can still be published and have no blocking check / all of them (null: none to publish). spectrum counts listings by state (ready = live, ready to publish or syncing; needs_review; blocked = blocking errors or rejected) plus the not-listed candidates. health scores each readiness group (pass 1, warn 0.5, fail 0) and, computed from the master catalogue, Variants (options set, SKU, barcode, price, an image per variant, every variant listed on the account) and Compliance (HSN code, GST rate, country of origin, manufacturer or brand, weight, MRP present, price within MRP, category attributes once validated); each check scores the share of variants or listings that pass it. Order: content, attributes, media, variants, compliance, then price, stock, category, marketplace. coverage = active products with a live listing per connected marketplace. journey = the steps of one sample listing that needs attention. suggestions = missing category attributes, with a value the same product already has elsewhere (apply with PATCH /listings/{id} attributeOverrides).',
       response: { 200: successEnvelope(z.object({
         ...Window,
         overall: z.object({ readinessPct: Int.nullable(), readyListings: Int, cohortListings: Int, readyProducts: Int }),
@@ -56,17 +56,21 @@ export const auditRoutes: FastifyPluginAsync = async (app) => {
         suggestions: z.array(SuggestionSchema),
       }).meta({ id: 'ListingReadinessAudit' })) },
     },
-  }, async (req) => ok(req, await vendorTx(req, (tx) => audit.readinessAudit(ctxOf(req), tx))));
+  }, async (req) => {
+    const ctx = ctxOf(req);
+    const live = await audit.liveValidations(ctx);
+    return ok(req, await vendorTx(req, (tx) => audit.readinessAudit(ctx, tx, live)));
+  });
 
   r.get('/listings/audit/publishing', {
     config: { access: { permission: 'listings:read' } },
     schema: {
       tags: TAGS, summary: 'Publishing preparation: the ready catalogue cohort and its potential issues',
-      description: 'Cohort = listings that can still go through the publish flow (draft, ready, approved, rejected, correction required). A listing is ready when its stored readiness has no blocking check. issues list every blocking and warning check (blockers first, at most 100; issuesTotal is the full count). readyListingIds (at most 500) feed POST /listings/bulk-publish, 100 per call. channels carry the pricing rule (active pricing policy) and the sync mode (webhooks / polling interval from the connector) of each channel; publishLock states what the approval locks. Nothing is published by this read.',
+      description: 'Cohort = listings that can still go through the publish flow (draft, ready, approved, rejected, correction required). A listing is ready when its readiness has no blocking check: the stored validation, or for a never-validated listing the same validation as the publish flow run live (no write, at most 100 per call). issues list every blocking and warning check (blockers first, at most 100; issuesTotal is the full count). readyListingIds (at most 500) feed POST /listings/bulk-publish, 100 per call. channels carry the pricing rule (active pricing policy) and the sync mode (webhooks / polling interval from the connector) of each channel; publishLock states what the approval locks. Nothing is published by this read.',
       response: { 200: successEnvelope(z.object({
         ...Window,
         candidateListings: Int, readyListings: Int, blockedListings: Int, readyProducts: Int, readyVariants: Int, potentialIssueProducts: Int,
-        unvalidatedListings: Int.describe('Candidates whose category attributes were not validated yet (the publish flow validates them first)'),
+        unvalidatedListings: Int.describe('Candidates whose category attributes could not be checked in this call (more than 100 were never validated; the publish flow validates them first)'),
         readyListingIds: z.array(z.string()), readyIdsTruncated: z.boolean(),
         issues: z.array(z.object({ id: z.string(), listingId: z.string(), productId: z.string(), productTitle: z.string(), sku: z.string(), marketplace: z.string(), marketplaceName: z.string(), issue: z.string(), severity: z.enum(['blocker', 'warning']), field: z.string().nullable(), fixAction: z.string().nullable() })),
         issuesTotal: Int,
@@ -77,7 +81,11 @@ export const auditRoutes: FastifyPluginAsync = async (app) => {
         publishLock: z.object({ locked: z.array(z.string()), notLocked: z.array(z.string()), statement: z.string() }).describe('What cannot change between the merchant\'s approval and the submission: the approval is bound to a hash of price, MRP and content, and a listing whose hash changed is not sent'),
       }).meta({ id: 'ListingPublishingPreparation' })) },
     },
-  }, async (req) => ok(req, await vendorTx(req, (tx) => audit.publishingPreparation(ctxOf(req), tx))));
+  }, async (req) => {
+    const ctx = ctxOf(req);
+    const live = await audit.liveValidations(ctx);
+    return ok(req, await vendorTx(req, (tx) => audit.publishingPreparation(ctx, tx, live)));
+  });
 
   r.get('/listings/:id/sync', {
     config: { access: { permission: 'listings:read' } },

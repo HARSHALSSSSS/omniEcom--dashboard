@@ -1,10 +1,10 @@
-import { and, desc, eq, inArray, isNull, or, schema, sql, type Tx } from '@oms/database';
-import { Errors } from '@oms/shared';
+import { and, desc, eq, inArray, isNull, or, schema, sql, withVendor, type Tx } from '@oms/database';
+import { AppError, Errors } from '@oms/shared';
 import type { Ctx } from './ctx';
-import { joined } from './service';
-import { enrichListings, marketplaceNameOf, notListedCounts } from './workspace-data';
+import { evaluate, joined } from './service';
+import { enrichListings, marketplaceNameOf, notListedCounts, type LiveValidation } from './workspace-data';
 import {
-  channelsOf, cohortOf, healthOf, isPublishable, journeyOf, orderHealth, pickJourneyListing, spectrumOf, suggestionsOf, syncStateOf, syncStepsOf, SPECTRUM,
+  PUBLISHABLE_STATUSES, channelsOf, cohortOf, healthOf, isPublishable, journeyOf, orderHealth, pickJourneyListing, spectrumOf, suggestionsOf, syncStateOf, syncStepsOf, SPECTRUM,
   type AuditListing, type JobFacts, type SpectrumState,
 } from './audit-domain';
 import { complianceChecks, loadProductFacts, qualityScores, variantChecks } from './audit-quality';
@@ -26,8 +26,34 @@ const listableMarketplaces = (ctx: Ctx): string[] => ctx.c.connectors.supporting
 
 interface Loaded { listings: AuditListing[]; total: number; truncated: boolean }
 
+/** at most this many never-validated listings are validated live per call (the rest are still validated again when published) */
+export const LIVE_VALIDATION_CAP = 100;
+
+/**
+ * "Ready" has to mean "can be published". A listing nobody validated yet has no stored validation, so its readiness could not see a
+ * missing required attribute that the publish flow then refuses. This runs the very validation the publish flow runs (no write, the
+ * category requirements are cached) for the never-validated publishable listings, newest first, and hands the outcome to the readiness.
+ * Called before the read transaction opens: it uses its own connections.
+ */
+export async function liveValidations(ctx: Ctx): Promise<Map<string, LiveValidation>> {
+  const ids = await withVendor(ctx.c.database.db, ctx.vendorId, async (tx) => (await tx.select({ id: L.id }).from(L)
+    .innerJoin(V, and(eq(V.id, L.variantId), eq(V.vendorId, L.vendorId))).innerJoin(P, and(eq(P.id, V.productId), eq(P.vendorId, V.vendorId)))
+    .where(and(eq(L.vendorId, ctx.vendorId), isNull(V.deletedAt), isNull(P.deletedAt), inArray(L.status, [...PUBLISHABLE_STATUSES]), sql`not (${L.validation} ? 'validatedAt')`))
+    .orderBy(desc(L.updatedAt), desc(L.id)).limit(LIVE_VALIDATION_CAP)).map((r) => r.id));
+  const out = new Map<string, LiveValidation>();
+  for (const id of ids) {
+    try {
+      const ev = await evaluate(ctx, id, { signImages: false });
+      out.set(id, { errors: ev.result.errors, warnings: ev.result.warnings, requiredAttributes: ev.requirements.filter((r) => r.required).length });
+    } catch (e) {
+      if (!(e instanceof AppError)) throw e; // a listing that cannot be evaluated keeps its stored readiness
+    }
+  }
+  return out;
+}
+
 /** every listing (newest first, capped) with the stored readiness the Listings table shows: a fixed number of queries per chunk, no marketplace call */
-async function loadListings(ctx: Ctx, tx: Tx): Promise<Loaded> {
+async function loadListings(ctx: Ctx, tx: Tx, liveChecks?: Map<string, LiveValidation>): Promise<Loaded> {
   const live = and(isNull(V.deletedAt), isNull(P.deletedAt));
   const total = Number((await tx.select({ n: sql<number>`count(*)::int` }).from(L)
     .innerJoin(V, and(eq(V.id, L.variantId), eq(V.vendorId, L.vendorId))).innerJoin(P, and(eq(P.id, V.productId), eq(P.vendorId, V.vendorId)))
@@ -36,12 +62,13 @@ async function loadListings(ctx: Ctx, tx: Tx): Promise<Loaded> {
   const out: AuditListing[] = [];
   for (let i = 0; i < rows.length; i += CHUNK) {
     const chunk = rows.slice(i, i + CHUNK);
-    const blocks = await enrichListings(tx, ctx.c, ctx.vendorId, chunk);
+    const blocks = await enrichListings(tx, ctx.c, ctx.vendorId, chunk, liveChecks);
     for (const r of chunk) {
       const b = blocks.get(r.l.id);
       if (!b) continue;
       const v = r.l.validation as { validatedAt?: string; errors?: Array<{ code?: string; attribute?: string }> };
-      const missing = v.validatedAt ? [...new Set((v.errors ?? []).filter((e) => e.code === 'attribute_missing' && e.attribute).map((e) => e.attribute!))] : [];
+      const errors = v.validatedAt ? (v.errors ?? []) : (liveChecks?.get(r.l.id)?.errors ?? []);
+      const missing = v.validatedAt || liveChecks?.has(r.l.id) ? [...new Set(errors.filter((e) => e.code === 'attribute_missing' && e.attribute).map((e) => e.attribute!))] : [];
       out.push({
         id: r.l.id, productId: r.productId, variantId: r.l.variantId, sku: r.sku, productTitle: r.productTitle, marketplace: r.marketplace, marketplaceName: b.marketplaceName, accountName: b.accountName, accountId: r.l.marketplaceAccountId,
         status: r.l.status, screenStatus: b.screenStatus, marketplaceCategoryId: r.l.marketplaceCategoryId, marketplaceCategoryName: b.marketplaceCategoryName,
@@ -97,8 +124,8 @@ async function catalogueHealth(tx: Tx, vendorId: string, listings: AuditListing[
   return qualityScores(perListing);
 }
 
-export async function readinessAudit(ctx: Ctx, tx: Tx) {
-  const { listings, total, truncated } = await loadListings(ctx, tx);
+export async function readinessAudit(ctx: Ctx, tx: Tx, live?: Map<string, LiveValidation>) {
+  const { listings, total, truncated } = await loadListings(ctx, tx, live);
   const cohort = listings.filter((l) => isPublishable(l.status));
   const ready = cohort.filter((l) => l.readiness.ready);
   const notListed = (await notListedCounts(tx, ctx.vendorId, listableMarketplaces(ctx), {})).reduce((a, r) => a + r.n, 0);
@@ -127,8 +154,8 @@ export async function readinessAudit(ctx: Ctx, tx: Tx) {
 // ------------------------------------------------------------------------------------------------
 // publishing preparation
 // ------------------------------------------------------------------------------------------------
-export async function publishingPreparation(ctx: Ctx, tx: Tx) {
-  const { listings, truncated, total } = await loadListings(ctx, tx);
+export async function publishingPreparation(ctx: Ctx, tx: Tx, live?: Map<string, LiveValidation>) {
+  const { listings, truncated, total } = await loadListings(ctx, tx, live);
   const candidates = listings.filter((l) => isPublishable(l.status));
   const cohort = cohortOf(candidates);
   const accounts = (await tx.select({ id: A.id, name: A.displayName, marketplace: A.marketplace, status: A.status }).from(A).where(eq(A.vendorId, ctx.vendorId))).sort((a, b) => a.name.localeCompare(b.name));

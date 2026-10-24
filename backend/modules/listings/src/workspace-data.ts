@@ -34,11 +34,25 @@ export const asPolicy = (p: typeof POLICY.$inferSelect | undefined): ChannelPoli
 const iso = (d: Date | null | undefined): string | null => (d ? d.toISOString() : null);
 const unique = <T>(xs: T[]): T[] => [...new Set(xs)];
 
-/** facts the readiness of a listing is built from when the marketplace is NOT asked (the table): the stored validation stands in for the live one */
+/** the outcome of the publish validation, run live (no write) for a listing whose stored validation does not exist yet */
+export interface LiveValidation { errors: ReadinessFacts['validation']['errors']; warnings: ReadinessFacts['validation']['warnings']; requiredAttributes: number }
+
+/**
+ * facts the readiness of a listing is built from when the marketplace is NOT asked (the table): the stored validation stands in for the live one.
+ * `live` (the real publish validation, see `liveValidations`) stands in for a validation that never ran, so "ready" means "can be published".
+ */
 export function storedFacts(
   l: ListingJoin['l'], x: { title: string; description: string | null; brand: string | null; barcode: string | null; imageCount: number; primaryImage: ReadinessFacts['primaryImage']; priceMinor: number | null; mrpMinor: number | null; categoryId: string | null; categoryRequired: boolean; available: number; sellable: number },
+  live?: LiveValidation,
 ): ReadinessFacts {
   const v = l.validation as { validatedAt?: string; errors?: ReadinessFacts['validation']['errors']; warnings?: ReadinessFacts['validation']['warnings']; requirements?: ListingRequirement[] };
+  if (!v.validatedAt && live) {
+    return {
+      title: x.title, description: x.description, brand: x.brand, barcode: x.barcode, imageCount: x.imageCount, primaryImage: x.primaryImage, priceMinor: x.priceMinor, mrpMinor: x.mrpMinor,
+      marketplaceCategoryId: x.categoryId, categoryRequired: x.categoryRequired, available: x.available, sellable: x.sellable,
+      validation: { validated: true, errors: live.errors, warnings: live.warnings, requiredAttributes: live.requiredAttributes }, marketplaceIssues: l.issues,
+    };
+  }
   const validated = Boolean(v.validatedAt);
   return {
     title: x.title, description: x.description, brand: x.brand, barcode: x.barcode, imageCount: x.imageCount, primaryImage: x.primaryImage, priceMinor: x.priceMinor, mrpMinor: x.mrpMinor,
@@ -54,7 +68,7 @@ const lastSync = (l: ListingJoin['l']): Date | null => {
 };
 
 /** Batched (a fixed number of queries however many rows): variants, accounts, policies, stock, images, categories, sales. */
-export async function enrichListings(tx: Tx, c: Pick<Container, 'storage' | 'connectors'>, vendorId: string, rows: ListingJoin[]): Promise<Map<string, TableBlock & { readinessFull: Readiness }>> {
+export async function enrichListings(tx: Tx, c: Pick<Container, 'storage' | 'connectors'>, vendorId: string, rows: ListingJoin[], live?: Map<string, LiveValidation>): Promise<Map<string, TableBlock & { readinessFull: Readiness }>> {
   const out = new Map<string, TableBlock & { readinessFull: Readiness }>();
   if (rows.length === 0) return out;
   const variantIds = unique(rows.map((r) => r.l.variantId));
@@ -118,7 +132,7 @@ export async function enrichListings(tx: Tx, c: Pick<Container, 'storage' | 'con
       title: r.productTitle, description: v?.description ?? null, brand: v?.brand ?? null, barcode: v?.barcode ?? null, imageCount: imgs.length,
       primaryImage: imgs[0] ? { width: imgs[0].width, height: imgs[0].height } : null, priceMinor, mrpMinor, categoryId: marketplaceCategoryId,
       categoryRequired: connector?.capabilities.listings.requiresCategoryMapping ?? false, available: avail, sellable,
-    }));
+    }, live?.get(r.l.id)));
     const sale = sales.get(`${r.l.marketplaceAccountId}:${r.l.variantId}`);
     const validation = r.l.validation as { validatedAt?: string; errors?: unknown[] };
     out.set(r.l.id, {

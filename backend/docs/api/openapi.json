@@ -33446,7 +33446,7 @@
             "type": "integer",
             "minimum": -9007199254740991,
             "maximum": 9007199254740991,
-            "description": "Candidates whose category attributes were not validated yet (the publish flow validates them first)"
+            "description": "Candidates whose category attributes could not be checked in this call (more than 100 were never validated; the publish flow validates them first)"
           },
           "readyListingIds": {
             "type": "array",
@@ -70857,7 +70857,7 @@
             "type": "integer",
             "minimum": -9007199254740991,
             "maximum": 9007199254740991,
-            "description": "Candidates whose category attributes were not validated yet (the publish flow validates them first)"
+            "description": "Candidates whose category attributes could not be checked in this call (more than 100 were never validated; the publish flow validates them first)"
           },
           "readyListingIds": {
             "type": "array",
@@ -109008,7 +109008,7 @@
         "tags": [
           "Listings Workspace"
         ],
-        "description": "Computed from the stored readiness of every listing (no marketplace call). overall.readinessPct = listings that can still be published and have no blocking check / all of them (null: none to publish). spectrum counts listings by state (ready = live, ready to publish or syncing; needs_review; blocked = blocking errors or rejected) plus the not-listed candidates. health scores each readiness group (pass 1, warn 0.5, fail 0) and, computed from the master catalogue, Variants (options set, SKU, barcode, price, an image per variant, every variant listed on the account) and Compliance (HSN code, GST rate, country of origin, manufacturer or brand, weight, MRP present, price within MRP, category attributes once validated); each check scores the share of variants or listings that pass it. Order: content, attributes, media, variants, compliance, then price, stock, category, marketplace. coverage = active products with a live listing per connected marketplace. journey = the steps of one sample listing that needs attention. suggestions = missing category attributes, with a value the same product already has elsewhere (apply with PATCH /listings/{id} attributeOverrides).",
+        "description": "Computed from the stored readiness of every listing; a publishable listing that was never validated is validated live with the same validation as the publish flow (no write, at most 100 per call), so a listing counted ready can be published. overall.readinessPct = listings that can still be published and have no blocking check / all of them (null: none to publish). spectrum counts listings by state (ready = live, ready to publish or syncing; needs_review; blocked = blocking errors or rejected) plus the not-listed candidates. health scores each readiness group (pass 1, warn 0.5, fail 0) and, computed from the master catalogue, Variants (options set, SKU, barcode, price, an image per variant, every variant listed on the account) and Compliance (HSN code, GST rate, country of origin, manufacturer or brand, weight, MRP present, price within MRP, category attributes once validated); each check scores the share of variants or listings that pass it. Order: content, attributes, media, variants, compliance, then price, stock, category, marketplace. coverage = active products with a live listing per connected marketplace. journey = the steps of one sample listing that needs attention. suggestions = missing category attributes, with a value the same product already has elsewhere (apply with PATCH /listings/{id} attributeOverrides).",
         "security": [
           {
             "bearerAuth": []
@@ -109095,7 +109095,7 @@
         "tags": [
           "Listings Workspace"
         ],
-        "description": "Cohort = listings that can still go through the publish flow (draft, ready, approved, rejected, correction required). A listing is ready when its stored readiness has no blocking check. issues list every blocking and warning check (blockers first, at most 100; issuesTotal is the full count). readyListingIds (at most 500) feed POST /listings/bulk-publish, 100 per call. channels carry the pricing rule (active pricing policy) and the sync mode (webhooks / polling interval from the connector) of each channel; publishLock states what the approval locks. Nothing is published by this read.",
+        "description": "Cohort = listings that can still go through the publish flow (draft, ready, approved, rejected, correction required). A listing is ready when its readiness has no blocking check: the stored validation, or for a never-validated listing the same validation as the publish flow run live (no write, at most 100 per call). issues list every blocking and warning check (blockers first, at most 100; issuesTotal is the full count). readyListingIds (at most 500) feed POST /listings/bulk-publish, 100 per call. channels carry the pricing rule (active pricing policy) and the sync mode (webhooks / polling interval from the connector) of each channel; publishLock states what the approval locks. Nothing is published by this read.",
         "security": [
           {
             "bearerAuth": []

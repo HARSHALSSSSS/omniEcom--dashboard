@@ -159,7 +159,7 @@ describe('readiness audit, publishing preparation and sync telemetry', () => {
       expect(h.scorePct).toBeGreaterThanOrEqual(0);
       expect(h.scorePct).toBeLessThanOrEqual(100);
     }
-    expect(audit.health.find((h: any) => h.key === 'attributes')).toMatchObject({ unchecked: 1 });
+    expect(audit.health.find((h: any) => h.key === 'attributes')).toMatchObject({ unchecked: 0 }); // the never-validated belt is checked live, like the publish flow would
     expect(audit.coverage).toEqual([{ marketplace: 'mock', name: expect.any(String), activeProducts: 1, totalProducts: 3, percent: 33 }]);
     expect(audit.unlistedProducts).toBeGreaterThanOrEqual(1);
     expect(audit.journey).toMatchObject({ listingId: expect.any(String), steps: expect.any(Array) });
@@ -181,7 +181,7 @@ describe('readiness audit, publishing preparation and sync telemetry', () => {
   it('prepares publishing: cohort counts, issues with fix actions, channels, ids for bulk-publish', async () => {
     const s = await setup();
     const prep = await get('/api/v1/listings/audit/publishing');
-    expect(prep).toMatchObject({ candidateListings: 3, readyListings: 1, blockedListings: 2, readyProducts: 1, readyVariants: 1, readyListingIds: [s.l2b.id], readyIdsTruncated: false, unvalidatedListings: 1 });
+    expect(prep).toMatchObject({ candidateListings: 3, readyListings: 1, blockedListings: 2, readyProducts: 1, readyVariants: 1, readyListingIds: [s.l2b.id], readyIdsTruncated: false, unvalidatedListings: 0 }); // the never-validated belt was validated live (not written) and passes
     expect(prep.potentialIssueProducts).toBeGreaterThanOrEqual(2);
     expect(prep.issues[0]).toMatchObject({ severity: 'blocker', fixAction: 'fill_attribute', field: 'material', marketplaceName: expect.any(String) });
     expect(prep.issues.filter((i: any) => i.severity === 'blocker').map((i: any) => i.listingId).sort()).toEqual([s.l2.id, s.l3.id].sort());
@@ -195,6 +195,28 @@ describe('readiness audit, publishing preparation and sync telemetry', () => {
     await t.pump();
     const after = await get('/api/v1/listings/audit/publishing');
     expect(after).toMatchObject({ candidateListings: 2, readyListings: 0, readyListingIds: [] });
+  });
+
+  it('never calls a listing ready that the publish validation would refuse, also when nobody validated it yet', async () => {
+    const s = await setup();
+    // never validated, and the category needs a material that this listing does not have: the stored readiness could not see that
+    const l3b = await newListing(s.b.id, s.v3.variantId, { marketplaceCategoryId: 'mock-accessories' });
+    const prep = await get('/api/v1/listings/audit/publishing');
+    expect(prep.readyListingIds).toEqual([s.l2b.id]);
+    expect(prep).toMatchObject({ candidateListings: 4, readyListings: 1, blockedListings: 3, unvalidatedListings: 0 });
+    expect(prep.issues.find((i: any) => i.listingId === l3b.id && i.severity === 'blocker')).toMatchObject({ field: 'material', fixAction: 'fill_attribute', issue: expect.stringMatching(/material/i) });
+    const audit = await get('/api/v1/listings/audit/readiness');
+    expect(audit.overall).toMatchObject({ cohortListings: 4, readyListings: 1, readinessPct: 25 });
+    expect(audit.health.find((h: any) => h.key === 'attributes')).toMatchObject({ unchecked: 0 });
+    // the read validates live but writes nothing: the listing still has no stored validation
+    const row = (await get('/api/v1/listings/table?pageSize=50')).items.find((i: any) => i.id === l3b.id);
+    expect(row.table.readiness).toMatchObject({ attributesChecked: false });
+
+    // everything the screen calls ready goes through the publish flow; the one it called blocked is refused for exactly that reason
+    const pub = await c.post('/api/v1/listings/bulk-publish', { ids: prep.readyListingIds }, admin);
+    expect(pub.body.data.summary).toMatchObject({ total: 1, succeeded: 1, failed: 0 });
+    const refused = await c.post('/api/v1/listings/bulk-publish', { ids: [l3b.id] }, admin);
+    expect(refused.body.data.results[0]).toMatchObject({ ok: false, outcome: 'blocked', error: { code: 'LISTING_NOT_READY' }, message: expect.stringMatching(/material is required/i) });
   });
 
   it('shows sync telemetry from the listing state and its jobs', async () => {
@@ -243,10 +265,11 @@ describe('readiness audit, publishing preparation and sync telemetry', () => {
     expect(keys.slice(0, 5)).toEqual(['content', 'attributes', 'media', 'variants', 'compliance']);
     // single-variant products without barcode or image: SKU and price pass, barcode and image fail => 2 of 4 checks, over 4 listings
     expect(audit.health.find((h: any) => h.key === 'variants')).toEqual({ key: 'variants', label: 'Variants', scorePct: 50, listings: 4, checks: 16, unchecked: 0 });
-    // every listing misses the weight; the 3 validated ones also answer the category attributes check (the live one passes, the two blocked ones miss material)
+    // every listing misses the weight; all 4 answer the category attributes check, the never-validated belt too (validated live like the publish flow does):
+    // the live one and the belt with a material pass, the two blocked ones miss material
     const compliance = audit.health.find((h: any) => h.key === 'compliance');
-    expect(compliance).toMatchObject({ label: 'Compliance', listings: 4, checks: 31, unchecked: 1 });
-    expect(compliance.scorePct).toBe(Math.round((100 * 25) / 31));
+    expect(compliance).toMatchObject({ label: 'Compliance', listings: 4, checks: 32, unchecked: 0 });
+    expect(compliance.scorePct).toBe(Math.round((100 * 26) / 32));
   });
 
   it('shows the pricing rule and the sync mode of every channel, and what the approval locks', async () => {
