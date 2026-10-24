@@ -1,6 +1,6 @@
 import { loadConfig, type AppConfig } from '@oms/config';
 import { createLogger, type Logger } from '@oms/logging';
-import { createMetrics, HealthRegistry, logErrorTracker, startTracing, type ErrorTracker, type Metrics } from '@oms/observability';
+import { createMetrics, HealthRegistry, createErrorTracker, startTracing, type ErrorTracker, type Metrics } from '@oms/observability';
 import { createDatabase, type Database } from '@oms/database';
 import { createRedis, QueueRegistry } from '@oms/messaging';
 import { createStorage } from '@oms/storage';
@@ -52,6 +52,7 @@ export async function createRuntime(service: string): Promise<Runtime> {
     conn.on('error', (err) => { if (Date.now() - last > 30_000) { last = Date.now(); logger.warn({ err: err.message, connection: name }, 'redis error (throttled)'); } });
   }
   const queues = new QueueRegistry(redis, config.REDIS_KEY_PREFIX);
+  const errorTracker = await createErrorTracker({ dsn: config.SENTRY_DSN, environment: config.NODE_ENV, release: config.APP_VERSION, service, logger });
   const storage = createStorage(config);
   const mailer = await createMailer(config, logger);
 
@@ -64,7 +65,7 @@ export async function createRuntime(service: string): Promise<Runtime> {
 
   const runtime: Runtime = {
     config, logger, metrics, health, redis, redisFast,
-    errorTracker: logErrorTracker(logger),
+    errorTracker,
     container: { config, logger, database: database satisfies Database, queues, storage, connectors: createConnectorRegistry({
       mock: config.mockMarketplaceEnabled,
       amazon: config.AMAZON_IN_LWA_CLIENT_ID && config.AMAZON_IN_LWA_CLIENT_SECRET ? { clientId: config.AMAZON_IN_LWA_CLIENT_ID, clientSecret: config.AMAZON_IN_LWA_CLIENT_SECRET } : undefined,
@@ -85,6 +86,8 @@ export async function createRuntime(service: string): Promise<Runtime> {
         logger.info('shutdown complete');
       })()),
   };
+
+  runtime.onShutdown('error-tracker', async () => { await errorTracker.flush?.(2000); });
 
   const stop = (sig: string) => void runtime.shutdown(sig).then(() => process.exit(0));
   process.once('SIGTERM', () => stop('SIGTERM'));
