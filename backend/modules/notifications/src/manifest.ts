@@ -9,6 +9,6 @@ export const manifest = defineModule({
   dependsOn: ["users", "rules", "vendors"],
   api: ["/api/v1/notifications"],
   publishes: ["notification.created", "notification.failed"],
-  consumes: ["return.created", "import.committed", "import.failed", "purchase_order.submitted", "purchase_order.received", "purchase_order.cancelled", "inventory.stock_adjusted", "inventory.transferred", "user.invited", "user.deactivated", "order.created", "order.needs_attention", "order.cancellation_requested", "inventory.low_stock", "sync.failed", "sync.dead_lettered", "listing.failed", "return.received", "marketplace_account.authorization_expired", "marketplace_account.disconnected", "fulfillment.exception_raised", "shipment.ndr_raised", "shipment.rto_started", "webhook.dead_lettered"],
+  consumes: ["return.created", "import.committed", "import.failed", "purchase_order.submitted", "purchase_order.received", "purchase_order.cancelled", "pricing.proposal_created", "pricing.proposal_approved", "inventory.stock_adjusted", "inventory.transferred", "user.invited", "user.deactivated", "order.created", "order.needs_attention", "order.cancellation_requested", "inventory.low_stock", "sync.failed", "sync.dead_lettered", "listing.failed", "return.received", "marketplace_account.authorization_expired", "marketplace_account.disconnected", "fulfillment.exception_raised", "shipment.ndr_raised", "shipment.rto_started", "webhook.dead_lettered"],
   extraction: "early",
 });

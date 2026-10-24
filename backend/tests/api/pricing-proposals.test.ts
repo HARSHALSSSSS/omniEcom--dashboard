@@ -209,6 +209,25 @@ describe('proposal generation', () => {
 });
 
 describe('approve and reject', () => {
+  it('a waiting proposal and an applied price each leave a notification (waiting ones collapse while unread)', async () => {
+    const { w } = await world();
+    await policy(w);
+    await competitor(w, 44_900);
+    await generate(w);
+    const p = (await proposals(w)).items[0];
+    await t.pump();
+    const notes = async () => (await c.get('/api/v1/notifications?limit=100', w.admin)).body.data.items as Array<{ type: string; title: string; body: string | null; actionUrl: string | null }>;
+    const waiting = (await notes()).filter((n) => n.type === 'pricing.proposal_created');
+    expect(waiting).toHaveLength(1);
+    expect(waiting[0]).toMatchObject({ title: 'Price proposals are waiting for your review', actionUrl: '/pricing?view=proposals' });
+    expect(waiting[0]!.body).toContain('INR 499.00 to INR 449.00');
+    expect((await c.post(`${API}/proposals/${p.id}/approve`, {}, w.admin)).status).toBe(200);
+    await t.pump();
+    const applied = (await notes()).find((n) => n.type === 'pricing.price_applied');
+    expect(applied, 'an approval is notified').toMatchObject({ title: 'A price change was approved', actionUrl: '/pricing?view=history' });
+    expect(applied!.body).toContain('INR 499.00 to INR 449.00');
+  });
+
   it('approval puts the price live through pricing, is idempotent, and only admins decide', async () => {
     const { w, staff, viewer } = await world();
     await policy(w);
