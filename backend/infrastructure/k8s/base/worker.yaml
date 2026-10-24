@@ -11,7 +11,7 @@ spec:
     metadata: { labels: { app: oms-worker } }
     spec:
       terminationGracePeriodSeconds: 60      # in-flight jobs finish on SIGTERM (BullMQ worker.close())
-      securityContext: { runAsNonRoot: true, runAsUser: 1000 }
+      securityContext: { runAsNonRoot: true, runAsUser: 1000, seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: worker
           image: registry.example.com/oms-worker:REPLACED_BY_OVERLAY
@@ -19,8 +19,11 @@ spec:
           envFrom: [{ secretRef: { name: oms-secrets } }, { configMapRef: { name: oms-config } }]
           env: [{ name: NODE_ENV, value: production }]
           resources: { requests: { cpu: 250m, memory: 256Mi }, limits: { memory: 768Mi } }
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+          volumeMounts: [{ name: tmp, mountPath: /tmp }]
           livenessProbe: { httpGet: { path: /health/live, port: ops }, periodSeconds: 10 }
           readinessProbe: { httpGet: { path: /health/ready, port: ops }, periodSeconds: 10 }
+      volumes: [{ name: tmp, emptyDir: { sizeLimit: 64Mi } }]
 ---
 # Scheduler (1-2 replicas) and webhook-worker (2+ replicas) follow the same shape.
 # Scheduler replicas are safe to run in parallel: BullMQ job schedulers are idempotent upserts in Redis.

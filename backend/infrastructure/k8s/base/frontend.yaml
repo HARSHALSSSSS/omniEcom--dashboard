@@ -1,0 +1,49 @@
+# Web app: static SPA behind nginx-unprivileged (uid 101, port 8080). Built from frontend/Dockerfile.
+# nginx also forwards /api/ to API_UPSTREAM so the image works without an Ingress rule for it; in this base the Ingress (platform.yaml)
+# routes /api/v1 straight to oms-api and everything else here.
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: oms-frontend, labels: { app: oms-frontend } }
+spec:
+  replicas: 2
+  strategy: { type: RollingUpdate, rollingUpdate: { maxUnavailable: 0, maxSurge: 1 } }
+  selector: { matchLabels: { app: oms-frontend } }
+  template:
+    metadata: { labels: { app: oms-frontend } }
+    spec:
+      terminationGracePeriodSeconds: 20
+      securityContext: { runAsNonRoot: true, runAsUser: 101, runAsGroup: 101, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: frontend
+          image: registry.example.com/oms-frontend:REPLACED_BY_OVERLAY
+          ports: [{ containerPort: 8080, name: http }]
+          env: [{ name: API_UPSTREAM, value: "http://oms-api" }]
+          resources: { requests: { cpu: 25m, memory: 32Mi }, limits: { memory: 128Mi } }
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+          # nginx writes its rendered config, pid file and caches at runtime: these paths must be writable on a read-only root
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+            - { name: nginx-cache, mountPath: /var/cache/nginx }
+            - { name: nginx-conf, mountPath: /etc/nginx/conf.d }
+          startupProbe: { httpGet: { path: /healthz, port: http }, periodSeconds: 2, failureThreshold: 15 }
+          livenessProbe: { httpGet: { path: /healthz, port: http }, periodSeconds: 10 }
+          readinessProbe: { httpGet: { path: /healthz, port: http }, periodSeconds: 5, failureThreshold: 3 }
+          lifecycle: { preStop: { exec: { command: ["sleep", "5"] } } }
+      volumes:
+        - { name: tmp, emptyDir: { sizeLimit: 16Mi } }
+        - { name: nginx-cache, emptyDir: { sizeLimit: 64Mi } }
+        - { name: nginx-conf, emptyDir: { sizeLimit: 1Mi } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: oms-frontend }
+spec:
+  selector: { app: oms-frontend }
+  ports: [{ port: 80, targetPort: http, name: http }]
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: { name: oms-frontend }
+spec:
+  minAvailable: 1
+  selector: { matchLabels: { app: oms-frontend } }

@@ -9,6 +9,16 @@ images:
   - { name: registry.example.com/oms-scheduler, newTag: GIT_SHA }
   - { name: registry.example.com/oms-webhook-worker, newTag: GIT_SHA }
   - { name: registry.example.com/oms-migrate, newTag: GIT_SHA }
+  - { name: registry.example.com/oms-frontend, newTag: GIT_SHA }
+patches:
+  - target: { kind: Ingress, name: oms-api }
+    patch: |-
+      - { op: replace, path: /spec/rules/0/host, value: api.staging.example.com }
+      - { op: replace, path: /spec/tls/0/hosts/0, value: api.staging.example.com }
+  - target: { kind: Ingress, name: oms-web }
+    patch: |-
+      - { op: replace, path: /spec/rules/0/host, value: app.staging.example.com }
+      - { op: replace, path: /spec/tls/0/hosts/0, value: app.staging.example.com }
 configMapGenerator:
   - name: oms-config
     literals: [SWAGGER_ENABLED=true, MOCK_MARKETPLACE_ENABLED=false, SANDBOX_COURIER_ENABLED=true, LOG_LEVEL=info, APP_WEB_URL=https://app.staging.example.com, PUBLIC_BASE_URL=https://api.staging.example.com, PUBLIC_API_URL=https://api.staging.example.com]

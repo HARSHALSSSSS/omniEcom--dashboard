@@ -9,6 +9,7 @@ images:
   - { name: registry.example.com/oms-scheduler, newTag: dev }
   - { name: registry.example.com/oms-webhook-worker, newTag: dev }
   - { name: registry.example.com/oms-migrate, newTag: dev }
+  - { name: registry.example.com/oms-frontend, newTag: dev }
 patches:
   - target: { kind: Deployment }
     patch: |-

@@ -19,6 +19,8 @@ spec:
           securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
           livenessProbe: { httpGet: { path: /health/live, port: ops }, periodSeconds: 10 }
           readinessProbe: { httpGet: { path: /health/ready, port: ops }, periodSeconds: 10 }
+          volumeMounts: [{ name: tmp, mountPath: /tmp }]
+      volumes: [{ name: tmp, emptyDir: { sizeLimit: 64Mi } }]
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -43,6 +45,8 @@ spec:
           securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
           livenessProbe: { httpGet: { path: /health/live, port: ops }, periodSeconds: 10 }
           readinessProbe: { httpGet: { path: /health/ready, port: ops }, periodSeconds: 10 }
+          volumeMounts: [{ name: tmp, mountPath: /tmp }]
+      volumes: [{ name: tmp, emptyDir: { sizeLimit: 64Mi } }]
 ---
 # Migrations run as a Job with the OWNER role BEFORE the app rolls (expand / contract migrations only).
 apiVersion: batch/v1
@@ -60,6 +64,9 @@ spec:
           envFrom: [{ secretRef: { name: oms-migration-secrets } }, { configMapRef: { name: oms-config } }]
 ---
 # Edge: TLS terminates at the ingress; it is THE trusted proxy (TRUST_PROXY=1). Rate limits at the edge are in addition to the app's.
+# EXPOSURE POLICY: only the public API surface is routed (/api/v1/*, plus the two bare probes). /metrics, /docs, /health (service info) and
+# every other path are NOT routed here - Prometheus scrapes pods directly inside the cluster (see NetworkPolicy below).
+# NOTE: ingress-nginx matches Prefix paths on path-segment boundaries, so "/api/v1" does not expose "/api/v10".
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -75,7 +82,32 @@ spec:
   tls: [{ hosts: [api.example.com], secretName: oms-api-tls }]
   rules:
     - host: api.example.com
-      http: { paths: [{ path: /, pathType: Prefix, backend: { service: { name: oms-api, port: { name: http } } } }] }
+      http:
+        paths:
+          - { path: /api/v1, pathType: Prefix, backend: { service: { name: oms-api, port: { name: http } } } }
+          - { path: /health/live, pathType: Exact, backend: { service: { name: oms-api, port: { name: http } } } }
+          - { path: /health/ready, pathType: Exact, backend: { service: { name: oms-api, port: { name: http } } } }   # status only: dependency details are hidden in staging/production
+---
+# Web app host: the SPA is served from oms-frontend; /api/v1 on the SAME origin goes straight to the API (the browser never needs CORS).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: oms-web
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: 10m
+    nginx.ingress.kubernetes.io/limit-rps: "50"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Forwarded-For: $remote_addr";
+spec:
+  ingressClassName: nginx
+  tls: [{ hosts: [app.example.com], secretName: oms-web-tls }]
+  rules:
+    - host: app.example.com
+      http:
+        paths:
+          - { path: /api/v1, pathType: Prefix, backend: { service: { name: oms-api, port: { name: http } } } }
+          - { path: /, pathType: Prefix, backend: { service: { name: oms-frontend, port: { name: http } } } }
 ---
 # Only the ingress and monitoring may reach the API pods; workers have no inbound traffic except the metrics scraper.
 apiVersion: networking.k8s.io/v1
@@ -85,5 +117,5 @@ spec:
   podSelector: { matchLabels: { app: oms-api } }
   policyTypes: [Ingress]
   ingress:
-    - from: [{ namespaceSelector: { matchLabels: { name: ingress-nginx } } }, { namespaceSelector: { matchLabels: { name: monitoring } } }]
+    - from: [{ namespaceSelector: { matchLabels: { name: ingress-nginx } } }, { namespaceSelector: { matchLabels: { name: monitoring } } }, { podSelector: { matchLabels: { app: oms-frontend } } }]
       ports: [{ port: 3000 }]

@@ -9,6 +9,7 @@ images:
   - { name: registry.example.com/oms-scheduler, newTag: GIT_SHA }
   - { name: registry.example.com/oms-webhook-worker, newTag: GIT_SHA }
   - { name: registry.example.com/oms-migrate, newTag: GIT_SHA }
+  - { name: registry.example.com/oms-frontend, newTag: GIT_SHA }
 patches:
   - target: { kind: Deployment, name: oms-worker }
     patch: |-
