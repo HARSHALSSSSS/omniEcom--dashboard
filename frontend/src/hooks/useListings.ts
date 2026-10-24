@@ -2,6 +2,7 @@ import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-quer
 import { useGuardedMutation } from "@/hooks/useSubmitGuard";
 import { listingsApi } from "@/api/listings.api";
 import { refreshShell } from "@/lib/session";
+import { refreshHubListingCounts } from "@/lib/channelRefresh";
 import { useWorkspaceStore } from "@/store/workspace.store";
 import type { BulkCreateInput, CreateOutcome, CreateTarget, JobStatus, ListingBulkAction, ListingFilters, ListingsQuery } from "@/types/listing";
 
@@ -109,6 +110,7 @@ function useAfterWrite() {
   const queryClient = useQueryClient();
   return () => {
     void queryClient.invalidateQueries({ queryKey: listingKeys.all });
+    refreshHubListingCounts(queryClient);
     void queryClient.invalidateQueries({
       predicate: (q) => (q.queryKey[0] === "products" && q.queryKey[1] !== "thumbnail") || q.queryKey[0] === "productDetail",
     });

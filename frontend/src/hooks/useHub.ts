@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useGuardedMutation } from "@/hooks/useSubmitGuard";
 import { hubApi } from "@/api/hub.api";
-import { refreshShell } from "@/lib/session";
+import { refreshAfterChannelChange } from "@/lib/channelRefresh";
 import { useWorkspaceStore } from "@/store/workspace.store";
 import type { HubSyncJob, SyncScope, SyncStart } from "@/types/hub";
 
@@ -61,10 +61,7 @@ export function useJobLogs(jobId: string | null) {
 /** after a write: the hub queries and the shell badges are stale */
 function useRefreshHub() {
   const qc = useQueryClient();
-  return useCallback(() => {
-    void qc.invalidateQueries({ queryKey: HUB_KEYS.all });
-    void refreshShell().catch(() => undefined);
-  }, [qc]);
+  return useCallback(() => refreshAfterChannelChange(qc), [qc]);
 }
 
 const TERMINAL = ["succeeded", "partially_failed", "failed", "dead_lettered", "cancelled"];

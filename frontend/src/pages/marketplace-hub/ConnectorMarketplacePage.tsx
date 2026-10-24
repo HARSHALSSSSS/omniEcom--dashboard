@@ -12,6 +12,7 @@ import { ConnectorCardItem } from "./components/ConnectorCardItem";
 import { ConnectorPreviewDrawer } from "./components/ConnectorPreviewDrawer";
 import { ConnectorCompareModal } from "./components/ConnectorCompareModal";
 import { CAPABILITY_LABEL, FEE_NOTE, loadBookmarks, saveBookmarks } from "./components/connectorFacts";
+import { isConnectedConnection } from "./components/channelRows";
 
 /** category tab -> the directory categories it shows. Tabs without a connector in the directory stay and show an honest empty state. */
 const CATEGORY_TABS = [
@@ -156,12 +157,14 @@ export default function ConnectorMarketplacePage() {
   const connectionOf = useCallback((id: string) => connections.find((c) => c.connectorId === id), [connections]);
   const previewConnection = previewConnector ? (connectionOf(previewConnector.id) ?? null) : null;
 
-  const connectedCount = connectionsQuery.data?.meta.total ?? connections.length;
+  // only channels the business sells through now (connected, paused, needing attention); a disconnected one is not "connected"
+  const sellingConnections = useMemo(() => connections.filter(isConnectedConnection), [connections]);
+  const connectedCount = sellingConnections.length;
   const connectedNames = useMemo(() => {
-    const names = connections.map((c) => c.name).filter(Boolean);
+    const names = sellingConnections.map((c) => c.name).filter(Boolean);
     if (names.length <= 1) return names[0] ?? "";
     return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
-  }, [connections]);
+  }, [sellingConnections]);
 
   // the first connector the business can connect and has not connected yet
   const recommendedConnector = useMemo(() => {

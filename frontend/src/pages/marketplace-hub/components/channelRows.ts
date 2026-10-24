@@ -41,6 +41,9 @@ export const STATUS_LABEL: Record<ChannelStatus, string> = {
   syncing: "Syncing",
 };
 
+/** an account the business can sell through right now: connected, paused or needing attention; not a disconnected / unauthorised one */
+export const isConnectedConnection = (c: ChannelConnection): boolean => channelStatus(c) !== "disconnected";
+
 export const needsAttention = (s: ChannelStatus) => s === "warning" || s === "error" || s === "disconnected";
 
 export function rowFromConnection(c: ChannelConnection): ChannelRowData {

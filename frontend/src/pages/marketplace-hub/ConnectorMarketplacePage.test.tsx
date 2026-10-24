@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { ApiError } from "@/api/errors";
 import { useWorkspaceStore } from "@/store/workspace.store";
-import { accounts, card, detail } from "@/test/hubFixtures";
+import { REVOKED, accounts, card, detail } from "@/test/hubFixtures";
 import type { AuthField, DirectoryItem } from "@/types/directory";
 
 const http = vi.hoisted(() => ({ accounts: vi.fn(), directory: vi.fn(), account: vi.fn() }));
@@ -105,6 +105,25 @@ beforeEach(() => {
   http.accounts.mockResolvedValue(accounts([A]));
   http.directory.mockResolvedValue(DIRECTORY);
   http.account.mockResolvedValue(detail({ ...A }));
+});
+
+describe("disconnected channels", () => {
+  it("does not say the business sells on a channel that was disconnected", async () => {
+    http.accounts.mockResolvedValue(accounts([REVOKED]));
+    http.directory.mockResolvedValue({ ...DIRECTORY, items: ITEMS.map((i) => (i.id === "amazon_in" ? { ...i, status: "available" as const, accountCount: 0 } : i)) });
+    renderPage();
+    await screen.findByRole("heading", { name: "Flipkart", level: 3 });
+    expect(screen.queryByText(/You currently sell on/)).not.toBeInTheDocument();
+    expect(screen.getByText("Connected channels · 0")).toBeInTheDocument();
+  });
+
+  it("names a connected channel in that sentence", async () => {
+    http.accounts.mockResolvedValue(accounts([A, REVOKED]));
+    renderPage();
+    await screen.findByRole("heading", { name: "Flipkart", level: 3 });
+    expect(await screen.findByText(/You currently sell on Acme Amazon\./)).toBeInTheDocument();
+    expect(screen.getByText("Connected channels · 1")).toBeInTheDocument();
+  });
 });
 
 describe("directory data", () => {

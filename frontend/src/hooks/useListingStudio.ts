@@ -28,6 +28,7 @@ import {
   type StudioActionKey,
   type SyncJob,
 } from "@/types/listingStudio";
+import { refreshHubListingCounts } from "@/lib/channelRefresh";
 
 export const STUDIO_KEYS = {
   studio: (id: string) => ["listing-studio", id, "studio"] as const,
@@ -159,6 +160,7 @@ export function useStudioController(id: string) {
   /** after any write: the studio, the list, and the product screens read the same listing */
   const refreshAll = useCallback(async () => {
     void qc.invalidateQueries({ queryKey: ["listings"] });
+    refreshHubListingCounts(qc);
     void qc.invalidateQueries({ queryKey: ["products"] });
     void qc.invalidateQueries({ queryKey: ["productDetail"] });
     await qc.invalidateQueries({ queryKey: STUDIO_KEYS.studio(id) });

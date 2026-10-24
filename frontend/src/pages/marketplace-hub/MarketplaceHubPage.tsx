@@ -19,7 +19,7 @@ import { ChannelDetailsDrawer } from "./components/ChannelDetailsDrawer";
 import { AddChannelModal } from "./components/AddChannelModal";
 import { MarketplaceHubSkeleton } from "./components/MarketplaceHubSkeleton";
 import { MarketplaceHubEmptyState } from "./components/MarketplaceHubEmptyState";
-import { needsAttention, rowFromConnection, rowFromDirectory, type ChannelRowData } from "./components/channelRows";
+import { isConnectedConnection, needsAttention, rowFromConnection, rowFromDirectory, type ChannelRowData } from "./components/channelRows";
 
 type TabFilter = "all" | "connected" | "attention" | "not_connected" | "syncing";
 const TABS: TabFilter[] = ["all", "connected", "attention", "not_connected", "syncing"];
@@ -63,7 +63,7 @@ export default function MarketplaceHubPage() {
   // Queries
   const connectionsQuery = useConnections();
   const { data: directory = [] } = useConnectorDirectory();
-  const connections = useMemo(() => connectionsQuery.data?.data ?? [], [connectionsQuery.data]);
+  const listConnections = useMemo(() => connectionsQuery.data?.data ?? [], [connectionsQuery.data]);
 
   // Filters live in the URL (tab, q, sort) so a reload or a shared link shows the same list
   const tabParam = params.get("tab");
@@ -86,7 +86,16 @@ export default function MarketplaceHubPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   // Full detail (per-entity sync state, recent jobs) when the drawer opens
-  const { data: selectedConnectionDetail } = useConnection(selectedChannelId);
+  const detailQuery = useConnection(selectedChannelId);
+  const selectedConnectionDetail = detailQuery.data;
+
+  // the list and the open detail panel read the same account twice; whichever was fetched last wins for both,
+  // so a count (listings, open orders) never differs between the row and its panel
+  const connections = useMemo(() => {
+    const detail = selectedConnectionDetail;
+    if (!detail || detailQuery.dataUpdatedAt <= connectionsQuery.dataUpdatedAt) return listConnections;
+    return listConnections.map((c) => (c.id === detail.id ? detail : c));
+  }, [listConnections, selectedConnectionDetail, detailQuery.dataUpdatedAt, connectionsQuery.dataUpdatedAt]);
 
   // Real accounts first, then the directory connectors that are not connected yet
   const allChannelRows: ChannelRowData[] = useMemo(() => {
@@ -122,7 +131,9 @@ export default function MarketplaceHubPage() {
 
   const selectedConnection = useMemo(() => {
     if (!selectedChannelId) return null;
-    return selectedConnectionDetail ?? connections.find((c) => c.id === selectedChannelId) ?? null;
+    const fromList = connections.find((c) => c.id === selectedChannelId);
+    // the detail carries the per-entity sync state the list lacks; its numbers are the merged ones
+    return selectedConnectionDetail ? { ...selectedConnectionDetail, stats: fromList?.stats ?? selectedConnectionDetail.stats } : (fromList ?? null);
   }, [connections, selectedChannelId, selectedConnectionDetail]);
 
   const attentionCandidate = useMemo(() => connections.find((c) => c.account && needsAttention(rowFromConnection(c).status)) ?? null, [connections]);
@@ -254,7 +265,9 @@ export default function MarketplaceHubPage() {
   const isSyncingAny = connections.some((c) => c.syncState === "syncing");
   const healthyCount = allChannelRows.filter((c) => c.status === "healthy").length;
   const attentionCount = allChannelRows.filter((c) => needsAttention(c.status)).length;
-  const notConnectedCount = allChannelRows.filter((c) => !c.connected).length;
+  // a disconnected account stays on the list (so it can be reconnected) but is not a connected channel any more
+  const connectedCount = connections.filter(isConnectedConnection).length;
+  const notConnectedCount = allChannelRows.filter((c) => !c.connected || c.status === "disconnected").length;
 
   return (
     <div className="w-full font-['Inter',sans-serif] text-[#121212] pb-24 space-y-6">
@@ -325,7 +338,7 @@ export default function MarketplaceHubPage() {
           </div>
         ) : isDrawerOpen ? (
           <div>
-            {connections.length} connected · {notConnectedCount} available · {selectedConnection?.name} selected
+            {connectedCount} connected · {notConnectedCount} available · {selectedConnection?.name} selected
           </div>
         ) : activeTab === "attention" ? (
           <div className="flex items-center justify-between w-full">

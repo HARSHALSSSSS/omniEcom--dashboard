@@ -3,6 +3,7 @@ import { useGuardedMutation } from "@/hooks/useSubmitGuard";
 import { listingFlowsApi } from "@/api/listingFlows.api";
 import { listingStudioApi } from "@/api/listingStudio.api";
 import { refreshShell } from "@/lib/session";
+import { refreshHubListingCounts } from "@/lib/channelRefresh";
 import { listingKeys } from "@/hooks/useListings";
 import type { AttributeValue } from "@/components/listings/flows/flowFormat";
 import type { BulkContentEdits } from "@/types/listingFlows";
@@ -95,6 +96,7 @@ function useRefreshAfterWrite(listingId?: string) {
   return async () => {
     if (listingId) await qc.invalidateQueries({ queryKey: ["listing-studio", listingId] });
     await qc.invalidateQueries({ queryKey: listingKeys.all });
+    refreshHubListingCounts(qc);
     refreshShell().catch(() => undefined);
   };
 }

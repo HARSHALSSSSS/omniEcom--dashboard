@@ -169,6 +169,19 @@ describe("rows and numbers from the API", () => {
   });
 });
 
+describe("counts after a disconnect", () => {
+  it("counts a disconnected account as not connected, in the header and in the open panel", async () => {
+    http.accounts.mockResolvedValue(accounts([A, REVOKED]));
+    renderPage();
+    await seen("Old Amazon");
+    // A is connected; the disconnected one and the two directory connectors are not
+    expect(screen.getByText("3 not connected")).toBeInTheDocument();
+    await userEvent.click(screen.getAllByRole("button", { name: /Manage/ })[0]);
+    await screen.findByRole("complementary", { name: /details$/ });
+    expect(await screen.findByText(/^1 connected · 3 available/)).toBeInTheDocument();
+  });
+});
+
 describe("filters and URL", () => {
   it("a tab filters the rows and is kept in the URL", async () => {
     renderPage();

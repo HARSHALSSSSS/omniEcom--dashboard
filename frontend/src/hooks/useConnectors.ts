@@ -8,7 +8,7 @@ import {
 import { ConnectChannelInput, ChannelConnection } from "@/types/connection";
 import type { HubSyncJob } from "@/types/hub";
 import { useToast } from "@/hooks/useToast";
-import { refreshShell } from "@/lib/session";
+import { refreshAfterChannelChange } from "@/lib/channelRefresh";
 import { errorMessage } from "@/api/errors";
 
 /** all under the "hub" prefix, so every hub write (sync, test, disconnect, ...) refreshes these too */
@@ -122,13 +122,7 @@ export function useCreateConnection() {
     mutationFn: (payload: ConnectChannelInput) =>
       connectorsApi.createConnection(payload),
     onSuccess: (newConn) => {
-      void queryClient.invalidateQueries({
-        queryKey: CONNECTOR_KEYS.connections(),
-      });
-      void queryClient.invalidateQueries({ queryKey: CONNECTOR_KEYS.directory() });
-      void queryClient.invalidateQueries({ queryKey: ["hub"] });
-      void queryClient.invalidateQueries({ queryKey: CONNECTOR_KEYS.health() });
-      void refreshShell().catch(() => undefined);
+      refreshAfterChannelChange(queryClient);
       toast({
         title: "Channel connected!",
         description: `${newConn.name} is now connected and operational.`,
@@ -152,13 +146,7 @@ export function useDisconnectConnection() {
     mutationFn: (connectionId: string) =>
       connectorsApi.disconnect(connectionId),
     onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: CONNECTOR_KEYS.connections(),
-      });
-      void queryClient.invalidateQueries({ queryKey: CONNECTOR_KEYS.directory() });
-      void queryClient.invalidateQueries({ queryKey: ["hub"] });
-      void queryClient.invalidateQueries({ queryKey: CONNECTOR_KEYS.health() });
-      void refreshShell().catch(() => undefined);
+      refreshAfterChannelChange(queryClient);
       toast({
         title: "Channel disconnected",
         description: "Credentials and sync schedules removed.",
