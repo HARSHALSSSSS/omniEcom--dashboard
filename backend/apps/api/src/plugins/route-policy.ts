@@ -38,7 +38,8 @@ export const routePolicyPlugin = fp(async (app) => {
     if (!schema.response || !Object.keys(schema.response).some((c) => c.startsWith('2'))) {
       throw new Error(`[route-policy] ${where}: missing 2xx response schema (undocumented API)`);
     }
-    // Every authenticated state-changing endpoint honours an Idempotency-Key header (a retried request never repeats its effect).
+    // Every authenticated state-changing endpoint ACCEPTS an optional Idempotency-Key header (a retried request with the same key never repeats its effect);
+    // routes that declare `idempotent: true` reject requests without one (see plugins/idempotency.ts). Default here is 'optional'.
     // Public endpoints (login, refresh...) are excluded on purpose: their responses carry tokens and must never be cached.
     if (typeof access === 'object' && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(String(route.method)) && route.config && route.config.idempotent === undefined) route.config.idempotent = 'optional';
     if (typeof access === 'object' && !KNOWN.has(access.permission)) {

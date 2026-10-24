@@ -46,7 +46,7 @@ const TTL_SECONDS = 24 * 3600;
 
 /**
  * `Idempotency-Key` support for routes declaring `config: { idempotent: true }`.
- *  - key is mandatory on those routes (400 otherwise)
+ *  - key is mandatory on routes declaring `idempotent: true` (400 otherwise); `idempotent: 'optional'` (the default for authenticated writes) only enables replay when the header is sent
  *  - same key + same request  -> original response replayed (header `Idempotency-Replayed: true`)
  *  - same key + other request -> 422 IDEMPOTENCY_KEY_REUSED
  *  - same key still running   -> 409 IDEMPOTENCY_IN_PROGRESS
