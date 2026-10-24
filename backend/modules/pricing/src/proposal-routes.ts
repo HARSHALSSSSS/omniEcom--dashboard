@@ -108,7 +108,7 @@ export const proposalRoutes: FastifyPluginAsync = async (app) => {
       response: { 200: successEnvelope(z.object({
         channels: z.array(z.object({
           accountId: z.string(), channel: z.string(), marketplace: z.string(), priceCount: z.number().int(), pricedWithCostCount: z.number().int(), avgMarginBps: z.number().int().nullable(),
-          belowTargetCount: z.number().int(), targetMarginBps: z.number().int().nullable(), feeTermsSummary: z.string(), feesConfigured: z.boolean(), unknownCostCount: z.number().int(), nextAction: z.enum(['costs', 'fees', 'proposals']),
+          belowTargetCount: z.number().int(), targetMarginBps: z.number().int().nullable(), feeTermsSummary: z.string(), feesConfigured: z.boolean(), feePercentBps: z.number().int().nullable().describe('Commission in bps from the fee profile; null without one'), fixedFeeMinor: z.number().int().nullable().describe('Fixed fee per unit from the fee profile; null without one'), unknownCostCount: z.number().int(), nextAction: z.enum(['costs', 'fees', 'proposals']),
         })),
         totals: z.object({ productsInView: z.number().int(), productChannelPrices: z.number().int(), avgMarginBps: z.number().int().nullable(), belowTargetCount: z.number().int(), unknownCostCount: z.number().int(), withProposalCount: z.number().int().describe('Listings with a pending proposal'), targetMarginBps: z.number().int().nullable().describe('Strictest active policy target; null without a policy target') }),
       })) },

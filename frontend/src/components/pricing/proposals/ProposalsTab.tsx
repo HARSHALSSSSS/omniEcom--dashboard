@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Download } from "lucide-react";
 import { errorMessage } from "@/api/errors";
-import { pricingApi } from "@/api/pricing.api";
 import { Button } from "@/components/ui/button";
 import { useBulkDecide, useDecideProposal, useProposals } from "@/hooks/usePricing";
 import { toast } from "@/hooks/useToast";
@@ -9,7 +8,8 @@ import { StateBox, LoadError, ListSkeleton } from "../PricingStates";
 import { ConflictDialog } from "../ConflictDialog";
 import { PricingPagination } from "../PricingPagination";
 import { DEFAULT_PAGE_SIZE, DEFAULT_SORT, DEFAULT_TAB, proposalsFiltered, type usePricingUrlState } from "../pricingParams";
-import { decisionError, downloadText, isDecidable, isVersionConflict, proposalsCsv } from "../pricingFormat";
+import { decisionError, isDecidable, isVersionConflict } from "../pricingFormat";
+import { exportProposals, exportToast } from "../pricingExport";
 import type { DecisionAction, PriceProposal, PricingChannel } from "@/types/pricing";
 import { BulkResultsDialog, type BulkResultsView } from "./BulkResultsDialog";
 import { DecisionDialog, type DecisionTarget } from "./DecisionDialog";
@@ -22,7 +22,6 @@ import { ProposalDetailReviewCard } from "./ProposalDetailReviewCard";
 
 /** the API decides at most this many proposals per bulk call (the page size never exceeds it) */
 const BULK_MAX = 100;
-const EXPORT_MAX = 5000;
 
 interface ProposalsTabProps {
   url: ReturnType<typeof usePricingUrlState>;
@@ -125,14 +124,7 @@ export function ProposalsTab({ url, channels, canApprove, canWrite, onGenerate }
   const exportAll = async () => {
     setExporting(true);
     try {
-      const all: PriceProposal[] = [];
-      for (let page = 1; all.length < EXPORT_MAX; page++) {
-        const res = await pricingApi.proposals({ ...query, page, pageSize: 100 });
-        all.push(...res.items);
-        if (page >= res.pages) break;
-      }
-      downloadText(`price-proposals-${query.tab}.csv`, proposalsCsv(all));
-      toast({ title: "Export ready", description: `${all.length} ${all.length === 1 ? "proposal" : "proposals"} exported.` });
+      toast(exportToast(await exportProposals(query), "proposal"));
     } catch (e) {
       toast({ title: "Could not export", description: errorMessage(e), variant: "destructive" });
     } finally {

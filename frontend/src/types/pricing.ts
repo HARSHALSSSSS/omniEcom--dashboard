@@ -71,6 +71,9 @@ export interface ChannelMargin {
   targetMarginBps: number | null;
   feeTermsSummary: string;
   feesConfigured: boolean;
+  /** commission in basis points / fixed fee per unit in minor units from the fee profile; null without one */
+  feePercentBps: number | null;
+  fixedFeeMinor: number | null;
   unknownCostCount: number;
   nextAction: "costs" | "fees" | "proposals";
 }
@@ -357,4 +360,11 @@ export interface HistoryQuery {
 export interface HistoryPage {
   items: PriceHistoryRow[];
   nextBefore: number | null;
+}
+
+export interface FeeProfile {
+  marketplaceAccountId: string;
+  feePercentBps: number;
+  fixedFeeMinor: number;
+  label: string | null;
 }

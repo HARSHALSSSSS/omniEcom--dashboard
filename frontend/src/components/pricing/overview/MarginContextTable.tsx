@@ -11,10 +11,12 @@ interface MarginContextTableProps {
   targetMarginBps?: number | null;
   onReviewCosts?: (row: ChannelMargin) => void;
   onReviewFees?: (row: ChannelMargin) => void;
+  /** opens the fee editor for the channel */
+  onEditFees?: (row: ChannelMargin) => void;
   onReviewProposals?: (row: ChannelMargin) => void;
 }
 
-export function MarginContextTable({ items, targetMarginBps, onReviewCosts, onReviewFees, onReviewProposals }: MarginContextTableProps) {
+export function MarginContextTable({ items, targetMarginBps, onReviewCosts, onReviewFees, onEditFees, onReviewProposals }: MarginContextTableProps) {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(5);
 
@@ -67,7 +69,14 @@ export function MarginContextTable({ items, targetMarginBps, onReviewCosts, onRe
                         {formatNumber(row.belowTargetCount)} {row.belowTargetCount === 1 ? "price" : "prices"}
                       </span>
                     </td>
-                    <td className="py-3 text-muted-foreground max-w-xs">{row.feeTermsSummary}</td>
+                    <td className="py-3 text-muted-foreground max-w-xs">
+                      <span>{row.feeTermsSummary}</span>
+                      {onEditFees && (
+                        <button type="button" onClick={() => onEditFees(row)} aria-label={`Edit fees for ${row.channel}`} className="ml-2 font-semibold text-foreground underline cursor-pointer">
+                          Edit
+                        </button>
+                      )}
+                    </td>
                     <td className="py-3 text-right">
                       {row.nextAction === "proposals" ? (
                         <button

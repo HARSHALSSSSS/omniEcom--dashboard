@@ -9,7 +9,7 @@ import { PricingPagination } from "@/components/pricing/PricingPagination";
 import { usePriceTable } from "@/hooks/usePricing";
 import { formatINR, formatNumber } from "@/utils/format";
 import { errorMessage } from "@/api/errors";
-import type { ChannelMargin, MarginOverview, PriceTableRow, PriceTableSort, PriceTableState } from "@/types/pricing";
+import type { ChannelMargin, MarginOverview, PriceTableQuery, PriceTableRow, PriceTableSort, PriceTableState } from "@/types/pricing";
 import { marginText, moneyText } from "./marginText";
 
 interface ProductChannelPricingTableProps {
@@ -18,13 +18,15 @@ interface ProductChannelPricingTableProps {
   /** totals for the filter pill counts */
   totals?: MarginOverview["totals"];
   onSelectPriceItem?: (item: PriceTableRow) => void;
+  /** the filters currently applied (for the page header's Export) */
+  onQueryChange?: (query: Omit<PriceTableQuery, "page" | "pageSize">) => void;
 }
 
 type FilterPill = "all" | PriceTableState;
 
 const NEXT_SORT: Record<PriceTableSort, PriceTableSort> = { product: "margin_asc", margin_asc: "margin_desc", margin_desc: "product", price_desc: "product" };
 
-export function ProductChannelPricingTable({ channels, totals, onSelectPriceItem }: ProductChannelPricingTableProps) {
+export function ProductChannelPricingTable({ channels, totals, onSelectPriceItem, onQueryChange }: ProductChannelPricingTableProps) {
   const [filterPill, setFilterPill] = useState<FilterPill>("all");
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
@@ -41,6 +43,11 @@ export function ProductChannelPricingTable({ channels, totals, onSelectPriceItem
   useEffect(() => {
     setPage(1);
   }, [filterPill, channelFilter, search, sort]);
+
+  const filterState = filterPill === "all" ? undefined : filterPill;
+  useEffect(() => {
+    onQueryChange?.({ q: search || undefined, accountId: channelFilter || undefined, state: filterState, sort });
+  }, [onQueryChange, search, channelFilter, filterState, sort]);
 
   const query = usePriceTable({
     q: search || undefined,

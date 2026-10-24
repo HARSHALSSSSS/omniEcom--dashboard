@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Plus, Download, MoreHorizontal } from "lucide-react";
+import { Plus, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { errorMessage } from "@/api/errors";
 import { RefreshButton } from "@/components/common/RefreshButton";
 import { CompetitorsTab } from "@/components/pricing/competitors/CompetitorsTab";
 import { HistoryTab } from "@/components/pricing/history/HistoryTab";
@@ -13,11 +14,14 @@ import { GenerateDialog } from "@/components/pricing/proposals/GenerateDialog";
 import { ProposalsTab } from "@/components/pricing/proposals/ProposalsTab";
 import { NO_WRITE_REASON } from "@/components/pricing/pricingFormat";
 import { usePricingUrlState } from "@/components/pricing/pricingParams";
+import { PricingMoreMenu } from "@/components/pricing/PricingMoreMenu";
+import { exportPriceTable, exportProposals, exportToast } from "@/components/pricing/pricingExport";
 import { useCan } from "@/hooks/useCan";
 import { usePricingOverview } from "@/hooks/usePricing";
+import { toast } from "@/hooks/useToast";
 import { cn } from "@/utils/cn";
 import { formatNumber } from "@/utils/format";
-import type { PricingView } from "@/types/pricing";
+import type { PriceTableQuery, PricingView } from "@/types/pricing";
 
 const VIEW_LABELS: Record<PricingView, string> = {
   overview: "Overview",
@@ -37,7 +41,26 @@ export default function PricingPage() {
   const canApprove = useCan("pricing:approve");
   const overview = usePricingOverview();
   const [generating, setGenerating] = useState(false);
-  const [moreOpen, setMoreOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  // the Overview price table's current search / filters, so Export matches what is on screen
+  const tableQuery = useRef<Omit<PriceTableQuery, "page" | "pageSize">>({ sort: "product" });
+  const onTableQueryChange = useCallback((q: Omit<PriceTableQuery, "page" | "pageSize">) => {
+    tableQuery.current = q;
+  }, []);
+  const canExport = view === "overview" || view === "proposals";
+
+  const runExport = async () => {
+    if (!canExport || exporting) return;
+    setExporting(true);
+    try {
+      if (view === "overview") toast(exportToast(await exportPriceTable(tableQuery.current), "price"));
+      else toast(exportToast(await exportProposals(url.proposals), "proposal"));
+    } catch (e) {
+      toast({ title: "Could not export", description: errorMessage(e), variant: "destructive" });
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const channels = overview.data?.channels ?? [];
 
@@ -78,49 +101,20 @@ export default function PricingPage() {
             variant="outline"
             size="sm"
             className="gap-1.5 text-xs h-8 cursor-pointer"
-            onClick={() => {
-              // Switch to proposals if not already to trigger export or direct export
-              if (view !== "proposals") update({ view: "proposals" });
-            }}
+            loading={exporting}
+            disabled={!canExport}
+            title={canExport ? undefined : "Export is available on Overview and Price proposals"}
+            onClick={() => void runExport()}
           >
             <Download className="h-3.5 w-3.5" aria-hidden />
             Export
           </Button>
-          <div className="relative">
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1 text-xs h-8 cursor-pointer"
-              onClick={() => setMoreOpen((prev) => !prev)}
-            >
-              <MoreHorizontal className="h-3.5 w-3.5" aria-hidden />
-              More
-            </Button>
-            {moreOpen && (
-              <div className="absolute right-0 mt-1 w-44 rounded-lg border border-border bg-card p-1 shadow-lg z-20 text-xs">
-                <button
-                  type="button"
-                  className="w-full text-left px-2.5 py-1.5 rounded-md hover:bg-muted text-foreground cursor-pointer transition-colors"
-                  onClick={() => {
-                    setMoreOpen(false);
-                    update({ view: "policies" });
-                  }}
-                >
-                  Strategy rules
-                </button>
-                <button
-                  type="button"
-                  className="w-full text-left px-2.5 py-1.5 rounded-md hover:bg-muted text-foreground cursor-pointer transition-colors"
-                  onClick={() => {
-                    setMoreOpen(false);
-                    update({ view: "competitors" });
-                  }}
-                >
-                  Competitor prices
-                </button>
-              </div>
-            )}
-          </div>
+          <PricingMoreMenu
+            items={[
+              { id: "policies", label: "Strategy rules", onSelect: () => update({ view: "policies" }) },
+              { id: "competitors", label: "Competitor prices", onSelect: () => update({ view: "competitors" }) },
+            ]}
+          />
           <Button
             size="sm"
             aria-label="Generate proposals"
@@ -135,8 +129,8 @@ export default function PricingPage() {
         </div>
       </div>
 
-      {/* Screen-reader & test compatibility for PricingKpis */}
-      <div className="sr-only" aria-hidden="true">
+      {/* the pending / gain / policies / channels summary, kept for screen readers (the tab design shows the pulse bars instead) */}
+      <section className="sr-only" aria-label="Pricing summary">
         <PricingKpis
           overview={overview.data}
           loading={overview.isLoading}
@@ -145,7 +139,7 @@ export default function PricingPage() {
           onOpenPending={() => update({ view: "proposals", tab: null })}
           onOpenPolicies={() => update({ view: "policies" })}
         />
-      </div>
+      </section>
 
       {/* 3. Figma Tabs Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-3">
@@ -202,6 +196,7 @@ export default function PricingPage() {
         {view === "overview" && (
           <PricingOverviewView
             overview={overview.data}
+            onTableQueryChange={onTableQueryChange}
             onReviewProposals={(target) =>
               update(target ? { view: "proposals", tab: null, account: target.accountId ?? null, q: target.q ?? null } : { view: "proposals" })
             }

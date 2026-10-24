@@ -115431,6 +115431,32 @@
                               "feesConfigured": {
                                 "type": "boolean"
                               },
+                              "feePercentBps": {
+                                "anyOf": [
+                                  {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "description": "Commission in bps from the fee profile; null without one"
+                              },
+                              "fixedFeeMinor": {
+                                "anyOf": [
+                                  {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "description": "Fixed fee per unit from the fee profile; null without one"
+                              },
                               "unknownCostCount": {
                                 "type": "integer",
                                 "minimum": -9007199254740991,
@@ -115456,6 +115482,8 @@
                               "targetMarginBps",
                               "feeTermsSummary",
                               "feesConfigured",
+                              "feePercentBps",
+                              "fixedFeeMinor",
                               "unknownCostCount",
                               "nextAction"
                             ],

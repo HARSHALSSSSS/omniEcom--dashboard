@@ -1,16 +1,19 @@
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { errorMessage } from "@/api/errors";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LoadError, StateBox } from "@/components/pricing/PricingStates";
 import { ROUTES } from "@/constants/routes";
 import { pricingApi } from "@/api/pricing.api";
+import { useCan } from "@/hooks/useCan";
 import { useMarginOverview, useProposals } from "@/hooks/usePricing";
-import type { PriceProposal, PriceTableRow, PricingOverview, ChannelMargin } from "@/types/pricing";
+import type { PriceProposal, PriceTableQuery, PriceTableRow, PricingOverview, ChannelMargin } from "@/types/pricing";
 import { PricingPulseKpiBar } from "./PricingPulseKpiBar";
 import { PricingOpportunitiesCard } from "./PricingOpportunitiesCard";
 import { PricingIntelligenceCard } from "./PricingIntelligenceCard";
 import { ProductChannelPricingTable } from "./ProductChannelPricingTable";
 import { MarginContextTable } from "./MarginContextTable";
+import { ChannelFeesDialog } from "./ChannelFeesDialog";
 
 /** where the proposals tab should open: narrowed to a channel and/or a product (SKU search) */
 export interface ReviewTarget {
@@ -21,13 +24,17 @@ export interface ReviewTarget {
 interface PricingOverviewViewProps {
   overview?: PricingOverview | null;
   onReviewProposals: (target?: ReviewTarget) => void;
+  /** the price table's current filters, for Export */
+  onTableQueryChange?: (query: Omit<PriceTableQuery, "page" | "pageSize">) => void;
 }
 
 /** the pending proposals shown as opportunities: the biggest margin impact first */
 const OPPORTUNITIES = { tab: "pending_review", sort: "impact", page: 1, pageSize: 25 } as const;
 
-export function PricingOverviewView({ overview, onReviewProposals }: PricingOverviewViewProps) {
+export function PricingOverviewView({ overview, onReviewProposals, onTableQueryChange }: PricingOverviewViewProps) {
   const navigate = useNavigate();
+  const canWrite = useCan("pricing:write");
+  const [feesFor, setFeesFor] = useState<string | null>(null);
   const margins = useMarginOverview();
   const pending = useProposals(OPPORTUNITIES);
 
@@ -71,8 +78,7 @@ export function PricingOverviewView({ overview, onReviewProposals }: PricingOver
       navigate(ROUTES.PRODUCTS);
     }
   };
-  // there is no fee editor in the dashboard yet: the channel's connection lives in the Marketplace hub
-  const reviewFees = (_row: ChannelMargin) => navigate(ROUTES.MARKETPLACE_HUB);
+  const editFees = (row: ChannelMargin) => setFeesFor(row.accountId);
 
   return (
     <div className="space-y-6">
@@ -111,7 +117,7 @@ export function PricingOverviewView({ overview, onReviewProposals }: PricingOver
       </div>
 
       {/* 3. Product & channel pricing table (server paged, searched and sorted) */}
-      <ProductChannelPricingTable channels={channels} totals={totals} onSelectPriceItem={reviewPrice} />
+      <ProductChannelPricingTable channels={channels} totals={totals} onSelectPriceItem={reviewPrice} onQueryChange={onTableQueryChange} />
 
       {/* 4. Margin context */}
       <MarginContextTable
@@ -119,8 +125,10 @@ export function PricingOverviewView({ overview, onReviewProposals }: PricingOver
         targetMarginBps={totals.targetMarginBps}
         onReviewProposals={(row) => onReviewProposals({ accountId: row.accountId })}
         onReviewCosts={(row) => void reviewCosts(row)}
-        onReviewFees={reviewFees}
+        onReviewFees={editFees}
+        onEditFees={editFees}
       />
+      <ChannelFeesDialog channel={channels.find((c) => c.accountId === feesFor) ?? null} canWrite={canWrite} onClose={() => setFeesFor(null)} />
     </div>
   );
 }

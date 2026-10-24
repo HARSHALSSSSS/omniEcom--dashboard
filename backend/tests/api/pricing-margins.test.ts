@@ -31,7 +31,7 @@ describe('margin overview and price table', () => {
     expect(res.status, JSON.stringify(res.body)).toBe(200);
     expect(res.body.data.channels).toHaveLength(1);
     expect(res.body.data.channels[0]).toMatchObject({
-      accountId: w.account.id, priceCount: 1, pricedWithCostCount: 1, avgMarginBps: 2988, belowTargetCount: 0, unknownCostCount: 0, feeTermsSummary: '10% commission', nextAction: 'proposals', targetMarginBps: null,
+      accountId: w.account.id, priceCount: 1, pricedWithCostCount: 1, avgMarginBps: 2988, belowTargetCount: 0, unknownCostCount: 0, feeTermsSummary: '10% commission', feePercentBps: 1000, fixedFeeMinor: 0, nextAction: 'proposals', targetMarginBps: null,
     });
     expect(res.body.data.totals).toEqual({ productsInView: 1, productChannelPrices: 1, avgMarginBps: 2988, belowTargetCount: 0, unknownCostCount: 0, withProposalCount: 0, targetMarginBps: null });
     const row = (await c.get(`${API}/price-table`, viewer)).body.data.items[0];
@@ -54,7 +54,7 @@ describe('margin overview and price table', () => {
     const w = await world({ cost: false, fee: false });
     await floorPolicy(w, 3500);
     const o = await overview(w);
-    expect(o.channels[0]).toMatchObject({ priceCount: 1, pricedWithCostCount: 0, avgMarginBps: null, belowTargetCount: 0, unknownCostCount: 1, feeTermsSummary: 'fees not configured', nextAction: 'costs' });
+    expect(o.channels[0]).toMatchObject({ priceCount: 1, pricedWithCostCount: 0, avgMarginBps: null, belowTargetCount: 0, unknownCostCount: 1, feeTermsSummary: 'fees not configured', feePercentBps: null, fixedFeeMinor: null, nextAction: 'costs' });
     expect(o.totals).toMatchObject({ avgMarginBps: null, belowTargetCount: 0, unknownCostCount: 1, productChannelPrices: 1 });
     expect((await table(w)).items[0]).toMatchObject({ currentPriceMinor: 49_900, unitCostMinor: null, feesMinor: null, marginBps: null, belowTarget: null });
     expect((await table(w, '?filter[state]=unknown_cost')).total).toBe(1);

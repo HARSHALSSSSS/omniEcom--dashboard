@@ -315,6 +315,7 @@ export const ENDPOINTS = {
   PRICING_OVERVIEW: `${BASE}/pricing/overview`,
   PRICING_MARGIN_OVERVIEW: `${BASE}/pricing/margin-overview`,
   PRICING_PRICE_TABLE: `${BASE}/pricing/price-table`,
+  FEE_PROFILE: (accountId: string) => `${BASE}/analytics/fee-profiles/${accountId}`,
   PRICING_PROPOSALS: `${BASE}/pricing/proposals`,
   PRICING_PROPOSAL: (id: string) => `${BASE}/pricing/proposals/${id}`,
   PRICING_PROPOSAL_ACTION: (id: string, action: "approve" | "reject") =>

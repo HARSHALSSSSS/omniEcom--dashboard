@@ -153,6 +153,15 @@ export function useDeletePolicy() {
   return useMutation({ mutationFn: (id: string) => pricingApi.deletePolicy(id), onSuccess: after });
 }
 
+/** new fees change every margin: the overview, the price table and the proposals all reload */
+export function useSetFeeProfile() {
+  const after = useAfterPolicy();
+  return useMutation({
+    mutationFn: (input: { accountId: string; feePercentBps: number; fixedFeeMinor: number }) => pricingApi.setFeeProfile(input.accountId, { feePercentBps: input.feePercentBps, fixedFeeMinor: input.fixedFeeMinor }),
+    onSuccess: after,
+  });
+}
+
 export function useAddCompetitor() {
   const after = useAfterPolicy();
   return useMutation({ mutationFn: (body: CompetitorWrite) => pricingApi.addCompetitor(body), onSuccess: after });

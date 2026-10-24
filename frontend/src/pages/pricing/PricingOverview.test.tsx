@@ -48,11 +48,11 @@ const marginData = (): MarginOverview => ({
   channels: [
     {
       accountId: AMAZON, channel: "Amazon", marketplace: "amazon", priceCount: 3, pricedWithCostCount: 3, avgMarginBps: 2988, belowTargetCount: 2, targetMarginBps: 3500,
-      feeTermsSummary: "10% commission", feesConfigured: true, unknownCostCount: 0, nextAction: "proposals",
+      feeTermsSummary: "10% commission", feesConfigured: true, feePercentBps: 1000, fixedFeeMinor: 0, unknownCostCount: 0, nextAction: "proposals",
     },
     {
       accountId: FLIPKART, channel: "Flipkart", marketplace: "flipkart", priceCount: 2, pricedWithCostCount: 0, avgMarginBps: null, belowTargetCount: 0, targetMarginBps: 3500,
-      feeTermsSummary: "fees not configured", feesConfigured: false, unknownCostCount: 2, nextAction: "costs",
+      feeTermsSummary: "fees not configured", feesConfigured: false, feePercentBps: null, fixedFeeMinor: null, unknownCostCount: 2, nextAction: "costs",
     },
   ],
   totals: { productsInView: 4, productChannelPrices: 5, avgMarginBps: 2988, belowTargetCount: 2, unknownCostCount: 2, withProposalCount: 1, targetMarginBps: 3500 },
@@ -214,7 +214,7 @@ describe("Pricing overview tab (real data)", () => {
     expect(api.priceTable.mock.calls.some((c) => c[0].state === "unknown_cost" && c[0].accountId === FLIPKART)).toBe(true);
   });
 
-  it("links the cost cell to the product's variants, and a channel without fees to the Marketplace hub", async () => {
+  it("links the cost cell to the product's variants, and a channel without fees to the fee editor", async () => {
     const user = userEvent.setup();
     const m = marginData();
     m.channels[1] = { ...m.channels[1], unknownCostCount: 0, pricedWithCostCount: 2, avgMarginBps: 3000, nextAction: "fees" };
@@ -223,7 +223,7 @@ describe("Pricing overview tab (real data)", () => {
     const shoes = (await screen.findByText("SHOE-9")).closest("tr") as HTMLElement;
     expect(within(shoes).getByRole("link", { name: "Set cost" })).toHaveAttribute("href", "/products/prod2/variants");
     await user.click(screen.getByRole("button", { name: /Set channel fees/ }));
-    await waitFor(() => expect(loc().pathname).toBe("/marketplace-hub"));
+    expect(await screen.findByRole("dialog", { name: /Channel fees · Flipkart/ })).toBeInTheDocument();
   });
 
   it("offers the Marketplace hub when no channel is connected", async () => {

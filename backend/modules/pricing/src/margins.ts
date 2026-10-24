@@ -145,7 +145,7 @@ export async function marginOverview(tx: Tx, vendorId: string, f: { accountId?: 
     return {
       accountId: a.accountId, channel: a.channel, marketplace: a.marketplace, priceCount: rows.length, pricedWithCostCount: known.length,
       avgMarginBps: avg(known.map((r) => r.marginBps as number)), belowTargetCount: rows.filter((r) => r.belowTarget === true).length,
-      targetMarginBps: a.targetMarginBps, feeTermsSummary: feeTermsSummary(a.fees), feesConfigured: a.fees !== null, unknownCostCount,
+      targetMarginBps: a.targetMarginBps, feeTermsSummary: feeTermsSummary(a.fees), feesConfigured: a.fees !== null, feePercentBps: a.fees?.feeBps ?? null, fixedFeeMinor: a.fees?.fixedMinor ?? null, unknownCostCount,
       nextAction: (unknownCostCount > 0 ? 'costs' : a.fees === null ? 'fees' : 'proposals') as 'costs' | 'fees' | 'proposals',
     };
   });

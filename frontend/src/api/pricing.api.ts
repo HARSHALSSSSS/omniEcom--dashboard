@@ -5,6 +5,7 @@ import type {
   CompetitorImportResult,
   CompetitorPrice,
   CompetitorWrite,
+  FeeProfile,
   CompetitorsPage,
   CompetitorsQuery,
   DecisionAction,
@@ -80,6 +81,10 @@ export const pricingApi = {
 
   /** 200 with the result, or 202 when the work was queued as a background job */
   generate: async (input: GenerateInput) => unwrap<GenerateResponse>(await client.post(ENDPOINTS.PRICING_PROPOSALS_GENERATE, input)),
+
+  /** commission terms of one channel: percent in basis points, fixed fee in minor units */
+  setFeeProfile: async (accountId: string, body: { feePercentBps: number; fixedFeeMinor: number }) =>
+    unwrap<FeeProfile>(await client.put(ENDPOINTS.FEE_PROFILE(accountId), body)),
 
   // ---- policies
   policies: async (signal?: AbortSignal) => unwrap<PricingPolicy[]>(await client.get(ENDPOINTS.PRICING_POLICIES, { signal })),

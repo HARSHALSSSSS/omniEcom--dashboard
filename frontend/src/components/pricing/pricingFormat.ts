@@ -1,6 +1,7 @@
 import { isApiError } from "@/api/errors";
 import { formatCurrency } from "@/utils/format";
-import type { BulkOutcome, DecisionAction, PriceField, PriceHistoryRow, PriceProposal, PriceStrategy, ProposalStatus, ProposalTab } from "@/types/pricing";
+import { saveBlob } from "@/components/products/list/saveBlob";
+import type { BulkOutcome, DecisionAction, PriceField, PriceHistoryRow, PriceProposal, PriceTableRow, PriceStrategy, ProposalStatus, ProposalTab } from "@/types/pricing";
 
 export const NO_APPROVE_REASON = "Only admins can approve or reject price proposals";
 export const NO_WRITE_REASON = "You do not have permission to change pricing";
@@ -118,10 +119,36 @@ function cell(value: string | number | null | undefined): string {
   return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
-const rupees = (minor: number | null): string => (minor === null ? "" : `${Math.floor(minor / 100)}.${String(minor % 100).padStart(2, "0")}`);
+export const rupees = (minor: number | null): string => (minor === null ? "" : `${Math.floor(minor / 100)}.${String(minor % 100).padStart(2, "0")}`);
+
+const marginCell = (bps: number | null): string => (bps === null ? "" : bpsText(bps));
+
+/** the price table rows as CSV: money in rupees, blanks for what is unknown (no cost price, no fee profile, no target) */
+export function priceTableCsv(rows: PriceTableRow[]): string {
+  const head = ["Product", "SKU", "Channel", "Marketplace", "Current price", "Unit cost", "Channel fees", "Margin %", "Target margin %", "Below target", "Proposal", "Proposed price"];
+  const lines = rows.map((r) =>
+    [
+      r.productTitle,
+      r.sku,
+      r.channel,
+      r.marketplace,
+      rupees(r.currentPriceMinor),
+      rupees(r.unitCostMinor),
+      rupees(r.feesMinor),
+      marginCell(r.marginBps),
+      marginCell(r.targetMarginBps),
+      r.belowTarget === null ? "" : r.belowTarget ? "Yes" : "No",
+      r.proposalState === "proposed" ? "Proposed" : "None",
+      rupees(r.proposedPriceMinor),
+    ]
+      .map(cell)
+      .join(","),
+  );
+  return [head.map(cell).join(","), ...lines].join("\r\n");
+}
 
 export function proposalsCsv(rows: PriceProposal[]): string {
-  const head = ["SKU", "Product", "Channel", "Strategy", "Status", "Current price", "Proposed price", "Change %", "Competitor price", "Margin change %", "Sales change %", "Reasoning", "Created", "Expires"];
+  const head = ["SKU", "Product", "Channel", "Strategy", "Status", "Current price", "Proposed price", "Change %", "Competitor price", "Margin change %", "Sales change %", "Unit cost", "Channel fees", "Current margin %", "Proposed margin %", "Target margin %", "Reason code", "Reason", "Reasoning", "Created", "Expires"];
   const lines = rows.map((p) =>
     [
       p.sku,
@@ -135,6 +162,13 @@ export function proposalsCsv(rows: PriceProposal[]): string {
       rupees(p.competitorPriceMinor),
       p.estMarginDeltaBps === null ? "" : bpsText(p.estMarginDeltaBps),
       p.projectedSalesDeltaBps === null ? "" : bpsText(p.projectedSalesDeltaBps),
+      rupees(p.unitCostMinor),
+      rupees(p.feesMinor),
+      marginCell(p.currentMarginBps),
+      marginCell(p.proposedMarginBps),
+      marginCell(p.targetMarginBps),
+      p.reasonCode,
+      p.reasonText,
       p.reasoning,
       p.createdAt,
       p.expiresAt ?? "",
@@ -155,14 +189,7 @@ export function historyCsv(rows: PriceHistoryRow[]): string {
   return [head.map(cell).join(","), ...lines].join("\r\n");
 }
 
-/** hands a text file to the browser's download */
+/** hands a CSV to the browser's download, with a UTF-8 byte-order mark so a spreadsheet reads the rupee sign and accents */
 export function downloadText(fileName: string, text: string, type = "text/csv;charset=utf-8"): void {
-  const url = URL.createObjectURL(new Blob([text], { type }));
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = fileName;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  saveBlob(new Blob(["\uFEFF", text], { type }), fileName);
 }
