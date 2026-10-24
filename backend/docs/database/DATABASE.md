@@ -14,7 +14,18 @@ PostgreSQL 16 · Drizzle ORM (`packages/database`) · migrations are plain SQL i
 
 Rules: migrations are **forward-only and additive by default** (expand → migrate data → contract across releases so old and new app versions run together during a rolling deploy). Never edit an applied migration.
 
-**Two roles.** `oms_owner` owns the schema (migrations/seed only). `oms_app` is the runtime role: `NOSUPERUSER NOBYPASSRLS` and *not owner*, so RLS always applies. See `infrastructure/postgres/init.sql`.
+**Two roles.** `oms_owner` owns the schema (migrations/seed only). `oms_app` is the runtime role: `NOSUPERUSER NOBYPASSRLS` and *not owner*, so RLS always applies. See `infrastructure/postgres/init.sql`. Migration `0024` makes the global reference tables read-only for `oms_app` (`permissions`, `role_permissions`: no writes; `plans`, `feature_flags`: no DELETE/TRUNCATE; platform staff still upsert plans and flags through the API). `tests/database/rls-coverage.test.ts` fails the build if any table with a `vendor_id` column lacks RLS (enabled + forced) or a policy.
+
+### Drizzle snapshots (`migrations/meta/*_snapshot.json`)
+
+`drizzle-kit generate` diffs the schema against the **newest snapshot file** (not against the SQL). Only some migrations were written with a snapshot, and the hand-written SQL migrations (RLS, privileges, `0019`-`0023`) have none, so a plain `pnpm db:generate` after `0018` would re-emit everything that already shipped. `0024_snapshot.json` was regenerated from the current schema to fix that: with it in place `drizzle-kit generate` reports "No schema changes".
+
+- The snapshot only needs to exist for the **latest** schema state; gaps in the middle are harmless.
+- After a hand-written migration that changes the schema (new table/column/constraint), refresh the snapshot, do not add a second SQL file:
+  1. copy `packages/database/migrations` to a scratch folder and run `drizzle-kit generate` there (a scratch `drizzle.config` with `out: ./migrations` and `schema` pointing at `packages/database/src/schema/index.ts`);
+  2. take the `NNNN_snapshot.json` it produces, rename it to your migration's number, put it in `packages/database/migrations/meta/`, and discard the generated SQL;
+  3. run `drizzle-kit generate` again against the real folder: it must print "No schema changes, nothing to migrate".
+- Privilege / RLS / data-only migrations do not change the snapshot.
 
 ## 2. Naming conventions
 
