@@ -5,7 +5,7 @@
 # Runtime config: API_UPSTREAM = where nginx forwards /api/ (default http://oms-api, the k8s Service name).
 # VITE_* values are baked in at BUILD time (see .env.production); override with --build-arg if needed.
 
-FROM node:22-alpine AS build
+FROM node:26-alpine AS build
 WORKDIR /app
 ENV HUSKY=0
 COPY package.json package-lock.json ./
