@@ -16,7 +16,7 @@ ARG VITE_USE_MOCKS=false
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL VITE_USE_MOCKS=$VITE_USE_MOCKS
 RUN npm run build
 
-FROM nginxinc/nginx-unprivileged:1.27-alpine AS runtime
+FROM nginxinc/nginx-unprivileged:1.31-alpine AS runtime
 ENV API_UPSTREAM=http://oms-api
 # the image's entrypoint renders *.template files through envsubst into /etc/nginx/conf.d at start
 COPY nginx.conf /etc/nginx/templates/default.conf.template
