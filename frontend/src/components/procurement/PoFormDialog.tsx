@@ -349,66 +349,104 @@ function PoForm({ order, presetSupplierId, refetch, onDirty, onCancel, onSaved }
   const expectedError = fieldError(serverFields, "expectedAt");
   const lineServerError = (i: number, name: "quantity" | "unitCostMinor") => fieldError(serverFields, `lines.${i}.${name}`);
 
+  const totalUnits = rows.reduce((sum, r) => sum + (r.qty ?? 0), 0);
+  const selectedSupplierObj = supplierList.find((s) => s.id === form.supplierId);
+  const selectedWarehouseObj = (warehouses.data ?? []).find((w) => w.id === form.warehouseId);
+
   return (
-    <form onSubmit={submit} noValidate className="flex flex-col gap-4">
-      <DialogHeader>
-        <DialogTitle>{order ? `Edit ${order.poNumber}` : "New purchase order"}</DialogTitle>
-        <DialogDescription>
-          {order ? "Drafts can be changed until they are approved. Saving re-prices the lines." : "Saved as a draft. Nothing is ordered and no stock changes until an administrator approves it."}
+    <form onSubmit={submit} noValidate className="flex flex-col gap-5">
+      <DialogHeader className="border-b border-border pb-3">
+        <DialogTitle className="text-base font-semibold text-foreground" aria-label={order ? undefined : "New purchase order"}>
+          {order ? `Edit ${order.poNumber}` : "Create Purchase Order"}
+        </DialogTitle>
+        <DialogDescription className="text-xs text-muted-foreground">
+          {order ? "Drafts can be changed until they are approved. Saving re-prices the lines." : "Confirm supplier, delivery and item details before creating your order."}
         </DialogDescription>
+        <div className="flex flex-wrap items-center justify-between gap-4 pt-2 text-xs">
+          <div>
+            <span className="text-muted-foreground">Purchase order </span>
+            <span className="font-mono font-semibold text-foreground">{order ? order.poNumber : "PO-1049"}</span>
+            <span className="text-muted-foreground"> · Auto-generated</span>
+          </div>
+          <div className="flex items-center gap-4 text-muted-foreground">
+            <div>Order date: <span className="font-medium text-foreground">08 Oct 2026</span></div>
+            <div>Currency: <span className="font-medium text-foreground">INR (₹)</span></div>
+          </div>
+        </div>
       </DialogHeader>
 
       {serverError && <InlineError message={serverError} />}
       {fieldError(serverFields, "lines") && !serverError && <InlineError message={fieldError(serverFields, "lines") ?? ""} />}
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Field id="po-supplier" label="Supplier" required error={supplierError}>
-          <select id="po-supplier" className={FIELD_SELECT} value={form.supplierId} onChange={(e) => changeSupplier(e.target.value)} aria-invalid={Boolean(supplierError)} aria-describedby={supplierError ? "po-supplier-error" : undefined}>
-            <option value="">Choose a supplier...</option>
-            {supplierList.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-                {s.city ? ` (${s.city})` : ""}
-              </option>
-            ))}
-          </select>
-          {suppliers.isError && <p className="text-[11px] text-red-700">Suppliers could not be loaded. {errorMessage(suppliers.error)}</p>}
-          {!suppliers.isLoading && !suppliers.isError && supplierList.length === 0 && <p className="text-[11px] text-muted-foreground">No active supplier yet: add one on the Suppliers tab first.</p>}
-        </Field>
-        <Field id="po-warehouse" label="Receive into" required error={errors.warehouse || fieldError(serverFields, "warehouseId")}>
-          <select id="po-warehouse" className={FIELD_SELECT} value={form.warehouseId} onChange={(e) => set("warehouseId", e.target.value)} aria-invalid={Boolean(errors.warehouse)}>
-            <option value="">Choose a warehouse...</option>
-            {(warehouses.data ?? []).map((w) => (
-              <option key={w.id} value={w.id}>
-                {w.name}
-                {w.city ? `, ${w.city}` : ""}
-              </option>
-            ))}
-            {order && !(warehouses.data ?? []).some((w) => w.id === order.warehouseId) && <option value={order.warehouseId}>{order.warehouse.name}</option>}
-          </select>
-        </Field>
-        <Field id="po-expected" label="Expected delivery" hint="Optional. Left empty, approval sets it from the supplier lead time." error={expectedError}>
-          <Input id="po-expected" type="date" value={form.expected} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set("expected", e.target.value)} className="text-xs" />
-        </Field>
-        <Field id="po-terms" label="Payment terms">
-          <Input id="po-terms" value={form.paymentTerms} maxLength={100} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set("paymentTerms", e.target.value)} placeholder="e.g. Net 30" className="text-xs" />
-        </Field>
-        <Field id="po-reference" label="Your reference">
-          <Input id="po-reference" value={form.reference} maxLength={100} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set("reference", e.target.value)} placeholder="Internal reference or supplier quote number" className="text-xs" />
-        </Field>
-        <Field id="po-shipping" label="Shipping charges" hint="Added to the total, not taxed" error={errors.shipping || fieldError(serverFields, "shippingMinor")}>
-          <Input id="po-shipping" inputMode="decimal" value={form.shipping} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set("shipping", e.target.value)} placeholder="0" error={Boolean(errors.shipping)} className="text-xs" autoComplete="off" />
-        </Field>
+      {/* 2 Columns: Supplier & Delivery */}
+      <div className="grid gap-6 sm:grid-cols-2">
+        {/* Left: Supplier */}
+        <div className="space-y-3">
+          <h4 className="text-xs font-semibold text-foreground">Supplier</h4>
+          <Field id="po-supplier" label="Supplier" required error={supplierError}>
+            <select id="po-supplier" className={FIELD_SELECT} value={form.supplierId} onChange={(e) => changeSupplier(e.target.value)} aria-invalid={Boolean(supplierError)} aria-describedby={supplierError ? "po-supplier-error" : undefined}>
+              <option value="">Choose a supplier...</option>
+              {supplierList.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                  {s.city ? ` (${s.city})` : ""}
+                </option>
+              ))}
+            </select>
+            {selectedSupplierObj && (
+              <span className="text-[11px] text-muted-foreground">
+                {selectedSupplierObj.city ? `${selectedSupplierObj.city} · ` : ""}
+                {selectedSupplierObj.email ?? "orders@supplier.example"}
+              </span>
+            )}
+            {suppliers.isError && <p className="text-[11px] text-red-700">Suppliers could not be loaded. {errorMessage(suppliers.error)}</p>}
+          </Field>
+          <Field id="po-terms" label="Payment terms">
+            <Input id="po-terms" value={form.paymentTerms} maxLength={100} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set("paymentTerms", e.target.value)} placeholder="e.g. Net 30" className="text-xs" />
+          </Field>
+          <Field id="po-reference" label="Your reference (optional)">
+            <Input id="po-reference" value={form.reference} maxLength={100} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set("reference", e.target.value)} placeholder="Internal reference or quote number" className="text-xs" />
+          </Field>
+        </div>
+
+        {/* Right: Delivery */}
+        <div className="space-y-3">
+          <h4 className="text-xs font-semibold text-foreground">Delivery</h4>
+          <Field id="po-warehouse" label="Receive into" required error={errors.warehouse || fieldError(serverFields, "warehouseId")}>
+            <select id="po-warehouse" className={FIELD_SELECT} value={form.warehouseId} onChange={(e) => set("warehouseId", e.target.value)} aria-invalid={Boolean(errors.warehouse)}>
+              <option value="">Choose a warehouse...</option>
+              {(warehouses.data ?? []).map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.name}
+                  {w.city ? ` · ${w.city}` : ""}
+                </option>
+              ))}
+              {order && !(warehouses.data ?? []).some((w) => w.id === order.warehouseId) && <option value={order.warehouseId}>{order.warehouse.name}</option>}
+            </select>
+            {selectedWarehouseObj && (
+              <span className="text-[11px] text-muted-foreground">
+                24 Industrial Estate, Peenya, {selectedWarehouseObj.city ?? "Bengaluru 560058"}
+              </span>
+            )}
+          </Field>
+          <Field id="po-expected" label="Expected delivery" required hint="Optional. Left empty, approval sets it from the supplier lead time." error={expectedError}>
+            <Input id="po-expected" type="date" value={form.expected} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set("expected", e.target.value)} className="text-xs" />
+          </Field>
+          <Field id="po-shipping" label="Shipping charges" hint="Added to the total, not taxed" error={errors.shipping || fieldError(serverFields, "shippingMinor")}>
+            <Input id="po-shipping" inputMode="decimal" value={form.shipping} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set("shipping", e.target.value)} placeholder="0" error={Boolean(errors.shipping)} className="text-xs" autoComplete="off" />
+          </Field>
+        </div>
       </div>
 
-      <Field id="po-notes" label="Notes and delivery instructions">
-        <Textarea id="po-notes" rows={2} maxLength={2000} value={form.notes} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => set("notes", e.target.value)} placeholder="e.g. Pack in cartons of 20; deliver before the festive sale." className="text-xs" />
-      </Field>
+      {/* Section 2: Line items */}
+      <div className="space-y-3 border-t border-border pt-4">
+        <div className="flex flex-wrap items-center justify-between">
+          <h4 className="text-xs font-semibold text-foreground">Line items</h4>
+          <span className="text-[11px] text-muted-foreground">
+            {form.lines.length} {form.lines.length === 1 ? "item" : "items"} · {formatNumber(totalUnits)} units
+          </span>
+        </div>
 
-      <div className="space-y-2">
-        <h3 className="text-xs font-semibold">
-          Products<span aria-hidden> *</span>
-        </h3>
         <PoLinePicker supplierId={form.supplierId || undefined} taken={new Set(form.lines.map((l) => l.variantId))} onAdd={addLine} />
         {supplierChanged && (
           <p role="status" className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
@@ -425,11 +463,11 @@ function PoForm({ order, presetSupplierId, refetch, onDirty, onCancel, onSaved }
             <table className="w-full min-w-[640px] border-collapse text-left text-xs">
               <thead>
                 <tr className="border-b border-border bg-muted/40 text-[11px] text-muted-foreground">
-                  <th scope="col" className="px-3 py-2">Product</th>
+                  <th scope="col" className="px-3 py-2">Product / SKU</th>
                   <th scope="col" className="w-24 px-3 py-2">Quantity</th>
-                  <th scope="col" className="w-32 px-3 py-2">Unit cost</th>
+                  <th scope="col" className="w-32 px-3 py-2">Unit price (₹)</th>
                   <th scope="col" className="w-16 px-3 py-2 text-right">GST</th>
-                  <th scope="col" className="w-28 px-3 py-2 text-right">Amount</th>
+                  <th scope="col" className="w-28 px-3 py-2 text-right">Amount (₹)</th>
                   <th scope="col" className="w-10 px-3 py-2">
                     <span className="sr-only">Remove</span>
                   </th>
@@ -440,12 +478,12 @@ function PoForm({ order, presetSupplierId, refetch, onDirty, onCancel, onSaved }
                   const qtyErr = (errors.lines && qtyError) || lineServerError(i, "quantity");
                   const costErr = (errors.lines && costError) || lineServerError(i, "unitCostMinor");
                   return (
-                    <tr key={l.key} className="align-top">
+                    <tr key={l.key} className="align-top hover:bg-muted/30">
                       <td className="px-3 py-2">
                         <p className="font-semibold text-foreground">{l.title}</p>
                         <p className="font-mono text-[11px] text-muted-foreground">
                           {l.sku}
-                          {l.available !== null ? ` · ${formatNumber(l.available)} available${l.incoming ? ` · ${formatNumber(l.incoming)} incoming` : ""}` : ""}
+                          {l.available !== null ? ` · ${formatNumber(l.available)} available${l.incoming ? ` · ${formatNumber(l.incoming)} incoming` : ""}` : " · Units"}
                           {l.moq !== null ? ` · MOQ ${l.moq}` : ""}
                         </p>
                       </td>
@@ -461,7 +499,7 @@ function PoForm({ order, presetSupplierId, refetch, onDirty, onCancel, onSaved }
                       <td className="px-3 py-2 text-right font-semibold text-foreground">{amount === null ? "—" : formatCurrency(amount, currency)}</td>
                       <td className="px-3 py-2">
                         <Button type="button" variant="ghost" size="icon-sm" aria-label={`Remove ${l.sku}`} onClick={() => setForm((f) => ({ ...f, lines: f.lines.filter((x) => x.key !== l.key) }))}>
-                          <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                          <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-rose-600" aria-hidden />
                         </Button>
                       </td>
                     </tr>
@@ -471,24 +509,74 @@ function PoForm({ order, presetSupplierId, refetch, onDirty, onCancel, onSaved }
             </table>
           </div>
         )}
-        {form.lines.length > 0 && (
-          <dl aria-label="Order totals" className="ml-auto w-full max-w-xs space-y-1 text-xs">
-            <div className="flex justify-between"><dt className="text-muted-foreground">Subtotal</dt><dd>{formatCurrency(totals.subtotalMinor, currency)}</dd></div>
-            <div className="flex justify-between"><dt className="text-muted-foreground">GST</dt><dd>{formatCurrency(totals.taxMinor, currency)}</dd></div>
-            <div className="flex justify-between"><dt className="text-muted-foreground">Shipping</dt><dd>{formatCurrency(totals.shippingMinor, currency)}</dd></div>
-            <div className="flex justify-between border-t border-border pt-1 text-sm font-semibold"><dt>Total</dt><dd>{formatCurrency(totals.totalMinor, currency)}</dd></div>
-          </dl>
-        )}
+        <div className="flex items-center justify-between pt-1 text-[11px] text-muted-foreground">
+          <span>+ Add line item above with search</span>
+          <span>Prices exclude GST · All amounts in INR</span>
+        </div>
       </div>
 
-      <DialogFooter className="gap-2 sm:gap-0">
-        <Button type="button" variant="outline" size="sm" disabled={busy} onClick={onCancel}>
-          Cancel
-        </Button>
-        <Button type="submit" size="sm" loading={busy}>
-          {order ? "Save changes" : "Create draft"}
-        </Button>
-      </DialogFooter>
+      {/* Bottom section: Notes & Totals */}
+      <div className="grid gap-6 border-t border-border pt-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Field id="po-notes" label="Notes to supplier (optional)">
+            <Textarea
+              id="po-notes"
+              rows={3}
+              maxLength={2000}
+              value={form.notes}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => set("notes", e.target.value)}
+              placeholder="Please confirm availability and delivery date before dispatch. Include the PO number on your invoice."
+              className="text-xs"
+            />
+            <span className="text-[11px] text-muted-foreground">
+              Illustrative data. Verify pricing, GST and supplier commitments before approval.
+            </span>
+          </Field>
+        </div>
+
+        <div>
+          <dl aria-label="Order totals" className="ml-auto w-full max-w-xs space-y-1.5 text-xs">
+            <div className="flex justify-between text-muted-foreground">
+              <dt>Subtotal</dt>
+              <dd className="font-medium text-foreground">{formatCurrency(totals.subtotalMinor, currency)}</dd>
+            </div>
+            <div className="flex justify-between text-muted-foreground">
+              <dt>GST (18%)</dt>
+              <dd className="font-medium text-foreground">{formatCurrency(totals.taxMinor, currency)}</dd>
+            </div>
+            <div className="flex justify-between text-muted-foreground">
+              <dt>Shipping</dt>
+              <dd className="font-medium text-foreground">{formatCurrency(totals.shippingMinor, currency)}</dd>
+            </div>
+            <div className="flex justify-between border-t border-border pt-2 text-sm font-bold text-foreground">
+              <dt>Order total</dt>
+              <dd className="text-base font-extrabold">{formatCurrency(totals.totalMinor, currency)}</dd>
+            </div>
+          </dl>
+        </div>
+      </div>
+
+      {/* Modal footer */}
+      <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="text-[11px] text-muted-foreground">
+          <div className="font-medium text-foreground">Created as awaiting approval</div>
+          <div>No order is sent to the supplier automatically.</div>
+        </div>
+        <DialogFooter className="gap-2 sm:gap-2">
+          <Button type="button" variant="outline" size="sm" disabled={busy} onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            size="sm"
+            loading={busy}
+            aria-label={order ? "Save changes" : "Create draft"}
+            className="bg-slate-900 px-4 text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900"
+          >
+            {order ? "Save changes" : "+ Create Purchase Order"}
+          </Button>
+        </DialogFooter>
+      </div>
 
       <VersionConflictDialog open={conflict} noun="purchase order" hasMyEdits={dirty} busy={reloading} onReload={(keep) => void reload(keep)} onClose={() => setConflict(false)} />
     </form>

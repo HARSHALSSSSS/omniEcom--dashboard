@@ -21,13 +21,26 @@ import { toast } from "@/hooks/useToast";
 
 const HEADER = <PageHeader eyebrow="INTELLIGENCE" title="AI Assistant" description="Ask questions about your stock, sales, returns and profitability. Answers are built from your own data." />;
 
+import { useSearchParams } from "react-router-dom";
+import { ProductContextRail } from "@/components/ai-assistant/ProductContextRail";
+import { ConversationHistoryView } from "@/components/ai-assistant/ConversationHistoryView";
+import { useConversationList } from "@/hooks/useAssistant";
+import { cn } from "@/utils/cn";
+
 function Workspace({ onBlocked }: { onBlocked: (r: BlockReason) => void }) {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get("tab") === "history" ? "history" : "current";
+  const skuParam = searchParams.get("sku");
+  const productParam = searchParams.get("product");
+
+  const [selectedId, setSelectedId] = useState<string | null>(searchParams.get("id"));
   const [draft, setDraft] = useState("");
   const [pendingText, setPendingText] = useState<string | null>(null);
   const [failure, setFailure] = useState<SendFailure | null>(null);
+  const [activeRightTab, setActiveRightTab] = useState<"product" | "insights">(skuParam || selectedId ? "product" : "insights");
 
   const insights = useAssistantInsights(true);
+  const conversationsList = useConversationList({ status: "active", q: "" }, true);
   const detail = useConversationDetail(selectedId);
   const create = useCreateConversation();
   const send = useSendMessage();
@@ -90,50 +103,199 @@ function Workspace({ onBlocked }: { onBlocked: (r: BlockReason) => void }) {
     );
   };
 
+  const openConversationFromHistory = (id: string) => {
+    setSelectedId(id);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set("tab", "current");
+      next.set("id", id);
+      return next;
+    });
+  };
+
+  const setTab = (t: "current" | "history") => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set("tab", t);
+      return next;
+    });
+  };
+
   return (
-    <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-      <div className="flex min-h-[560px] flex-col lg:h-[calc(100vh-260px)]">
-        <ChatPanel
-          detail={selectedId ? conversation : undefined}
-          selected={selectedId !== null}
-          loading={selectedId !== null && detail.isLoading}
-          error={selectedId !== null ? detail.error : null}
-          onRetryLoad={() => void detail.refetch()}
-          onNew={newConversation}
-          pendingText={pendingText}
-          failure={failure}
-          onRetrySend={() => failure && void run(failure.text, failure.fromDraft)}
-          onDismissFailure={() => setFailure(null)}
-          draft={draft}
-          onDraft={setDraft}
-          onSend={() => void run(draft.trim(), true)}
-          onAsk={(t) => void run(t, false)}
-          lockedReason={lockedReason}
-          onRestore={archived ? restore : null}
-          restoring={setStatus.isPending}
-        />
+    <div className="flex flex-col gap-4">
+      {/* Top Tab Switcher */}
+      <div className="flex items-center justify-between">
+        <div role="tablist" aria-label="AI Assistant Views" className="inline-flex items-center gap-1 rounded-lg border border-border bg-muted p-1">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "current"}
+            onClick={() => setTab("current")}
+            className={cn(
+              "rounded-md px-3.5 py-1.5 text-xs font-medium transition-all",
+              activeTab === "current"
+                ? "bg-background font-semibold text-foreground shadow-xs"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            Current conversation
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "history"}
+            onClick={() => setTab("history")}
+            className={cn(
+              "rounded-md px-3.5 py-1.5 text-xs font-medium transition-all",
+              activeTab === "history"
+                ? "bg-background font-semibold text-foreground shadow-xs"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            Conversation history
+          </button>
+        </div>
       </div>
 
-      <div className="flex min-h-0 flex-col gap-5 lg:h-[calc(100vh-260px)]">
-        <InsightsPanel
-          insights={insights.data}
-          loading={insights.isLoading}
-          error={insights.error}
-          onRetry={() => void insights.refetch()}
-          onAsk={(t) => void run(t, false)}
-          disabled={sending || !!lockedReason}
+      {activeTab === "history" ? (
+        <ConversationHistoryView
+          conversations={conversationsList.data?.pages.flatMap((p) => p.items) ?? []}
+          onOpenConversation={openConversationFromHistory}
         />
-        <ConversationList
-          selectedId={selectedId}
-          onSelect={(id) => {
-            setSelectedId(id);
-            setFailure(null);
-          }}
-          onNew={newConversation}
-          onGone={(id) => id === selectedId && newConversation()}
-          disabled={sending}
-        />
-      </div>
+      ) : (
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+          <div className="flex min-h-[560px] flex-col lg:h-[calc(100vh-300px)]">
+            <ChatPanel
+              detail={selectedId ? conversation : undefined}
+              selected={selectedId !== null}
+              loading={selectedId !== null && detail.isLoading}
+              error={selectedId !== null ? detail.error : null}
+              onRetryLoad={() => void detail.refetch()}
+              onNew={newConversation}
+              pendingText={pendingText}
+              failure={failure}
+              onRetrySend={() => failure && void run(failure.text, failure.fromDraft)}
+              onDismissFailure={() => setFailure(null)}
+              draft={draft}
+              onDraft={setDraft}
+              onSend={() => void run(draft.trim(), true)}
+              onAsk={(t) => void run(t, false)}
+              lockedReason={lockedReason}
+              onRestore={archived ? restore : null}
+              restoring={setStatus.isPending}
+              breadcrumb={
+                productParam
+                  ? `Product Intelligence / ${productParam} · Stock risk review`
+                  : conversation?.title
+                    ? `Product Intelligence / ${conversation.title}`
+                    : undefined
+              }
+              onBack={() => newConversation()}
+            />
+          </div>
+
+          <div className="flex min-h-0 flex-col gap-4 lg:h-[calc(100vh-300px)]">
+            {/* Side Rail Tabs if in active conversation with a product context */}
+            {selectedId || skuParam ? (
+              <div className="flex flex-col h-full rounded-xl border border-border bg-card overflow-hidden">
+                <div className="flex border-b border-border bg-muted/20 p-1">
+                  <button
+                    type="button"
+                    onClick={() => setActiveRightTab("product")}
+                    className={cn(
+                      "flex-1 rounded py-1 text-xs font-medium transition-colors",
+                      activeRightTab === "product"
+                        ? "bg-card font-semibold text-foreground shadow-xs"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    Product Context
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveRightTab("insights")}
+                    className={cn(
+                      "flex-1 rounded py-1 text-xs font-medium transition-colors",
+                      activeRightTab === "insights"
+                        ? "bg-card font-semibold text-foreground shadow-xs"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    Insights & List
+                  </button>
+                </div>
+
+                {activeRightTab === "product" ? (
+                  <ProductContextRail
+                    className="border-0 w-full"
+                    data={
+                      skuParam
+                        ? {
+                            sku: skuParam,
+                            name: productParam || "Selected Product",
+                            category: "Textiles",
+                            riskBadge: "P1 · Stock risk",
+                            daysOfCover: 5,
+                            leadTimeDays: 12,
+                            onHand: 50,
+                            unitsSold: 300,
+                            dailyDemand: 10,
+                            netSales: "₹4,50,000",
+                            grossProfit: "₹1,53,000",
+                            grossMargin: "34.0%",
+                            month: "September 2026",
+                          }
+                        : undefined
+                    }
+                  />
+                ) : (
+                  <div className="flex flex-col gap-4 p-3 overflow-y-auto">
+                    <InsightsPanel
+                      insights={insights.data}
+                      loading={insights.isLoading}
+                      error={insights.error}
+                      onRetry={() => void insights.refetch()}
+                      onAsk={(t) => void run(t, false)}
+                      disabled={sending || !!lockedReason}
+                    />
+                    <ConversationList
+                      selectedId={selectedId}
+                      onSelect={(id) => {
+                        setSelectedId(id);
+                        setFailure(null);
+                      }}
+                      onNew={newConversation}
+                      onGone={(id) => id === selectedId && newConversation()}
+                      disabled={sending}
+                    />
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex min-h-0 flex-col gap-4 overflow-y-auto">
+                <InsightsPanel
+                  insights={insights.data}
+                  loading={insights.isLoading}
+                  error={insights.error}
+                  onRetry={() => void insights.refetch()}
+                  onAsk={(t) => void run(t, false)}
+                  disabled={sending || !!lockedReason}
+                />
+                <ConversationList
+                  selectedId={selectedId}
+                  onSelect={(id) => {
+                    setSelectedId(id);
+                    setFailure(null);
+                  }}
+                  onNew={newConversation}
+                  onGone={(id) => id === selectedId && newConversation()}
+                  disabled={sending}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

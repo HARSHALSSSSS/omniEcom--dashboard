@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { ChevronDown, ShieldCheck } from "lucide-react";
 import { SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { errorMessage } from "@/api/errors";
@@ -13,17 +13,10 @@ import { ProductField } from "./ProductField";
 import type { StockTarget } from "./stockTarget";
 import { useSubmitLock } from "@/hooks/useSubmitGuard";
 
+import { useDebounced } from "@/hooks/useDebounced";
+
 const FIELD = "w-full h-8 px-2.5 border border-[#E5E5E5] rounded-lg text-[12px] font-normal text-[#111111] focus:outline-none focus:border-black";
 const LABEL = "text-[11px] font-semibold text-[#111111]";
-
-function useDebounced<T>(value: T, ms: number): T {
-  const [v, setV] = useState(value);
-  useEffect(() => {
-    const t = window.setTimeout(() => setV(value), ms);
-    return () => window.clearTimeout(t);
-  }, [value, ms]);
-  return v;
-}
 
 interface AdjustPanelProps {
   target: StockTarget | null;

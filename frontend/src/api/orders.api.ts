@@ -85,13 +85,13 @@ export const ordersApi = {
     await client.delete(ENDPOINTS.VIEW(id));
   },
 
-  drawer: async (id: string, signal?: AbortSignal) => unwrap<OrderDrawerData>(await client.get(ENDPOINTS.ORDER_DRAWER(id), { signal })),
+  drawer: async (id: string, signal?: AbortSignal) => unwrap<OrderDrawerData>(await client.get(ENDPOINTS.ORDER_DRAWER(id), signal ? { signal } : undefined)),
 
-  detail: async (id: string, signal?: AbortSignal) => unwrap<OrderDetail>(await client.get(ENDPOINTS.ORDER(id), { signal })),
+  detail: async (id: string, signal?: AbortSignal) => unwrap<OrderDetail>(await client.get(ENDPOINTS.ORDER(id), signal ? { signal } : undefined)),
 
-  timeline: async (id: string, signal?: AbortSignal) => unwrap<OrderTimelineEntry[]>(await client.get(ENDPOINTS.ORDER_TIMELINE(id), { signal })),
+  timeline: async (id: string, signal?: AbortSignal) => unwrap<OrderTimelineEntry[]>(await client.get(ENDPOINTS.ORDER_TIMELINE(id), signal ? { signal } : undefined)),
 
-  nextActions: async (id: string, signal?: AbortSignal) => unwrap<NextActions>(await client.get(ENDPOINTS.ORDER_NEXT_ACTIONS(id), { signal })),
+  nextActions: async (id: string, signal?: AbortSignal) => unwrap<NextActions>(await client.get(ENDPOINTS.ORDER_NEXT_ACTIONS(id), signal ? { signal } : undefined)),
 
   transition: async ({ id, status, version, tracking }: TransitionInput) =>
     unwrap<TransitionResult>(await client.post(ENDPOINTS.ORDER_TRANSITION(id), { status, version, ...(tracking ? { tracking } : {}) })),

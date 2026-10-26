@@ -40,13 +40,22 @@ export function resolveApiUrl(url: string): string {
 
 export const productCreationApi = {
   // ---------------------------------------------------------------------------------------- options
-  formOptions: async (): Promise<FormOptions> => unwrap(await client.get(ENDPOINTS.CREATION_FORM_OPTIONS)),
-  standardCategories: async (q?: string): Promise<StandardCategorySuggestion[]> =>
-    unwrap(await client.get(ENDPOINTS.CREATION_STANDARD_CATEGORIES, { params: { ...(q ? { q } : {}), limit: 20 } })),
-  categoryTree: async (): Promise<CategoryNode[]> => unwrap(await client.get(ENDPOINTS.CATEGORIES_TREE)),
+  formOptions: async (signalOrCtx?: AbortSignal | { signal?: AbortSignal }): Promise<FormOptions> => {
+    const signal = signalOrCtx instanceof AbortSignal ? signalOrCtx : signalOrCtx?.signal;
+    return unwrap(await client.get(ENDPOINTS.CREATION_FORM_OPTIONS, { signal }));
+  },
+  standardCategories: async (q?: string, signal?: AbortSignal): Promise<StandardCategorySuggestion[]> =>
+    unwrap(await client.get(ENDPOINTS.CREATION_STANDARD_CATEGORIES, { params: { ...(q ? { q } : {}), limit: 20 }, signal })),
+  categoryTree: async (signalOrCtx?: AbortSignal | { signal?: AbortSignal }): Promise<CategoryNode[]> => {
+    const signal = signalOrCtx instanceof AbortSignal ? signalOrCtx : signalOrCtx?.signal;
+    return unwrap(await client.get(ENDPOINTS.CATEGORIES_TREE, { signal }));
+  },
 
   // ---------------------------------------------------------------------------------------- brands
-  brands: async (): Promise<Brand[]> => unwrap(await client.get(ENDPOINTS.BRANDS, { params: { limit: 100 } })),
+  brands: async (signalOrCtx?: AbortSignal | { signal?: AbortSignal }): Promise<Brand[]> => {
+    const signal = signalOrCtx instanceof AbortSignal ? signalOrCtx : signalOrCtx?.signal;
+    return unwrap(await client.get(ENDPOINTS.BRANDS, { params: { limit: 100 }, signal }));
+  },
   createBrand: async (name: string): Promise<Brand> => unwrap(await client.post(ENDPOINTS.BRANDS, { name })),
   confirmBrand: async (id: string): Promise<Brand> => unwrap(await client.post(ENDPOINTS.BRAND_CONFIRM(id))),
 

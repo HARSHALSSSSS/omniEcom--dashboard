@@ -239,4 +239,97 @@ export interface AccountSession {
   ip: string | null;
 }
 
-export type SettingsModule = "business" | "regional" | "gstin" | "operations" | "notifications" | "team" | "security";
+export type SettingsModule =
+  | "general"
+  | "business"
+  | "regional"
+  | "gstin"
+  | "operations"
+  | "listings"
+  | "inventory"
+  | "fulfillment"
+  | "pricing"
+  | "integrations"
+  | "notifications"
+  | "team"
+  | "security"
+  | "profile";
+
+// ---- General Settings ---------------------------------------------------------------------------------
+
+export interface GeneralSettings {
+  workspaceDisplayName: string;
+  defaultLandingRoute: string;
+  interfaceLanguage: string;
+  defaultPageSize: number;
+  defaultCatalogView: "grid" | "table";
+  defaultReportingPeriod: "7d" | "30d" | "qtd" | "fytd";
+  telemetryPollingIntervalSeconds: number;
+  showMediaThumbnails: boolean;
+  guardrails: {
+    confirmBulkStatus: boolean;
+    confirmStockAllocation: boolean;
+    warnZeroStockDelist: boolean;
+  };
+}
+
+// ---- Inventory & Listings Settings --------------------------------------------------------------------
+
+export interface CatalogListingSettings {
+  skuSyntaxTemplate: string;
+  skuSeparator: "-" | "_" | "/";
+  skuCasing: "uppercase" | "lowercase" | "as_is";
+  strictEanValidation: boolean;
+  mandatoryGates: {
+    hsnCode: boolean;
+    countryOfOrigin: boolean;
+    gstRateSlab: boolean;
+  };
+  syncSovereignty: "master_catalog" | "channel_autonomous";
+}
+
+export interface ChannelReserveAllocation {
+  channelId: string;
+  channelName: string;
+  channelIcon: string;
+  reservePercent: number;
+  safetyBufferUnits: number;
+  status: "active" | "paused";
+}
+
+export interface InventoryBufferSettings {
+  globalBufferPercent: number;
+  minSafetyStockUnits: number;
+  criticalLowStockUnits: number;
+  channelAllocations: ChannelReserveAllocation[];
+  hubPriorities: Array<{ id: string; name: string; city: string; priority: number; active: boolean }>;
+  negativeStockTwoStepApproval: boolean;
+  spikeProtectionUnitsPerHour: number;
+}
+
+// ---- Pricing & Margins Settings -----------------------------------------------------------------------
+
+export interface PricingTierConfig {
+  id: string;
+  channelName: string;
+  channelCode: string;
+  baseMarkupPercent: number;
+  fixedFeeBufferInr: number;
+  hardUndercutFloorInr: number;
+  maxDiscountDepthPercent: number;
+  repriceIntervalMinutes: number;
+  minNetMarginPercent: number;
+  autoDelistOnBreach: boolean;
+  dealFloorInr: number;
+  mandate2faForMarkdown: boolean;
+  status: "active" | "draft" | "paused";
+}
+
+export interface PricingMarginSettings {
+  grossMarginFloorPercent: number;
+  psychologicalEnding: "9" | "0" | "exact";
+  legalMetrologyMrpGate: boolean;
+  withholdTcsTdsBuffer: boolean;
+  maxVelocityShiftPercent: number;
+  tiers: PricingTierConfig[];
+}

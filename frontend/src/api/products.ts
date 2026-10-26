@@ -99,7 +99,7 @@ export const catalogApi = {
     return { blob: res.data, fileName: fileNameOf(res.headers["content-disposition"], "products.csv") };
   },
 
-  views: async () => unwrap<SavedView[]>(await client.get(ENDPOINTS.VIEWS, { params: { screen: "products" } })),
+  views: async (signal?: AbortSignal) => unwrap<SavedView[]>(await client.get(ENDPOINTS.VIEWS, { params: { screen: "products" }, signal })),
 
   createView: async (input: { name: string; filters: Record<string, unknown>; sort: string | null; shared: boolean }) =>
     unwrap<SavedView>(await client.post(ENDPOINTS.VIEWS, { screen: "products", ...input })),
@@ -108,13 +108,13 @@ export const catalogApi = {
     await client.delete(ENDPOINTS.VIEW(id));
   },
 
-  categoryTree: async () => unwrap<CategoryNode[]>(await client.get(ENDPOINTS.CATEGORIES_TREE)),
+  categoryTree: async (signal?: AbortSignal) => unwrap<CategoryNode[]>(await client.get(ENDPOINTS.CATEGORIES_TREE, { signal })),
 
   /** the marketplaces the business has connected, by marketplace code, with the marketplace's own name */
-  channels: async (): Promise<ChannelOption[]> => {
+  channels: async (signal?: AbortSignal): Promise<ChannelOption[]> => {
     const [accounts, marketplaces] = await Promise.all([
-      client.get<{ data: Array<{ marketplace: string; displayName: string }> }>(ENDPOINTS.MARKETPLACE_ACCOUNTS, { params: { limit: 100 } }),
-      client.get<{ data: Array<{ code: string; displayName: string }> }>(ENDPOINTS.MARKETPLACES).catch(() => null),
+      client.get<{ data: Array<{ marketplace: string; displayName: string }> }>(ENDPOINTS.MARKETPLACE_ACCOUNTS, { params: { limit: 100 }, signal }),
+      client.get<{ data: Array<{ code: string; displayName: string }> }>(ENDPOINTS.MARKETPLACES, { signal }).catch(() => null),
     ]);
     const names = new Map((marketplaces?.data.data ?? []).map((m) => [m.code, m.displayName]));
     const seen = new Map<string, ChannelOption>();

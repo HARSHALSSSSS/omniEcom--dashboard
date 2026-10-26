@@ -75,7 +75,7 @@ function Probe() {
   return <div data-testid="loc">{`${l.pathname}${l.search}`}</div>;
 }
 
-function renderPage(url = "/product-intelligence") {
+function renderPage(url = "/product-intelligence?tab=all") {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 0 }, mutations: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>

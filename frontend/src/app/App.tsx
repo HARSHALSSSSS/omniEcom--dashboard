@@ -8,7 +8,7 @@ import { ErrorBoundary } from "@/components/common/ErrorBoundary";
 import { queryClient } from "@/lib/queryClient";
 import { bootstrapSession } from "@/lib/session";
 
-export function App() {
+function App() {
   // turn a stored refresh token into a live session before any guarded page renders
   useEffect(() => {
     void bootstrapSession();

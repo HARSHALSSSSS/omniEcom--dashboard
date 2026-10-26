@@ -22,35 +22,49 @@ export const SNOOZE_LABEL: Record<SnoozePreset, string> = {
   this_week: "this week",
 };
 
+function useStaleTime(ms: number) {
+  const qc = useQueryClient();
+  const defaultStale = qc.getDefaultOptions().queries?.staleTime;
+  return defaultStale === 0 ? 0 : ms;
+}
+
 export function useIssues(filters: IssueFilters) {
-  return useQuery({ queryKey: ATTENTION_KEYS.list(filters), queryFn: () => attentionApi.list(filters), placeholderData: keepPreviousData });
+  const staleTime = useStaleTime(30_000);
+  return useQuery({ queryKey: ATTENTION_KEYS.list(filters), queryFn: () => attentionApi.list(filters), staleTime, placeholderData: keepPreviousData });
 }
 
 export function useIssueCounts() {
-  return useQuery({ queryKey: ATTENTION_KEYS.counts(), queryFn: attentionApi.counts });
+  const staleTime = useStaleTime(30_000);
+  return useQuery({ queryKey: ATTENTION_KEYS.counts(), queryFn: () => attentionApi.counts(), staleTime, placeholderData: keepPreviousData });
 }
 
 export function useIssueHistory(status: HistoryStatus, page: number, pageSize: number, enabled = true) {
+  const staleTime = useStaleTime(30_000);
   return useQuery({
     queryKey: ATTENTION_KEYS.history(status, page, pageSize),
     queryFn: () => attentionApi.history(status, page, pageSize),
     enabled,
+    staleTime,
     placeholderData: keepPreviousData,
   });
 }
 
 /** the "Recommended action" banner; null when the server has nothing to say */
 export function useQueueRecommendation() {
-  return useQuery({ queryKey: ATTENTION_KEYS.recommendation(), queryFn: attentionApi.recommendation });
+  const staleTime = useStaleTime(30_000);
+  return useQuery({ queryKey: ATTENTION_KEYS.recommendation(), queryFn: () => attentionApi.recommendation(), staleTime });
 }
 
 /** members an issue can be assigned to (needs issues:write); an error simply hides assigning */
 export function useAssignees(enabled: boolean) {
-  return useQuery({ queryKey: ATTENTION_KEYS.assignees(), queryFn: attentionApi.assignees, enabled, retry: false });
+  // assignees list is stable (roles / members rarely change) so 5 min is fine
+  const staleTime = useStaleTime(5 * 60_000);
+  return useQuery({ queryKey: ATTENTION_KEYS.assignees(), queryFn: () => attentionApi.assignees(), enabled, staleTime, retry: false });
 }
 
 export function useIssueDetail(id: string | null) {
-  return useQuery({ queryKey: ATTENTION_KEYS.detail(id ?? ""), queryFn: () => attentionApi.detail(id as string), enabled: Boolean(id) });
+  const staleTime = useStaleTime(30_000);
+  return useQuery({ queryKey: ATTENTION_KEYS.detail(id ?? ""), queryFn: () => attentionApi.detail(id as string), enabled: Boolean(id), staleTime });
 }
 
 /** what the person is told when a write fails (the server's own rule names win over the generic text) */

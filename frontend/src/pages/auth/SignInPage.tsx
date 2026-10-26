@@ -13,6 +13,7 @@ import { useWorkspaceStore } from "@/store/workspace.store";
 import { signIn } from "@/lib/session";
 import { errorMessage } from "@/api/errors";
 import { useSubmitLock } from "@/hooks/useSubmitGuard";
+import { isSafeInternalRedirect } from "@/utils/security";
 
 const signInSchema = z.object({
   email: z.string().email("Please enter a valid work email"),
@@ -58,8 +59,11 @@ export default function SignInPage() {
     // back to where the visitor was heading; otherwise the workspace, or the wizard while onboarding is open
     const { onboardingComplete, onboardingResumeStep } = useWorkspaceStore.getState();
     const from = (location.state as { from?: { pathname: string; search?: string } } | null)?.from;
+    const safeDestination = from && isSafeInternalRedirect(from.pathname)
+      ? `${from.pathname}${from.search ?? ""}`
+      : ROUTES.DASHBOARD;
     if (!onboardingComplete) navigate(`${ROUTES.ONBOARDING}/${onboardingResumeStep}`, { replace: true });
-    else navigate(from ? `${from.pathname}${from.search ?? ""}` : ROUTES.DASHBOARD, { replace: true });
+    else navigate(safeDestination, { replace: true });
   };
 
   return (

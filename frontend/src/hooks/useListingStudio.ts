@@ -47,14 +47,7 @@ export const useStudio = (id: string) =>
     refetchOnMount: "always",
   });
 
-export function useDebounced<T>(value: T, ms: number): T {
-  const [v, setV] = useState(value);
-  useEffect(() => {
-    const t = setTimeout(() => setV(value), ms);
-    return () => clearTimeout(t);
-  }, [value, ms]);
-  return v;
-}
+export { useDebounced } from "@/hooks/useDebounced";
 
 /** marketplace category search of the category dialog */
 export const useCategorySearch = (accountId: string | undefined, query: string, enabled: boolean) =>

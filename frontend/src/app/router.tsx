@@ -92,11 +92,9 @@ const AiAssistantPage = lazy(
 const AutomationPage = lazy(() => import("@/pages/automation/AutomationPage"));
 // Settings
 const SettingsPage = lazy(() => import("@/pages/settings/SettingsPage"));
-// Dev
-// only reachable in `vite dev`; the production build never registers the route (the lazy import is tree-shaken away)
-const ComponentsDevPage = import.meta.env.DEV
-  ? lazy(() => import("@/pages/dev/ComponentsDevPage"))
-  : null;
+// Error & Fallback pages
+const NotFoundPage = lazy(() => import("@/pages/error/NotFoundPage"));
+const ErrorPage = lazy(() => import("@/pages/error/ErrorPage"));
 
 function OnboardingIndex() {
   const step = useWorkspaceStore((s) => s.onboardingResumeStep);
@@ -278,12 +276,11 @@ export const router = createBrowserRouter([
         element: withSuspense(SettingsPage),
       },
       { path: ROUTES.SETTINGS, element: withSuspense(SettingsPage) },
-      // Dev
-      ...(ComponentsDevPage
-        ? [{ path: "/dev/components", element: withSuspense(ComponentsDevPage) }]
-        : []),
     ],
   },
+  // Error and Not Found routes
+  { path: ROUTES.NOT_FOUND, element: withSuspense(NotFoundPage) },
+  { path: ROUTES.ERROR, element: withSuspense(ErrorPage) },
   { path: "*", element: <RouteError notFound /> },
     ],
   },

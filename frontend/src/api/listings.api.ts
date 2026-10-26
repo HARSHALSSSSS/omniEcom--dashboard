@@ -139,10 +139,10 @@ export const listingsApi = {
   syncJob: async (jobId: string) => unwrap<SyncJobView>(await client.get(ENDPOINTS.SYNC_JOB(jobId))),
 
   /** connected accounts and the marketplaces' own names (filters, create-listing targets) */
-  channels: async (): Promise<ListingChannels> => {
+  channels: async (signal?: AbortSignal): Promise<ListingChannels> => {
     const [accounts, marketplaces] = await Promise.all([
-      client.get<{ data: ListingAccount[] }>(ENDPOINTS.MARKETPLACE_ACCOUNTS, { params: { limit: 100 } }),
-      client.get<{ data: Array<{ code: string; displayName: string }> }>(ENDPOINTS.MARKETPLACES).catch(() => null),
+      client.get<{ data: ListingAccount[] }>(ENDPOINTS.MARKETPLACE_ACCOUNTS, { params: { limit: 100 }, signal }),
+      client.get<{ data: Array<{ code: string; displayName: string }> }>(ENDPOINTS.MARKETPLACES, { signal }).catch(() => null),
     ]);
     const names = new Map((marketplaces?.data.data ?? []).map((m) => [m.code, m.displayName]));
     const seen = new Map<string, { code: string; name: string }>();

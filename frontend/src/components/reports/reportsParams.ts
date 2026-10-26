@@ -27,7 +27,7 @@ export function readUrlState(p: URLSearchParams): ReportsUrlState {
   const size = Number(p.get("size"));
   const run = p.get("run");
   return {
-    tab: oneOf(p.get("tab"), REPORT_TABS) ?? "reports",
+    tab: oneOf(p.get("tab"), REPORT_TABS) ?? "overview",
     type: oneOf(p.get("type"), REPORT_TYPES),
     status: oneOf(p.get("status"), RUN_STATUSES),
     trigger: oneOf(p.get("trigger"), RUN_TRIGGERS),
@@ -62,7 +62,7 @@ export function useReportsUrlState() {
           for (const key of keys) {
             const value = patch[key];
             next.delete(key);
-            if (value !== null && value !== undefined && value !== "" && !(key === "tab" && value === "reports")) next.set(key, value);
+            if (value !== null && value !== undefined && value !== "" && !(key === "tab" && value === "overview")) next.set(key, value);
           }
           return next;
         },

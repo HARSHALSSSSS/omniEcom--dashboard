@@ -8,6 +8,9 @@ export const reportKeys = {
   all: ["reports"] as const,
   overview: (b: string | undefined) => ["reports", "overview", b] as const,
   catalog: (b: string | undefined) => ["reports", "catalog", b] as const,
+  sales: (b: string | undefined, p?: Record<string, unknown>) => ["reports", "sales", b, p] as const,
+  marketplaces: (b: string | undefined, p?: Record<string, unknown>) => ["reports", "marketplaces", b, p] as const,
+  returns: (b: string | undefined, p?: Record<string, unknown>) => ["reports", "returns", b, p] as const,
   runs: (b: string | undefined, q: RunQuery) => ["reports", "runs", b, q] as const,
   run: (b: string | undefined, id: string) => ["reports", "run", b, id] as const,
   schedules: (b: string | undefined, q: ScheduleQuery) => ["reports", "schedules", b, q] as const,
@@ -32,6 +35,36 @@ export function useReportsOverview() {
 export function useReportCatalog() {
   const b = useBusinessId();
   return useQuery({ queryKey: reportKeys.catalog(b), queryFn: ({ signal }) => reportsApi.catalog(signal), staleTime: 10 * 60_000 });
+}
+
+export function useReportsSales(params?: { from?: string; to?: string; period?: "day" | "week" | "month"; marketplace?: string }, enabled = true) {
+  const b = useBusinessId();
+  return useQuery({
+    queryKey: reportKeys.sales(b, params),
+    queryFn: ({ signal }) => reportsApi.sales(params, signal),
+    staleTime: 30_000,
+    enabled,
+  });
+}
+
+export function useReportsMarketplaces(params?: { from?: string; to?: string }, enabled = true) {
+  const b = useBusinessId();
+  return useQuery({
+    queryKey: reportKeys.marketplaces(b, params),
+    queryFn: ({ signal }) => reportsApi.marketplaces(params, signal),
+    staleTime: 30_000,
+    enabled,
+  });
+}
+
+export function useReportsReturns(params?: { from?: string; to?: string }, enabled = true) {
+  const b = useBusinessId();
+  return useQuery({
+    queryKey: reportKeys.returns(b, params),
+    queryFn: ({ signal }) => reportsApi.returns(params, signal),
+    staleTime: 30_000,
+    enabled,
+  });
 }
 
 /** one numbered page of the run history; re-reads itself while something is generating */

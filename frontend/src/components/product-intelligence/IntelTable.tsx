@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { cn } from "@/utils/cn";
 import { formatNumber } from "@/utils/format";
 import type { IntelAction, ProductIntelligenceItem } from "@/types/intelligence";
@@ -43,6 +44,9 @@ export function IntelTable({ items, selectedVariantId, onOpen }: IntelTableProps
             </th>
             <th scope="col" className={TH}>
               Confidence
+            </th>
+            <th scope="col" className={TH}>
+              Action
             </th>
           </tr>
         </thead>
@@ -99,6 +103,15 @@ export function IntelTable({ items, selectedVariantId, onOpen }: IntelTableProps
                 <td className="px-4 py-3">
                   <span className={cn("block font-mono font-semibold", CONFIDENCE_TONE[item.confidence.level])}>{item.confidence.score}%</span>
                   <span className="block text-[11px] capitalize text-muted-foreground">{item.confidence.level}</span>
+                </td>
+                <td className="px-4 py-3">
+                  <Link
+                    to={`/ai-assistant?sku=${item.sku}&product=${encodeURIComponent(item.productName)}&context=${item.recommendedAction}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="inline-flex items-center gap-1 font-medium text-xs text-foreground hover:underline"
+                  >
+                    Inspect product →
+                  </Link>
                 </td>
               </tr>
             );

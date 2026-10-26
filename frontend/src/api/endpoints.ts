@@ -358,6 +358,10 @@ export const ENDPOINTS = {
   // Intelligence
   REPORTS_OVERVIEW: `${BASE}/reports/overview`,
   REPORTS_CATALOG: `${BASE}/reports/catalog`,
+  REPORTS_SALES: `${BASE}/reports/sales`,
+  REPORTS_ORDERS: `${BASE}/reports/orders`,
+  REPORTS_MARKETPLACES: `${BASE}/reports/marketplaces`,
+  REPORTS_RETURNS: `${BASE}/reports/returns`,
   REPORT_EXPORTS: `${BASE}/reports/exports`,
   REPORT_RUNS: `${BASE}/reports/runs`,
   REPORT_RUN: (id: string) => `${BASE}/reports/runs/${id}`,
@@ -366,6 +370,7 @@ export const ENDPOINTS = {
   REPORT_SCHEDULE: (id: string) => `${BASE}/reports/schedules/${id}`,
   REPORT_SCHEDULE_ACTION: (id: string, action: "pause" | "resume" | "run-now") => `${BASE}/reports/schedules/${id}/${action}`,
   PROFIT_WATERFALL: `${BASE}/analytics/profitability/waterfall`,
+  PROFITABILITY: `${BASE}/analytics/profitability`,
   MARKETING_SPEND: `${BASE}/analytics/marketing-spend`,
   MARKETING_SPEND_ROW: (id: string) => `${BASE}/analytics/marketing-spend/${id}`,
   MARKETING_SPEND_SUMMARY: `${BASE}/analytics/marketing-spend/summary`,

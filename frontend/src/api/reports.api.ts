@@ -9,11 +9,14 @@ import type {
   Catalog,
   DownloadedFile,
   ExportRequest,
+  MarketplacesReportResponse,
   Paged,
   ReportRun,
   ReportSchedule,
   ReportsOverview,
+  ReturnsReportResponse,
   RunQuery,
+  SalesReportResponse,
   SchedulePatch,
   ScheduleQuery,
   ScheduleWrite,
@@ -79,6 +82,15 @@ export const reportsApi = {
   overview: async (signal?: AbortSignal) => unwrap<ReportsOverview>(await client.get(ENDPOINTS.REPORTS_OVERVIEW, { signal })),
 
   catalog: async (signal?: AbortSignal) => unwrap<Catalog>(await client.get(ENDPOINTS.REPORTS_CATALOG, { signal })),
+
+  sales: async (params?: { from?: string; to?: string; period?: "day" | "week" | "month"; marketplace?: string }, signal?: AbortSignal) =>
+    unwrap<SalesReportResponse>(await client.get(ENDPOINTS.REPORTS_SALES, { params, signal })),
+
+  marketplaces: async (params?: { from?: string; to?: string }, signal?: AbortSignal) =>
+    unwrap<MarketplacesReportResponse>(await client.get(ENDPOINTS.REPORTS_MARKETPLACES, { params, signal })),
+
+  returns: async (params?: { from?: string; to?: string }, signal?: AbortSignal) =>
+    unwrap<ReturnsReportResponse>(await client.get(ENDPOINTS.REPORTS_RETURNS, { params, signal })),
 
   /** 201 with a finished run, or 202 with a queued one (poll `getRun`). One Idempotency-Key is not offered by this endpoint, so callers lock the button while it runs. */
   exportReport: async (body: ExportRequest) => unwrap<ReportRun>(await client.post(ENDPOINTS.REPORT_EXPORTS, { ...body, background: body.background ?? false })),

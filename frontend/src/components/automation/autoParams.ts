@@ -5,7 +5,7 @@ import { RULE_STATUSES, RUN_STATUSES, type AutomationRule, type AutomationTab, t
 export const PAGE_SIZES = [25, 50, 100] as const;
 export const DEFAULT_PAGE_SIZE = 25;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const TABS: readonly AutomationTab[] = ["rules", "approvals", "runs"];
+const TABS: readonly AutomationTab[] = ["overview", "rules", "approvals", "runs"];
 
 const oneOf = <T extends string>(value: string | null | undefined, allowed: readonly T[]): T | undefined => allowed.find((a) => a === value);
 const uuid = (value: string | null): string | undefined => (value && UUID.test(value) ? value : undefined);
@@ -28,7 +28,13 @@ export interface AutomationUrlState {
 }
 
 export function readUrlState(params: URLSearchParams): AutomationUrlState {
-  const tab = oneOf(params.get("tab"), TABS) ?? "rules";
+  const hasRulesParams = Boolean(
+    params.get("status") ||
+    params.get("trigger") ||
+    params.get("q") ||
+    params.get("rule")
+  );
+  const tab = oneOf(params.get("tab"), TABS) ?? (hasRulesParams ? "rules" : "overview");
   const page = Number(params.get("page"));
   const size = Number(params.get("size"));
   return {
@@ -72,7 +78,15 @@ export function useAutomationUrlState() {
           if (!("page" in patch) && !onlyDrawer) next.delete("page");
           for (const [key, value] of Object.entries(patch)) {
             next.delete(key);
-            if (value !== null && value !== undefined && value !== "" && !(key === "tab" && value === "rules")) next.set(key, value);
+            if (value !== null && value !== undefined && value !== "") {
+              next.set(key, value);
+            }
+          }
+          if (next.has("status") || next.has("trigger") || next.has("q") || next.has("rule")) {
+            next.delete("tab");
+          }
+          if (next.get("tab") === "overview") {
+            next.delete("tab");
           }
           return next;
         },

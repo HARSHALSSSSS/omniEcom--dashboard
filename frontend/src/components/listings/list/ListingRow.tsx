@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { ROUTES } from "@/constants/routes";
 import { cn } from "@/utils/cn";
+import { isSafeUrl } from "@/utils/security";
 import { formatRelativeTime } from "@/utils/format";
 import type { ListingBulkAction, ListingRow as Row } from "@/types/listing";
 import { CONTENT_ALERT, NO_WRITE_REASON, STATUS_COLOR, STATUS_LABEL, price, readinessColor, rowActionOf, secondaryActionOf, statusPathOf, studioPath } from "./listingFormat";
@@ -75,7 +76,7 @@ export function ListingRow({ row, selected, canWrite, busy, onToggle, onQuickVie
           {t.externalListingId && (
             <>
               {" · "}
-              {t.externalUrl ? (
+              {t.externalUrl && isSafeUrl(t.externalUrl) ? (
                 <a href={t.externalUrl} target="_blank" rel="noopener noreferrer" className="hover:underline" aria-label={`Open ${t.externalListingId} on ${t.marketplaceName}`}>
                   {t.externalListingId}
                 </a>

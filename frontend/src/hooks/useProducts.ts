@@ -66,7 +66,7 @@ export function useCategoryOptions() {
   const businessId = useBusinessId();
   return useQuery({
     queryKey: PRODUCT_QUERY_KEYS.categories(businessId),
-    queryFn: catalogApi.categoryTree,
+    queryFn: ({ signal }) => catalogApi.categoryTree(signal),
     staleTime: 5 * 60_000,
     select: flatten,
   });
@@ -76,7 +76,7 @@ export function useChannelOptions() {
   const businessId = useBusinessId();
   return useQuery({
     queryKey: PRODUCT_QUERY_KEYS.channels(businessId),
-    queryFn: catalogApi.channels,
+    queryFn: ({ signal }) => catalogApi.channels(signal),
     staleTime: 5 * 60_000,
   });
 }
@@ -85,7 +85,7 @@ export function useSavedViews() {
   const businessId = useBusinessId();
   return useQuery({
     queryKey: PRODUCT_QUERY_KEYS.views(businessId),
-    queryFn: catalogApi.views,
+    queryFn: ({ signal }) => catalogApi.views(signal),
     staleTime: 60_000,
   });
 }

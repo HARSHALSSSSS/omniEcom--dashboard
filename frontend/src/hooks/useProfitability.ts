@@ -26,6 +26,17 @@ export function useWaterfall(query: WaterfallQuery | null) {
   });
 }
 
+export function useProfitabilityQuery(params: { groupBy?: "product" | "marketplace" | "order"; from?: string; to?: string; compare?: "previous" } | null) {
+  const b = useBusinessId();
+  return useQuery({
+    queryKey: ["profitability", "report", b, params],
+    queryFn: ({ signal }) => profitabilityApi.profitability(params ?? undefined, signal),
+    enabled: params !== null,
+    staleTime: 30_000,
+    placeholderData: keepPreviousData,
+  });
+}
+
 export function useSpendRows(query: SpendQuery | null, enabled = true) {
   const b = useBusinessId();
   return useQuery({
