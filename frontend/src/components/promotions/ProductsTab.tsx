@@ -1,176 +1,216 @@
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { Search, Sparkles, Download, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import type { ProductIntelligenceItem, IntelItem } from "@/types/intelligence";
-import type { PromotionAccount, PromotionCampaign, PromotionProduct } from "@/types/promotions";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ROUTES } from "@/constants/routes";
+import { promotionsApi } from "@/api/promotions.api";
+import { errorMessage } from "@/api/errors";
+import { useSubmitGuard } from "@/hooks/useSubmitGuard";
+import { toast } from "@/hooks/useToast";
+import { downloadText } from "@/components/pricing/pricingFormat";
+import { formatNumber } from "@/utils/format";
+import {
+  CANDIDATE_QUICK_FILTERS,
+  CANDIDATE_SORTS,
+  type CandidatesPage,
+  type CandidatesQuery,
+  type ProductSegment,
+  type PromotionAccount,
+  type PromotionCandidate,
+} from "@/types/promotions";
+import type { PromotionsUrlState } from "./promoParams";
+import { candidatesQueryOf } from "./promoParams";
+import { LoadError, PromoPagination, TableSkeleton } from "./PromoUi";
+import {
+  CANDIDATE_SORT_LABELS,
+  CANDIDATE_STATUS_LABELS,
+  CANDIDATE_STATUS_TONE,
+  ELIGIBILITY_LABELS,
+  ELIGIBILITY_TONE,
+  WRITE_REASON,
+  candidateKey,
+  candidatesCsv,
+  marketplaceLabel,
+  money,
+  percentLabel,
+  quickFilterLabel,
+} from "./promoFormat";
+
+/** a CSV export stops here; the seller is told when the list was longer */
+export const EXPORT_CAP = 10_000;
+const EXPORT_PAGE = 100;
 
 interface ProductsTabProps {
-  intelItems: IntelItem[];
-  intelTotal: number;
-  promotedProducts: PromotionProduct[];
-  campaigns: PromotionCampaign[];
-  accounts: PromotionAccount[];
+  url: PromotionsUrlState;
+  update: (patch: Partial<Record<"q" | "status" | "seg" | "quick" | "market" | "sort" | "page" | "size", string | null>>, opts?: { replace?: boolean }) => void;
+  data: CandidatesPage | undefined;
   loading: boolean;
-  selectedIds: string[];
-  onSelectIdsChange: (ids: string[]) => void;
-  onCreateCampaignWithSelected: (variantIds: string[]) => void;
-  onOpenCampaign?: (campaignId: string) => void;
+  error: unknown;
+  onRetry: () => void;
+  accounts: PromotionAccount[];
+  /** the seller's own selection, kept across pages and filters (variant + channel) */
+  selected: Map<string, PromotionCandidate>;
+  onSelectedChange: (next: Map<string, PromotionCandidate>) => void;
+  canWrite: boolean;
+  /** rows of ONE channel */
+  onCreateCampaign: (rows: PromotionCandidate[]) => void;
+  onOpenCampaign: (campaignId: string) => void;
 }
 
-export function ProductsTab({
-  intelItems,
-  intelTotal,
-  promotedProducts,
-  campaigns,
-  accounts,
-  loading,
-  selectedIds,
-  onSelectIdsChange,
-  onCreateCampaignWithSelected,
-  onOpenCampaign,
-}: ProductsTabProps) {
-  const [activeSegment, setActiveSegment] = useState<"recommended" | "custom" | "all">("recommended");
-  const [search, setSearch] = useState("");
-  const [quickFilter, setQuickFilter] = useState<string | null>(null);
-  const [selectedMarketplace, setSelectedMarketplace] = useState<string>("all");
+const SEGMENT_LABELS: Record<ProductSegment, string> = { recommended: "● Recommended", custom: "Custom", all: "All Matching" };
 
-  // Map promoted products by variantId to check existing campaign
-  const campaignByVariant = useMemo(() => {
-    const map = new Map<string, PromotionProduct>();
-    for (const p of promotedProducts) {
-      map.set(p.variantId, p);
+const selectClass = "h-9 rounded-md border border-input bg-background px-3 text-xs";
+const pricingLink = (r: PromotionCandidate): string => `${ROUTES.PRICING}?view=proposals&tab=pending_review&q=${encodeURIComponent(r.sku)}&account=${r.accountId}`;
+
+function MarginCell({ r }: { r: PromotionCandidate }) {
+  if (r.marginBps === null) {
+    return (
+      <div>
+        <span className="font-mono text-muted-foreground">—</span>
+        <p className="text-[11px] text-muted-foreground">{r.unitCostMinor === null ? "cost not set" : "margin unknown"}</p>
+        {r.feesMinor === null && <p className="text-[11px] text-muted-foreground">fees not configured</p>}
+      </div>
+    );
+  }
+  const below = r.targetMarginBps !== null && r.marginBps < r.targetMarginBps;
+  return (
+    <div className="space-y-0.5">
+      <span className={`font-mono ${below ? "font-semibold text-amber-600" : ""}`}>{percentLabel(r.marginBps)}</span>
+      {r.feesMinor === null && <p className="text-[11px] text-muted-foreground">fees not configured</p>}
+      {r.targetMarginBps !== null && (
+        <p className="text-[11px] text-muted-foreground">
+          Target {percentLabel(r.targetMarginBps)} {below && <span className="font-semibold text-amber-600">· below target</span>}
+        </p>
+      )}
+      {r.maxDiscountBps !== null && (
+        <p className="text-[11px] text-muted-foreground">{r.maxDiscountBps > 0 ? `Up to ${percentLabel(r.maxDiscountBps)} off keeps the target` : "No discount keeps the target"}</p>
+      )}
+    </div>
+  );
+}
+
+function CampaignCell({ r, onOpen }: { r: PromotionCandidate; onOpen: (id: string) => void }) {
+  const others = r.conflicts.filter((c) => c.kind !== "other_campaign" || !r.existingCampaign);
+  return (
+    <div className="space-y-0.5">
+      {r.existingCampaign ? (
+        <button type="button" onClick={() => onOpen(r.existingCampaign!.id)} className="font-medium text-foreground underline-offset-2 hover:underline">
+          {r.existingCampaign.name} <span className="font-normal text-muted-foreground">({r.existingCampaign.status})</span>
+        </button>
+      ) : (
+        <span className="text-muted-foreground">—</span>
+      )}
+      {others.map((c) =>
+        c.kind === "pending_price_proposal" ? (
+          <p key={c.kind} className="text-[11px]">
+            <Link to={pricingLink(r)} className="font-medium text-blue-600 underline hover:text-blue-700">
+              Price change waiting in Pricing
+            </Link>
+          </p>
+        ) : (
+          <p key={c.kind + c.message} className="text-[11px] text-amber-700">
+            {c.message}
+          </p>
+        ),
+      )}
+    </div>
+  );
+}
+
+export function ProductsTab({ url, update, data, loading, error, onRetry, accounts, selected, onSelectedChange, canWrite, onCreateCampaign, onOpenCampaign }: ProductsTabProps) {
+  const custom = url.segment === "custom";
+  const [text, setText] = useState(url.q ?? "");
+  const [chooser, setChooser] = useState<Array<{ accountId: string; channel: string; rows: PromotionCandidate[] }> | null>(null);
+  const exportGuard = useSubmitGuard();
+
+  // typing goes to the URL after a pause, so the server is not asked on every key
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (text.trim() !== (url.q ?? "")) update({ q: text.trim() || null }, { replace: true });
+    }, 300);
+    return () => clearTimeout(t);
+  }, [text, url.q, update]);
+  useEffect(() => setText(url.q ?? ""), [url.q]);
+
+  const markets = useMemo(() => [...new Set(accounts.map((a) => a.marketplace))].sort(), [accounts]);
+  const needle = url.q?.toLowerCase();
+  const customRows = useMemo(
+    () => [...selected.values()].filter((r) => !needle || r.sku.toLowerCase().includes(needle) || r.productName.toLowerCase().includes(needle)),
+    [selected, needle],
+  );
+  const rows = custom ? customRows.slice((url.page - 1) * url.pageSize, url.page * url.pageSize) : (data?.items ?? []);
+  const total = custom ? customRows.length : (data?.total ?? 0);
+  const pages = custom ? Math.max(1, Math.ceil(customRows.length / url.pageSize)) : (data?.pages ?? 1);
+  const thresholds = data?.thresholds;
+  const counts = data?.counts;
+  const summary = data?.summary;
+  const filtered = Boolean(url.q || url.quick || url.marketplace || url.candidateStatus);
+
+  const allOnPage = rows.length > 0 && rows.every((r) => selected.has(candidateKey(r)));
+  const toggleOne = (r: PromotionCandidate) => {
+    const next = new Map(selected);
+    if (next.has(candidateKey(r))) next.delete(candidateKey(r));
+    else next.set(candidateKey(r), r);
+    onSelectedChange(next);
+  };
+  const togglePage = () => {
+    const next = new Map(selected);
+    for (const r of rows) {
+      if (allOnPage) next.delete(candidateKey(r));
+      else next.set(candidateKey(r), r);
     }
-    return map;
-  }, [promotedProducts]);
+    onSelectedChange(next);
+  };
 
-  // Merge and transform real data for display
-  const tableData = useMemo(() => {
-    return intelItems.map((item, idx) => {
-      const existing = campaignByVariant.get(item.variantId);
-      const isShopify = (idx % 5 === 4);
-      const account = accounts[idx % (accounts.length || 1)];
-      const marketplace = isShopify ? "Shopify" : (account ? account.marketplace.charAt(0).toUpperCase() + account.marketplace.slice(1) : "Amazon");
+  /** a campaign runs on one channel: with products from several channels selected, the seller picks which one to start with */
+  const createWithSelected = () => {
+    const groups = new Map<string, { accountId: string; channel: string; rows: PromotionCandidate[] }>();
+    for (const r of selected.values()) {
+      const g = groups.get(r.accountId) ?? { accountId: r.accountId, channel: r.channel, rows: [] };
+      g.rows.push(r);
+      groups.set(r.accountId, g);
+    }
+    const list = [...groups.values()];
+    if (list.length === 0) onCreateCampaign([]);
+    else if (list.length === 1) onCreateCampaign(list[0]!.rows);
+    else setChooser(list);
+  };
 
-      const stock = item.inventory.available ?? 0;
-      const margin = item.marginPercent ?? 0;
-      const salesUnits = item.unitsSold30d > 0 ? item.unitsSold30d : Math.round(item.salesVelocity * 30);
-
-      // Determine Promotion Status
-      let promoStatus: "Recommended" | "Review" | "Not selected" | "Connector unavail." = "Not selected";
-      if (isShopify) {
-        promoStatus = "Connector unavail.";
-      } else if (item.recommendedAction === "promote") {
-        promoStatus = "Recommended";
-      } else if (stock < 10 || margin < 20) {
-        promoStatus = "Review";
+  const exportCsv = () =>
+    void exportGuard.run(async () => {
+      try {
+        let out: PromotionCandidate[];
+        let capped = false;
+        if (custom) out = customRows;
+        else {
+          const base: CandidatesQuery = { ...candidatesQueryOf(url), page: 1, pageSize: EXPORT_PAGE };
+          out = [];
+          for (let page = 1; ; page++) {
+            const res = await promotionsApi.candidates({ ...base, page });
+            out.push(...res.items);
+            if (out.length >= res.total || res.items.length === 0 || page >= res.pages) break;
+            if (out.length >= EXPORT_CAP) {
+              capped = res.total > EXPORT_CAP;
+              break;
+            }
+          }
+          if (out.length > EXPORT_CAP) {
+            out = out.slice(0, EXPORT_CAP);
+            capped = true;
+          }
+        }
+        downloadText(`promotions-products-${new Date().toISOString().slice(0, 10)}.csv`, candidatesCsv(out));
+        if (capped) toast({ title: `The export holds the first ${formatNumber(EXPORT_CAP)} rows`, description: "Narrow the filters to export the rest.", variant: "warning" });
+      } catch (e) {
+        toast({ title: "Could not export the products", description: errorMessage(e), variant: "destructive" });
       }
-
-      // Determine Eligibility
-      let eligibility: "Eligible" | "Margin risk" | "Low inventory" | "Verif. required" | "Not provided" = "Eligible";
-      if (isShopify) {
-        eligibility = "Not provided";
-      } else if (stock <= 5) {
-        eligibility = "Low inventory";
-      } else if (margin > 0 && margin < 20) {
-        eligibility = "Margin risk";
-      } else if (item.recommendedAction === "reorder") {
-        eligibility = "Low inventory";
-      }
-
-      return {
-        variantId: item.variantId,
-        productId: item.productId,
-        productName: item.productName,
-        sku: item.sku,
-        marketplace,
-        existingCampaign: existing ? existing.campaignName : null,
-        existingCampaignId: existing ? existing.campaignId : null,
-        recentSales: salesUnits,
-        availStock: stock,
-        margin: margin,
-        promoStatus,
-        eligibility,
-        isShopify,
-      };
     });
-  }, [intelItems, campaignByVariant, accounts]);
 
-  // Filter according to search, segment, and quick filters
-  const filteredData = useMemo(() => {
-    return tableData.filter((row) => {
-      // Segment filter
-      if (activeSegment === "recommended" && row.promoStatus !== "Recommended" && row.promoStatus !== "Review") {
-        return false;
-      }
-
-      // Marketplace filter
-      if (selectedMarketplace !== "all" && row.marketplace.toLowerCase() !== selectedMarketplace.toLowerCase()) {
-        return false;
-      }
-
-      // Quick filter
-      if (quickFilter === "high_margin" && row.margin < 30) return false;
-      if (quickFilter === "strong_sellers" && row.recentSales < 50) return false;
-      if (quickFilter === "eligible" && row.eligibility !== "Eligible") return false;
-      if (quickFilter === "high_inventory" && row.availStock < 30) return false;
-      if (quickFilter === "not_in_campaign" && row.existingCampaign !== null) return false;
-
-      // Search text
-      if (search.trim()) {
-        const q = search.toLowerCase();
-        return row.productName.toLowerCase().includes(q) || row.sku.toLowerCase().includes(q);
-      }
-
-      return true;
-    });
-  }, [tableData, activeSegment, selectedMarketplace, quickFilter, search]);
-
-  const recommendedCount = tableData.filter((r) => r.promoStatus === "Recommended").length || 12;
-  const totalCount = intelTotal > 0 ? intelTotal : 1248;
-
-  const toggleSelectAll = () => {
-    if (selectedIds.length === filteredData.length) {
-      onSelectIdsChange([]);
-    } else {
-      onSelectIdsChange(filteredData.map((d) => d.variantId));
-    }
-  };
-
-  const toggleSelectOne = (id: string) => {
-    if (selectedIds.includes(id)) {
-      onSelectIdsChange(selectedIds.filter((x) => x !== id));
-    } else {
-      onSelectIdsChange([...selectedIds, id]);
-    }
-  };
-
-  const handleExportCsv = () => {
-    const headers = ["Product", "SKU", "Marketplace", "Existing Campaign", "Recent Sales", "Available Stock", "Margin %", "Status", "Eligibility"];
-    const csvRows = [headers.join(",")];
-    for (const r of filteredData) {
-      csvRows.push([
-        `"${r.productName.replace(/"/g, '""')}"`,
-        `"${r.sku}"`,
-        `"${r.marketplace}"`,
-        `"${r.existingCampaign || "—"}"`,
-        r.recentSales,
-        r.availStock,
-        `${r.margin}%`,
-        r.promoStatus,
-        r.eligibility,
-      ].join(","));
-    }
-    const blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `promotion-products-${new Date().toISOString().slice(0, 10)}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
+  const noneListed = !loading && !error && summary !== undefined && summary.placements === 0 && !filtered;
 
   return (
     <div className="w-full space-y-6">
@@ -178,18 +218,20 @@ export function ProductsTab({
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
           <h1 className="text-xl font-bold tracking-tight text-foreground">Promotion Products</h1>
-          <p className="text-xs text-muted-foreground">Select products for promotion analysis or campaign participation. Data is illustrative.</p>
+          <p className="text-xs text-muted-foreground">Select products for promotion analysis or campaign participation. Based on connector capabilities.</p>
         </div>
 
         <div className="flex items-center gap-2">
           <Button
             size="sm"
             className="gap-1.5 bg-foreground text-xs text-background hover:bg-foreground/90"
-            onClick={() => onCreateCampaignWithSelected(selectedIds)}
+            disabled={!canWrite}
+            title={canWrite ? undefined : WRITE_REASON}
+            onClick={createWithSelected}
           >
-            <Plus className="h-3.5 w-3.5" /> Create Campaign
+            <Plus className="h-3.5 w-3.5" /> Create Campaign{selected.size > 0 ? ` (${selected.size})` : ""}
           </Button>
-          <Button variant="outline" size="sm" className="gap-1 text-xs" onClick={handleExportCsv}>
+          <Button variant="outline" size="sm" className="gap-1 text-xs" aria-label="Export products" loading={exportGuard.busy} disabled={total === 0} onClick={exportCsv}>
             <Download className="h-3.5 w-3.5" /> Export
           </Button>
         </div>
@@ -199,115 +241,105 @@ export function ProductsTab({
       <div className="flex flex-col justify-between gap-4 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center">
         <div className="flex items-baseline gap-6">
           <div>
-            <span className="text-2xl font-bold text-blue-600">{recommendedCount}</span>
+            <span className="text-2xl font-bold text-blue-600">{summary ? formatNumber(summary.recommendedProducts) : "—"}</span>
             <p className="text-xs text-muted-foreground">recommended products</p>
           </div>
           <div className="h-8 w-px bg-border" />
           <div>
-            <span className="text-2xl font-bold text-foreground">{totalCount.toLocaleString()}</span>
+            <span className="text-2xl font-bold text-foreground">{summary ? formatNumber(summary.listedProducts) : "—"}</span>
             <p className="text-xs text-muted-foreground">total products</p>
           </div>
           <div className="h-8 w-px bg-border" />
           <div>
-            <span className="text-2xl font-bold text-foreground">{selectedIds.length}</span>
+            <span className="text-2xl font-bold text-foreground">{selected.size}</span>
             <p className="text-xs text-muted-foreground">products selected</p>
           </div>
         </div>
 
-        {/* Segmented Filter Pills */}
-        <div className="inline-flex rounded-lg border border-border bg-muted p-1 text-xs">
-          {(["recommended", "custom", "all"] as const).map((seg) => (
-            <button
-              key={seg}
-              type="button"
-              onClick={() => setActiveSegment(seg)}
-              className={`rounded-md px-3.5 py-1.5 font-medium transition-all ${
-                activeSegment === seg
-                  ? "bg-background font-semibold text-foreground shadow-2xs"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {seg === "recommended" ? "● Recommended" : seg === "custom" ? "Custom" : "All Matching"}
-            </button>
-          ))}
+        <div role="group" aria-label="Segment" className="inline-flex rounded-lg border border-border bg-muted p-1 text-xs">
+          {(["recommended", "custom", "all"] as const).map((seg) => {
+            const n = seg === "custom" ? selected.size : counts ? (seg === "all" ? counts.all : counts.recommended + counts.review) : null;
+            return (
+              <button
+                key={seg}
+                type="button"
+                aria-pressed={url.segment === seg}
+                onClick={() => update({ seg: seg === "recommended" ? null : seg })}
+                className={`rounded-md px-3.5 py-1.5 font-medium transition-all ${url.segment === seg ? "bg-background font-semibold text-foreground shadow-2xs" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                {SEGMENT_LABELS[seg]}
+                {n !== null && <span className="ml-1 font-mono text-[11px] text-muted-foreground">{formatNumber(n)}</span>}
+              </button>
+            );
+          })}
         </div>
       </div>
 
       {/* Recommendation Banner */}
-      <div
-        className="flex items-start gap-3 rounded-xl border border-blue-200/50 p-4 shadow-2xs"
-        style={{
-          background: "linear-gradient(98deg, #E9D5FF 0%, #DBEAFE 48%, #93C5FD 100%)",
-        }}
-      >
-        <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-blue-700" />
-        <div className="space-y-0.5 text-xs text-foreground">
-          <p className="font-semibold text-foreground">
-            {recommendedCount} products recommended for healthy available stock, strong recent sales and sufficient margin based on available data.
-          </p>
-          <p className="text-foreground/80">
-            Recommendations are suggestions, not selections. Zero products are auto-selected or auto-enrolled. Final selection remains yours. Illustrative data only.
-          </p>
+      {summary && (
+        <div className="flex items-start gap-3 rounded-xl border border-blue-200/50 p-4 shadow-2xs" style={{ background: "linear-gradient(98deg, #E9D5FF 0%, #DBEAFE 48%, #93C5FD 100%)" }}>
+          <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-blue-700" />
+          <div className="space-y-0.5 text-xs text-foreground">
+            <p className="font-semibold text-foreground">
+              {summary.recommendedProducts === 0
+                ? "No product is recommended for a promotion right now."
+                : `${formatNumber(summary.recommendedProducts)} product${summary.recommendedProducts === 1 ? " is" : "s are"} recommended: listed, in stock, with margin room and slow recent sales.`}
+            </p>
+            <p className="text-foreground/80">Recommendations are suggestions, not selections. Nothing is selected or enrolled automatically; the final choice is yours.</p>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Search & Filters */}
       <div className="space-y-3">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              type="search"
-              placeholder="Search product, SKU or barcode"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 text-xs"
-            />
+            <Input type="search" aria-label="Search products" placeholder="Search product or SKU" value={text} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setText(e.target.value)} className="pl-9 text-xs" />
           </div>
 
           <div className="flex items-center gap-2">
-            <select
-              value={selectedMarketplace}
-              onChange={(e) => setSelectedMarketplace(e.target.value)}
-              className="h-9 rounded-md border border-input bg-background px-3 text-xs"
-            >
-              <option value="all">All Marketplaces</option>
-              <option value="amazon">Amazon</option>
-              <option value="flipkart">Flipkart</option>
-              <option value="meesho">Meesho</option>
-              <option value="shopify">Shopify</option>
+            <select aria-label="Marketplace" value={url.marketplace ?? ""} onChange={(e) => update({ market: e.target.value || null })} className={selectClass} disabled={custom}>
+              <option value="">All Marketplaces</option>
+              {markets.map((m) => (
+                <option key={m} value={m}>
+                  {marketplaceLabel(m)}
+                </option>
+              ))}
+            </select>
+            <select aria-label="Status" value={url.candidateStatus ?? ""} onChange={(e) => update({ status: e.target.value || null })} className={selectClass} disabled={custom}>
+              <option value="">Any status</option>
+              {(["recommended", "review", "not_selected", "connector_unavailable"] as const).map((s) => (
+                <option key={s} value={s}>
+                  {CANDIDATE_STATUS_LABELS[s]}
+                </option>
+              ))}
+            </select>
+            <select aria-label="Sort by" value={url.sort} onChange={(e) => update({ sort: e.target.value === "priority" ? null : e.target.value })} className={selectClass} disabled={custom}>
+              {CANDIDATE_SORTS.map((s) => (
+                <option key={s} value={s}>
+                  {CANDIDATE_SORT_LABELS[s]}
+                </option>
+              ))}
             </select>
           </div>
         </div>
 
-        {/* Quick Filter Chips */}
         <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
-          {[
-            { id: "high_margin", label: "High Margin Products" },
-            { id: "strong_sellers", label: "Strong Sellers" },
-            { id: "eligible", label: "Promotion Eligible" },
-            { id: "high_inventory", label: "High Inventory" },
-            { id: "not_in_campaign", label: "Products Not in Campaign" },
-          ].map((f) => (
+          {CANDIDATE_QUICK_FILTERS.map((id) => (
             <button
-              key={f.id}
+              key={id}
               type="button"
-              onClick={() => setQuickFilter(quickFilter === f.id ? null : f.id)}
-              className={`rounded-full border px-3 py-1 font-medium transition-colors ${
-                quickFilter === f.id
-                  ? "border-foreground bg-foreground text-background"
-                  : "border-border bg-card text-muted-foreground hover:border-foreground/30 hover:text-foreground"
-              }`}
+              aria-pressed={url.quick === id}
+              disabled={custom}
+              onClick={() => update({ quick: url.quick === id ? null : id })}
+              className={`rounded-full border px-3 py-1 font-medium transition-colors disabled:opacity-50 ${url.quick === id ? "border-foreground bg-foreground text-background" : "border-border bg-card text-muted-foreground hover:border-foreground/30 hover:text-foreground"}`}
             >
-              {f.label}
+              {quickFilterLabel(id, thresholds)}
             </button>
           ))}
-          {quickFilter && (
-            <button
-              type="button"
-              onClick={() => setQuickFilter(null)}
-              className="text-xs text-muted-foreground underline hover:text-foreground"
-            >
+          {filtered && (
+            <button type="button" onClick={() => update({ q: null, status: null, quick: null, market: null })} className="text-xs text-muted-foreground underline hover:text-foreground">
               Reset filters
             </button>
           )}
@@ -315,167 +347,147 @@ export function ProductsTab({
       </div>
 
       {/* Products Table */}
-      <div className="overflow-x-auto rounded-xl border border-border bg-card shadow-2xs">
-        <table className="w-full text-left text-xs">
-          <thead>
-            <tr className="border-b border-border bg-muted/40 text-muted-foreground">
-              <th className="w-10 px-3 py-3 text-center">
-                <Checkbox
-                  checked={filteredData.length > 0 && selectedIds.length === filteredData.length}
-                  onCheckedChange={toggleSelectAll}
-                  aria-label="Select all"
-                />
-              </th>
-              <th className="px-4 py-3 font-medium">Product</th>
-              <th className="px-4 py-3 font-medium">SKU</th>
-              <th className="px-4 py-3 font-medium">Marketplace</th>
-              <th className="px-4 py-3 font-medium">Existing Campaign</th>
-              <th className="px-4 py-3 font-medium">Recent sales</th>
-              <th className="px-4 py-3 font-medium">Avail. stock</th>
-              <th className="px-4 py-3 font-medium">Margin</th>
-              <th className="px-4 py-3 font-medium">Promotion status</th>
-              <th className="px-4 py-3 font-medium">Eligibility</th>
-              <th className="px-4 py-3 font-medium text-right">Action</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {filteredData.length === 0 ? (
-              <tr>
-                <td colSpan={11} className="p-8 text-center text-muted-foreground">
-                  No products matched the current filters.
-                </td>
+      {loading && !data && !custom ? (
+        <TableSkeleton label="Loading products" />
+      ) : error && !data && !custom ? (
+        <LoadError noun="The products" message={errorMessage(error)} onRetry={onRetry} />
+      ) : noneListed && !custom ? (
+        <div className="flex min-h-[220px] flex-col items-center justify-center gap-2 rounded-xl border border-border bg-card px-6 text-center">
+          <h2 className="text-base font-semibold text-foreground">No product is listed on a connected marketplace yet.</h2>
+          <p className="max-w-[520px] text-xs text-muted-foreground">A product can only be promoted where it has an active listing. Publish products to a marketplace first{summary && summary.unlistedVariants > 0 ? ` (${formatNumber(summary.unlistedVariants)} active variants have no listing)` : ""}.</p>
+          <div className="flex items-center gap-2 pt-2">
+            <Link to={ROUTES.LISTINGS} className="inline-flex h-8 items-center rounded-md border border-border px-3 text-xs font-medium hover:bg-muted">
+              Open Listings
+            </Link>
+            <Link to={ROUTES.MARKETPLACE_HUB} className="inline-flex h-8 items-center rounded-md border border-border px-3 text-xs font-medium hover:bg-muted">
+              Open Marketplace Hub
+            </Link>
+          </div>
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-border bg-card shadow-2xs">
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="border-b border-border bg-muted/40 text-muted-foreground">
+                <th className="w-10 px-3 py-3 text-center">
+                  <Checkbox checked={allOnPage} onCheckedChange={togglePage} aria-label="Select all on this page" disabled={rows.length === 0} />
+                </th>
+                <th className="px-4 py-3 font-medium">Product</th>
+                <th className="px-4 py-3 font-medium">SKU</th>
+                <th className="px-4 py-3 font-medium">Marketplace</th>
+                <th className="px-4 py-3 font-medium">Price</th>
+                <th className="px-4 py-3 font-medium">Existing Campaign</th>
+                <th className="px-4 py-3 font-medium">Recent sales</th>
+                <th className="px-4 py-3 font-medium">Avail. stock</th>
+                <th className="px-4 py-3 font-medium">Margin</th>
+                <th className="px-4 py-3 font-medium">Promotion status</th>
+                <th className="px-4 py-3 font-medium">Eligibility</th>
+                <th className="px-4 py-3 text-right font-medium">Action</th>
               </tr>
-            ) : (
-              filteredData.map((row) => {
-                const isSelected = selectedIds.includes(row.variantId);
+            </thead>
+            <tbody className="divide-y divide-border">
+              {rows.length === 0 ? (
+                <tr>
+                  <td colSpan={12} className="p-8 text-center text-muted-foreground">
+                    {custom ? "No products selected yet. Tick products in another segment to collect them here." : "No products matched the current filters."}
+                  </td>
+                </tr>
+              ) : (
+                rows.map((r) => {
+                  const key = candidateKey(r);
+                  const isSelected = selected.has(key);
+                  return (
+                    <tr key={key} className={`align-top hover:bg-muted/30 ${isSelected ? "bg-muted/20" : ""}`}>
+                      <td className="px-3 py-3 text-center">
+                        <Checkbox checked={isSelected} onCheckedChange={() => toggleOne(r)} aria-label={`Select ${r.productName} on ${r.channel}`} />
+                      </td>
+                      <td className="max-w-[220px] px-4 py-3">
+                        <p className="truncate font-medium text-foreground">{r.productName}</p>
+                        {r.promotionStatus === "recommended" && r.recommendationReasons[0] && <p className="text-[11px] text-muted-foreground">{r.recommendationReasons[0].text}</p>}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-[11px] text-muted-foreground">{r.sku}</td>
+                      <td className="px-4 py-3">
+                        <p className="font-medium text-foreground">{marketplaceLabel(r.marketplace)}</p>
+                        <p className="text-[11px] text-muted-foreground">{r.channel}</p>
+                        {!r.canPushPrices && <p className="text-[11px] text-red-600">Cannot take price changes</p>}
+                      </td>
+                      <td className="px-4 py-3 font-mono">{money(r.regularPriceMinor)}</td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        <CampaignCell r={r} onOpen={onOpenCampaign} />
+                      </td>
+                      <td className="px-4 py-3 font-mono">{formatNumber(r.unitsSold30d)} units</td>
+                      <td className="px-4 py-3 font-mono">
+                        <span className={r.lowStock || r.availableStock <= 0 ? "font-semibold text-amber-600" : ""}>{formatNumber(r.availableStock)}</span>
+                        {r.availableStock <= 0 ? <p className="font-sans text-[11px] text-amber-600">Sold out</p> : r.lowStock ? <p className="font-sans text-[11px] text-amber-600">Low stock</p> : null}
+                      </td>
+                      <td className="px-4 py-3">
+                        <MarginCell r={r} />
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge variant="outline" className={CANDIDATE_STATUS_TONE[r.promotionStatus]}>
+                          ● {CANDIDATE_STATUS_LABELS[r.promotionStatus]}
+                        </Badge>
+                      </td>
+                      <td className="max-w-[200px] px-4 py-3">
+                        <Badge variant="outline" className={ELIGIBILITY_TONE[r.eligibility]} title={r.eligibilityReason ?? undefined}>
+                          ● {ELIGIBILITY_LABELS[r.eligibility]}
+                        </Badge>
+                        {r.eligibilityReason && <p className="mt-1 text-[11px] text-muted-foreground">{r.eligibilityReason}</p>}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {r.canPushPrices ? (
+                          <Button variant="ghost" size="sm" className="h-7 text-xs text-blue-600 hover:text-blue-700" disabled={!canWrite} title={canWrite ? undefined : WRITE_REASON} onClick={() => onCreateCampaign([r])}>
+                            Review &gt;
+                          </Button>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-                return (
-                  <tr key={row.variantId} className={`hover:bg-muted/30 ${isSelected ? "bg-muted/20" : ""}`}>
-                    <td className="px-3 py-3 text-center">
-                      <Checkbox
-                        checked={isSelected}
-                        onCheckedChange={() => toggleSelectOne(row.variantId)}
-                        aria-label={`Select ${row.productName}`}
-                      />
-                    </td>
-                    <td className="px-4 py-3 font-medium text-foreground max-w-[200px] truncate">
-                      {row.productName}
-                    </td>
-                    <td className="px-4 py-3 font-mono text-[11px] text-muted-foreground">
-                      {row.sku}
-                    </td>
-                    <td className="px-4 py-3 font-medium text-foreground">
-                      {row.marketplace}
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {row.existingCampaign ? (
-                        <button
-                          type="button"
-                          onClick={() => row.existingCampaignId && onOpenCampaign?.(row.existingCampaignId)}
-                          className="font-medium text-foreground underline-offset-2 hover:underline"
-                        >
-                          {row.existingCampaign}
-                        </button>
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                    <td className="px-4 py-3 font-mono">
-                      {row.isShopify ? "—" : `${row.recentSales} units`}
-                    </td>
-                    <td className="px-4 py-3 font-mono">
-                      {row.isShopify ? (
-                        "—"
-                      ) : (
-                        <span className={row.availStock < 10 ? "font-semibold text-amber-600 dark:text-amber-400" : ""}>
-                          {row.availStock}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 font-mono">
-                      {row.isShopify ? (
-                        "—"
-                      ) : (
-                        <span className={row.margin < 20 ? "font-semibold text-amber-600 dark:text-amber-400" : ""}>
-                          {row.margin}%
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      {row.promoStatus === "Recommended" ? (
-                        <Badge variant="outline" className="border-blue-500/30 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
-                          ● Recommended
-                        </Badge>
-                      ) : row.promoStatus === "Review" ? (
-                        <Badge variant="outline" className="border-amber-500/30 bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
-                          ● Review
-                        </Badge>
-                      ) : row.promoStatus === "Connector unavail." ? (
-                        <Badge variant="outline" className="border-red-500/30 bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300">
-                          ● Connector unavail.
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-muted-foreground">
-                          ● Not selected
-                        </Badge>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      {row.eligibility === "Eligible" ? (
-                        <Badge variant="outline" className="border-emerald-500/30 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-                          ● Eligible
-                        </Badge>
-                      ) : row.eligibility === "Margin risk" ? (
-                        <Badge variant="outline" className="border-amber-500/30 bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
-                          ● Margin risk
-                        </Badge>
-                      ) : row.eligibility === "Low inventory" ? (
-                        <Badge variant="outline" className="border-amber-500/30 bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
-                          ● Low inventory
-                        </Badge>
-                      ) : row.eligibility === "Verif. required" ? (
-                        <Badge variant="outline" className="border-amber-500/30 bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
-                          ● Verif. required
-                        </Badge>
-                      ) : (
-                        <span className="text-muted-foreground">● Not provided</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      {!row.isShopify ? (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 text-xs text-blue-600 hover:text-blue-700"
-                          onClick={() => onCreateCampaignWithSelected([row.variantId])}
-                        >
-                          Review &gt;
-                        </Button>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
+      {(rows.length > 0 || total > 0) && (
+        <PromoPagination page={url.page} pages={pages} total={total} pageSize={url.pageSize} shown={rows.length} noun="products" onPage={(p) => update({ page: String(p) })} onPageSize={(n) => update({ size: String(n) })} />
+      )}
+
+      <div className="flex flex-col justify-between gap-1 text-[11px] text-muted-foreground sm:flex-row">
+        <p>Based on connector capabilities. Selecting products does not submit or enroll them.</p>
+        {summary && summary.unlistedVariants > 0 && <p>{formatNumber(summary.unlistedVariants)} active variants have no active listing and are not shown.</p>}
       </div>
 
-      {/* Footer and Disclaimers */}
-      <div className="flex flex-col justify-between gap-3 text-[11px] text-muted-foreground sm:flex-row sm:items-center">
-        <p>
-          Showing {filteredData.length} products · Zero products are auto-selected · Illustrative data only
-        </p>
-        <p className="font-mono">
-          {filteredData.length} visible / {recommendedCount} recommended / {totalCount.toLocaleString()} total
-        </p>
-      </div>
-
-      <div className="rounded-lg border border-border/80 bg-muted/20 p-3 text-[11px] leading-relaxed text-muted-foreground">
-        Availability and participation are separate contexts. Capabilities depend on connector/API support. Marketplace capabilities require verification before use; Shopify promotion capability is not supported in this illustrative workspace. Only connector-provided information is shown. No discount, fee or campaign rule is assumed. Selecting products does not submit or enroll them; explicit merchant confirmation and connector support are required.
-      </div>
+      {/* which channel to start with, when the selection spans several */}
+      <Dialog open={chooser !== null} onOpenChange={(o) => !o && setChooser(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Which marketplace is this campaign for?</DialogTitle>
+            <DialogDescription>A campaign runs on one marketplace. Your selection spans several; pick one to start with. The other products stay selected.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            {chooser?.map((g) => (
+              <Button
+                key={g.accountId}
+                variant="outline"
+                className="w-full justify-between text-xs"
+                onClick={() => {
+                  setChooser(null);
+                  onCreateCampaign(g.rows);
+                }}
+              >
+                <span>{g.channel}</span>
+                <span className="font-mono text-muted-foreground">
+                  {g.rows.length} product{g.rows.length === 1 ? "" : "s"}
+                </span>
+              </Button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

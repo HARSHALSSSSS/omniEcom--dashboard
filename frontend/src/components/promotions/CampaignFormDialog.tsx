@@ -12,11 +12,11 @@ import { errorMessage, isApiError } from "@/api/errors";
 import { useCampaignLifecycle, useCreateCampaign, useUpdateCampaign } from "@/hooks/usePromotions";
 import { useSubmitLock } from "@/hooks/useSubmitGuard";
 import { toast } from "@/hooks/useToast";
-import { PROMOTION_TYPES, type PickerVariant, type PromotionAccount, type PromotionCampaign, type PromotionType } from "@/types/promotions";
+import { PROMOTION_TYPES, type CampaignPrefill, type PickerVariant, type PromotionAccount, type PromotionCampaign, type PromotionType } from "@/types/promotions";
 import { EMPTY_FORM, campaignFormSchema, formFromCampaign, serverFieldErrors, toCampaignWrite, type CampaignFormValues } from "./campaignForm";
 import { ProductSelector } from "./ProductSelector";
 import { EMPTY_SELECTION, isEmptySelection, toSelection, type SelectorValue } from "./selection";
-import { TYPE_HINTS, TYPE_LABELS, symbol } from "./promoFormat";
+import { TYPE_HINTS, TYPE_LABELS, bpsToInput, symbol } from "./promoFormat";
 
 const SELECT = "h-9 w-full rounded-md border border-input bg-transparent px-3 text-xs";
 
@@ -45,10 +45,12 @@ interface Props {
   accounts: PromotionAccount[];
   initialVariantIds?: string[];
   initialVariants?: PickerVariant[];
+  /** products, channel and discount to start from (a new campaign only) */
+  prefill?: CampaignPrefill | null;
   onSaved: (campaign: PromotionCampaign) => void;
 }
 
-export function CampaignFormDialog({ open, onOpenChange, campaign, accounts, initialVariantIds, initialVariants, onSaved }: Props) {
+export function CampaignFormDialog({ open, onOpenChange, campaign, accounts, initialVariantIds, initialVariants, prefill, onSaved }: Props) {
   const editing = campaign !== null;
   const create = useCreateCampaign();
   const update = useUpdateCampaign();
@@ -68,9 +70,17 @@ export function CampaignFormDialog({ open, onOpenChange, campaign, accounts, ini
   useEffect(() => {
     if (!open) return;
     setBase(campaign);
-    reset(campaign ? formFromCampaign(campaign) : EMPTY_FORM);
+    reset(
+      campaign
+        ? formFromCampaign(campaign)
+        : prefill
+          ? { ...EMPTY_FORM, accountIds: prefill.accountId ? [prefill.accountId] : [], percent: prefill.discountBps ? bpsToInput(prefill.discountBps) : "" }
+          : EMPTY_FORM,
+    );
 
-    if (initialVariants && initialVariants.length > 0 && !campaign) {
+    if (prefill && prefill.variants.length > 0 && !campaign) {
+      setSelection({ mode: "variants", variants: prefill.variants, categoryIds: [] });
+    } else if (initialVariants && initialVariants.length > 0 && !campaign) {
       setSelection({
         mode: "variants",
         variants: initialVariants,
@@ -96,7 +106,7 @@ export function CampaignFormDialog({ open, onOpenChange, campaign, accounts, ini
 
     setFormError(null);
     setConflict(false);
-  }, [open, campaign, initialVariantIds, initialVariants, reset]);
+  }, [open, campaign, initialVariantIds, initialVariants, prefill, reset]);
 
   const type = watch("type");
   const accountIds = watch("accountIds");

@@ -29,14 +29,6 @@ const api = vi.hoisted(() => ({
 }));
 vi.mock("@/api/promotions.api", () => ({ promotionsApi: api }));
 
-const intelApi = vi.hoisted(() => ({
-  list: vi.fn(),
-  categories: vi.fn(),
-  warehouses: vi.fn(),
-  draftPurchaseOrders: vi.fn(),
-  generatePriceProposals: vi.fn(),
-}));
-vi.mock("@/api/productIntelligence.api", () => ({ productIntelligenceApi: intelApi }));
 
 vi.mock("@/lib/session", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/session")>()), refreshShell: vi.fn(() => Promise.resolve()) }));
 
@@ -274,45 +266,6 @@ beforeEach(() => {
   api.candidates.mockResolvedValue(candidatesPage([candidate(), candidate({ variantId: "v3", productName: "Linen Shirt", sku: "LS-9", marketplace: "shopify", channel: "Web shop", canPushPrices: false, promotionStatus: "connector_unavailable", eligibility: "not_provided", recommendationReasons: [], eligibilityReason: "This marketplace connection cannot take price changes" })]));
   api.categories.mockResolvedValue([]);
   api.variants.mockResolvedValue({ items: [], nextCursor: null, hasMore: false });
-
-  intelApi.list.mockResolvedValue({
-    items: [
-      {
-        id: "intel-1",
-        variantId: "v1",
-        productId: "p1",
-        sku: "TRV-1042-BLK",
-        productName: "Premium Travel Bag",
-        salesVelocity: 1.2,
-        unitsSold30d: 36,
-        marginPercent: 32,
-        inventory: { available: 42, onHand: 50 },
-        recommendedAction: "promote",
-        reasons: [{ key: "margin_room", text: "Healthy contribution margin", values: {} }],
-        confidence: { score: 85, level: "high" },
-      },
-      {
-        id: "intel-2",
-        variantId: "v2",
-        productId: "p2",
-        sku: "LW-BRN-018",
-        productName: "Leather Wallet",
-        salesVelocity: 0.8,
-        unitsSold30d: 24,
-        marginPercent: 16,
-        inventory: { available: 8, onHand: 10 },
-        recommendedAction: "hold",
-        reasons: [{ key: "low_stock", text: "Low stock", values: {} }],
-        confidence: { score: 70, level: "medium" },
-      },
-    ],
-    summary: { promote: 12, reorder: 4, raise_price: 2, liquidate: 1, hold: 30 },
-    variantsAnalysed: 1248,
-    total: 2,
-    page: 1,
-    pageSize: 50,
-    pages: 1,
-  });
 });
 
 describe("PromotionsPage - Connected Screens", () => {
@@ -460,22 +413,6 @@ describe("PromotionsPage - Connected Screens", () => {
     const row = within(screen.getByLabelText("Promotion opportunities")).getByText("Premium Travel Bag").closest("div.flex.flex-col") as HTMLElement;
     await user.click(within(row).getByRole("button", { name: /Review/ }));
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
-  });
-
-  it("navigates to Products Tab (Screen 2) and renders candidate products with real intelligence", async () => {
-    const user = userEvent.setup();
-    renderPage("/promotions");
-    const productsTab = screen.getByRole("tab", { name: "products" });
-    await user.click(productsTab);
-    expect(loc()).toContain("view=products");
-
-    expect(await screen.findByText("Promotion Products")).toBeInTheDocument();
-    expect(screen.getByText("recommended products")).toBeInTheDocument();
-    expect(screen.getByText("total products")).toBeInTheDocument();
-    expect(screen.getByPlaceholderText("Search product, SKU or barcode")).toBeInTheDocument();
-    expect(screen.getByText("High Margin Products")).toBeInTheDocument();
-    expect(await screen.findByText("Premium Travel Bag")).toBeInTheDocument();
-    expect(screen.getByText("TRV-1042-BLK")).toBeInTheDocument();
   });
 
   it("navigates to Campaigns Tab (Screen 3) and renders connected channel records and educational guidance", async () => {

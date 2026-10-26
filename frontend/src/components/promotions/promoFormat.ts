@@ -1,5 +1,5 @@
 import { currencySymbol, formatCurrency, formatInZone, getFormatPreferences } from "@/utils/format";
-import type { ChannelCapability, ContributionBasis, PromotionCampaign, PromotionItemStatus, PromotionLifecycleAction, PromotionOverview, PromotionStatus, PromotionType } from "@/types/promotions";
+import type { CampaignPrefill, CandidateQuick, CandidateSort, CandidateStatus, ChannelCapability, ContributionBasis, Eligibility, PromotionCampaign, PromotionCandidate, PromotionThresholds, PromotionItemStatus, PromotionLifecycleAction, PromotionOverview, PromotionStatus, PromotionType } from "@/types/promotions";
 
 export const WRITE_REASON = "You need the promotions:write permission to change campaigns.";
 
@@ -272,4 +272,118 @@ export function overviewCsv(o: PromotionOverview): string {
     ...o.channels.map((c) => [marketplaceLabel(c.marketplace), c.displayName, c.status, CAPABILITY_LABELS[c.capability], c.activeCampaigns, c.scheduledCampaigns, c.liveProducts, c.listedProducts, c.opportunities]),
   ];
   return [...rows, ...channels].map((r) => r.map(csvCell).join(",")).join("\r\n");
+}
+
+// ---------------------------------------------------------------------------- Products tab (candidates)
+
+export const candidateKey = (c: { variantId: string; accountId: string }): string => `${c.variantId}|${c.accountId}`;
+
+export const ELIGIBILITY_LABELS: Record<Eligibility, string> = {
+  eligible: "Eligible",
+  margin_risk: "Margin risk",
+  low_inventory: "Low inventory",
+  verification_required: "Cost price needed",
+  not_provided: "Not provided",
+  conflict: "Conflict",
+};
+
+export const ELIGIBILITY_TONE: Record<Eligibility, string> = {
+  eligible: "border-emerald-500/30 bg-emerald-50 text-emerald-700",
+  margin_risk: "border-amber-500/30 bg-amber-50 text-amber-700",
+  low_inventory: "border-amber-500/30 bg-amber-50 text-amber-700",
+  verification_required: "border-amber-500/30 bg-amber-50 text-amber-700",
+  not_provided: "border-red-500/30 bg-red-50 text-red-700",
+  conflict: "border-red-500/30 bg-red-50 text-red-700",
+};
+
+export const CANDIDATE_STATUS_LABELS: Record<CandidateStatus, string> = {
+  recommended: "Recommended",
+  review: "Review",
+  not_selected: "Not selected",
+  connector_unavailable: "Connector unavail.",
+};
+
+export const CANDIDATE_STATUS_TONE: Record<CandidateStatus, string> = {
+  recommended: "border-blue-500/30 bg-blue-50 text-blue-700",
+  review: "border-amber-500/30 bg-amber-50 text-amber-700",
+  not_selected: "text-muted-foreground",
+  connector_unavailable: "border-red-500/30 bg-red-50 text-red-700",
+};
+
+export const CANDIDATE_SORT_LABELS: Record<CandidateSort, string> = {
+  priority: "Recommended first",
+  sales: "Most sold (30 days)",
+  margin: "Highest margin",
+  stock: "Most stock",
+  name: "Name",
+};
+
+const pctText = (bps: number): string => `${Number.isInteger(bps / 100) ? bps / 100 : (Math.round(bps / 10) / 10).toFixed(1)}%`;
+export const percentLabel = pctText;
+
+/** the label of a quick filter, with the real threshold the server uses (none until the thresholds are loaded) */
+export function quickFilterLabel(id: CandidateQuick, t: PromotionThresholds | undefined): string {
+  switch (id) {
+    case "high_margin":
+      return t ? `High margin (${pctText(t.highMarginBps)} or more)` : "High margin";
+    case "strong_sellers":
+      return t ? `Strong sellers (${t.strongSellerUnits30d}+ in 30 days)` : "Strong sellers";
+    case "eligible":
+      return "Promotion eligible";
+    case "high_inventory":
+      return t ? `High inventory (${t.highInventoryUnits}+ available)` : "High inventory";
+    case "not_in_campaign":
+      return "Not in a campaign";
+  }
+}
+
+/**
+ * A discount to start from for the picked products: 10%, lowered to the deepest discount that still keeps the margin target on every
+ * product where that is known (rounded down to a whole percent). null when nothing is known or no discount keeps the target.
+ */
+export function suggestedDiscountBps(rows: Array<{ maxDiscountBps: number | null }>): number | null {
+  const known = rows.map((r) => r.maxDiscountBps).filter((v): v is number => v !== null);
+  if (known.length === 0) return null;
+  const whole = Math.floor(Math.min(...known) / 100) * 100;
+  const pick = Math.min(1000, whole);
+  return pick >= 100 ? pick : null;
+}
+
+/** the product-and-channel table as CSV: rupees, blank = unknown (no cost price, no fee profile, no target) */
+export function candidatesCsv(rows: PromotionCandidate[]): string {
+  const head = ["Product", "SKU", "Marketplace", "Channel", "Regular price", "Cost price", "Fees at regular price", "Margin %", "Target margin %", "Deepest discount keeping the target %", "Available stock", "Low stock", "Units sold (30 days)", "Existing campaign", "Conflicts", "Promotion status", "Eligibility", "Why"];
+  const lines = rows.map((r) =>
+    [
+      r.productName,
+      r.sku,
+      marketplaceLabel(r.marketplace),
+      r.channel,
+      rupeeText(r.regularPriceMinor),
+      rupeeText(r.unitCostMinor),
+      rupeeText(r.feesMinor),
+      percentOf(r.marginBps),
+      percentOf(r.targetMarginBps),
+      percentOf(r.maxDiscountBps),
+      r.availableStock,
+      r.lowStock ? "yes" : "no",
+      r.unitsSold30d,
+      r.existingCampaign ? `${r.existingCampaign.name} (${r.existingCampaign.status})` : "",
+      r.conflicts.map((c) => c.message).join("; "),
+      CANDIDATE_STATUS_LABELS[r.promotionStatus],
+      ELIGIBILITY_LABELS[r.eligibility],
+      r.eligibilityReason ?? "",
+    ]
+      .map(csvCell)
+      .join(","),
+  );
+  return [head.map(csvCell).join(","), ...lines].join("\r\n");
+}
+
+/** what the Create Campaign dialog starts from for products of ONE channel: the real variants and prices, the channel, a margin-safe discount */
+export function prefillFor(rows: PromotionCandidate[]): CampaignPrefill {
+  return {
+    accountId: rows[0]?.accountId ?? null,
+    variants: rows.map((r) => ({ id: r.variantId, productId: r.productId, sku: r.sku, productTitle: r.productName, optionValues: {}, sellingPriceMinor: r.regularPriceMinor, status: "active" as const })),
+    discountBps: suggestedDiscountBps(rows),
+  };
 }

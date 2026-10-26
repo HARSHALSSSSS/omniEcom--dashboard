@@ -109,6 +109,9 @@ export const promotionsApi = {
     if (query.q) params.q = query.q;
     if (query.status) params["filter[status]"] = query.status;
     if (query.accountId) params["filter[accountId]"] = query.accountId;
+    if (query.marketplace) params["filter[marketplace]"] = query.marketplace;
+    if (query.quick) params["filter[quick]"] = query.quick;
+    if (query.sort && query.sort !== "priority") params.sort = query.sort;
     return unwrap<CandidatesPage>(await client.get(ENDPOINTS.PROMOTIONS_CANDIDATES, { params, signal }));
   },
 

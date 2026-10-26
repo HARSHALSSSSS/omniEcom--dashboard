@@ -90,6 +90,7 @@ function VariantPicker({ value, onChange, disabled }: Props) {
           {value.variants.map((v) => (
             <span key={v.id} className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1 text-[11px] font-medium">
               {v.sku}
+              {v.sellingPriceMinor ? ` · ${money(v.sellingPriceMinor)}` : ""}
               <button type="button" aria-label={`Remove ${v.sku}`} disabled={disabled} onClick={() => toggle(v)} className="rounded-full p-0.5 hover:bg-background">
                 <X className="h-3 w-3" aria-hidden />
               </button>

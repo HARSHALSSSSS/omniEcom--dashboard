@@ -12,29 +12,23 @@ import { CampaignFormDialog } from "@/components/promotions/CampaignFormDialog";
 import { OverviewTab } from "@/components/promotions/OverviewTab";
 import { ProductsTab } from "@/components/promotions/ProductsTab";
 import { CampaignsTab } from "@/components/promotions/CampaignsTab";
-import { ACTION_LABELS, WRITE_REASON, overviewCsv } from "@/components/promotions/promoFormat";
-import { campaignsQueryOf, productsQueryOf, usePromotionsUrlState } from "@/components/promotions/promoParams";
+import { ACTION_LABELS, WRITE_REASON, overviewCsv, prefillFor } from "@/components/promotions/promoFormat";
+import { campaignsQueryOf, candidatesQueryOf, usePromotionsUrlState } from "@/components/promotions/promoParams";
 import { errorMessage, isApiError } from "@/api/errors";
 import { useCan } from "@/hooks/useCan";
 import {
   useCampaignLifecycle,
   useDeleteCampaign,
   useDuplicateCampaign,
-  usePromotedProducts,
   usePromotionCandidates,
   usePromotionAccounts,
   usePromotionCampaigns,
   usePromotionOverview,
   useProcessPromotions,
 } from "@/hooks/usePromotions";
-import { useProductIntelligence } from "@/hooks/useProductIntelligence";
 import { toast } from "@/hooks/useToast";
-import type { ProductIntelligenceQuery } from "@/types/intelligence";
-import type { CandidatesQuery, PickerVariant, PromotionCampaign, PromotionLifecycleAction } from "@/types/promotions";
+import type { CampaignPrefill, CandidatesQuery, PromotionCampaign, PromotionCandidate, PromotionLifecycleAction } from "@/types/promotions";
 import { formatNumber } from "@/utils/format";
-
-/** the recommendations the Overview and Products tabs read (one page of the best-ranked variants) */
-const INTEL_QUERY: ProductIntelligenceQuery = { action: undefined, categoryId: undefined, warehouseId: undefined, q: undefined, sort: "priority", page: 1, pageSize: 50 };
 
 /** the few recommended products the Overview lists as opportunities */
 const OPPORTUNITIES_QUERY: CandidatesQuery = { segment: "recommended", page: 1, pageSize: 5 };
@@ -51,8 +45,7 @@ export default function PromotionsPage() {
   const overview = usePromotionOverview();
   const accounts = usePromotionAccounts();
   const campaigns = usePromotionCampaigns(campaignsQueryOf(url), true);
-  const products = usePromotedProducts(productsQueryOf(url), true);
-  const productIntel = useProductIntelligence(INTEL_QUERY, true);
+  const productCandidates = usePromotionCandidates(candidatesQueryOf(url), view === "products" && url.segment !== "custom");
   const candidates = usePromotionCandidates(OPPORTUNITIES_QUERY, view === "overview");
   const navigate = useNavigate();
 
@@ -65,18 +58,15 @@ export default function PromotionsPage() {
   // UI state
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<PromotionCampaign | null>(null);
-  const [initialVariantIds, setInitialVariantIds] = useState<string[]>([]);
-  const [initialVariants, setInitialVariants] = useState<PickerVariant[]>([]);
-  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
+  const [prefill, setPrefill] = useState<CampaignPrefill | null>(null);
+  /** the seller's own selection on the Products tab: product + channel, kept across pages and filters */
+  const [selectedProducts, setSelectedProducts] = useState<Map<string, PromotionCandidate>>(new Map());
   const [confirm, setConfirm] = useState<Confirm | null>(null);
   const [addFor, setAddFor] = useState<PromotionCampaign | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const accountList = useMemo(() => accounts.data ?? [], [accounts.data]);
   const campaignList = useMemo(() => campaigns.data?.items ?? [], [campaigns.data?.items]);
-  const intelItems = useMemo(() => productIntel.data?.items ?? [], [productIntel.data?.items]);
-  const intelTotal = productIntel.data?.total ?? 0;
-  const promotedList = useMemo(() => products.data?.items ?? [], [products.data?.items]);
 
   // the header counts come from the overview only: no figure is shown before it is loaded
   const o = overview.data;
@@ -93,54 +83,16 @@ export default function PromotionsPage() {
 
   const openCampaign = (id: string | null) => update({ open: id });
 
-  const startCreate = (variantIds: string[] = []) => {
+  /** a new campaign; with rows (products of ONE channel) the dialog starts from their real prices, the channel and a margin-safe discount */
+  const startCreate = (rows: PromotionCandidate[] = []) => {
     setEditing(null);
-    setInitialVariantIds(variantIds);
-
-    const resolved: PickerVariant[] = variantIds.map((id) => {
-      const intel = intelItems.find((i) => i.variantId === id);
-      if (intel) {
-        return {
-          id: intel.variantId,
-          productId: intel.productId,
-          sku: intel.sku,
-          productTitle: intel.productName,
-          optionValues: {},
-          sellingPriceMinor: 0,
-          status: "active",
-        };
-      }
-      const promo = promotedList.find((p) => p.variantId === id);
-      if (promo) {
-        return {
-          id: promo.variantId,
-          productId: promo.productId,
-          sku: promo.sku,
-          productTitle: promo.productName,
-          optionValues: {},
-          sellingPriceMinor: promo.originalPriceMinor,
-          status: "active",
-        };
-      }
-      return {
-        id,
-        productId: id,
-        sku: id.slice(0, 8),
-        productTitle: "Selected Product",
-        optionValues: {},
-        sellingPriceMinor: 0,
-        status: "active",
-      };
-    });
-
-    setInitialVariants(resolved);
+    setPrefill(rows.length > 0 ? prefillFor(rows) : null);
     setFormOpen(true);
   };
 
   const startEdit = (c: PromotionCampaign) => {
     setEditing(c);
-    setInitialVariantIds([]);
-    setInitialVariants([]);
+    setPrefill(null);
     setFormOpen(true);
   };
 
@@ -248,6 +200,8 @@ export default function PromotionsPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            {view !== "products" && (
+              <>
             <Button
               size="sm"
               className="gap-1.5 bg-foreground text-xs text-background hover:bg-foreground/90"
@@ -267,6 +221,8 @@ export default function PromotionsPage() {
             >
               <Download className="h-3.5 w-3.5" /> Export
             </Button>
+              </>
+            )}
             <Button
               variant="outline"
               size="sm"
@@ -340,22 +296,24 @@ export default function PromotionsPage() {
           candidatesError={candidates.error}
           onRetryCandidates={() => void candidates.refetch()}
           canWrite={canWrite}
-          onReviewProduct={(vId) => startCreate([vId])}
+          onReviewProduct={(row) => startCreate([row])}
           onNavigateToProducts={() => update({ view: "products" })}
         />
       )}
 
       {view === "products" && (
         <ProductsTab
-          intelItems={intelItems}
-          intelTotal={intelTotal}
-          promotedProducts={promotedList}
-          campaigns={campaignList}
+          url={url}
+          update={update}
+          data={productCandidates.data}
+          loading={productCandidates.isLoading}
+          error={productCandidates.error}
+          onRetry={() => void productCandidates.refetch()}
           accounts={accountList}
-          loading={productIntel.isLoading}
-          selectedIds={selectedProductIds}
-          onSelectIdsChange={setSelectedProductIds}
-          onCreateCampaignWithSelected={(ids) => startCreate(ids)}
+          selected={selectedProducts}
+          onSelectedChange={setSelectedProducts}
+          canWrite={canWrite}
+          onCreateCampaign={(rows) => startCreate(rows)}
           onOpenCampaign={openCampaign}
         />
       )}
@@ -392,8 +350,7 @@ export default function PromotionsPage() {
         onOpenChange={setFormOpen}
         campaign={editing}
         accounts={accountList}
-        initialVariantIds={initialVariantIds}
-        initialVariants={initialVariants}
+        prefill={prefill}
         onSaved={(c) => {
           toast({
             title: editing ? "Campaign updated" : c.status === "draft" ? "Draft saved" : "Campaign scheduled",

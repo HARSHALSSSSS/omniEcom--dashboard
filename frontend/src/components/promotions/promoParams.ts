@@ -1,10 +1,18 @@
 import { useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
-  PROMOTION_ITEM_STATUSES,
+  CANDIDATE_QUICK_FILTERS,
+  CANDIDATE_SORTS,
+  CANDIDATE_STATUSES,
+  PRODUCT_SEGMENTS,
   PROMOTION_STATUSES,
   PROMOTION_TYPES,
   type CampaignsQuery,
+  type CandidateQuick,
+  type CandidateSort,
+  type CandidateStatus,
+  type CandidatesQuery,
+  type ProductSegment,
   type ProductsQuery,
   type PromotionItemStatus,
   type PromotionStatus,
@@ -29,6 +37,12 @@ export interface PromotionsUrlState {
   accountId?: string;
   /** the campaign whose detail drawer is open */
   open?: string;
+  /** products view: which candidates (recommended / the seller's own selection / all) */
+  segment: ProductSegment;
+  quick?: CandidateQuick;
+  marketplace?: string;
+  sort: CandidateSort;
+  candidateStatus?: CandidateStatus;
   page: number;
   pageSize: number;
 }
@@ -42,7 +56,12 @@ export function readUrlState(params: URLSearchParams): PromotionsUrlState {
   return {
     view,
     q: params.get("q")?.trim() || undefined,
-    status: view === "products" ? oneOf(rawStatus, PROMOTION_ITEM_STATUSES) : oneOf(rawStatus, PROMOTION_STATUSES),
+    status: view === "products" ? undefined : oneOf(rawStatus, PROMOTION_STATUSES),
+    segment: oneOf(params.get("seg"), PRODUCT_SEGMENTS) ?? "recommended",
+    quick: oneOf(params.get("quick"), CANDIDATE_QUICK_FILTERS),
+    marketplace: params.get("market")?.trim() || undefined,
+    sort: oneOf(params.get("sort"), CANDIDATE_SORTS) ?? "priority",
+    candidateStatus: view === "products" ? oneOf(rawStatus, CANDIDATE_STATUSES) : undefined,
     type: view === "campaigns" ? oneOf(params.get("type"), PROMOTION_TYPES) : undefined,
     campaignId: view === "products" ? uuid(params.get("campaign")) : undefined,
     accountId: view === "products" ? uuid(params.get("account")) : undefined,
@@ -69,9 +88,23 @@ export const productsQueryOf = (s: PromotionsUrlState): ProductsQuery => ({
   pageSize: s.pageSize,
 });
 
-export const isFiltered = (s: PromotionsUrlState): boolean => Boolean(s.q || s.status || s.type || s.campaignId || s.accountId);
+/** the candidates the Products tab lists; the "custom" segment is the seller's own selection and is not asked of the server */
+export const candidatesQueryOf = (s: PromotionsUrlState): CandidatesQuery => ({
+  segment: s.segment === "all" ? "all" : "recommended",
+  status: s.candidateStatus,
+  quick: s.quick,
+  accountId: s.accountId,
+  marketplace: s.marketplace,
+  sort: s.sort,
+  q: s.q,
+  page: s.page,
+  pageSize: s.pageSize,
+});
 
-type Key = "view" | "q" | "status" | "type" | "campaign" | "account" | "open" | "page" | "size";
+export const isFiltered = (s: PromotionsUrlState): boolean => Boolean(s.q || s.status || s.type || s.campaignId || s.accountId);
+export const productsFiltered = (s: PromotionsUrlState): boolean => Boolean(s.q || s.quick || s.marketplace || s.candidateStatus);
+
+type Key = "view" | "q" | "status" | "type" | "campaign" | "account" | "open" | "page" | "size" | "seg" | "quick" | "market" | "sort";
 type Patch = Partial<Record<Key, string | null>>;
 
 /** The Promotions screen keeps view, tab, search, filters, page and the open campaign in the URL, so reload, back and deep links work. */
@@ -99,7 +132,7 @@ export function usePromotionsUrlState() {
     [setParams],
   );
 
-  const clearFilters = useCallback(() => update({ q: null, status: null, type: null, campaign: null, account: null }), [update]);
+  const clearFilters = useCallback(() => update({ q: null, status: null, type: null, campaign: null, account: null, quick: null, market: null }), [update]);
 
   return { ...state, update, clearFilters };
 }

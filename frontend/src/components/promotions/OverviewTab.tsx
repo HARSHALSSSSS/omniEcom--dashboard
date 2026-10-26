@@ -19,7 +19,7 @@ interface OverviewTabProps {
   candidatesError: unknown;
   onRetryCandidates: () => void;
   canWrite: boolean;
-  onReviewProduct: (variantId: string) => void;
+  onReviewProduct: (row: PromotionCandidate) => void;
   onNavigateToProducts: () => void;
 }
 
@@ -48,7 +48,7 @@ function Measure({ label, value, note }: { label: string; value: string; note?: 
 const pressureTitle = (p: PressurePick): string =>
   p.eligibility === "low_inventory" ? "High demand / Low stock" : p.eligibility === "margin_risk" ? "High demand / Thin margin" : "High demand / Review before promoting";
 
-function OpportunityRow({ row, canWrite, onReview }: { row: PromotionCandidate; canWrite: boolean; onReview: (variantId: string) => void }) {
+function OpportunityRow({ row, canWrite, onReview }: { row: PromotionCandidate; canWrite: boolean; onReview: (row: PromotionCandidate) => void }) {
   const reason = row.recommendationReasons[0]?.text ?? row.eligibilityReason;
   const blocked = row.promotionStatus === "connector_unavailable";
   return (
@@ -79,7 +79,7 @@ function OpportunityRow({ row, canWrite, onReview }: { row: PromotionCandidate; 
         {blocked ? (
           <span className="text-xs text-muted-foreground">—</span>
         ) : (
-          <Button variant="ghost" size="sm" className="h-8 gap-1 text-xs text-blue-600 hover:text-blue-700" disabled={!canWrite} title={canWrite ? undefined : "You need the promotions:write permission to create campaigns."} onClick={() => onReview(row.variantId)}>
+          <Button variant="ghost" size="sm" className="h-8 gap-1 text-xs text-blue-600 hover:text-blue-700" disabled={!canWrite} title={canWrite ? undefined : "You need the promotions:write permission to create campaigns."} onClick={() => onReview(row)}>
             Review <ArrowRight className="h-3.5 w-3.5" />
           </Button>
         )}

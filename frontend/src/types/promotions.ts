@@ -144,10 +144,22 @@ export interface PromotionCandidate {
   promotionStatus: CandidateStatus;
 }
 
+export const CANDIDATE_STATUSES = ["recommended", "review", "not_selected", "connector_unavailable"] as const;
+export const CANDIDATE_QUICK_FILTERS = ["high_margin", "strong_sellers", "eligible", "high_inventory", "not_in_campaign"] as const;
+export type CandidateQuick = (typeof CANDIDATE_QUICK_FILTERS)[number];
+export const CANDIDATE_SORTS = ["priority", "sales", "margin", "stock", "name"] as const;
+export type CandidateSort = (typeof CANDIDATE_SORTS)[number];
+/** custom = the seller's own selection (no server filter) */
+export const PRODUCT_SEGMENTS = ["recommended", "custom", "all"] as const;
+export type ProductSegment = (typeof PRODUCT_SEGMENTS)[number];
+
 export interface CandidatesQuery {
   segment: "recommended" | "all";
   status?: CandidateStatus;
+  quick?: CandidateQuick;
   accountId?: string;
+  marketplace?: string;
+  sort?: CandidateSort;
   q?: string;
   page: number;
   pageSize: number;
@@ -314,6 +326,15 @@ export interface PromotionAccount {
   marketplace: string;
   displayName: string;
   status: string;
+}
+
+/** what the Create Campaign dialog starts from when it is opened for chosen products (the Products tab, an Overview opportunity) */
+export interface CampaignPrefill {
+  /** the one channel the campaign runs on; null = every connected channel */
+  accountId: string | null;
+  variants: PickerVariant[];
+  /** a discount that keeps the margin target on the chosen products, when it is known */
+  discountBps: number | null;
 }
 
 /** a variant the seller can pick for a campaign */
