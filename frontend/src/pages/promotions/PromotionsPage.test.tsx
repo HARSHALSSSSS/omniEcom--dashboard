@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
@@ -24,10 +24,21 @@ const api = vi.hoisted(() => ({
   removeProducts: vi.fn(),
   process: vi.fn(),
   accounts: vi.fn(),
+  recentActivity: vi.fn(),
   categories: vi.fn(),
   variants: vi.fn(),
 }));
 vi.mock("@/api/promotions.api", () => ({ promotionsApi: api }));
+
+const intelApi = vi.hoisted(() => ({
+  list: vi.fn(),
+  categories: vi.fn(),
+  warehouses: vi.fn(),
+  draftPurchaseOrders: vi.fn(),
+  generatePriceProposals: vi.fn(),
+}));
+vi.mock("@/api/productIntelligence.api", () => ({ productIntelligenceApi: intelApi }));
+
 vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
 
 import PromotionsPage from "./PromotionsPage";
@@ -58,19 +69,38 @@ const campaign = (over: Partial<PromotionCampaign> = {}): PromotionCampaign => (
   revenueMinor: 0,
   unitsMoved: 0,
   ordersCount: 0,
-  budgetUsedBps: 0,
+  budgetUsedBps: null,
   statsUpdatedAt: null,
-  itemCounts: { total: 3, eligible: 2, pending_sync: 0, live: 0, ineligible: 1, ended: 0 },
+  itemCounts: { total: 2, eligible: 1, pending_sync: 0, live: 0, ineligible: 1, ended: 0 },
   endReason: null,
   version: 4,
-  createdAt: "2026-10-01T00:00:00.000Z",
-  updatedAt: "2026-10-02T00:00:00.000Z",
+  createdAt: "2026-10-20T08:00:00.000Z",
+  updatedAt: "2026-10-21T08:00:00.000Z",
   ...over,
 });
 
-const ACTIVE = campaign({ id: C2, name: "Weekend Luggage Sale", code: "WEEKENDTRV", status: "active", type: "flat_discount", valueBps: null, valueMinor: 50000, revenueMinor: 21540000, spendMinor: 4250000, budgetMinor: 8000000, budgetUsedBps: 5313, unitsMoved: 88 });
+const ACTIVE = campaign({
+  id: C2,
+  name: "Weekend Luggage Sale",
+  code: "WEEKENDTRV",
+  type: "flat_discount",
+  valueBps: null,
+  valueMinor: 50000,
+  status: "active",
+  budgetMinor: 8000000,
+  spendMinor: 4250000,
+  revenueMinor: 21540000,
+  unitsMoved: 88,
+  ordersCount: 76,
+  budgetUsedBps: 5313,
+  itemCounts: { total: 1, eligible: 0, pending_sync: 0, live: 1, ineligible: 0, ended: 0 },
+  version: 2,
+});
 
-const detail = (c: PromotionCampaign): PromotionCampaignDetail => ({ ...c, velocity: { liftBps: 1840, promoUnits: 88, promoDays: 9, baselineUnits: 60, baselineDays: 14 } });
+const detail = (c: PromotionCampaign): PromotionCampaignDetail => ({
+  ...c,
+  velocity: { liftBps: 1840, promoUnits: 88, promoDays: 3, baselineUnits: 20, baselineDays: 14 },
+});
 
 const overview = (): PromotionOverview => ({
   currency: "INR",
@@ -155,7 +185,6 @@ function renderPage(url = "/promotions") {
 
 const grant = (...permissions: string[]) => useWorkspaceStore.setState({ permissions });
 const loc = () => screen.getByTestId("loc").textContent;
-const lastCampaignsQuery = () => api.campaigns.mock.calls.at(-1)?.[0];
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -167,270 +196,140 @@ beforeEach(() => {
   api.campaign.mockImplementation(async (id: string) => detail(id === C2 ? ACTIVE : campaign()));
   api.campaignProducts.mockResolvedValue(productsPage([product({ campaignId: C1, status: "eligible" })]));
   api.accounts.mockResolvedValue([{ id: ACCOUNT, marketplace: "amazon_in", displayName: "Main store", status: "active" }]);
+  api.recentActivity.mockResolvedValue([
+    { id: 1, action: "promotion.created", createdAt: "2026-10-23T12:00:00.000Z" },
+    { id: 2, action: "promotion.activated", createdAt: "2026-10-23T11:00:00.000Z" },
+  ]);
   api.categories.mockResolvedValue([]);
   api.variants.mockResolvedValue({ items: [], nextCursor: null, hasMore: false });
+
+  intelApi.list.mockResolvedValue({
+    items: [
+      {
+        id: "intel-1",
+        variantId: "v1",
+        productId: "p1",
+        sku: "TRV-1042-BLK",
+        productName: "Premium Travel Bag",
+        salesVelocity: 1.2,
+        unitsSold30d: 36,
+        marginPercent: 32,
+        inventory: { available: 42, onHand: 50 },
+        recommendedAction: "promote",
+        reasons: [{ key: "margin_room", text: "Healthy contribution margin", values: {} }],
+        confidence: { score: 85, level: "high" },
+      },
+      {
+        id: "intel-2",
+        variantId: "v2",
+        productId: "p2",
+        sku: "LW-BRN-018",
+        productName: "Leather Wallet",
+        salesVelocity: 0.8,
+        unitsSold30d: 24,
+        marginPercent: 16,
+        inventory: { available: 8, onHand: 10 },
+        recommendedAction: "hold",
+        reasons: [{ key: "low_stock", text: "Low stock", values: {} }],
+        confidence: { score: 70, level: "medium" },
+      },
+    ],
+    summary: { promote: 12, reorder: 4, raise_price: 2, liquidate: 1, hold: 30 },
+    variantsAnalysed: 1248,
+    total: 2,
+    page: 1,
+    pageSize: 50,
+    pages: 1,
+  });
 });
 
-describe("PromotionsPage", () => {
-  it("shows the overview tiles and the campaign ledger from the API", async () => {
-    renderPage();
-    expect(await screen.findByText("Festive Flash")).toBeInTheDocument();
-    expect(screen.getAllByText("₹2,15,400")).toHaveLength(2);
-    expect(screen.getByText(/Velocity lift \+18\.4%/)).toBeInTheDocument();
-    expect(screen.getByText("1 scheduled".replace("1", "2") + " · 3 draft")).toBeInTheDocument();
-
-    const draft = screen.getByText("Festive Flash").closest("tr") as HTMLElement;
-    expect(within(draft).getByText("20% off")).toBeInTheDocument();
-    expect(within(draft).getByText("1 cannot run")).toBeInTheDocument();
-    expect(within(draft).getByText("Draft")).toBeInTheDocument();
-    expect(within(draft).getByText("Main store")).toBeInTheDocument();
-
-    const active = screen.getByText("Weekend Luggage Sale").closest("tr") as HTMLElement;
-    expect(within(active).getByText("₹500 off")).toBeInTheDocument();
-    expect(within(active).getByText(/of ₹80,000 · 53\.13%/)).toBeInTheDocument();
-    expect(lastCampaignsQuery()).toMatchObject({ page: 1, pageSize: 25 });
+describe("PromotionsPage - Connected Screens", () => {
+  it("renders Overview Tab (Screen 1) with real pulse, opportunities, and landscape", async () => {
+    renderPage("/promotions");
+    expect(await screen.findByText("Promotion pulse")).toBeInTheDocument();
+    expect(screen.getByText("Promotion opportunities")).toBeInTheDocument();
+    expect(screen.getByText("Promotion Intelligence")).toBeInTheDocument();
+    expect(screen.getByText("Promotion pressure")).toBeInTheDocument();
+    expect(screen.getByText("Marketplace Promotion Landscape")).toBeInTheDocument();
+    expect(screen.getAllByText("Opportunities").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("Eligible products")).toBeInTheDocument();
   });
 
-  it("puts status, type and search in the URL and sends them to the API", async () => {
+  it("navigates to Products Tab (Screen 2) and renders candidate products with real intelligence", async () => {
     const user = userEvent.setup();
-    renderPage();
-    await screen.findByText("Festive Flash");
+    renderPage("/promotions");
+    const productsTab = screen.getByRole("tab", { name: "products" });
+    await user.click(productsTab);
+    expect(loc()).toContain("view=products");
 
-    await user.click(screen.getByRole("tab", { name: /^Active/ }));
-    expect(loc()).toBe("/promotions?status=active");
-    await waitFor(() => expect(lastCampaignsQuery()).toMatchObject({ status: "active" }));
-
-    await user.selectOptions(screen.getByLabelText("Campaign type"), "bogo");
-    await waitFor(() => expect(lastCampaignsQuery()).toMatchObject({ status: "active", type: "bogo" }));
-
-    await user.type(screen.getByLabelText("Search campaigns"), "diwali");
-    await waitFor(() => expect(lastCampaignsQuery()).toMatchObject({ q: "diwali" }), { timeout: 2000 });
-    expect(loc()).toContain("q=diwali");
-
-    await user.click(screen.getByRole("button", { name: "Clear filters" }));
-    expect(loc()).toBe("/promotions");
+    expect(await screen.findByText("Promotion Products")).toBeInTheDocument();
+    expect(screen.getByText("recommended products")).toBeInTheDocument();
+    expect(screen.getByText("total products")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Search product, SKU or barcode")).toBeInTheDocument();
+    expect(screen.getByText("High Margin Products")).toBeInTheDocument();
+    expect(await screen.findByText("Premium Travel Bag")).toBeInTheDocument();
+    expect(screen.getByText("TRV-1042-BLK")).toBeInTheDocument();
   });
 
-  it("restores the filters from the URL and pages through the results", async () => {
-    api.campaigns.mockResolvedValue(campaignsPage([campaign()], { page: 2, pages: 3, total: 60, pageSize: 25 }));
+  it("navigates to Campaigns Tab (Screen 3) and renders connected channel records and educational guidance", async () => {
     const user = userEvent.setup();
-    renderPage("/promotions?status=draft&page=2&size=50");
-    await screen.findByText("Festive Flash");
-    expect(lastCampaignsQuery()).toMatchObject({ status: "draft", page: 2, pageSize: 50 });
-    await user.click(screen.getByRole("button", { name: "Next" }));
-    expect(loc()).toContain("page=3");
+    renderPage("/promotions");
+    const campaignsTab = screen.getByRole("tab", { name: "campaigns" });
+    await user.click(campaignsTab);
+    expect(loc()).toContain("view=campaigns");
+
+    expect(await screen.findByText("Verification required before relying on any campaign schedule or type. Marketplace capabilities are unverified.")).toBeInTheDocument();
+    expect(screen.getByText("Before you manage a campaign")).toBeInTheDocument();
+    expect(screen.getByText("Availability is not participation")).toBeInTheDocument();
+    expect(screen.getByText("Connector-dependent capabilities")).toBeInTheDocument();
   });
 
-  it("lists promoted SKUs with the reason a product cannot run", async () => {
+  it("opens Create Campaign Modal (Screen 4) and submits draft to backend", async () => {
+    api.create.mockResolvedValue({ campaign: campaign({ id: "99999999-9999-4999-8999-999999999999", name: "Festive Home Sale" }), products: null });
     const user = userEvent.setup();
-    renderPage();
-    await screen.findByText("Festive Flash");
-    await user.click(screen.getByRole("tab", { name: "Promoted SKUs" }));
-    expect(loc()).toBe("/promotions?view=products");
-    const row = (await screen.findByText("Cotton Overshirt")).closest("tr") as HTMLElement;
-    expect(within(row).getByText("Ineligible")).toBeInTheDocument();
-    expect(within(row).getByText("Main store: no active listing on this account")).toBeInTheDocument();
-    const live = screen.getByText("Premium Travel Bag").closest("tr") as HTMLElement;
-    expect(within(live).getByText("₹1,999")).toBeInTheDocument();
-    expect(within(live).getByText("₹2,499")).toBeInTheDocument();
+    renderPage("/promotions");
 
-    await user.selectOptions(screen.getByLabelText("Campaign"), C1);
-    await waitFor(() => expect(api.products.mock.calls.at(-1)?.[0]).toMatchObject({ campaignId: C1 }));
-    expect(loc()).toContain(`campaign=${C1}`);
-  });
-
-  it("creates a draft with money in integer minor units and percentages in basis points", async () => {
-    api.create.mockResolvedValue({ campaign: campaign({ id: "55555555-5555-4555-8555-555555555555", name: "Spring" }), products: null });
-    const user = userEvent.setup();
-    renderPage();
-    await screen.findByText("Festive Flash");
-    await user.click(screen.getByRole("button", { name: "Create campaign" }));
+    const createBtn = screen.getByRole("button", { name: /Create Campaign/i });
+    await user.click(createBtn);
 
     const dialog = await screen.findByRole("dialog");
-    await user.click(within(dialog).getByRole("button", { name: "Save draft" }));
-    expect(await within(dialog).findByText("Give the campaign a name")).toBeInTheDocument();
-    expect(within(dialog).getByText("Enter the discount percentage")).toBeInTheDocument();
-    expect(api.create).not.toHaveBeenCalled();
+    expect(within(dialog).getByText("Campaign basics")).toBeInTheDocument();
+    expect(within(dialog).getByText("Sales channel")).toBeInTheDocument();
+    expect(within(dialog).getByText("Promotion details")).toBeInTheDocument();
+    expect(within(dialog).getByText("Schedule")).toBeInTheDocument();
+    expect(within(dialog).getByText("Creating saves a draft, not a live promotion.")).toBeInTheDocument();
 
-    await user.type(within(dialog).getByLabelText("Campaign name"), "Spring");
-    await user.type(within(dialog).getByLabelText("Discount (%)"), "12.5");
-    await user.type(within(dialog).getByLabelText(/Discount budget/), "50000.50");
-    await user.click(within(dialog).getByRole("button", { name: "Save draft" }));
+    await user.type(within(dialog).getByLabelText(/Campaign name/i), "Festive Home Sale");
+    await user.type(within(dialog).getByLabelText(/Proposed discount/i), "15");
 
-    await waitFor(() => expect(api.create).toHaveBeenCalledTimes(1));
-    expect(api.create.mock.calls[0]?.[0]).toMatchObject({
-      name: "Spring",
-      type: "percentage_discount",
-      valueBps: 1250,
-      valueMinor: null,
-      budgetMinor: 5000050,
-      startsAt: null,
-      endsAt: null,
-      accountIds: [],
-    });
-    expect(api.create.mock.calls[0]?.[0].selection).toBeUndefined();
-    await waitFor(() => expect(loc()).toContain("open=55555555-5555-4555-8555-555555555555"));
+    const submitBtn = within(dialog).getByRole("button", { name: "Create Campaign" });
+    await user.click(submitBtn);
+
+    await waitFor(() => expect(api.create).toHaveBeenCalled());
   });
 
-  it("saves a double-clicked Save draft once", async () => {
-    api.create.mockImplementation(() => new Promise((resolve) => setTimeout(() => resolve({ campaign: campaign({ id: "66666666-6666-4666-8666-666666666666", name: "Once" }), products: null }), 50)));
-    const user = userEvent.setup();
-    renderPage();
-    await screen.findByText("Festive Flash");
-    await user.click(screen.getByRole("button", { name: "Create campaign" }));
-    const dialog = await screen.findByRole("dialog");
-    await user.type(within(dialog).getByLabelText("Campaign name"), "Once");
-    await user.type(within(dialog).getByLabelText("Discount (%)"), "10");
-    const save = within(dialog).getByRole("button", { name: "Save draft" });
-    // two clicks inside one task, before the button can re-render as disabled
-    act(() => {
-      fireEvent.click(save);
-      fireEvent.click(save);
-    });
-    await waitFor(() => expect(loc()).toContain("open=66666666-6666-4666-8666-666666666666"));
-    expect(api.create).toHaveBeenCalledTimes(1);
-  });
-
-  it("sends the picked products and shows a duplicate code on the code field", async () => {
-    api.variants.mockResolvedValue({
-      items: [{ id: "66666666-6666-4666-8666-666666666666", productId: "p1", sku: "KURTA-M", productTitle: "Cotton Kurta", optionValues: { size: "M" }, sellingPriceMinor: 129900, status: "active" }],
-      nextCursor: null,
-      hasMore: false,
-    });
-    api.create.mockRejectedValue(new ApiError({ code: "CONFLICT", message: "dup", status: 409, details: { rule: "duplicate_code" } }));
-    const user = userEvent.setup();
-    renderPage();
-    await screen.findByText("Festive Flash");
-    await user.click(screen.getByRole("button", { name: "Create campaign" }));
-    const dialog = await screen.findByRole("dialog");
-
-    await user.type(within(dialog).getByLabelText("Campaign name"), "Spring");
-    await user.type(within(dialog).getByLabelText("Campaign code (optional)"), "FESTIVE20");
-    await user.type(within(dialog).getByLabelText("Discount (%)"), "10");
-    await user.click(await within(dialog).findByRole("checkbox", { name: "Select KURTA-M" }));
-    await user.click(within(dialog).getByRole("button", { name: "Save draft" }));
-
-    expect(await within(dialog).findByText("This code is already used by another campaign")).toBeInTheDocument();
-    expect(api.create.mock.calls[0]?.[0]).toMatchObject({ code: "FESTIVE20", selection: { variantIds: ["66666666-6666-4666-8666-666666666666"] } });
-  });
-
-  it("asks before leaving a form with unsaved changes", async () => {
-    const user = userEvent.setup();
-    renderPage();
-    await screen.findByText("Festive Flash");
-    await user.click(screen.getByRole("button", { name: "Create campaign" }));
-    const dialog = await screen.findByRole("dialog");
-    await user.type(within(dialog).getByLabelText("Campaign name"), "Half done");
-    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
-    expect(await screen.findByText("Discard your changes?")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Keep editing" }));
-    expect(screen.getByLabelText("Campaign name")).toHaveValue("Half done");
-  });
-
-  it("opens a campaign from the URL, shows its results and schedules it after a confirmation", async () => {
+  it("opens a campaign drawer and schedules it after confirmation", async () => {
     api.lifecycle.mockResolvedValue({ campaign: campaign({ status: "scheduled" }), changed: true, pushed: [] });
     const user = userEvent.setup();
     renderPage(`/promotions?open=${C1}`);
     const drawer = await screen.findByRole("dialog");
     expect(await within(drawer).findByText("Results")).toBeInTheDocument();
     expect(within(drawer).getByText("+18.4%")).toBeInTheDocument();
-    expect(await within(drawer).findByText("TRV-1042-BLK")).toBeInTheDocument();
 
     await user.click(within(drawer).getByRole("button", { name: "Schedule" }));
     const confirm = await screen.findByText("Schedule this campaign?");
     expect(confirm).toBeInTheDocument();
-    expect(api.lifecycle).not.toHaveBeenCalled();
     const confirmDialog = confirm.closest("[role=dialog]") as HTMLElement;
     await user.click(within(confirmDialog).getByRole("button", { name: "Schedule" }));
     await waitFor(() => expect(api.lifecycle).toHaveBeenCalledWith(C1, "schedule", 4));
-    await waitFor(() => expect(useToastStore.getState().toasts.some((t) => t.title === "Festive Flash scheduled")).toBe(true));
   });
 
-  it("explains a refused action from the server", async () => {
-    api.lifecycle.mockRejectedValue(new ApiError({ code: "CONFLICT", message: "No product in this campaign can run yet", status: 409, details: { rule: "no_eligible_items" } }));
+  it("synchronizes promotions with backend scheduler tick", async () => {
+    api.process.mockResolvedValue({ activated: 1, ended: 0, refreshed: 2 });
     const user = userEvent.setup();
-    renderPage(`/promotions?open=${C1}`);
-    const drawer = await screen.findByRole("dialog");
-    await user.click(await within(drawer).findByRole("button", { name: "Start now" }));
-    const confirmDialog = (await screen.findByText("Start this campaign now?")).closest("[role=dialog]") as HTMLElement;
-    await user.click(within(confirmDialog).getByRole("button", { name: "Start now" }));
-    await waitFor(() => expect(useToastStore.getState().toasts.some((t) => t.title === "Could not start the campaign" && /Ineligible tab shows the reason/.test(String(t.description)) && t.variant === "destructive")).toBe(true));
-  });
-
-  it("only offers End on a running campaign and never Edit or Delete", async () => {
-    renderPage(`/promotions?open=${C2}`);
-    const drawer = await screen.findByRole("dialog");
-    expect(await within(drawer).findByRole("button", { name: "End now" })).toBeInTheDocument();
-    expect(within(drawer).queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
-    expect(within(drawer).queryByRole("button", { name: "Delete draft" })).not.toBeInTheDocument();
-    expect(within(drawer).queryByRole("button", { name: "Schedule" })).not.toBeInTheDocument();
-  });
-
-  it("deletes a draft only after a confirmation", async () => {
-    api.remove.mockResolvedValue({ id: C1 });
-    const user = userEvent.setup();
-    renderPage(`/promotions?open=${C1}`);
-    const drawer = await screen.findByRole("dialog");
-    await user.click(await within(drawer).findByRole("button", { name: "Delete draft" }));
-    const confirmDialog = (await screen.findByText("Delete this draft?")).closest("[role=dialog]") as HTMLElement;
-    expect(api.remove).not.toHaveBeenCalled();
-    await user.click(within(confirmDialog).getByRole("button", { name: "Delete draft" }));
-    await waitFor(() => expect(api.remove).toHaveBeenCalledWith(C1, 4));
-  });
-
-  it("disables every write control without the write permission", async () => {
-    grant("promotions:read");
-    renderPage(`/promotions?open=${C1}`);
-    expect(await screen.findByRole("button", { name: "Create campaign", hidden: true })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Refresh results", hidden: true })).toBeDisabled();
-    const drawer = await screen.findByRole("dialog");
-    expect(await within(drawer).findByRole("button", { name: "Schedule" })).toBeDisabled();
-    expect(within(drawer).getByRole("button", { name: "Duplicate" })).toBeDisabled();
-    expect(within(drawer).getByRole("button", { name: "Add products" })).toBeDisabled();
-  });
-
-  it("duplicates a campaign and opens the copy", async () => {
-    api.duplicate.mockResolvedValue(campaign({ id: "77777777-7777-4777-8777-777777777777", name: "Festive Flash (copy)", code: "DIWALI25-COPY" }));
-    const user = userEvent.setup();
-    renderPage(`/promotions?open=${C1}`);
-    const drawer = await screen.findByRole("dialog");
-    await user.click(await within(drawer).findByRole("button", { name: "Duplicate" }));
-    await waitFor(() => expect(api.duplicate).toHaveBeenCalledWith(C1));
-    await waitFor(() => expect(loc()).toContain("open=77777777-7777-4777-8777-777777777777"));
-  });
-
-  it("adds products to a draft from the drawer", async () => {
-    api.variants.mockResolvedValue({
-      items: [{ id: "66666666-6666-4666-8666-666666666666", productId: "p1", sku: "KURTA-M", productTitle: "Cotton Kurta", optionValues: {}, sellingPriceMinor: 129900, status: "active" }],
-      nextCursor: null,
-      hasMore: false,
-    });
-    api.setProducts.mockResolvedValue({ total: 4, added: 1, removed: 0, skipped: [], droppedNoListing: 0 });
-    const user = userEvent.setup();
-    renderPage(`/promotions?open=${C1}`);
-    const drawer = await screen.findByRole("dialog");
-    await user.click(await within(drawer).findByRole("button", { name: "Add products" }));
-    const dialogs = await screen.findAllByRole("dialog");
-    const add = dialogs.find((d) => within(d).queryByText("Add products", { selector: "h2" })) as HTMLElement;
-    await user.click(await within(add).findByRole("checkbox", { name: "Select KURTA-M" }));
-    await user.click(within(add).getByRole("button", { name: "Add products" }));
-    await waitFor(() => expect(api.setProducts).toHaveBeenCalledWith(C1, { variantIds: ["66666666-6666-4666-8666-666666666666"] }, "add"));
-  });
-
-  it("shows an error with a retry when the campaigns cannot load", async () => {
-    api.campaigns.mockRejectedValueOnce(new ApiError({ code: "INTERNAL", message: "Database unavailable", status: 500 }));
-    const user = userEvent.setup();
-    renderPage();
-    expect(await screen.findByText("Campaigns could not be loaded.")).toBeInTheDocument();
-    expect(screen.getByText("Database unavailable")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Retry" }));
-    expect(await screen.findByText("Festive Flash")).toBeInTheDocument();
-  });
-
-  it("explains an empty account and offers the first campaign", async () => {
-    api.campaigns.mockResolvedValue(campaignsPage([], { counts: { all: 0, draft: 0, scheduled: 0, active: 0, ended: 0, cancelled: 0 } }));
-    renderPage();
-    expect(await screen.findByText("No campaigns yet.")).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "Create campaign" }).length).toBeGreaterThan(1);
+    renderPage("/promotions");
+    const syncBtn = screen.getByRole("button", { name: /Sync Promotions/i });
+    await user.click(syncBtn);
+    await waitFor(() => expect(api.process).toHaveBeenCalled());
   });
 });

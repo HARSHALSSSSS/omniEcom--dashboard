@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { ShieldCheck, Info, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -10,19 +11,19 @@ import { promotionsApi } from "@/api/promotions.api";
 import { errorMessage, isApiError } from "@/api/errors";
 import { useCampaignLifecycle, useCreateCampaign, useUpdateCampaign } from "@/hooks/usePromotions";
 import { toast } from "@/hooks/useToast";
-import { PROMOTION_TYPES, type PromotionAccount, type PromotionCampaign, type PromotionType } from "@/types/promotions";
+import { PROMOTION_TYPES, type PickerVariant, type PromotionAccount, type PromotionCampaign, type PromotionType } from "@/types/promotions";
 import { EMPTY_FORM, campaignFormSchema, formFromCampaign, serverFieldErrors, toCampaignWrite, type CampaignFormValues } from "./campaignForm";
 import { ProductSelector } from "./ProductSelector";
 import { EMPTY_SELECTION, isEmptySelection, toSelection, type SelectorValue } from "./selection";
 import { TYPE_HINTS, TYPE_LABELS, symbol } from "./promoFormat";
 
-const SELECT = "h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm";
+const SELECT = "h-9 w-full rounded-md border border-input bg-transparent px-3 text-xs";
 
-function Field({ label, error, hint, children, htmlFor }: { label: string; error?: string; hint?: string; children: React.ReactNode; htmlFor?: string }) {
+function Field({ label, error, hint, required, children, htmlFor }: { label: string; error?: string; hint?: string; required?: boolean; children: React.ReactNode; htmlFor?: string }) {
   return (
     <div className="space-y-1">
-      <label htmlFor={htmlFor} className="block text-[11px] font-medium text-muted-foreground">
-        {label}
+      <label htmlFor={htmlFor} className="block text-[11px] font-medium text-foreground">
+        {label} {required && <span className="text-destructive">*</span>}
       </label>
       {children}
       {error ? (
@@ -39,15 +40,14 @@ function Field({ label, error, hint, children, htmlFor }: { label: string; error
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** the draft being edited; null creates a new campaign */
   campaign: PromotionCampaign | null;
   accounts: PromotionAccount[];
-  /** called once the campaign is saved (and scheduled, when asked) */
+  initialVariantIds?: string[];
+  initialVariants?: PickerVariant[];
   onSaved: (campaign: PromotionCampaign) => void;
 }
 
-/** create a draft (with its products) or edit a draft's terms, dates, budget and channels */
-export function CampaignFormDialog({ open, onOpenChange, campaign, accounts, onSaved }: Props) {
+export function CampaignFormDialog({ open, onOpenChange, campaign, accounts, initialVariantIds, initialVariants, onSaved }: Props) {
   const editing = campaign !== null;
   const create = useCreateCampaign();
   const update = useUpdateCampaign();
@@ -64,15 +64,38 @@ export function CampaignFormDialog({ open, onOpenChange, campaign, accounts, onS
   const { register, handleSubmit, reset, watch, setValue, setError, formState } = form;
   const { errors, isDirty } = formState;
 
-  // every time the dialog opens it starts from the campaign (or a blank form)
   useEffect(() => {
     if (!open) return;
     setBase(campaign);
     reset(campaign ? formFromCampaign(campaign) : EMPTY_FORM);
-    setSelection(EMPTY_SELECTION);
+
+    if (initialVariants && initialVariants.length > 0 && !campaign) {
+      setSelection({
+        mode: "variants",
+        variants: initialVariants,
+        categoryIds: [],
+      });
+    } else if (initialVariantIds && initialVariantIds.length > 0 && !campaign) {
+      setSelection({
+        mode: "variants",
+        variants: initialVariantIds.map((id) => ({
+          id,
+          productId: id,
+          sku: id.slice(0, 8),
+          productTitle: "Selected Product",
+          optionValues: {},
+          sellingPriceMinor: 0,
+          status: "active",
+        })),
+        categoryIds: [],
+      });
+    } else {
+      setSelection(EMPTY_SELECTION);
+    }
+
     setFormError(null);
     setConflict(false);
-  }, [open, campaign, reset]);
+  }, [open, campaign, initialVariantIds, initialVariants, reset]);
 
   const type = watch("type");
   const accountIds = watch("accountIds");
@@ -114,7 +137,7 @@ export function CampaignFormDialog({ open, onOpenChange, campaign, accounts, onS
     }
   };
 
-  const save = (andSchedule: boolean) =>
+  const save = (andSchedule = false) =>
     handleSubmit(async (values) => {
       setFormError(null);
       const body = toCampaignWrite(values);
@@ -152,20 +175,18 @@ export function CampaignFormDialog({ open, onOpenChange, campaign, accounts, onS
       }
     })();
 
-  const toggleAccount = (id: string) => setValue("accountIds", accountIds.includes(id) ? accountIds.filter((x) => x !== id) : [...accountIds, id], { shouldDirty: true });
-
   return (
     <>
       <Dialog open={open} onOpenChange={requestClose}>
-        <DialogContent className="max-h-[92vh] max-w-2xl overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{editing ? "Edit draft campaign" : "New campaign"}</DialogTitle>
-            <DialogDescription>
-              {editing ? "Changing prices, channels or dates re-checks every product." : "A campaign is saved as a draft first. Check which products can run, then schedule it."}
+        <DialogContent className="max-h-[92vh] max-w-xl overflow-y-auto p-6">
+          <DialogHeader className="pb-3 border-b border-border">
+            <DialogTitle className="text-lg font-bold">{editing ? "Edit Campaign" : "Create Campaign"}</DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Prepare a campaign draft. Nothing is published automatically.
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={(e) => e.preventDefault()} noValidate className="space-y-5 text-xs">
+          <form onSubmit={(e) => e.preventDefault()} noValidate className="space-y-6 pt-2 text-xs">
             {conflict && (
               <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-900">
                 <span>This campaign was changed by someone else while you were editing.</span>
@@ -175,24 +196,66 @@ export function CampaignFormDialog({ open, onOpenChange, campaign, accounts, onS
               </div>
             )}
 
-            <section className="grid gap-3 sm:grid-cols-2">
-              <div className="sm:col-span-2">
-                <Field label="Campaign name" htmlFor="promo-name" error={errors.name?.message}>
-                  <Input id="promo-name" placeholder="e.g. Diwali Mega Fest" {...register("name")} error={Boolean(errors.name)} />
-                </Field>
+            {/* Campaign basics */}
+            <section className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Campaign basics</h3>
+                <span className="text-[11px] text-muted-foreground">* Required</span>
               </div>
-              <Field label="Campaign code (optional)" htmlFor="promo-code" error={errors.code?.message} hint="Internal reference, generated when left blank. It is not sent to marketplaces as a coupon.">
-                <Input id="promo-code" placeholder="e.g. FESTIVE20" className="font-mono uppercase" {...register("code")} error={Boolean(errors.code)} />
-              </Field>
-              <Field label="Description (optional)" htmlFor="promo-desc" error={errors.description?.message}>
-                <Textarea id="promo-desc" rows={2} {...register("description")} />
-              </Field>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <Field label="Campaign name" required htmlFor="promo-name" error={errors.name?.message}>
+                    <Input id="promo-name" placeholder="Festive Home Sale" {...register("name")} error={Boolean(errors.name)} className="text-xs" />
+                  </Field>
+                </div>
+
+                <div>
+                  <Field label="Sales channel" required htmlFor="promo-channel">
+                    <select
+                      id="promo-channel"
+                      className={SELECT}
+                      value={accountIds[0] ?? ""}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setValue("accountIds", val ? [val] : [], { shouldDirty: true });
+                      }}
+                    >
+                      <option value="">Every connected channel</option>
+                      {accounts.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.displayName || a.marketplace.toUpperCase()}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2 rounded-lg border border-border/80 bg-muted/30 p-2.5 text-[11px] text-muted-foreground">
+                <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <span>Illustrative setup only. Campaign creation, promotion types and schedules depend on connector/API support and require verification.</span>
+              </div>
             </section>
 
+            {/* Products */}
+            {!editing && (
+              <section className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Products *</h3>
+                  <span className="text-[11px] text-muted-foreground font-mono">
+                    {selection.variants.length} selected · illustrative products
+                  </span>
+                </div>
+                <ProductSelector value={selection} onChange={setSelection} disabled={busy} />
+              </section>
+            )}
+
+            {/* Promotion details */}
             <section className="space-y-3">
-              <h3 className="text-xs font-semibold text-foreground">Discount</h3>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Promotion details</h3>
               <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="Discount type" htmlFor="promo-type" hint={TYPE_HINTS[type]}>
+                <Field label="Promotion type" required htmlFor="promo-type">
                   <select id="promo-type" className={SELECT} {...register("type")}>
                     {PROMOTION_TYPES.map((t: PromotionType) => (
                       <option key={t} value={t}>
@@ -201,83 +264,60 @@ export function CampaignFormDialog({ open, onOpenChange, campaign, accounts, onS
                     ))}
                   </select>
                 </Field>
+
                 {percent && (
-                  <Field label={type === "bundle" ? "Bundle discount (%)" : "Discount (%)"} htmlFor="promo-percent" error={errors.percent?.message}>
-                    <Input id="promo-percent" inputMode="decimal" placeholder="15" {...register("percent")} error={Boolean(errors.percent)} />
+                  <Field label="Proposed discount" required htmlFor="promo-percent" error={errors.percent?.message}>
+                    <div className="relative">
+                      <Input id="promo-percent" inputMode="decimal" placeholder="10" {...register("percent")} error={Boolean(errors.percent)} className="pr-8 text-xs font-mono" />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground">%</span>
+                    </div>
                   </Field>
                 )}
+
                 {type === "flat_discount" && (
-                  <Field label={`Amount off (${sym})`} htmlFor="promo-flat" error={errors.flat?.message}>
-                    <Input id="promo-flat" inputMode="decimal" placeholder="200" {...register("flat")} error={Boolean(errors.flat)} />
+                  <Field label={`Proposed discount (${sym})`} required htmlFor="promo-flat" error={errors.flat?.message}>
+                    <Input id="promo-flat" inputMode="decimal" placeholder="200" {...register("flat")} error={Boolean(errors.flat)} className="text-xs font-mono" />
                   </Field>
                 )}
+
                 {(type === "bogo" || type === "bundle") && (
-                  <Field label={type === "bundle" ? "Items in the bundle" : "Buy quantity"} htmlFor="promo-buy" error={errors.buyQuantity?.message}>
-                    <Input id="promo-buy" inputMode="numeric" placeholder={type === "bundle" ? "3" : "2"} {...register("buyQuantity")} error={Boolean(errors.buyQuantity)} />
-                  </Field>
-                )}
-                {type === "bogo" && (
-                  <Field label="Get quantity (free)" htmlFor="promo-get" error={errors.getQuantity?.message}>
-                    <Input id="promo-get" inputMode="numeric" placeholder="1" {...register("getQuantity")} error={Boolean(errors.getQuantity)} />
+                  <Field label={type === "bundle" ? "Items in the bundle" : "Buy quantity"} required htmlFor="promo-buy" error={errors.buyQuantity?.message}>
+                    <Input id="promo-buy" inputMode="numeric" placeholder={type === "bundle" ? "3" : "2"} {...register("buyQuantity")} error={Boolean(errors.buyQuantity)} className="text-xs font-mono" />
                   </Field>
                 )}
               </div>
+              <p className="text-[11px] text-muted-foreground">
+                Proposed values only; not a verified channel offer. Confirm supported types, fees and rules before submission.
+              </p>
             </section>
 
+            {/* Schedule */}
             <section className="space-y-3">
-              <h3 className="text-xs font-semibold text-foreground">Schedule and budget</h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Schedule</h3>
+                <span className="text-[11px] text-muted-foreground">India Standard Time (UTC+05:30)</span>
+              </div>
+
               <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="Starts" htmlFor="promo-start" error={errors.startsAt?.message} hint="Business time zone. A start in the past runs as soon as it is scheduled.">
-                  <Input id="promo-start" type="datetime-local" {...register("startsAt")} error={Boolean(errors.startsAt)} />
+                <Field label="Starts" required htmlFor="promo-start" error={errors.startsAt?.message}>
+                  <Input id="promo-start" type="datetime-local" {...register("startsAt")} error={Boolean(errors.startsAt)} className="text-xs" />
                 </Field>
-                <Field label="Ends" htmlFor="promo-end" error={errors.endsAt?.message}>
-                  <Input id="promo-end" type="datetime-local" {...register("endsAt")} error={Boolean(errors.endsAt)} />
-                </Field>
-                <Field label={`Discount budget (${sym}, optional)`} htmlFor="promo-budget" error={errors.budget?.message} hint="The campaign ends by itself once the discount given reaches this. Leave blank for no limit.">
-                  <Input id="promo-budget" inputMode="decimal" placeholder="50000" {...register("budget")} error={Boolean(errors.budget)} />
-                </Field>
-                <Field label={`Minimum order (${sym}, optional)`} htmlFor="promo-min" error={errors.minOrder?.message} hint="For your reference: marketplaces cannot enforce a minimum order on a sale price.">
-                  <Input id="promo-min" inputMode="decimal" placeholder="0" {...register("minOrder")} error={Boolean(errors.minOrder)} />
+                <Field label="Ends" required htmlFor="promo-end" error={errors.endsAt?.message}>
+                  <Input id="promo-end" type="datetime-local" {...register("endsAt")} error={Boolean(errors.endsAt)} className="text-xs" />
                 </Field>
               </div>
             </section>
 
-            <section className="space-y-2">
-              <h3 className="text-xs font-semibold text-foreground">Marketplaces</h3>
-              {accounts.length === 0 ? (
-                <p className="text-[11px] text-muted-foreground">No marketplace account is connected yet. Connect one in the marketplace hub to run a campaign.</p>
-              ) : (
-                <>
-                  <div role="group" aria-label="Marketplace accounts" className="flex flex-wrap gap-2">
-                    {accounts.map((a) => {
-                      const on = accountIds.includes(a.id);
-                      const usable = a.status === "active" || on;
-                      return (
-                        <label key={a.id} className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 ${on ? "border-primary bg-primary/5" : "border-border"} ${usable ? "cursor-pointer" : "cursor-not-allowed opacity-50"}`}>
-                          <input type="checkbox" checked={on} disabled={!usable} onChange={() => toggleAccount(a.id)} className="h-3.5 w-3.5 accent-[#1D4ED8]" />
-                          <span className="font-medium">{a.displayName}</span>
-                          {a.status !== "active" && <span className="text-[10px] text-muted-foreground">{a.status}</span>}
-                        </label>
-                      );
-                    })}
-                  </div>
-                  <p className="text-[11px] text-muted-foreground">{accountIds.length === 0 ? "Runs on every connected account." : `Runs on ${accountIds.length} selected account${accountIds.length === 1 ? "" : "s"}.`}</p>
-                </>
-              )}
-              {errors.accountIds?.message && (
-                <p role="alert" className="text-[11px] text-destructive">
-                  {errors.accountIds.message}
+            {/* Notice / Guarantee Box */}
+            <div className="flex items-start gap-2.5 rounded-xl border border-border bg-muted/40 p-3.5 text-xs">
+              <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-foreground" />
+              <div className="space-y-0.5">
+                <p className="font-semibold text-foreground">Creating saves a draft, not a live promotion.</p>
+                <p className="text-muted-foreground text-[11px] leading-relaxed">
+                  Submission is a separate action requiring connector support and your explicit confirmation. AI advice never automatically enrolls products.
                 </p>
-              )}
-            </section>
-
-            {!editing && (
-              <section className="space-y-2">
-                <h3 className="text-xs font-semibold text-foreground">Products</h3>
-                <ProductSelector value={selection} onChange={setSelection} disabled={busy} />
-                <p className="text-[11px] text-muted-foreground">You can also add or change products from the campaign after saving.</p>
-              </section>
-            )}
+              </div>
+            </div>
 
             {formError && (
               <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-destructive">
@@ -285,16 +325,23 @@ export function CampaignFormDialog({ open, onOpenChange, campaign, accounts, onS
               </p>
             )}
 
-            <DialogFooter className="gap-2 sm:gap-2">
-              <Button type="button" variant="outline" disabled={busy} onClick={() => requestClose(false)}>
-                Cancel
-              </Button>
-              <Button type="button" variant="outline" loading={busy} disabled={conflict} onClick={() => void save(false)}>
-                {editing ? "Save changes" : "Save draft"}
-              </Button>
-              <Button type="button" loading={busy} disabled={conflict} onClick={() => void save(true)}>
-                Save &amp; schedule
-              </Button>
+            <DialogFooter className="flex flex-col-reverse items-center justify-between gap-3 sm:flex-row pt-3 border-t border-border">
+              <span className="text-[11px] text-muted-foreground">Sample values · not submitted</span>
+              <div className="flex items-center gap-2">
+                <Button type="button" variant="outline" size="sm" className="h-8 text-xs" disabled={busy} onClick={() => requestClose(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-8 bg-foreground text-xs text-background hover:bg-foreground/90"
+                  loading={busy}
+                  disabled={conflict}
+                  onClick={() => void save(false)}
+                >
+                  {editing ? "Save Changes" : "Create Campaign"}
+                </Button>
+              </div>
             </DialogFooter>
           </form>
         </DialogContent>

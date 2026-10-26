@@ -340,6 +340,7 @@ export const ENDPOINTS = {
   PROMOTION_CAMPAIGN_ACTION: (id: string, action: "schedule" | "activate" | "end" | "cancel" | "duplicate" | "evaluate") =>
     `${BASE}/promotions/campaigns/${id}/${action}`,
   PROMOTION_CAMPAIGN_PRODUCTS: (id: string) => `${BASE}/promotions/campaigns/${id}/products`,
+  AUDIT_LOGS: `${BASE}/audit-logs`,
 
   // Procurement
   PROCUREMENT_OVERVIEW: `${BASE}/procurement/overview`,
