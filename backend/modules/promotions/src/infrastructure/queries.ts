@@ -143,15 +143,18 @@ export async function priceRows(tx: Tx, vendorId: string, variantIds: string[]) 
 // ------------------------------------------------------------------------------------------------
 export interface SalesWindow { unitsByVariant: Map<string, number>; units: number; revenueMinor: number; orders: number }
 
+/** the order lines that count as sales of these variants in [from, to) on the given accounts (none = all): cancelled and returned lines do not count */
+export const saleLineFilter = (vendorId: string, variantIds: string[], accountIds: string[], from: Date, to: Date) => and(
+  eq(OI.vendorId, vendorId), inArray(OI.variantId, variantIds), gte(O.placedAt, from), lt(O.placedAt, to),
+  sql`${O.status} not in ('cancelled', 'returned')`, sql`${OI.status} not in ('cancelled', 'returned')`,
+  accountIds.length ? inArray(O.marketplaceAccountId, accountIds) : undefined,
+);
+
 /** units and revenue of the variants sold in [from, to) on the given accounts (none = all); cancelled and returned lines do not count */
 export async function salesInWindow(tx: Tx, vendorId: string, variantIds: string[], accountIds: string[], from: Date, to: Date): Promise<SalesWindow> {
   const empty: SalesWindow = { unitsByVariant: new Map(), units: 0, revenueMinor: 0, orders: 0 };
   if (variantIds.length === 0 || to <= from) return empty;
-  const where = and(
-    eq(OI.vendorId, vendorId), inArray(OI.variantId, variantIds), gte(O.placedAt, from), lt(O.placedAt, to),
-    sql`${O.status} not in ('cancelled', 'returned')`, sql`${OI.status} not in ('cancelled', 'returned')`,
-    accountIds.length ? inArray(O.marketplaceAccountId, accountIds) : undefined,
-  );
+  const where = saleLineFilter(vendorId, variantIds, accountIds, from, to);
   const [perVariant, total] = await Promise.all([
     tx.select({ variantId: OI.variantId, units: sql<string>`coalesce(sum(${OI.quantity}), 0)`, revenue: sql<string>`coalesce(sum(${OI.unitPriceMinor} * ${OI.quantity} - ${OI.discountMinor}), 0)` })
       .from(OI).innerJoin(O, and(eq(O.id, OI.orderId), eq(O.vendorId, OI.vendorId))).where(where).groupBy(OI.variantId),

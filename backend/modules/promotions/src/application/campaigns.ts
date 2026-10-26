@@ -3,6 +3,7 @@ import { and, desc, eq, escapeLike, ilike, inArray, isNull, or, schema, sql, typ
 import { AppError, Errors } from '@oms/shared';
 import { effects, type OpCtx } from '@oms/module-kit';
 import { validateTerms, type Terms } from '../domain/terms';
+import { HORIZON_STATUSES, THRESHOLDS, type Horizon } from '../domain/candidates';
 import { isEditable, type Status } from '../domain/lifecycle';
 import { assertAccounts, loadCampaign, type CampaignRow, type Selection } from '../infrastructure/queries';
 import { evaluateItems, loadItems, setItems, termsOf, type SetItemsResult } from './items';
@@ -109,23 +110,41 @@ export async function duplicateCampaign(tx: Tx, ctx: OpCtx, id: string, now: Dat
 // ------------------------------------------------------------------------------------------------
 // reads
 // ------------------------------------------------------------------------------------------------
-export interface ListFilters { status?: string; type?: string; q?: string }
+export const CAMPAIGN_SORTS = ['newest', 'ends_soon', 'revenue', 'name'] as const;
+export type CampaignSort = (typeof CAMPAIGN_SORTS)[number];
+export interface ListFilters { status?: string; type?: string; q?: string; horizon?: Horizon; accountId?: string; marketplace?: string; endingSoon?: boolean; sort?: CampaignSort; now?: Date }
 
+/** a campaign without accounts runs on every connected account */
+const onAccount = (accountId: string): SQL => sql`(${C.accountIds} @> ${JSON.stringify([accountId])}::jsonb or (jsonb_array_length(${C.accountIds}) = 0 and exists (select 1 from ${A} a where a.vendor_id = ${C.vendorId} and a.id = ${accountId} and a.status = 'active')))`;
+const onMarketplace = (marketplace: string): SQL => sql`exists (select 1 from ${A} a where a.vendor_id = ${C.vendorId} and a.marketplace = ${marketplace} and (${C.accountIds} @> jsonb_build_array(a.id::text) or (jsonb_array_length(${C.accountIds}) = 0 and a.status = 'active')))`;
+
+/** `withStatus` = the filters that narrow the list; the counts leave out status, horizon and ending-soon so the tabs keep their numbers */
 const listWhere = (vendorId: string, f: ListFilters, withStatus: boolean): SQL | undefined => and(
   eq(C.vendorId, vendorId), isNull(C.deletedAt),
   withStatus && f.status ? eq(C.status, f.status) : undefined, f.type ? eq(C.type, f.type) : undefined,
+  withStatus && f.horizon ? inArray(C.status, [...HORIZON_STATUSES[f.horizon]]) : undefined,
+  withStatus && f.endingSoon ? and(eq(C.status, 'active'), sql`${C.endsAt} > ${f.now ?? new Date()}`, sql`${C.endsAt} <= ${new Date((f.now ?? new Date()).getTime() + THRESHOLDS.endingSoonHours * 3_600_000)}`) : undefined,
+  f.accountId ? onAccount(f.accountId) : undefined, f.marketplace ? onMarketplace(f.marketplace) : undefined,
   f.q?.trim() ? or(ilike(C.name, `%${escapeLike(f.q.trim())}%`), ilike(C.code, `%${escapeLike(f.q.trim())}%`)) : undefined,
 );
 
+const ORDER: Record<CampaignSort, SQL[]> = {
+  newest: [sql`${C.createdAt} desc`, sql`${C.id} desc`],
+  ends_soon: [sql`${C.endsAt} asc nulls last`, sql`${C.createdAt} desc`, sql`${C.id} desc`],
+  revenue: [sql`${C.revenueMinor} desc`, sql`${C.createdAt} desc`, sql`${C.id} desc`],
+  name: [sql`lower(${C.name}) asc`, sql`${C.id} asc`],
+};
+
 export async function listCampaigns(tx: Tx, vendorId: string, f: ListFilters, win: { limit: number; offset: number }) {
   const [rows, [total], grouped] = await Promise.all([
-    tx.select().from(C).where(listWhere(vendorId, f, true)).orderBy(desc(C.createdAt), desc(C.id)).limit(win.limit).offset(win.offset),
+    tx.select().from(C).where(listWhere(vendorId, f, true)).orderBy(...ORDER[f.sort ?? 'newest']).limit(win.limit).offset(win.offset),
     tx.select({ n: sql<string>`count(*)` }).from(C).where(listWhere(vendorId, f, true)),
     tx.select({ status: C.status, n: sql<string>`count(*)` }).from(C).where(listWhere(vendorId, f, false)).groupBy(C.status),
   ]);
   const counts: Record<string, number> = { all: 0, draft: 0, scheduled: 0, active: 0, ended: 0, cancelled: 0 };
   for (const g of grouped) { counts[g.status] = Number(g.n); counts.all! += Number(g.n); }
-  return { rows, total: Number(total?.n ?? 0), counts };
+  const sum = (h: Horizon) => HORIZON_STATUSES[h].reduce((s, st) => s + (counts[st] ?? 0), 0);
+  return { rows, total: Number(total?.n ?? 0), counts, horizonCounts: { past: sum('past'), now: sum('now'), next: sum('next') } };
 }
 
 export interface AccountLite { id: string; marketplace: string; displayName: string; status: string }
