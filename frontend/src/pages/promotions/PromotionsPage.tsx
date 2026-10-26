@@ -66,7 +66,6 @@ export default function PromotionsPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const accountList = useMemo(() => accounts.data ?? [], [accounts.data]);
-  const campaignList = useMemo(() => campaigns.data?.items ?? [], [campaigns.data?.items]);
 
   // the header counts come from the overview only: no figure is shown before it is loaded
   const o = overview.data;
@@ -200,7 +199,7 @@ export default function PromotionsPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {view !== "products" && (
+            {view === "overview" && (
               <>
             <Button
               size="sm"
@@ -223,6 +222,7 @@ export default function PromotionsPage() {
             </Button>
               </>
             )}
+            {view !== "campaigns" && (
             <Button
               variant="outline"
               size="sm"
@@ -234,6 +234,7 @@ export default function PromotionsPage() {
             >
               <RefreshCw className="h-3.5 w-3.5" /> Sync Promotions
             </Button>
+            )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground" aria-label="More options">
@@ -320,14 +321,25 @@ export default function PromotionsPage() {
 
       {view === "campaigns" && (
         <CampaignsTab
-          campaigns={campaignList}
-          accounts={accountList}
+          url={url}
+          update={update}
+          clearFilters={url.clearFilters}
+          data={campaigns.data}
           loading={campaigns.isLoading}
+          fetching={campaigns.isFetching}
+          error={campaigns.error}
+          onRetry={() => void campaigns.refetch()}
+          accounts={accountList}
+          canWrite={canWrite}
+          busyId={busyId}
           refreshing={process.isPending}
           onRefresh={refreshResults}
           onCreateCampaign={() => startCreate()}
-          onOpenCampaign={openCampaign}
-          onEditCampaign={startEdit}
+          onOpen={(c) => openCampaign(c.id)}
+          onEdit={startEdit}
+          onLifecycle={(c, action) => setConfirm({ kind: "lifecycle", campaign: asRef(c), action })}
+          onDuplicate={(c) => runDuplicate(asRef(c))}
+          onDelete={(c) => setConfirm({ kind: "delete", campaign: asRef(c) })}
         />
       )}
 

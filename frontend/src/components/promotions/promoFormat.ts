@@ -1,5 +1,5 @@
 import { currencySymbol, formatCurrency, formatInZone, getFormatPreferences } from "@/utils/format";
-import type { CampaignPrefill, CandidateQuick, CandidateSort, CandidateStatus, ChannelCapability, ContributionBasis, Eligibility, PromotionCampaign, PromotionCandidate, PromotionThresholds, PromotionItemStatus, PromotionLifecycleAction, PromotionOverview, PromotionStatus, PromotionType } from "@/types/promotions";
+import type { CampaignPrefill, PromotionCampaignRow, CandidateQuick, CandidateSort, CandidateStatus, ChannelCapability, ContributionBasis, Eligibility, PromotionCampaign, PromotionCandidate, PromotionThresholds, PromotionItemStatus, PromotionLifecycleAction, PromotionOverview, PromotionStatus, PromotionType } from "@/types/promotions";
 
 export const WRITE_REASON = "You need the promotions:write permission to change campaigns.";
 
@@ -386,4 +386,39 @@ export function prefillFor(rows: PromotionCandidate[]): CampaignPrefill {
     variants: rows.map((r) => ({ id: r.variantId, productId: r.productId, sku: r.sku, productTitle: r.productName, optionValues: {}, sellingPriceMinor: r.regularPriceMinor, status: "active" as const })),
     discountBps: suggestedDiscountBps(rows),
   };
+}
+
+// ---------------------------------------------------------------------------- Campaigns tab
+
+/** the campaign list as CSV: rupees, blank = unknown (no cost price, nothing sold) */
+export function campaignsCsv(rows: PromotionCampaignRow[]): string {
+  const head = ["Campaign", "Code", "Status", "Type", "Discount", "Average discount %", "Channels", "Starts", "Ends", "Products", "Live", "Cannot run", "Units sold", "Revenue", "Discount given", "Budget", "Contribution", "Contribution margin %", "Below margin target", "Without cost price", "In conflict"];
+  const lines = rows.map((c) =>
+    [
+      c.name,
+      c.code,
+      STATUS_LABELS[c.status],
+      TYPE_LABELS[c.type],
+      describeTerms(c),
+      percentOf(c.avgDiscountBps),
+      c.channels.map((ch) => ch.displayName).join("; "),
+      c.startsAt ?? "",
+      c.endsAt ?? "",
+      c.itemCounts.total,
+      c.itemCounts.live,
+      c.itemCounts.ineligible,
+      c.unitsMoved,
+      rupeeText(c.revenueMinor),
+      rupeeText(c.spendMinor),
+      c.budgetMinor > 0 ? rupeeText(c.budgetMinor) : "",
+      rupeeText(c.contributionMinor),
+      percentOf(c.contributionBps),
+      c.marginRisk ? c.marginRisk.belowTarget : "",
+      c.marginRisk ? c.marginRisk.unknownCost : "",
+      c.marginRisk ? c.marginRisk.conflicts : "",
+    ]
+      .map(csvCell)
+      .join(","),
+  );
+  return [head.map(csvCell).join(","), ...lines].join("\r\n");
 }

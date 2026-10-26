@@ -204,9 +204,35 @@ export interface PromotionCampaign {
   statsUpdatedAt: string | null;
   itemCounts: PromotionItemCounts;
   endReason: string | null;
+  /** past = ended or cancelled, now = running, next = not started */
+  horizon: "past" | "now" | "next";
+  /** running and ending within the threshold */
+  endingSoon: boolean;
+  /** hours until a running campaign ends; null when it is not running or has no end */
+  endsInHours: number | null;
+  /** whether the campaign channels can take price changes: all, some, none, or no channel at all */
+  capability: "supported" | "partial" | "not_supported" | "none";
   version: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface MarginRisk {
+  checkedProducts: number;
+  belowTarget: number;
+  unknownCost: number;
+  conflicts: number;
+}
+
+/** a campaign as the ledger lists it: the campaign plus its average discount, the contribution of its sales and its margin risk */
+export interface PromotionCampaignRow extends PromotionCampaign {
+  avgDiscountBps: number | null;
+  /** revenue - cost - marketplace fees of the promoted sales; null when nothing sold or any sold unit has no cost price */
+  contributionMinor: number | null;
+  contributionBps: number | null;
+  contributionBasis: ContributionBasis | null;
+  /** today's margin picture of its products at the promotional prices; null once finished */
+  marginRisk: MarginRisk | null;
 }
 
 export interface PromotionVelocity {
@@ -217,7 +243,7 @@ export interface PromotionVelocity {
   baselineDays: number;
 }
 
-export interface PromotionCampaignDetail extends PromotionCampaign {
+export interface PromotionCampaignDetail extends PromotionCampaignRow {
   velocity: PromotionVelocity;
 }
 
@@ -251,7 +277,11 @@ export interface Paged<T, C> {
 
 export type CampaignCounts = Record<"all" | PromotionStatus, number>;
 export type ProductCounts = Record<"all" | PromotionItemStatus, number>;
-export type CampaignsPage = Paged<PromotionCampaign, CampaignCounts>;
+export type CampaignHorizon = "past" | "now" | "next";
+export const CAMPAIGN_HORIZONS: readonly CampaignHorizon[] = ["past", "now", "next"];
+export const CAMPAIGN_SORTS = ["newest", "ends_soon", "revenue", "name"] as const;
+export type CampaignSort = (typeof CAMPAIGN_SORTS)[number];
+export type CampaignsPage = Paged<PromotionCampaignRow, CampaignCounts> & { horizonCounts: Record<CampaignHorizon, number> };
 export type ProductsPage = Paged<PromotionProduct, ProductCounts>;
 
 export type PromotionView = "overview" | "products" | "campaigns";
@@ -259,6 +289,11 @@ export type PromotionView = "overview" | "products" | "campaigns";
 export interface CampaignsQuery {
   status?: PromotionStatus;
   type?: PromotionType;
+  horizon?: CampaignHorizon;
+  endingSoon?: boolean;
+  marketplace?: string;
+  accountId?: string;
+  sort?: CampaignSort;
   q?: string;
   page: number;
   pageSize: number;
@@ -364,4 +399,65 @@ export interface ProcessResult {
   activated: number;
   ended: number;
   refreshed: number;
+}
+
+/** the body of POST /promotions/preview: the create terms plus the products to look at (nothing is saved) */
+export interface PreviewRequest {
+  type: PromotionType;
+  valueBps?: number | null;
+  valueMinor?: number | null;
+  buyQuantity?: number | null;
+  getQuantity?: number | null;
+  accountIds?: string[];
+  variantIds: string[];
+  startsAt?: string | null;
+  endsAt?: string | null;
+}
+
+/** one product on one channel under the previewed terms */
+export interface PreviewRow {
+  variantId: string;
+  productId: string;
+  productName: string;
+  sku: string;
+  availableStock: number | null;
+  lowStock: boolean | null;
+  accountId: string;
+  marketplace: string;
+  displayName: string;
+  listed: boolean;
+  canPushPrices: boolean;
+  regularPriceMinor: number;
+  promoPriceMinor: number;
+  discountBps: number;
+  ok: boolean;
+  reason: string | null;
+  conflict: { kind: "other_campaign" | "existing_sale"; message: string } | null;
+  unitCostMinor: number | null;
+  feesConfigured: boolean;
+  marginRegularBps: number | null;
+  marginPromoBps: number | null;
+  targetMarginBps: number | null;
+  belowTarget: boolean | null;
+  minPromoPriceMinor: number | null;
+  maxDiscountBps: number | null;
+}
+
+export interface PreviewSummary {
+  products: number;
+  placements: number;
+  runnable: number;
+  notRunnable: number;
+  notListed: number;
+  belowMarginTarget: number;
+  unknownCost: number;
+  conflicts: number;
+  connectorCannotPush: number;
+  avgDiscountBps: number | null;
+  unknownVariants: number;
+}
+
+export interface PreviewResult {
+  summary: PreviewSummary;
+  items: PreviewRow[];
 }

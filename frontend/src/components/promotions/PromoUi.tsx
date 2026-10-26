@@ -70,10 +70,6 @@ export function EmptyCampaigns({ canWrite, onCreate }: { canWrite: boolean; onCr
   );
 }
 
-export function EmptyProducts() {
-  return <StateBox title="No promoted products yet." description="Products appear here once you add them to a campaign. Open a campaign and add products to see their promotional prices and whether they can run." />;
-}
-
 export function TableSkeleton({ label }: { label: string }) {
   return (
     <div role="status" aria-label={label} className="space-y-px overflow-hidden rounded-xl border border-border bg-card p-4">
@@ -153,15 +149,6 @@ export function PromoPagination({ page, pages, total, pageSize, shown, noun, onP
   );
 }
 
-export function Stat({ label, value, hint, tone }: { label: string; value: string; hint?: string; tone?: string }) {
-  return (
-    <div className="flex flex-col gap-1 rounded-xl border border-border bg-card p-4 shadow-sm">
-      <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</span>
-      <span className="font-mono text-2xl font-bold text-foreground">{value}</span>
-      {hint && <span className={cn("text-[11px]", tone ?? "text-muted-foreground")}>{hint}</span>}
-    </div>
-  );
-}
 
 export function Line({ label, children }: { label: string; children: ReactNode }) {
   return (

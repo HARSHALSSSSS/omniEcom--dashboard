@@ -1,19 +1,22 @@
 import { useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
+  CAMPAIGN_HORIZONS,
+  CAMPAIGN_SORTS,
   CANDIDATE_QUICK_FILTERS,
   CANDIDATE_SORTS,
   CANDIDATE_STATUSES,
   PRODUCT_SEGMENTS,
   PROMOTION_STATUSES,
   PROMOTION_TYPES,
+  type CampaignHorizon,
+  type CampaignSort,
   type CampaignsQuery,
   type CandidateQuick,
   type CandidateSort,
   type CandidateStatus,
   type CandidatesQuery,
   type ProductSegment,
-  type ProductsQuery,
   type PromotionItemStatus,
   type PromotionStatus,
   type PromotionType,
@@ -43,6 +46,10 @@ export interface PromotionsUrlState {
   marketplace?: string;
   sort: CandidateSort;
   candidateStatus?: CandidateStatus;
+  /** campaigns view: the Past / Now / Next toggle (a status filter overrides it) */
+  horizon: CampaignHorizon;
+  endingSoon: boolean;
+  campaignSort: CampaignSort;
   page: number;
   pageSize: number;
 }
@@ -60,7 +67,10 @@ export function readUrlState(params: URLSearchParams): PromotionsUrlState {
     segment: oneOf(params.get("seg"), PRODUCT_SEGMENTS) ?? "recommended",
     quick: oneOf(params.get("quick"), CANDIDATE_QUICK_FILTERS),
     marketplace: params.get("market")?.trim() || undefined,
-    sort: oneOf(params.get("sort"), CANDIDATE_SORTS) ?? "priority",
+    sort: view === "products" ? (oneOf(params.get("sort"), CANDIDATE_SORTS) ?? "priority") : "priority",
+    horizon: oneOf(params.get("when"), CAMPAIGN_HORIZONS) ?? "now",
+    endingSoon: view === "campaigns" && params.get("ending") === "true",
+    campaignSort: view === "campaigns" ? (oneOf(params.get("sort"), CAMPAIGN_SORTS) ?? "newest") : "newest",
     candidateStatus: view === "products" ? oneOf(rawStatus, CANDIDATE_STATUSES) : undefined,
     type: view === "campaigns" ? oneOf(params.get("type"), PROMOTION_TYPES) : undefined,
     campaignId: view === "products" ? uuid(params.get("campaign")) : undefined,
@@ -74,15 +84,11 @@ export function readUrlState(params: URLSearchParams): PromotionsUrlState {
 export const campaignsQueryOf = (s: PromotionsUrlState): CampaignsQuery => ({
   status: s.status as PromotionStatus | undefined,
   type: s.type,
-  q: s.q,
-  page: s.page,
-  pageSize: s.pageSize,
-});
-
-export const productsQueryOf = (s: PromotionsUrlState): ProductsQuery => ({
-  status: s.status as PromotionItemStatus | undefined,
-  campaignId: s.campaignId,
-  accountId: s.accountId,
+  // a status filter is more specific than the Past / Now / Next toggle
+  horizon: s.status ? undefined : s.horizon,
+  endingSoon: s.endingSoon || undefined,
+  marketplace: s.marketplace,
+  sort: s.campaignSort,
   q: s.q,
   page: s.page,
   pageSize: s.pageSize,
@@ -101,10 +107,8 @@ export const candidatesQueryOf = (s: PromotionsUrlState): CandidatesQuery => ({
   pageSize: s.pageSize,
 });
 
-export const isFiltered = (s: PromotionsUrlState): boolean => Boolean(s.q || s.status || s.type || s.campaignId || s.accountId);
-export const productsFiltered = (s: PromotionsUrlState): boolean => Boolean(s.q || s.quick || s.marketplace || s.candidateStatus);
 
-type Key = "view" | "q" | "status" | "type" | "campaign" | "account" | "open" | "page" | "size" | "seg" | "quick" | "market" | "sort";
+type Key = "view" | "q" | "status" | "type" | "campaign" | "account" | "open" | "page" | "size" | "seg" | "quick" | "market" | "sort" | "when" | "ending";
 type Patch = Partial<Record<Key, string | null>>;
 
 /** The Promotions screen keeps view, tab, search, filters, page and the open campaign in the URL, so reload, back and deep links work. */
@@ -132,7 +136,7 @@ export function usePromotionsUrlState() {
     [setParams],
   );
 
-  const clearFilters = useCallback(() => update({ q: null, status: null, type: null, campaign: null, account: null, quick: null, market: null }), [update]);
+  const clearFilters = useCallback(() => update({ q: null, status: null, type: null, campaign: null, account: null, quick: null, market: null, ending: null }), [update]);
 
   return { ...state, update, clearFilters };
 }

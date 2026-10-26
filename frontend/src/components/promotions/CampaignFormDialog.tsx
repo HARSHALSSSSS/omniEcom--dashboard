@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ShieldCheck, Info, X } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -9,14 +9,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { promotionsApi } from "@/api/promotions.api";
 import { errorMessage, isApiError } from "@/api/errors";
-import { useCampaignLifecycle, useCreateCampaign, useUpdateCampaign } from "@/hooks/usePromotions";
+import { useCampaignLifecycle, useCampaignProducts, useCreateCampaign, usePromotionPreview, useUpdateCampaign } from "@/hooks/usePromotions";
 import { useSubmitLock } from "@/hooks/useSubmitGuard";
 import { toast } from "@/hooks/useToast";
-import { PROMOTION_TYPES, type CampaignPrefill, type PickerVariant, type PromotionAccount, type PromotionCampaign, type PromotionType } from "@/types/promotions";
+import { PROMOTION_TYPES, type CampaignPrefill, type PickerVariant, type PreviewRequest, type PromotionAccount, type PromotionCampaign, type PromotionType } from "@/types/promotions";
 import { EMPTY_FORM, campaignFormSchema, formFromCampaign, serverFieldErrors, toCampaignWrite, type CampaignFormValues } from "./campaignForm";
+import { CampaignPreview } from "./CampaignPreview";
 import { ProductSelector } from "./ProductSelector";
 import { EMPTY_SELECTION, isEmptySelection, toSelection, type SelectorValue } from "./selection";
-import { TYPE_HINTS, TYPE_LABELS, bpsToInput, symbol } from "./promoFormat";
+import { TYPE_HINTS, TYPE_LABELS, bpsToInput, marketplaceLabel, symbol } from "./promoFormat";
 
 const SELECT = "h-9 w-full rounded-md border border-input bg-transparent px-3 text-xs";
 
@@ -114,6 +115,32 @@ export function CampaignFormDialog({ open, onOpenChange, campaign, accounts, ini
   const dirty = isDirty || (!editing && !isEmptySelection(selection));
   const percent = type === "percentage_discount" || type === "bundle";
   const sym = useMemo(symbol, []);
+
+  // live preview: the products are the picked ones (a new campaign) or the draft's own (an edit)
+  const watched = watch();
+  const campaignProducts = useCampaignProducts(editing && open ? campaign.id : null, { page: 1, pageSize: 100 });
+  const previewVariantIds = editing ? (campaignProducts.data?.items.map((i) => i.variantId) ?? []) : selection.mode === "variants" ? selection.variants.map((v) => v.id) : [];
+  const watchedKey = JSON.stringify(watched);
+  const previewBody = useMemo<PreviewRequest | null>(() => {
+    if (!open || previewVariantIds.length === 0) return null;
+    const parsed = campaignFormSchema.safeParse(JSON.parse(watchedKey));
+    // only a problem with the terms or the window stops the preview; a missing name does not
+    const termsWrong = !parsed.success && parsed.error.issues.some((i) => ["percent", "flat", "buyQuantity", "getQuantity", "startsAt", "endsAt"].includes(String(i.path[0])));
+    if (termsWrong) return null;
+    const w = toCampaignWrite(JSON.parse(watchedKey) as CampaignFormValues);
+    return { type: w.type, valueBps: w.valueBps, valueMinor: w.valueMinor, buyQuantity: w.buyQuantity, getQuantity: w.getQuantity, accountIds: w.accountIds, variantIds: previewVariantIds.slice(0, 200), startsAt: w.startsAt, endsAt: w.endsAt };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, watchedKey, previewVariantIds.join(",")]);
+  const preview = usePromotionPreview(previewBody);
+  const previewIdle = previewBody
+    ? null
+    : !editing && selection.mode !== "variants" && !isEmptySelection(selection)
+      ? "The preview is shown when you pick products one by one."
+      : previewVariantIds.length === 0
+        ? "Pick products and enter the discount to preview prices and margins."
+        : "Enter a valid discount and schedule to preview prices and margins.";
+  // scheduling needs at least one product that can run; the server refuses otherwise, so say so before the click
+  const nothingCanRun = Boolean(previewBody && preview.data && !preview.waiting && preview.data.summary.runnable === 0);
 
   const requestClose = (next: boolean) => {
     if (next) return onOpenChange(true);
@@ -221,32 +248,35 @@ export function CampaignFormDialog({ open, onOpenChange, campaign, accounts, ini
                   </Field>
                 </div>
 
-                <div>
-                  <Field label="Sales channel" required htmlFor="promo-channel">
-                    <select
-                      id="promo-channel"
-                      className={SELECT}
-                      value={accountIds[0] ?? ""}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setValue("accountIds", val ? [val] : [], { shouldDirty: true });
-                      }}
-                    >
-                      <option value="">Every connected channel</option>
-                      {accounts.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.displayName || a.marketplace.toUpperCase()}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-                </div>
+                <fieldset className="space-y-1" aria-label="Sales channels">
+                  <legend className="block text-[11px] font-medium text-foreground">
+                    Sales channels <span className="text-destructive">*</span>
+                  </legend>
+                  <div className="space-y-1 rounded-md border border-input p-2">
+                    <label className="flex items-center gap-2 text-xs">
+                      <input type="checkbox" checked={accountIds.length === 0} onChange={() => setValue("accountIds", [], { shouldDirty: true })} />
+                      Every connected channel
+                    </label>
+                    {accounts.map((a) => {
+                      const label = a.displayName || marketplaceLabel(a.marketplace);
+                      return (
+                        <label key={a.id} className="flex items-center gap-2 text-xs">
+                          <input
+                            type="checkbox"
+                            aria-label={label}
+                            checked={accountIds.includes(a.id)}
+                            onChange={(e) => setValue("accountIds", e.target.checked ? [...accountIds, a.id] : accountIds.filter((x) => x !== a.id), { shouldDirty: true })}
+                          />
+                          {label}
+                          {a.status !== "active" && <span className="text-[11px] text-muted-foreground">(not connected)</span>}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </fieldset>
               </div>
 
-              <div className="flex items-start gap-2 rounded-lg border border-border/80 bg-muted/30 p-2.5 text-[11px] text-muted-foreground">
-                <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                <span>Illustrative setup only. Campaign creation, promotion types and schedules depend on connector/API support and require verification.</span>
-              </div>
+              <p className="text-[11px] text-muted-foreground">A campaign runs on the channels ticked above. Where a marketplace cannot take price changes, the preview below says so.</p>
             </section>
 
             {/* Products */}
@@ -254,11 +284,10 @@ export function CampaignFormDialog({ open, onOpenChange, campaign, accounts, ini
               <section className="space-y-2">
                 <div className="flex items-center justify-between">
                   <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Products *</h3>
-                  <span className="text-[11px] text-muted-foreground font-mono">
-                    {selection.variants.length} selected · illustrative products
-                  </span>
+                  <span className="font-mono text-[11px] text-muted-foreground">{selection.variants.length} selected</span>
                 </div>
                 <ProductSelector value={selection} onChange={setSelection} disabled={busy} />
+                <p className="text-[11px] text-muted-foreground">You can also add or change products from the campaign after saving.</p>
               </section>
             )}
 
@@ -303,9 +332,26 @@ export function CampaignFormDialog({ open, onOpenChange, campaign, accounts, ini
                   </Field>
                 )}
               </div>
-              <p className="text-[11px] text-muted-foreground">
-                Proposed values only; not a verified channel offer. Confirm supported types, fees and rules before submission.
-              </p>
+              <p className="text-[11px] text-muted-foreground">{TYPE_HINTS[type]}</p>
+            </section>
+
+            {/* Optional details */}
+            <section className="space-y-3">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Optional details</h3>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Campaign code (optional)" htmlFor="promo-code" error={errors.code?.message} hint="Letters, digits, - and _. Generated when left blank; it is not pushed to marketplaces.">
+                  <Input id="promo-code" placeholder="DIWALI25" {...register("code")} error={Boolean(errors.code)} className="font-mono text-xs uppercase" />
+                </Field>
+                <Field label={`Discount budget (${sym}, optional)`} htmlFor="promo-budget" error={errors.budget?.message} hint="The campaign ends by itself once the discount given reaches this. Leave blank for no limit.">
+                  <Input id="promo-budget" inputMode="decimal" placeholder="150000" {...register("budget")} error={Boolean(errors.budget)} className="font-mono text-xs" />
+                </Field>
+                <Field label={`Minimum order (${sym}, optional)`} htmlFor="promo-min-order" error={errors.minOrder?.message} hint="Informational: marketplaces cannot enforce a minimum order on a sale price.">
+                  <Input id="promo-min-order" inputMode="decimal" placeholder="0" {...register("minOrder")} error={Boolean(errors.minOrder)} className="font-mono text-xs" />
+                </Field>
+                <Field label="Description (optional)" htmlFor="promo-description" error={errors.description?.message}>
+                  <Textarea id="promo-description" rows={2} {...register("description")} className="text-xs" />
+                </Field>
+              </div>
             </section>
 
             {/* Schedule */}
@@ -325,13 +371,19 @@ export function CampaignFormDialog({ open, onOpenChange, campaign, accounts, ini
               </div>
             </section>
 
+            {/* Preview */}
+            <section className="space-y-2" aria-label="Preview">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Preview</h3>
+              <CampaignPreview data={preview.data} loading={preview.isFetching} stale={preview.waiting} error={preview.error} idle={previewIdle} />
+            </section>
+
             {/* Notice / Guarantee Box */}
             <div className="flex items-start gap-2.5 rounded-xl border border-border bg-muted/40 p-3.5 text-xs">
               <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-foreground" />
               <div className="space-y-0.5">
                 <p className="font-semibold text-foreground">Creating saves a draft, not a live promotion.</p>
                 <p className="text-muted-foreground text-[11px] leading-relaxed">
-                  Submission is a separate action requiring connector support and your explicit confirmation. AI advice never automatically enrolls products.
+                  Saving and scheduling are separate actions, and nothing goes to a marketplace until a campaign is scheduled or started. Recommendations never enroll products by themselves.
                 </p>
               </div>
             </div>
@@ -343,7 +395,7 @@ export function CampaignFormDialog({ open, onOpenChange, campaign, accounts, ini
             )}
 
             <DialogFooter className="flex flex-col-reverse items-center justify-between gap-3 sm:flex-row pt-3 border-t border-border">
-              <span className="text-[11px] text-muted-foreground">Sample values · not submitted</span>
+              <span className="text-[11px] text-muted-foreground">{nothingCanRun ? "None of the products can run yet: see the preview." : ""}</span>
               <div className="flex items-center gap-2">
                 <Button type="button" variant="outline" size="sm" className="h-8 text-xs" disabled={busy} onClick={() => requestClose(false)}>
                   Cancel
@@ -357,6 +409,17 @@ export function CampaignFormDialog({ open, onOpenChange, campaign, accounts, ini
                   onClick={() => void save(false)}
                 >
                   {editing ? "Save Changes" : "Create Campaign"}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs"
+                  disabled={conflict || busy || nothingCanRun}
+                  title={nothingCanRun ? "None of the products can run: the campaign cannot be scheduled yet" : "Save, then put the sale prices on the marketplaces for the chosen window"}
+                  onClick={() => void save(true)}
+                >
+                  Save &amp; Schedule
                 </Button>
               </div>
             </DialogFooter>

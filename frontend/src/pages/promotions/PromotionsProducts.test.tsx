@@ -310,7 +310,8 @@ describe("Products tab", () => {
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByText("SKU-1 · ₹499")).toBeInTheDocument();
     expect(within(dialog).getByText("SKU-2 · ₹199")).toBeInTheDocument();
-    expect((within(dialog).getByLabelText(/Sales channel/) as HTMLSelectElement).value).toBe(AMAZON);
+    expect(within(dialog).getByRole("checkbox", { name: "Main store" })).toBeChecked();
+    expect(within(dialog).getByRole("checkbox", { name: "Web shop" })).not.toBeChecked();
     // 10% is the starting point; the thinnest product allows 6.5%, so 6% (whole percent, rounded down)
     expect((within(dialog).getByLabelText(/Proposed discount/) as HTMLInputElement).value).toBe("6");
   });
@@ -328,7 +329,8 @@ describe("Products tab", () => {
     const dialog = await screen.findByText("Create Campaign", { selector: "h2" }).then(() => screen.getByRole("dialog"));
     expect(within(dialog).getByText("SKU-3 · ₹499")).toBeInTheDocument();
     expect(within(dialog).queryByText(/SKU-1/)).not.toBeInTheDocument();
-    expect((within(dialog).getByLabelText(/Sales channel/) as HTMLSelectElement).value).toBe(SHOP);
+    expect(within(dialog).getByRole("checkbox", { name: "Web shop" })).toBeChecked();
+    expect(within(dialog).getByRole("checkbox", { name: "Main store" })).not.toBeChecked();
     expect(screen.getByText("products selected").previousSibling).toHaveTextContent("3");
   });
 

@@ -11,6 +11,8 @@ import type {
   CreateCampaignResult,
   LifecycleResult,
   PickerPage,
+  PreviewRequest,
+  PreviewResult,
   PickerVariant,
   ProcessResult,
   ProductSelection,
@@ -30,18 +32,14 @@ export function campaignParams(q: CampaignsQuery): Record<string, string | numbe
   if (q.q) out.q = q.q;
   if (q.status) out["filter[status]"] = q.status;
   if (q.type) out["filter[type]"] = q.type;
+  if (q.horizon) out["filter[horizon]"] = q.horizon;
+  if (q.endingSoon) out["filter[endingSoon]"] = "true";
+  if (q.marketplace) out["filter[marketplace]"] = q.marketplace;
+  if (q.accountId) out["filter[accountId]"] = q.accountId;
+  if (q.sort && q.sort !== "newest") out.sort = q.sort;
   return out;
 }
 
-export function productParams(q: ProductsQuery): Record<string, string | number> {
-  const out: Record<string, string | number> = { pageSize: q.pageSize };
-  if (q.page > 1) out.page = q.page;
-  if (q.q) out.q = q.q;
-  if (q.status) out["filter[status]"] = q.status;
-  if (q.campaignId) out["filter[campaignId]"] = q.campaignId;
-  if (q.accountId) out["filter[accountId]"] = q.accountId;
-  return out;
-}
 
 function flatten(nodes: CategoryNode[], trail: string[] = []): CategoryOption[] {
   return nodes.flatMap((n) => {
@@ -59,9 +57,6 @@ export const promotionsApi = {
 
   campaigns: async (query: CampaignsQuery, signal?: AbortSignal) =>
     unwrap<CampaignsPage>(await client.get(ENDPOINTS.PROMOTIONS_CAMPAIGNS, { params: campaignParams(query), signal })),
-
-  products: async (query: ProductsQuery, signal?: AbortSignal) =>
-    unwrap<ProductsPage>(await client.get(ENDPOINTS.PROMOTIONS_PRODUCTS, { params: productParams(query), signal })),
 
   campaign: async (id: string, signal?: AbortSignal) =>
     unwrap<PromotionCampaignDetail>(await client.get(ENDPOINTS.PROMOTION_CAMPAIGN(id), { signal })),
@@ -101,6 +96,9 @@ export const promotionsApi = {
 
   /** starts due campaigns, ends finished ones and refreshes results now (the scheduler does it every minute) */
   process: async () => unwrap<ProcessResult>(await client.post(ENDPOINTS.PROMOTIONS_PROCESS, {})),
+
+  /** price, margin and conflicts of a campaign that is not saved yet; the signal cancels a stale request */
+  preview: async (body: PreviewRequest, signal?: AbortSignal) => unwrap<PreviewResult>(await client.post(ENDPOINTS.PROMOTIONS_PREVIEW, body, { signal })),
 
   /** the Products tab list: one product on one channel per row, with margin, stock, eligibility and the recommendation */
   candidates: async (query: CandidatesQuery, signal?: AbortSignal) => {

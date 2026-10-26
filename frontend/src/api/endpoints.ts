@@ -334,7 +334,7 @@ export const ENDPOINTS = {
   // Promotions
   PROMOTIONS_OVERVIEW: `${BASE}/promotions/overview`,
   PROMOTIONS_CAMPAIGNS: `${BASE}/promotions/campaigns`,
-  PROMOTIONS_PRODUCTS: `${BASE}/promotions/products`,
+  PROMOTIONS_PREVIEW: `${BASE}/promotions/preview`,
   PROMOTIONS_PROCESS: `${BASE}/promotions/process`,
   PROMOTION_CAMPAIGN: (id: string) => `${BASE}/promotions/campaigns/${id}`,
   PROMOTION_CAMPAIGN_ACTION: (id: string, action: "schedule" | "activate" | "end" | "cancel" | "duplicate" | "evaluate") =>

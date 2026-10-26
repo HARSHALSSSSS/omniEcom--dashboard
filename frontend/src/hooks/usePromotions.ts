@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { keepPreviousData, useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useGuardedMutation } from "@/hooks/useSubmitGuard";
 import { promotionsApi } from "@/api/promotions.api";
@@ -6,6 +7,7 @@ import { useWorkspaceStore } from "@/store/workspace.store";
 import type {
   CampaignsQuery,
   CandidatesQuery,
+  PreviewRequest,
   CampaignWrite,
   ProductSelection,
   ProductsQuery,
@@ -16,10 +18,10 @@ export const promotionKeys = {
   all: ["promotions"] as const,
   overview: (b: string | undefined) => ["promotions", "overview", b] as const,
   campaigns: (b: string | undefined, q: CampaignsQuery) => ["promotions", "campaigns", b, q] as const,
-  products: (b: string | undefined, q: ProductsQuery) => ["promotions", "products", b, q] as const,
   campaign: (b: string | undefined, id: string) => ["promotions", "campaign", b, id] as const,
   campaignProducts: (b: string | undefined, id: string, q: object) => ["promotions", "campaign-products", b, id, q] as const,
   accounts: (b: string | undefined) => ["promotions", "accounts", b] as const,
+  preview: (b: string | undefined, body: PreviewRequest) => ["promotions", "preview", b, body] as const,
   candidates: (b: string | undefined, q: CandidatesQuery) => ["promotions", "candidates", b, q] as const,
   categories: (b: string | undefined) => ["promotions", "categories", b] as const,
   variants: (b: string | undefined, q: string) => ["promotions", "variants", b, q] as const,
@@ -37,17 +39,6 @@ export function usePromotionCampaigns(query: CampaignsQuery, enabled = true) {
   return useQuery({
     queryKey: promotionKeys.campaigns(b, query),
     queryFn: ({ signal }) => promotionsApi.campaigns(query, signal),
-    staleTime: 10_000,
-    placeholderData: keepPreviousData,
-    enabled,
-  });
-}
-
-export function usePromotedProducts(query: ProductsQuery, enabled = true) {
-  const b = useBusinessId();
-  return useQuery({
-    queryKey: promotionKeys.products(b, query),
-    queryFn: ({ signal }) => promotionsApi.products(query, signal),
     staleTime: 10_000,
     placeholderData: keepPreviousData,
     enabled,
@@ -78,6 +69,28 @@ export function useCampaignProducts(id: string | null, query: Pick<ProductsQuery
 export function usePromotionAccounts() {
   const b = useBusinessId();
   return useQuery({ queryKey: promotionKeys.accounts(b), queryFn: promotionsApi.accounts, staleTime: 5 * 60_000 });
+}
+
+/** the dialog's live preview: asked a moment after the seller stops typing, a stale request is cancelled, nothing is saved */
+export function usePromotionPreview(body: PreviewRequest | null) {
+  const b = useBusinessId();
+  const key = body ? JSON.stringify(body) : null;
+  const [settled, setSettled] = useState<string | null>(key);
+  useEffect(() => {
+    if (key === null) return setSettled(null);
+    const t = setTimeout(() => setSettled(key), 400);
+    return () => clearTimeout(t);
+  }, [key]);
+  const request = settled ? (JSON.parse(settled) as PreviewRequest) : null;
+  const query = useQuery({
+    queryKey: request ? promotionKeys.preview(b, request) : ["promotions", "preview", b, null],
+    queryFn: ({ signal }) => promotionsApi.preview(request as PreviewRequest, signal),
+    enabled: request !== null,
+    staleTime: 0,
+    gcTime: 0,
+    placeholderData: keepPreviousData,
+  });
+  return { ...query, waiting: key !== settled };
 }
 
 /** products that can be promoted, one row per product and channel (the opportunities of the Overview, the Products tab) */

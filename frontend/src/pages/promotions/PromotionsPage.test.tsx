@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { useToastStore } from "@/hooks/useToast";
 import { useWorkspaceStore } from "@/store/workspace.store";
-import type { CampaignsPage, CandidatesPage, ProductsPage, PromotionCampaign, PromotionCampaignDetail, PromotionCandidate, PromotionOverview, PromotionProduct } from "@/types/promotions";
+import type { CampaignsPage, CandidatesPage, ProductsPage, PromotionCampaignDetail, PromotionCampaignRow, PromotionCandidate, PromotionOverview, PromotionProduct } from "@/types/promotions";
 
 const api = vi.hoisted(() => ({
   overview: vi.fn(),
@@ -43,7 +43,7 @@ const ACCOUNT = "22222222-2222-4222-8222-222222222222";
 const C1 = "33333333-3333-4333-8333-333333333333";
 const C2 = "44444444-4444-4444-8444-444444444444";
 
-const campaign = (over: Partial<PromotionCampaign> = {}): PromotionCampaign => ({
+const campaign = (over: Partial<PromotionCampaignRow> = {}): PromotionCampaignRow => ({
   id: C1,
   name: "Festive Flash",
   code: "DIWALI25",
@@ -69,6 +69,15 @@ const campaign = (over: Partial<PromotionCampaign> = {}): PromotionCampaign => (
   statsUpdatedAt: null,
   itemCounts: { total: 2, eligible: 1, pending_sync: 0, live: 0, ineligible: 1, ended: 0 },
   endReason: null,
+  horizon: "next",
+  endingSoon: false,
+  endsInHours: null,
+  capability: "supported",
+  avgDiscountBps: 2000,
+  contributionMinor: null,
+  contributionBps: null,
+  contributionBasis: null,
+  marginRisk: null,
   version: 4,
   createdAt: "2026-10-20T08:00:00.000Z",
   updatedAt: "2026-10-21T08:00:00.000Z",
@@ -93,7 +102,7 @@ const ACTIVE = campaign({
   version: 2,
 });
 
-const detail = (c: PromotionCampaign): PromotionCampaignDetail => ({
+const detail = (c: PromotionCampaignRow): PromotionCampaignDetail => ({
   ...c,
   velocity: { liftBps: 1840, promoUnits: 88, promoDays: 3, baselineUnits: 20, baselineDays: 14 },
 });
@@ -185,8 +194,9 @@ const candidatesPage = (items: PromotionCandidate[]): CandidatesPage => ({
   thresholds: overview().thresholds,
 });
 
-const campaignsPage = (items: PromotionCampaign[], over: Partial<CampaignsPage> = {}): CampaignsPage => ({
+const campaignsPage = (items: PromotionCampaignRow[], over: Partial<CampaignsPage> = {}): CampaignsPage => ({
   items,
+  horizonCounts: { past: 0, now: items.length, next: 0 },
   page: 1,
   pageSize: 25,
   total: items.length,
@@ -251,7 +261,6 @@ function renderPage(url = "/promotions") {
 }
 
 const grant = (...permissions: string[]) => useWorkspaceStore.setState({ permissions });
-const loc = () => screen.getByTestId("loc").textContent;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -415,19 +424,6 @@ describe("PromotionsPage - Connected Screens", () => {
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
   });
 
-  it("navigates to Campaigns Tab (Screen 3) and renders connected channel records and educational guidance", async () => {
-    const user = userEvent.setup();
-    renderPage("/promotions");
-    const campaignsTab = screen.getByRole("tab", { name: "campaigns" });
-    await user.click(campaignsTab);
-    expect(loc()).toContain("view=campaigns");
-
-    expect(await screen.findByText("Verification required before relying on any campaign schedule or type. Marketplace capabilities are unverified.")).toBeInTheDocument();
-    expect(screen.getByText("Before you manage a campaign")).toBeInTheDocument();
-    expect(screen.getByText("Availability is not participation")).toBeInTheDocument();
-    expect(screen.getByText("Connector-dependent capabilities")).toBeInTheDocument();
-  });
-
   it("opens Create Campaign Modal (Screen 4) and submits draft to backend", async () => {
     api.create.mockResolvedValue({ campaign: campaign({ id: "99999999-9999-4999-8999-999999999999", name: "Festive Home Sale" }), products: null });
     const user = userEvent.setup();
@@ -438,7 +434,7 @@ describe("PromotionsPage - Connected Screens", () => {
 
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByText("Campaign basics")).toBeInTheDocument();
-    expect(within(dialog).getByText("Sales channel")).toBeInTheDocument();
+    expect(within(dialog).getByText("Sales channels")).toBeInTheDocument();
     expect(within(dialog).getByText("Promotion details")).toBeInTheDocument();
     expect(within(dialog).getByText("Schedule")).toBeInTheDocument();
     expect(within(dialog).getByText("Creating saves a draft, not a live promotion.")).toBeInTheDocument();
