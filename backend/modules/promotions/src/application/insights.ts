@@ -28,16 +28,16 @@ export async function campaignEconomics(tx: Tx, c: CampaignRow, now: Date): Prom
   return salesEconomics(tx, c.vendorId, ranItems(await loadItems(tx, c.vendorId, c.id)).map((i) => i.variantId), c.accountIds, win.from, win.to);
 }
 
-export interface CampaignExtras extends Contribution { avgDiscountBps: number | null }
+export interface CampaignExtras extends Contribution { avgDiscountBps: number | null; marginRisk: MarginRisk | null }
 
-/** the list columns that need a query per campaign: average discount over its products and the contribution of its sales */
-export async function campaignExtras(tx: Tx, vendorId: string, rows: CampaignRow[], now: Date): Promise<Map<string, CampaignExtras>> {
+/** the list columns that need a query per campaign: average discount over its products, the contribution of its sales and today's margin picture (null once finished) */
+export async function campaignExtras(tx: Tx, vendorId: string, rows: CampaignRow[], canPush: CanPush, now: Date): Promise<Map<string, CampaignExtras>> {
   const out = new Map<string, CampaignExtras>();
   if (rows.length === 0) return out;
   const disc = await tx.select({ campaignId: I.campaignId, d: sql<string | null>`avg(case when ${I.originalPriceMinor} > 0 then (${I.originalPriceMinor} - ${I.promoPriceMinor}) * 10000.0 / ${I.originalPriceMinor} end)` }).from(I)
     .where(and(eq(I.vendorId, vendorId), inArray(I.campaignId, rows.map((r) => r.id)), sql`${I.status} <> 'ineligible'`)).groupBy(I.campaignId);
   const avgBy = new Map(disc.map((d) => [d.campaignId, d.d === null ? null : Math.round(Number(d.d))]));
-  for (const c of rows) out.set(c.id, { avgDiscountBps: avgBy.get(c.id) ?? null, ...contributionOf(await campaignEconomics(tx, c, now)) });
+  for (const c of rows) out.set(c.id, { avgDiscountBps: avgBy.get(c.id) ?? null, ...contributionOf(await campaignEconomics(tx, c, now)), marginRisk: await campaignMarginRisk(tx, c, canPush, now) });
   return out;
 }
 

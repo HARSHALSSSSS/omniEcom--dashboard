@@ -215,6 +215,7 @@ describe('campaign list: filters and columns', () => {
     expect((await policy(w, 2000)).status).toBe(201);
     const row = (await c.get(`${P}/campaigns`, w.admin)).body.data.items[0];
     expect(row).toMatchObject({ contributionMinor: 2 * 39_920 - 2 * 30_000 - Math.round(2 * 39_920 * 0.1), contributionBps: 1485, contributionBasis: 'after_cost_and_fees' });
+    expect(row.marginRisk).toEqual({ checkedProducts: 1, belowTarget: 1, unknownCost: 0, conflicts: 0 });
     const d = (await c.get(`${P}/campaigns/${camp.id}`, w.admin)).body.data;
     expect(d.marginRisk).toEqual({ checkedProducts: 1, belowTarget: 1, unknownCost: 0, conflicts: 0 });
     expect(d).toMatchObject({ avgDiscountBps: 2000, contributionBps: 1485 });
@@ -366,6 +367,22 @@ describe('candidates (the Products tab)', () => {
     expect(o.pressure.strongCandidate).toMatchObject({ sku: 'HOT-1', eligibility: 'eligible', availableStock: 80, marginBps: 4992, unitsSold30d: 60 });
     expect(o.pressure.reviewFirst).toMatchObject({ sku: 'SCARCE-1', eligibility: 'low_inventory', availableStock: 2, unitsSold30d: 10 });
     expect(await (async () => (await candidates(w, '?filter[segment]=all&filter[quick]=strong_sellers')).items.map((r: any) => r.sku))()).toEqual(['HOT-1']);
+  });
+});
+
+describe('promotion notifications', () => {
+  it('tells the team when a campaign is created, starts and ends', async () => {
+    const w = await world();
+    const camp = await create(w, { name: 'Festive Flash', type: 'percentage_discount', valueBps: 1000, startsAt: at(-HOUR), endsAt: at(2 * DAY), selection: { variantIds: [w.variant.variantId] } });
+    await act(w, camp.id, 'schedule');
+    await act(w, camp.id, 'end');
+    await t.pump();
+    const items = (await c.get('/api/v1/notifications?limit=100', w.admin)).body.data.items as Array<{ type: string; title: string; body: string | null; actionUrl: string | null; category: string }>;
+    const by = Object.fromEntries(items.filter((n) => n.type.startsWith('promotion.')).map((n) => [n.type, n]));
+    expect(by['promotion.created']).toMatchObject({ title: 'Campaign Festive Flash created as a draft', category: 'system', actionUrl: `/promotions?view=campaigns&open=${camp.id}` });
+    expect(by['promotion.activated']).toMatchObject({ title: 'Campaign Festive Flash is running' });
+    expect(by['promotion.ended'].title).toBe('Campaign Festive Flash ended');
+    expect(by['promotion.ended'].body).toMatch(/ended manually\. 0 unit\(s\) sold/);
   });
 });
 

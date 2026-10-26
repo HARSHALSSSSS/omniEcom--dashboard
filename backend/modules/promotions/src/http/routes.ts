@@ -9,7 +9,7 @@ import { SyncWork } from '@oms/mod-pricing';
 import { CAMPAIGN_SORTS, createCampaign, deleteCampaign, duplicateCampaign, endReasons, listCampaigns, updateCampaign, vendorAccounts, campaignDetail } from '../application/campaigns';
 import { canPushOf, type CanPush } from '../application/analysis';
 import { CANDIDATE_SORTS, QUICK_FILTERS, filterCandidates, loadCandidates } from '../application/candidates';
-import { campaignExtras, campaignMarginRisk, itemInsights, overviewInsights, previewCampaign } from '../application/insights';
+import { campaignExtras, itemInsights, overviewInsights, previewCampaign } from '../application/insights';
 import { evaluateItems, itemCounts, loadItems, removeItems, setItems } from '../application/items';
 import { tick, transition } from '../application/lifecycle';
 import { listPromotedProducts } from '../application/products';
@@ -96,7 +96,7 @@ export const promotionRoutes: FastifyPluginAsync = async (app) => {
     const out = await vendorTx(req, async (tx, vendorId) => {
       const now = new Date();
       const l = await listCampaigns(tx, vendorId, { status: q['filter[status]'], type: q['filter[type]'], q: q.q, horizon: q['filter[horizon]'], accountId: q['filter[accountId]'], marketplace: q['filter[marketplace]'], endingSoon: q['filter[endingSoon]'] === 'true', sort: q.sort, now }, pageWindow(q));
-      const [items, extras] = await Promise.all([present(tx, vendorId, l.rows, canPush), campaignExtras(tx, vendorId, l.rows, now)]);
+      const [items, extras] = await Promise.all([present(tx, vendorId, l.rows, canPush), campaignExtras(tx, vendorId, l.rows, canPush, now)]);
       return { items: items.map((i) => withExtras(i, extras.get(i.id))), total: l.total, counts: l.counts, horizonCounts: l.horizonCounts };
     });
     return ok(req, { items: out.items, page: q.page, pageSize: q.pageSize, total: out.total, pages: Math.max(1, Math.ceil(out.total / q.pageSize)), counts: out.counts, horizonCounts: out.horizonCounts });
@@ -127,8 +127,8 @@ export const promotionRoutes: FastifyPluginAsync = async (app) => {
     return ok(req, await vendorTx(req, async (tx, vendorId) => {
       const now = new Date();
       const { row, velocity } = await campaignDetail(tx, vendorId, req.params.id, now);
-      const [dto, extras, marginRisk] = await Promise.all([present(tx, vendorId, [row], canPush), campaignExtras(tx, vendorId, [row], now), campaignMarginRisk(tx, row, canPush, now)]);
-      return { ...withExtras(dto[0]!, extras.get(row.id)), velocity, marginRisk };
+      const [dto, extras] = await Promise.all([present(tx, vendorId, [row], canPush), campaignExtras(tx, vendorId, [row], canPush, now)]);
+      return { ...withExtras(dto[0]!, extras.get(row.id)), velocity };
     }));
   });
 

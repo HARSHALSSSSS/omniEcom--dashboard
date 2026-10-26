@@ -31,17 +31,18 @@ export const CampaignSchema = z.object({
   version: z.number().int(), createdAt: IsoDate, updatedAt: IsoDate,
 }).meta({ id: 'PromotionCampaign' });
 
+const MarginRiskSchema = z.object({ checkedProducts: z.number().int(), belowTarget: z.number().int(), unknownCost: z.number().int(), conflicts: z.number().int() })
+  .describe("today's margin picture of the campaign products at their promotional prices; null for a finished campaign");
+
 const Contribution = {
   avgDiscountBps: z.number().int().nullable().describe('average discount over the campaign products that can run; null without products'),
   contributionMinor: z.number().int().nullable().describe('revenue - cost - marketplace fees of the promoted sales; null when nothing sold or any sold unit has no cost price'),
   contributionBps: z.number().int().nullable().describe('contribution as basis points of the revenue; null with contributionMinor'),
   contributionBasis: z.enum(['after_cost_and_fees', 'after_cost_only']).nullable().describe('after_cost_only: a channel has no fee profile, so its fees count as 0'),
 };
-export const CampaignListSchema = CampaignSchema.extend(Contribution).meta({ id: 'PromotionCampaignRow' });
+export const CampaignListSchema = CampaignSchema.extend({ ...Contribution, marginRisk: MarginRiskSchema.nullable() }).meta({ id: 'PromotionCampaignRow' });
 
-const MarginRiskSchema = z.object({ checkedProducts: z.number().int(), belowTarget: z.number().int(), unknownCost: z.number().int(), conflicts: z.number().int() })
-  .describe("today's margin picture of the campaign products at their promotional prices; null for a finished campaign");
-export const CampaignDetailSchema = CampaignListSchema.extend({ velocity: VelocitySchema, marginRisk: MarginRiskSchema.nullable() }).meta({ id: 'PromotionCampaignDetail' });
+export const CampaignDetailSchema = CampaignListSchema.extend({ velocity: VelocitySchema }).meta({ id: 'PromotionCampaignDetail' });
 
 export const ChannelDetail = z.object({
   accountId: z.string(), marketplace: z.string(), displayName: z.string(), listed: z.boolean(), canPushPrices: z.boolean(),
@@ -92,7 +93,7 @@ export function campaignDto(c: CampaignRow, accounts: AccountLite[], counts: Rec
 const NONE: ItemInsight = { availableStock: null, lowStock: null, unitCostMinor: null, marginRegularBps: null, marginPromoBps: null, targetMarginBps: null, belowTarget: null, minPromoPriceMinor: null, conflict: null, channelDetails: [] };
 
 /** the campaign row with its list columns (average discount, contribution of its sales) */
-export const withExtras = <T extends object>(dto: T, x: CampaignExtras | undefined) => ({ ...dto, avgDiscountBps: x?.avgDiscountBps ?? null, contributionMinor: x?.contributionMinor ?? null, contributionBps: x?.contributionBps ?? null, contributionBasis: x?.contributionBasis ?? null });
+export const withExtras = <T extends object>(dto: T, x: CampaignExtras | undefined) => ({ ...dto, avgDiscountBps: x?.avgDiscountBps ?? null, contributionMinor: x?.contributionMinor ?? null, contributionBps: x?.contributionBps ?? null, contributionBasis: x?.contributionBasis ?? null, marginRisk: x?.marginRisk ?? null });
 
 export function itemDto(r: { item: ItemRow; campaign: { id: string; name: string; code: string; status: string; accountIds: string[] }; sku: string; productId: string; title: string }, accounts: AccountLite[], canPush: CanPush, insight: ItemInsight = NONE) {
   const i = r.item;

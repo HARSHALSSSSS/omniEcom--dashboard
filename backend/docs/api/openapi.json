@@ -26111,6 +26111,45 @@
               }
             ],
             "description": "after_cost_only: a channel has no fee profile, so its fees count as 0"
+          },
+          "marginRisk": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "checkedProducts": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "belowTarget": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "unknownCost": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "conflicts": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "checkedProducts",
+                  "belowTarget",
+                  "unknownCost",
+                  "conflicts"
+                ],
+                "description": "today's margin picture of the campaign products at their promotional prices; null for a finished campaign"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -26149,7 +26188,8 @@
           "avgDiscountBps",
           "contributionMinor",
           "contributionBps",
-          "contributionBasis"
+          "contributionBasis",
+          "marginRisk"
         ]
       },
       "PromotionCampaignDetailInput": {
@@ -26513,6 +26553,45 @@
             ],
             "description": "after_cost_only: a channel has no fee profile, so its fees count as 0"
           },
+          "marginRisk": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "checkedProducts": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "belowTarget": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "unknownCost": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "conflicts": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "checkedProducts",
+                  "belowTarget",
+                  "unknownCost",
+                  "conflicts"
+                ],
+                "description": "today's margin picture of the campaign products at their promotional prices; null for a finished campaign"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "velocity": {
             "type": "object",
             "properties": {
@@ -26555,45 +26634,6 @@
               "baselineUnits",
               "baselineDays"
             ]
-          },
-          "marginRisk": {
-            "anyOf": [
-              {
-                "type": "object",
-                "properties": {
-                  "checkedProducts": {
-                    "type": "integer",
-                    "minimum": -9007199254740991,
-                    "maximum": 9007199254740991
-                  },
-                  "belowTarget": {
-                    "type": "integer",
-                    "minimum": -9007199254740991,
-                    "maximum": 9007199254740991
-                  },
-                  "unknownCost": {
-                    "type": "integer",
-                    "minimum": -9007199254740991,
-                    "maximum": 9007199254740991
-                  },
-                  "conflicts": {
-                    "type": "integer",
-                    "minimum": -9007199254740991,
-                    "maximum": 9007199254740991
-                  }
-                },
-                "required": [
-                  "checkedProducts",
-                  "belowTarget",
-                  "unknownCost",
-                  "conflicts"
-                ],
-                "description": "today's margin picture of the campaign products at their promotional prices; null for a finished campaign"
-              },
-              {
-                "type": "null"
-              }
-            ]
           }
         },
         "required": [
@@ -26633,8 +26673,8 @@
           "contributionMinor",
           "contributionBps",
           "contributionBasis",
-          "velocity",
-          "marginRisk"
+          "marginRisk",
+          "velocity"
         ]
       },
       "PromotionChannelDetailInput": {
@@ -65222,6 +65262,46 @@
               }
             ],
             "description": "after_cost_only: a channel has no fee profile, so its fees count as 0"
+          },
+          "marginRisk": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "checkedProducts": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "belowTarget": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "unknownCost": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "conflicts": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "checkedProducts",
+                  "belowTarget",
+                  "unknownCost",
+                  "conflicts"
+                ],
+                "additionalProperties": false,
+                "description": "today's margin picture of the campaign products at their promotional prices; null for a finished campaign"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -65260,7 +65340,8 @@
           "avgDiscountBps",
           "contributionMinor",
           "contributionBps",
-          "contributionBasis"
+          "contributionBasis",
+          "marginRisk"
         ],
         "additionalProperties": false
       },
@@ -65627,6 +65708,46 @@
             ],
             "description": "after_cost_only: a channel has no fee profile, so its fees count as 0"
           },
+          "marginRisk": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "checkedProducts": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "belowTarget": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "unknownCost": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "conflicts": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "checkedProducts",
+                  "belowTarget",
+                  "unknownCost",
+                  "conflicts"
+                ],
+                "additionalProperties": false,
+                "description": "today's margin picture of the campaign products at their promotional prices; null for a finished campaign"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "velocity": {
             "type": "object",
             "properties": {
@@ -65670,46 +65791,6 @@
               "baselineDays"
             ],
             "additionalProperties": false
-          },
-          "marginRisk": {
-            "anyOf": [
-              {
-                "type": "object",
-                "properties": {
-                  "checkedProducts": {
-                    "type": "integer",
-                    "minimum": -9007199254740991,
-                    "maximum": 9007199254740991
-                  },
-                  "belowTarget": {
-                    "type": "integer",
-                    "minimum": -9007199254740991,
-                    "maximum": 9007199254740991
-                  },
-                  "unknownCost": {
-                    "type": "integer",
-                    "minimum": -9007199254740991,
-                    "maximum": 9007199254740991
-                  },
-                  "conflicts": {
-                    "type": "integer",
-                    "minimum": -9007199254740991,
-                    "maximum": 9007199254740991
-                  }
-                },
-                "required": [
-                  "checkedProducts",
-                  "belowTarget",
-                  "unknownCost",
-                  "conflicts"
-                ],
-                "additionalProperties": false,
-                "description": "today's margin picture of the campaign products at their promotional prices; null for a finished campaign"
-              },
-              {
-                "type": "null"
-              }
-            ]
           }
         },
         "required": [
@@ -65749,8 +65830,8 @@
           "contributionMinor",
           "contributionBps",
           "contributionBasis",
-          "velocity",
-          "marginRisk"
+          "marginRisk",
+          "velocity"
         ],
         "additionalProperties": false
       },
