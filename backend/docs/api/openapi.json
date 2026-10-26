@@ -25555,12 +25555,17 @@
                 },
                 "displayName": {
                   "type": "string"
+                },
+                "canPushPrices": {
+                  "type": "boolean",
+                  "description": "false: the connector cannot take price changes, so a campaign there cannot be applied automatically"
                 }
               },
               "required": [
                 "accountId",
                 "marketplace",
-                "displayName"
+                "displayName",
+                "canPushPrices"
               ]
             }
           },
@@ -25659,6 +25664,42 @@
               "null"
             ]
           },
+          "horizon": {
+            "type": "string",
+            "enum": [
+              "past",
+              "now",
+              "next"
+            ],
+            "description": "past = ended or cancelled, now = running, next = not started (draft or scheduled)"
+          },
+          "endingSoon": {
+            "type": "boolean",
+            "description": "running and ending within 72 hours"
+          },
+          "endsInHours": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "hours until a running campaign ends; null when it is not running or has no end"
+          },
+          "capability": {
+            "type": "string",
+            "enum": [
+              "supported",
+              "partial",
+              "not_supported",
+              "none"
+            ],
+            "description": "whether the campaign channels can take price changes: all, some, none, or no channel at all"
+          },
           "version": {
             "type": "integer",
             "minimum": -9007199254740991,
@@ -25701,9 +25742,414 @@
           "statsUpdatedAt",
           "itemCounts",
           "endReason",
+          "horizon",
+          "endingSoon",
+          "endsInHours",
+          "capability",
           "version",
           "createdAt",
           "updatedAt"
+        ]
+      },
+      "PromotionCampaignRowInput": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "description": "Internal campaign code (unique, case-insensitive). It is not pushed to marketplaces as a coupon"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "percentage_discount",
+              "flat_discount",
+              "bogo",
+              "bundle"
+            ]
+          },
+          "valueBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "percentage_discount and bundle: basis points off (1500 = 15%)"
+          },
+          "valueMinor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "flat_discount: minor units off"
+          },
+          "buyQuantity": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "getQuantity": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "minOrderMinor": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Informational: marketplaces cannot enforce a minimum order on a sale price"
+          },
+          "budgetMinor": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "0 = no budget limit"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "scheduled",
+              "active",
+              "ended",
+              "cancelled"
+            ]
+          },
+          "startsAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "example": "2026-01-31T10:15:30.000Z"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "endsAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "example": "2026-01-31T10:15:30.000Z"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "accountIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Empty = every connected account"
+          },
+          "channels": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "accountId": {
+                  "type": "string"
+                },
+                "marketplace": {
+                  "type": "string"
+                },
+                "displayName": {
+                  "type": "string"
+                },
+                "canPushPrices": {
+                  "type": "boolean",
+                  "description": "false: the connector cannot take price changes, so a campaign there cannot be applied automatically"
+                }
+              },
+              "required": [
+                "accountId",
+                "marketplace",
+                "displayName",
+                "canPushPrices"
+              ]
+            }
+          },
+          "spendMinor": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Discount actually given: (original - promo price) x units sold in the window"
+          },
+          "revenueMinor": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "unitsMoved": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "ordersCount": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "budgetUsedBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "statsUpdatedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "example": "2026-01-31T10:15:30.000Z"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "itemCounts": {
+            "type": "object",
+            "properties": {
+              "total": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "eligible": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "pending_sync": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "live": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "ineligible": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "ended": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "total",
+              "eligible",
+              "pending_sync",
+              "live",
+              "ineligible",
+              "ended"
+            ]
+          },
+          "endReason": {
+            "description": "ended_manually | window_closed | budget_exhausted | cancelled",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "horizon": {
+            "type": "string",
+            "enum": [
+              "past",
+              "now",
+              "next"
+            ],
+            "description": "past = ended or cancelled, now = running, next = not started (draft or scheduled)"
+          },
+          "endingSoon": {
+            "type": "boolean",
+            "description": "running and ending within 72 hours"
+          },
+          "endsInHours": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "hours until a running campaign ends; null when it is not running or has no end"
+          },
+          "capability": {
+            "type": "string",
+            "enum": [
+              "supported",
+              "partial",
+              "not_supported",
+              "none"
+            ],
+            "description": "whether the campaign channels can take price changes: all, some, none, or no channel at all"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-01-31T10:15:30.000Z"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-01-31T10:15:30.000Z"
+          },
+          "avgDiscountBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "average discount over the campaign products that can run; null without products"
+          },
+          "contributionMinor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "revenue - cost - marketplace fees of the promoted sales; null when nothing sold or any sold unit has no cost price"
+          },
+          "contributionBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "contribution as basis points of the revenue; null with contributionMinor"
+          },
+          "contributionBasis": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "after_cost_and_fees",
+                  "after_cost_only"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "after_cost_only: a channel has no fee profile, so its fees count as 0"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "code",
+          "description",
+          "type",
+          "valueBps",
+          "valueMinor",
+          "buyQuantity",
+          "getQuantity",
+          "minOrderMinor",
+          "budgetMinor",
+          "currency",
+          "status",
+          "startsAt",
+          "endsAt",
+          "accountIds",
+          "channels",
+          "spendMinor",
+          "revenueMinor",
+          "unitsMoved",
+          "ordersCount",
+          "budgetUsedBps",
+          "statsUpdatedAt",
+          "itemCounts",
+          "endReason",
+          "horizon",
+          "endingSoon",
+          "endsInHours",
+          "capability",
+          "version",
+          "createdAt",
+          "updatedAt",
+          "avgDiscountBps",
+          "contributionMinor",
+          "contributionBps",
+          "contributionBasis"
         ]
       },
       "PromotionCampaignDetailInput": {
@@ -25853,12 +26299,17 @@
                 },
                 "displayName": {
                   "type": "string"
+                },
+                "canPushPrices": {
+                  "type": "boolean",
+                  "description": "false: the connector cannot take price changes, so a campaign there cannot be applied automatically"
                 }
               },
               "required": [
                 "accountId",
                 "marketplace",
-                "displayName"
+                "displayName",
+                "canPushPrices"
               ]
             }
           },
@@ -25957,6 +26408,42 @@
               "null"
             ]
           },
+          "horizon": {
+            "type": "string",
+            "enum": [
+              "past",
+              "now",
+              "next"
+            ],
+            "description": "past = ended or cancelled, now = running, next = not started (draft or scheduled)"
+          },
+          "endingSoon": {
+            "type": "boolean",
+            "description": "running and ending within 72 hours"
+          },
+          "endsInHours": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "hours until a running campaign ends; null when it is not running or has no end"
+          },
+          "capability": {
+            "type": "string",
+            "enum": [
+              "supported",
+              "partial",
+              "not_supported",
+              "none"
+            ],
+            "description": "whether the campaign channels can take price changes: all, some, none, or no channel at all"
+          },
           "version": {
             "type": "integer",
             "minimum": -9007199254740991,
@@ -25971,6 +26458,60 @@
             "type": "string",
             "format": "date-time",
             "example": "2026-01-31T10:15:30.000Z"
+          },
+          "avgDiscountBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "average discount over the campaign products that can run; null without products"
+          },
+          "contributionMinor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "revenue - cost - marketplace fees of the promoted sales; null when nothing sold or any sold unit has no cost price"
+          },
+          "contributionBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "contribution as basis points of the revenue; null with contributionMinor"
+          },
+          "contributionBasis": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "after_cost_and_fees",
+                  "after_cost_only"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "after_cost_only: a channel has no fee profile, so its fees count as 0"
           },
           "velocity": {
             "type": "object",
@@ -26014,6 +26555,45 @@
               "baselineUnits",
               "baselineDays"
             ]
+          },
+          "marginRisk": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "checkedProducts": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "belowTarget": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "unknownCost": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "conflicts": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "checkedProducts",
+                  "belowTarget",
+                  "unknownCost",
+                  "conflicts"
+                ],
+                "description": "today's margin picture of the campaign products at their promotional prices; null for a finished campaign"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -26042,10 +26622,191 @@
           "statsUpdatedAt",
           "itemCounts",
           "endReason",
+          "horizon",
+          "endingSoon",
+          "endsInHours",
+          "capability",
           "version",
           "createdAt",
           "updatedAt",
-          "velocity"
+          "avgDiscountBps",
+          "contributionMinor",
+          "contributionBps",
+          "contributionBasis",
+          "velocity",
+          "marginRisk"
+        ]
+      },
+      "PromotionChannelDetailInput": {
+        "type": "object",
+        "properties": {
+          "accountId": {
+            "type": "string"
+          },
+          "marketplace": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "listed": {
+            "type": "boolean"
+          },
+          "canPushPrices": {
+            "type": "boolean"
+          },
+          "regularPriceMinor": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "promoPriceMinor": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "discountBps": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "conflict": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "other_campaign",
+                      "existing_sale"
+                    ]
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "message"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unitCostMinor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "feesConfigured": {
+            "type": "boolean"
+          },
+          "marginRegularBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "marginPromoBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "targetMarginBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "belowTarget": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "minPromoPriceMinor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "maxDiscountBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "accountId",
+          "marketplace",
+          "displayName",
+          "listed",
+          "canPushPrices",
+          "regularPriceMinor",
+          "promoPriceMinor",
+          "discountBps",
+          "ok",
+          "reason",
+          "conflict",
+          "unitCostMinor",
+          "feesConfigured",
+          "marginRegularBps",
+          "marginPromoBps",
+          "targetMarginBps",
+          "belowTarget",
+          "minPromoPriceMinor",
+          "maxDiscountBps"
         ]
       },
       "PromotionProductInput": {
@@ -26142,14 +26903,139 @@
                 },
                 "displayName": {
                   "type": "string"
+                },
+                "canPushPrices": {
+                  "type": "boolean",
+                  "description": "false: the connector cannot take price changes, so a campaign there cannot be applied automatically"
                 }
               },
               "required": [
                 "accountId",
                 "marketplace",
-                "displayName"
+                "displayName",
+                "canPushPrices"
               ]
             }
+          },
+          "availableStock": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "on hand minus reserved over the active warehouses"
+          },
+          "lowStock": {
+            "description": "the shared low-stock rule of Inventory",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "unitCostMinor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "marginRegularBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "margin after cost and the channel fees at the regular price; null = no cost price"
+          },
+          "marginPromoBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "the same at the promotional price (the channel with the thinnest margin)"
+          },
+          "targetMarginBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "strictest active pricing-policy target of that channel"
+          },
+          "belowTarget": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "minPromoPriceMinor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "lowest promotional price that still earns the target margin"
+          },
+          "conflict": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "message"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "another running or scheduled campaign, or a sale somebody else set, on a target channel"
+          },
+          "channelDetails": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PromotionChannelDetailInput"
+            },
+            "description": "the same numbers per target channel; empty for a finished campaign"
           }
         },
         "required": [
@@ -26168,7 +27054,521 @@
           "status",
           "reason",
           "lastSyncedAt",
-          "channels"
+          "channels",
+          "availableStock",
+          "lowStock",
+          "unitCostMinor",
+          "marginRegularBps",
+          "marginPromoBps",
+          "targetMarginBps",
+          "belowTarget",
+          "minPromoPriceMinor",
+          "conflict",
+          "channelDetails"
+        ]
+      },
+      "PromotionCandidateInput": {
+        "type": "object",
+        "properties": {
+          "variantId": {
+            "type": "string"
+          },
+          "productId": {
+            "type": "string"
+          },
+          "productName": {
+            "type": "string"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "accountId": {
+            "type": "string"
+          },
+          "marketplace": {
+            "type": "string"
+          },
+          "channel": {
+            "type": "string"
+          },
+          "canPushPrices": {
+            "type": "boolean"
+          },
+          "regularPriceMinor": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "unitCostMinor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "feesMinor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "commission and fixed fee at the regular price; null = no fee profile"
+          },
+          "marginBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "margin after cost and fees at the regular price; null = no cost price"
+          },
+          "targetMarginBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "minPromoPriceMinor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "maxDiscountBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "the deepest discount that still earns the target margin"
+          },
+          "availableStock": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "lowStock": {
+            "type": "boolean"
+          },
+          "unitsSold30d": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "salesVelocity": {
+            "type": "number",
+            "description": "units per day"
+          },
+          "recommendedAction": {
+            "type": "string",
+            "enum": [
+              "reorder",
+              "raise_price",
+              "liquidate",
+              "promote",
+              "hold"
+            ]
+          },
+          "recommendationReasons": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key",
+                "text"
+              ]
+            }
+          },
+          "existingCampaign": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "endsAt": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date-time",
+                        "example": "2026-01-31T10:15:30.000Z"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "status",
+                  "endsAt"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "the running, else scheduled, else draft campaign that already has it on this channel"
+          },
+          "conflicts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "pending_price_proposal",
+                    "other_campaign",
+                    "existing_sale"
+                  ]
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "message"
+              ]
+            }
+          },
+          "pendingProposal": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "proposedPriceMinor": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "id",
+                  "proposedPriceMinor"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "eligibility": {
+            "type": "string",
+            "enum": [
+              "eligible",
+              "margin_risk",
+              "low_inventory",
+              "verification_required",
+              "not_provided",
+              "conflict"
+            ]
+          },
+          "eligibilityReason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "promotionStatus": {
+            "type": "string",
+            "enum": [
+              "recommended",
+              "review",
+              "not_selected",
+              "connector_unavailable"
+            ]
+          }
+        },
+        "required": [
+          "variantId",
+          "productId",
+          "productName",
+          "sku",
+          "accountId",
+          "marketplace",
+          "channel",
+          "canPushPrices",
+          "regularPriceMinor",
+          "unitCostMinor",
+          "feesMinor",
+          "marginBps",
+          "targetMarginBps",
+          "minPromoPriceMinor",
+          "maxDiscountBps",
+          "availableStock",
+          "lowStock",
+          "unitsSold30d",
+          "salesVelocity",
+          "recommendedAction",
+          "recommendationReasons",
+          "existingCampaign",
+          "conflicts",
+          "pendingProposal",
+          "eligibility",
+          "eligibilityReason",
+          "promotionStatus"
+        ]
+      },
+      "PromotionPreviewRowInput": {
+        "type": "object",
+        "properties": {
+          "variantId": {
+            "type": "string"
+          },
+          "productId": {
+            "type": "string"
+          },
+          "productName": {
+            "type": "string"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "availableStock": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lowStock": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "accountId": {
+            "type": "string"
+          },
+          "marketplace": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "listed": {
+            "type": "boolean"
+          },
+          "canPushPrices": {
+            "type": "boolean"
+          },
+          "regularPriceMinor": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "promoPriceMinor": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "discountBps": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "conflict": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "other_campaign",
+                      "existing_sale"
+                    ]
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "message"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unitCostMinor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "feesConfigured": {
+            "type": "boolean"
+          },
+          "marginRegularBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "marginPromoBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "targetMarginBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "belowTarget": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "minPromoPriceMinor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "maxDiscountBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "variantId",
+          "productId",
+          "productName",
+          "sku",
+          "availableStock",
+          "lowStock",
+          "accountId",
+          "marketplace",
+          "displayName",
+          "listed",
+          "canPushPrices",
+          "regularPriceMinor",
+          "promoPriceMinor",
+          "discountBps",
+          "ok",
+          "reason",
+          "conflict",
+          "unitCostMinor",
+          "feesConfigured",
+          "marginRegularBps",
+          "marginPromoBps",
+          "targetMarginBps",
+          "belowTarget",
+          "minPromoPriceMinor",
+          "maxDiscountBps"
         ]
       },
       "ImportSettingsInput": {
@@ -36711,6 +38111,451 @@
                 "type": "null"
               }
             ]
+          },
+          "productsOnPromotion": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "distinct products in scheduled or running campaigns whose sale is pending or live"
+          },
+          "liveProducts": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "distinct products whose sale price is live on a running campaign"
+          },
+          "eligibleProducts": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "distinct products in draft, scheduled or running campaigns that can run"
+          },
+          "conflictItems": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "campaign products blocked by another campaign or an existing sale"
+          },
+          "belowMarginTargetItems": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "products of scheduled or running campaigns whose margin at the promotional price is below the pricing-policy target of a channel; null when there is nothing to check"
+          },
+          "endingSoonCampaigns": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "nextEndsAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "example": "2026-01-31T10:15:30.000Z"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resultsCampaigns": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "campaigns that ran and have results"
+          },
+          "opportunities": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "distinct products recommended for a promotion (product intelligence says promote, and nothing blocks it)"
+          },
+          "listedProducts": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "distinct products with an active priced listing"
+          },
+          "unlistedVariants": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "active variants with no active listing (they cannot be promoted)"
+          },
+          "connectorLimitations": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "accounts that are not connected or whose connector cannot take price changes"
+          },
+          "contributionMinor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "revenue - cost - marketplace fees of all promoted sales; null when nothing sold or any promoted unit has no cost price"
+          },
+          "contributionBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "contributionBasis": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "after_cost_and_fees",
+                  "after_cost_only"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "channels": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "accountId": {
+                  "type": "string"
+                },
+                "marketplace": {
+                  "type": "string"
+                },
+                "displayName": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "canPushPrices": {
+                  "type": "boolean"
+                },
+                "capability": {
+                  "type": "string",
+                  "enum": [
+                    "supported",
+                    "not_supported",
+                    "verification_required"
+                  ],
+                  "description": "supported = connected and the connector takes prices; not_supported = the connector cannot; verification_required = the account is not connected"
+                },
+                "activeCampaigns": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "scheduledCampaigns": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "liveProducts": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "listedProducts": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "opportunities": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "accountId",
+                "marketplace",
+                "displayName",
+                "status",
+                "canPushPrices",
+                "capability",
+                "activeCampaigns",
+                "scheduledCampaigns",
+                "liveProducts",
+                "listedProducts",
+                "opportunities"
+              ]
+            }
+          },
+          "pressure": {
+            "type": "object",
+            "properties": {
+              "strongCandidate": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "variantId": {
+                        "type": "string"
+                      },
+                      "productName": {
+                        "type": "string"
+                      },
+                      "sku": {
+                        "type": "string"
+                      },
+                      "accountId": {
+                        "type": "string"
+                      },
+                      "channel": {
+                        "type": "string"
+                      },
+                      "availableStock": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "marginBps": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "unitsSold30d": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "eligibility": {
+                        "type": "string"
+                      },
+                      "reasons": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "key": {
+                              "type": "string"
+                            },
+                            "text": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "key",
+                            "text"
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "variantId",
+                      "productName",
+                      "sku",
+                      "accountId",
+                      "channel",
+                      "availableStock",
+                      "marginBps",
+                      "unitsSold30d",
+                      "eligibility",
+                      "reasons"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "best seller that is eligible, well stocked and has a healthy margin; null when none qualifies"
+              },
+              "reviewFirst": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "variantId": {
+                        "type": "string"
+                      },
+                      "productName": {
+                        "type": "string"
+                      },
+                      "sku": {
+                        "type": "string"
+                      },
+                      "accountId": {
+                        "type": "string"
+                      },
+                      "channel": {
+                        "type": "string"
+                      },
+                      "availableStock": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "marginBps": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "unitsSold30d": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "eligibility": {
+                        "type": "string"
+                      },
+                      "reasons": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "key": {
+                              "type": "string"
+                            },
+                            "text": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "key",
+                            "text"
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "variantId",
+                      "productName",
+                      "sku",
+                      "accountId",
+                      "channel",
+                      "availableStock",
+                      "marginBps",
+                      "unitsSold30d",
+                      "eligibility",
+                      "reasons"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "best seller that is low on stock or has a thin margin; null when none"
+              }
+            },
+            "required": [
+              "strongCandidate",
+              "reviewFirst"
+            ]
+          },
+          "recentActivity": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "action": {
+                  "type": "string"
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "example": "2026-01-31T10:15:30.000Z"
+                },
+                "campaignId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "campaignName": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "action",
+                "createdAt",
+                "campaignId",
+                "campaignName"
+              ]
+            }
+          },
+          "thresholds": {
+            "type": "object",
+            "properties": {
+              "highMarginBps": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "strongSellerUnits30d": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "highInventoryUnits": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "minHealthyMarginBps": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "endingSoonHours": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "highMarginBps",
+              "strongSellerUnits30d",
+              "highInventoryUnits",
+              "minHealthyMarginBps",
+              "endingSoonHours"
+            ]
           }
         },
         "required": [
@@ -36726,7 +38571,26 @@
           "unitsMoved",
           "velocityLiftBps",
           "velocityCampaigns",
-          "statsUpdatedAt"
+          "statsUpdatedAt",
+          "productsOnPromotion",
+          "liveProducts",
+          "eligibleProducts",
+          "conflictItems",
+          "belowMarginTargetItems",
+          "endingSoonCampaigns",
+          "nextEndsAt",
+          "resultsCampaigns",
+          "opportunities",
+          "listedProducts",
+          "unlistedVariants",
+          "connectorLimitations",
+          "contributionMinor",
+          "contributionBps",
+          "contributionBasis",
+          "channels",
+          "pressure",
+          "recentActivity",
+          "thresholds"
         ]
       },
       "ErrorResponse": {
@@ -62797,12 +64661,17 @@
                 },
                 "displayName": {
                   "type": "string"
+                },
+                "canPushPrices": {
+                  "type": "boolean",
+                  "description": "false: the connector cannot take price changes, so a campaign there cannot be applied automatically"
                 }
               },
               "required": [
                 "accountId",
                 "marketplace",
-                "displayName"
+                "displayName",
+                "canPushPrices"
               ],
               "additionalProperties": false
             }
@@ -62903,6 +64772,42 @@
               "null"
             ]
           },
+          "horizon": {
+            "type": "string",
+            "enum": [
+              "past",
+              "now",
+              "next"
+            ],
+            "description": "past = ended or cancelled, now = running, next = not started (draft or scheduled)"
+          },
+          "endingSoon": {
+            "type": "boolean",
+            "description": "running and ending within 72 hours"
+          },
+          "endsInHours": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "hours until a running campaign ends; null when it is not running or has no end"
+          },
+          "capability": {
+            "type": "string",
+            "enum": [
+              "supported",
+              "partial",
+              "not_supported",
+              "none"
+            ],
+            "description": "whether the campaign channels can take price changes: all, some, none, or no channel at all"
+          },
           "version": {
             "type": "integer",
             "minimum": -9007199254740991,
@@ -62945,9 +64850,417 @@
           "statsUpdatedAt",
           "itemCounts",
           "endReason",
+          "horizon",
+          "endingSoon",
+          "endsInHours",
+          "capability",
           "version",
           "createdAt",
           "updatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "PromotionCampaignRow": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "description": "Internal campaign code (unique, case-insensitive). It is not pushed to marketplaces as a coupon"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "percentage_discount",
+              "flat_discount",
+              "bogo",
+              "bundle"
+            ]
+          },
+          "valueBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "percentage_discount and bundle: basis points off (1500 = 15%)"
+          },
+          "valueMinor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "flat_discount: minor units off"
+          },
+          "buyQuantity": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "getQuantity": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "minOrderMinor": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Informational: marketplaces cannot enforce a minimum order on a sale price"
+          },
+          "budgetMinor": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "0 = no budget limit"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "scheduled",
+              "active",
+              "ended",
+              "cancelled"
+            ]
+          },
+          "startsAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "example": "2026-01-31T10:15:30.000Z"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "endsAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "example": "2026-01-31T10:15:30.000Z"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "accountIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Empty = every connected account"
+          },
+          "channels": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "accountId": {
+                  "type": "string"
+                },
+                "marketplace": {
+                  "type": "string"
+                },
+                "displayName": {
+                  "type": "string"
+                },
+                "canPushPrices": {
+                  "type": "boolean",
+                  "description": "false: the connector cannot take price changes, so a campaign there cannot be applied automatically"
+                }
+              },
+              "required": [
+                "accountId",
+                "marketplace",
+                "displayName",
+                "canPushPrices"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "spendMinor": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Discount actually given: (original - promo price) x units sold in the window"
+          },
+          "revenueMinor": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "unitsMoved": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "ordersCount": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "budgetUsedBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "statsUpdatedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "example": "2026-01-31T10:15:30.000Z"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "itemCounts": {
+            "type": "object",
+            "properties": {
+              "total": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "eligible": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "pending_sync": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "live": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "ineligible": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "ended": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "total",
+              "eligible",
+              "pending_sync",
+              "live",
+              "ineligible",
+              "ended"
+            ],
+            "additionalProperties": false
+          },
+          "endReason": {
+            "description": "ended_manually | window_closed | budget_exhausted | cancelled",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "horizon": {
+            "type": "string",
+            "enum": [
+              "past",
+              "now",
+              "next"
+            ],
+            "description": "past = ended or cancelled, now = running, next = not started (draft or scheduled)"
+          },
+          "endingSoon": {
+            "type": "boolean",
+            "description": "running and ending within 72 hours"
+          },
+          "endsInHours": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "hours until a running campaign ends; null when it is not running or has no end"
+          },
+          "capability": {
+            "type": "string",
+            "enum": [
+              "supported",
+              "partial",
+              "not_supported",
+              "none"
+            ],
+            "description": "whether the campaign channels can take price changes: all, some, none, or no channel at all"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-01-31T10:15:30.000Z"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-01-31T10:15:30.000Z"
+          },
+          "avgDiscountBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "average discount over the campaign products that can run; null without products"
+          },
+          "contributionMinor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "revenue - cost - marketplace fees of the promoted sales; null when nothing sold or any sold unit has no cost price"
+          },
+          "contributionBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "contribution as basis points of the revenue; null with contributionMinor"
+          },
+          "contributionBasis": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "after_cost_and_fees",
+                  "after_cost_only"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "after_cost_only: a channel has no fee profile, so its fees count as 0"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "code",
+          "description",
+          "type",
+          "valueBps",
+          "valueMinor",
+          "buyQuantity",
+          "getQuantity",
+          "minOrderMinor",
+          "budgetMinor",
+          "currency",
+          "status",
+          "startsAt",
+          "endsAt",
+          "accountIds",
+          "channels",
+          "spendMinor",
+          "revenueMinor",
+          "unitsMoved",
+          "ordersCount",
+          "budgetUsedBps",
+          "statsUpdatedAt",
+          "itemCounts",
+          "endReason",
+          "horizon",
+          "endingSoon",
+          "endsInHours",
+          "capability",
+          "version",
+          "createdAt",
+          "updatedAt",
+          "avgDiscountBps",
+          "contributionMinor",
+          "contributionBps",
+          "contributionBasis"
         ],
         "additionalProperties": false
       },
@@ -63098,12 +65411,17 @@
                 },
                 "displayName": {
                   "type": "string"
+                },
+                "canPushPrices": {
+                  "type": "boolean",
+                  "description": "false: the connector cannot take price changes, so a campaign there cannot be applied automatically"
                 }
               },
               "required": [
                 "accountId",
                 "marketplace",
-                "displayName"
+                "displayName",
+                "canPushPrices"
               ],
               "additionalProperties": false
             }
@@ -63204,6 +65522,42 @@
               "null"
             ]
           },
+          "horizon": {
+            "type": "string",
+            "enum": [
+              "past",
+              "now",
+              "next"
+            ],
+            "description": "past = ended or cancelled, now = running, next = not started (draft or scheduled)"
+          },
+          "endingSoon": {
+            "type": "boolean",
+            "description": "running and ending within 72 hours"
+          },
+          "endsInHours": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "hours until a running campaign ends; null when it is not running or has no end"
+          },
+          "capability": {
+            "type": "string",
+            "enum": [
+              "supported",
+              "partial",
+              "not_supported",
+              "none"
+            ],
+            "description": "whether the campaign channels can take price changes: all, some, none, or no channel at all"
+          },
           "version": {
             "type": "integer",
             "minimum": -9007199254740991,
@@ -63218,6 +65572,60 @@
             "type": "string",
             "format": "date-time",
             "example": "2026-01-31T10:15:30.000Z"
+          },
+          "avgDiscountBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "average discount over the campaign products that can run; null without products"
+          },
+          "contributionMinor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "revenue - cost - marketplace fees of the promoted sales; null when nothing sold or any sold unit has no cost price"
+          },
+          "contributionBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "contribution as basis points of the revenue; null with contributionMinor"
+          },
+          "contributionBasis": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "after_cost_and_fees",
+                  "after_cost_only"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "after_cost_only: a channel has no fee profile, so its fees count as 0"
           },
           "velocity": {
             "type": "object",
@@ -63262,6 +65670,46 @@
               "baselineDays"
             ],
             "additionalProperties": false
+          },
+          "marginRisk": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "checkedProducts": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "belowTarget": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "unknownCost": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "conflicts": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "checkedProducts",
+                  "belowTarget",
+                  "unknownCost",
+                  "conflicts"
+                ],
+                "additionalProperties": false,
+                "description": "today's margin picture of the campaign products at their promotional prices; null for a finished campaign"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -63290,10 +65738,193 @@
           "statsUpdatedAt",
           "itemCounts",
           "endReason",
+          "horizon",
+          "endingSoon",
+          "endsInHours",
+          "capability",
           "version",
           "createdAt",
           "updatedAt",
-          "velocity"
+          "avgDiscountBps",
+          "contributionMinor",
+          "contributionBps",
+          "contributionBasis",
+          "velocity",
+          "marginRisk"
+        ],
+        "additionalProperties": false
+      },
+      "PromotionChannelDetail": {
+        "type": "object",
+        "properties": {
+          "accountId": {
+            "type": "string"
+          },
+          "marketplace": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "listed": {
+            "type": "boolean"
+          },
+          "canPushPrices": {
+            "type": "boolean"
+          },
+          "regularPriceMinor": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "promoPriceMinor": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "discountBps": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "conflict": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "other_campaign",
+                      "existing_sale"
+                    ]
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "message"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unitCostMinor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "feesConfigured": {
+            "type": "boolean"
+          },
+          "marginRegularBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "marginPromoBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "targetMarginBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "belowTarget": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "minPromoPriceMinor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "maxDiscountBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "accountId",
+          "marketplace",
+          "displayName",
+          "listed",
+          "canPushPrices",
+          "regularPriceMinor",
+          "promoPriceMinor",
+          "discountBps",
+          "ok",
+          "reason",
+          "conflict",
+          "unitCostMinor",
+          "feesConfigured",
+          "marginRegularBps",
+          "marginPromoBps",
+          "targetMarginBps",
+          "belowTarget",
+          "minPromoPriceMinor",
+          "maxDiscountBps"
         ],
         "additionalProperties": false
       },
@@ -63391,15 +66022,141 @@
                 },
                 "displayName": {
                   "type": "string"
+                },
+                "canPushPrices": {
+                  "type": "boolean",
+                  "description": "false: the connector cannot take price changes, so a campaign there cannot be applied automatically"
                 }
               },
               "required": [
                 "accountId",
                 "marketplace",
-                "displayName"
+                "displayName",
+                "canPushPrices"
               ],
               "additionalProperties": false
             }
+          },
+          "availableStock": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "on hand minus reserved over the active warehouses"
+          },
+          "lowStock": {
+            "description": "the shared low-stock rule of Inventory",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "unitCostMinor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "marginRegularBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "margin after cost and the channel fees at the regular price; null = no cost price"
+          },
+          "marginPromoBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "the same at the promotional price (the channel with the thinnest margin)"
+          },
+          "targetMarginBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "strictest active pricing-policy target of that channel"
+          },
+          "belowTarget": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "minPromoPriceMinor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "lowest promotional price that still earns the target margin"
+          },
+          "conflict": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "message"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "another running or scheduled campaign, or a sale somebody else set, on a target channel"
+          },
+          "channelDetails": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PromotionChannelDetail"
+            },
+            "description": "the same numbers per target channel; empty for a finished campaign"
           }
         },
         "required": [
@@ -63418,7 +66175,528 @@
           "status",
           "reason",
           "lastSyncedAt",
-          "channels"
+          "channels",
+          "availableStock",
+          "lowStock",
+          "unitCostMinor",
+          "marginRegularBps",
+          "marginPromoBps",
+          "targetMarginBps",
+          "belowTarget",
+          "minPromoPriceMinor",
+          "conflict",
+          "channelDetails"
+        ],
+        "additionalProperties": false
+      },
+      "PromotionCandidate": {
+        "type": "object",
+        "properties": {
+          "variantId": {
+            "type": "string"
+          },
+          "productId": {
+            "type": "string"
+          },
+          "productName": {
+            "type": "string"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "accountId": {
+            "type": "string"
+          },
+          "marketplace": {
+            "type": "string"
+          },
+          "channel": {
+            "type": "string"
+          },
+          "canPushPrices": {
+            "type": "boolean"
+          },
+          "regularPriceMinor": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "unitCostMinor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "feesMinor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "commission and fixed fee at the regular price; null = no fee profile"
+          },
+          "marginBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "margin after cost and fees at the regular price; null = no cost price"
+          },
+          "targetMarginBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "minPromoPriceMinor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "maxDiscountBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "the deepest discount that still earns the target margin"
+          },
+          "availableStock": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "lowStock": {
+            "type": "boolean"
+          },
+          "unitsSold30d": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "salesVelocity": {
+            "type": "number",
+            "description": "units per day"
+          },
+          "recommendedAction": {
+            "type": "string",
+            "enum": [
+              "reorder",
+              "raise_price",
+              "liquidate",
+              "promote",
+              "hold"
+            ]
+          },
+          "recommendationReasons": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key",
+                "text"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "existingCampaign": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "endsAt": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date-time",
+                        "example": "2026-01-31T10:15:30.000Z"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "status",
+                  "endsAt"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "the running, else scheduled, else draft campaign that already has it on this channel"
+          },
+          "conflicts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "pending_price_proposal",
+                    "other_campaign",
+                    "existing_sale"
+                  ]
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "message"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "pendingProposal": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "proposedPriceMinor": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "id",
+                  "proposedPriceMinor"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "eligibility": {
+            "type": "string",
+            "enum": [
+              "eligible",
+              "margin_risk",
+              "low_inventory",
+              "verification_required",
+              "not_provided",
+              "conflict"
+            ]
+          },
+          "eligibilityReason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "promotionStatus": {
+            "type": "string",
+            "enum": [
+              "recommended",
+              "review",
+              "not_selected",
+              "connector_unavailable"
+            ]
+          }
+        },
+        "required": [
+          "variantId",
+          "productId",
+          "productName",
+          "sku",
+          "accountId",
+          "marketplace",
+          "channel",
+          "canPushPrices",
+          "regularPriceMinor",
+          "unitCostMinor",
+          "feesMinor",
+          "marginBps",
+          "targetMarginBps",
+          "minPromoPriceMinor",
+          "maxDiscountBps",
+          "availableStock",
+          "lowStock",
+          "unitsSold30d",
+          "salesVelocity",
+          "recommendedAction",
+          "recommendationReasons",
+          "existingCampaign",
+          "conflicts",
+          "pendingProposal",
+          "eligibility",
+          "eligibilityReason",
+          "promotionStatus"
+        ],
+        "additionalProperties": false
+      },
+      "PromotionPreviewRow": {
+        "type": "object",
+        "properties": {
+          "variantId": {
+            "type": "string"
+          },
+          "productId": {
+            "type": "string"
+          },
+          "productName": {
+            "type": "string"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "availableStock": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lowStock": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "accountId": {
+            "type": "string"
+          },
+          "marketplace": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "listed": {
+            "type": "boolean"
+          },
+          "canPushPrices": {
+            "type": "boolean"
+          },
+          "regularPriceMinor": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "promoPriceMinor": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "discountBps": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "conflict": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "other_campaign",
+                      "existing_sale"
+                    ]
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "message"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unitCostMinor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "feesConfigured": {
+            "type": "boolean"
+          },
+          "marginRegularBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "marginPromoBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "targetMarginBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "belowTarget": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "minPromoPriceMinor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "maxDiscountBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "variantId",
+          "productId",
+          "productName",
+          "sku",
+          "availableStock",
+          "lowStock",
+          "accountId",
+          "marketplace",
+          "displayName",
+          "listed",
+          "canPushPrices",
+          "regularPriceMinor",
+          "promoPriceMinor",
+          "discountBps",
+          "ok",
+          "reason",
+          "conflict",
+          "unitCostMinor",
+          "feesConfigured",
+          "marginRegularBps",
+          "marginPromoBps",
+          "targetMarginBps",
+          "belowTarget",
+          "minPromoPriceMinor",
+          "maxDiscountBps"
         ],
         "additionalProperties": false
       },
@@ -74191,6 +77469,459 @@
                 "type": "null"
               }
             ]
+          },
+          "productsOnPromotion": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "distinct products in scheduled or running campaigns whose sale is pending or live"
+          },
+          "liveProducts": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "distinct products whose sale price is live on a running campaign"
+          },
+          "eligibleProducts": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "distinct products in draft, scheduled or running campaigns that can run"
+          },
+          "conflictItems": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "campaign products blocked by another campaign or an existing sale"
+          },
+          "belowMarginTargetItems": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "products of scheduled or running campaigns whose margin at the promotional price is below the pricing-policy target of a channel; null when there is nothing to check"
+          },
+          "endingSoonCampaigns": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "nextEndsAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "example": "2026-01-31T10:15:30.000Z"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resultsCampaigns": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "campaigns that ran and have results"
+          },
+          "opportunities": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "distinct products recommended for a promotion (product intelligence says promote, and nothing blocks it)"
+          },
+          "listedProducts": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "distinct products with an active priced listing"
+          },
+          "unlistedVariants": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "active variants with no active listing (they cannot be promoted)"
+          },
+          "connectorLimitations": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "accounts that are not connected or whose connector cannot take price changes"
+          },
+          "contributionMinor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "revenue - cost - marketplace fees of all promoted sales; null when nothing sold or any promoted unit has no cost price"
+          },
+          "contributionBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "contributionBasis": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "after_cost_and_fees",
+                  "after_cost_only"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "channels": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "accountId": {
+                  "type": "string"
+                },
+                "marketplace": {
+                  "type": "string"
+                },
+                "displayName": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "canPushPrices": {
+                  "type": "boolean"
+                },
+                "capability": {
+                  "type": "string",
+                  "enum": [
+                    "supported",
+                    "not_supported",
+                    "verification_required"
+                  ],
+                  "description": "supported = connected and the connector takes prices; not_supported = the connector cannot; verification_required = the account is not connected"
+                },
+                "activeCampaigns": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "scheduledCampaigns": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "liveProducts": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "listedProducts": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "opportunities": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "accountId",
+                "marketplace",
+                "displayName",
+                "status",
+                "canPushPrices",
+                "capability",
+                "activeCampaigns",
+                "scheduledCampaigns",
+                "liveProducts",
+                "listedProducts",
+                "opportunities"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "pressure": {
+            "type": "object",
+            "properties": {
+              "strongCandidate": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "variantId": {
+                        "type": "string"
+                      },
+                      "productName": {
+                        "type": "string"
+                      },
+                      "sku": {
+                        "type": "string"
+                      },
+                      "accountId": {
+                        "type": "string"
+                      },
+                      "channel": {
+                        "type": "string"
+                      },
+                      "availableStock": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "marginBps": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "unitsSold30d": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "eligibility": {
+                        "type": "string"
+                      },
+                      "reasons": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "key": {
+                              "type": "string"
+                            },
+                            "text": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "key",
+                            "text"
+                          ],
+                          "additionalProperties": false
+                        }
+                      }
+                    },
+                    "required": [
+                      "variantId",
+                      "productName",
+                      "sku",
+                      "accountId",
+                      "channel",
+                      "availableStock",
+                      "marginBps",
+                      "unitsSold30d",
+                      "eligibility",
+                      "reasons"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "best seller that is eligible, well stocked and has a healthy margin; null when none qualifies"
+              },
+              "reviewFirst": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "variantId": {
+                        "type": "string"
+                      },
+                      "productName": {
+                        "type": "string"
+                      },
+                      "sku": {
+                        "type": "string"
+                      },
+                      "accountId": {
+                        "type": "string"
+                      },
+                      "channel": {
+                        "type": "string"
+                      },
+                      "availableStock": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "marginBps": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "unitsSold30d": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "eligibility": {
+                        "type": "string"
+                      },
+                      "reasons": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "key": {
+                              "type": "string"
+                            },
+                            "text": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "key",
+                            "text"
+                          ],
+                          "additionalProperties": false
+                        }
+                      }
+                    },
+                    "required": [
+                      "variantId",
+                      "productName",
+                      "sku",
+                      "accountId",
+                      "channel",
+                      "availableStock",
+                      "marginBps",
+                      "unitsSold30d",
+                      "eligibility",
+                      "reasons"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "best seller that is low on stock or has a thin margin; null when none"
+              }
+            },
+            "required": [
+              "strongCandidate",
+              "reviewFirst"
+            ],
+            "additionalProperties": false
+          },
+          "recentActivity": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "action": {
+                  "type": "string"
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "example": "2026-01-31T10:15:30.000Z"
+                },
+                "campaignId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "campaignName": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "action",
+                "createdAt",
+                "campaignId",
+                "campaignName"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "thresholds": {
+            "type": "object",
+            "properties": {
+              "highMarginBps": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "strongSellerUnits30d": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "highInventoryUnits": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "minHealthyMarginBps": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "endingSoonHours": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "highMarginBps",
+              "strongSellerUnits30d",
+              "highInventoryUnits",
+              "minHealthyMarginBps",
+              "endingSoonHours"
+            ],
+            "additionalProperties": false
           }
         },
         "required": [
@@ -74206,7 +77937,26 @@
           "unitsMoved",
           "velocityLiftBps",
           "velocityCampaigns",
-          "statsUpdatedAt"
+          "statsUpdatedAt",
+          "productsOnPromotion",
+          "liveProducts",
+          "eligibleProducts",
+          "conflictItems",
+          "belowMarginTargetItems",
+          "endingSoonCampaigns",
+          "nextEndsAt",
+          "resultsCampaigns",
+          "opportunities",
+          "listedProducts",
+          "unlistedVariants",
+          "connectorLimitations",
+          "contributionMinor",
+          "contributionBps",
+          "contributionBasis",
+          "channels",
+          "pressure",
+          "recentActivity",
+          "thresholds"
         ],
         "additionalProperties": false
       }
@@ -177466,7 +181216,7 @@
         "tags": [
           "Promotions"
         ],
-        "description": "Active and scheduled campaigns, revenue, discount spend against budget and units moved (cached results of campaigns that ran). `velocityLiftBps` compares the promoted variants' sales rate during their campaigns with the 14 days before each; null when no campaign ran a full day with at least 5 baseline units.",
+        "description": "Active and scheduled campaigns, revenue, discount spend against budget and units moved (cached results of campaigns that ran). `velocityLiftBps` compares the promoted variants' sales rate during their campaigns with the 14 days before each; null when no campaign ran a full day with at least 5 baseline units. Also: products on promotion, opportunities (product intelligence says promote and nothing blocks it), ending-soon campaigns, below-margin-target and conflicting products, the contribution of promoted sales (null while any promoted unit has no cost price), one row per channel (capability, active campaigns, live products, opportunities), the two Promotion pressure picks (null when none qualifies), recent promotion activity, and the thresholds used.",
         "security": [
           {
             "bearerAuth": []
@@ -177553,7 +181303,7 @@
         "tags": [
           "Promotions"
         ],
-        "description": "`counts` are per status for the tabs (they follow `q` and `filter[type]`, not the status filter).",
+        "description": "`counts` are per status for the tabs and `horizonCounts` per Past / Now / Next toggle; both follow `q`, `filter[type]`, `filter[accountId]` and `filter[marketplace]`, not the status, horizon or ending-soon filters. `filter[horizon]`: past = ended and cancelled, now = everything not finished, next = draft and scheduled. `filter[accountId]` / `filter[marketplace]` keep the campaigns that run on that channel (a campaign without accounts runs on every connected account). `filter[endingSoon]=true` keeps running campaigns that end within 72 hours. Rows carry `avgDiscountBps` and the contribution of their sales (null while unknown).",
         "parameters": [
           {
             "schema": {
@@ -177615,6 +181365,67 @@
             "in": "query",
             "name": "q",
             "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "past",
+                "now",
+                "next"
+              ]
+            },
+            "in": "query",
+            "name": "filter[horizon]",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "query",
+            "name": "filter[accountId]",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40
+            },
+            "in": "query",
+            "name": "filter[marketplace]",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            },
+            "in": "query",
+            "name": "filter[endingSoon]",
+            "required": false
+          },
+          {
+            "schema": {
+              "default": "newest",
+              "type": "string",
+              "enum": [
+                "newest",
+                "ends_soon",
+                "revenue",
+                "name"
+              ]
+            },
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "description": "newest | ends_soon (no end last) | revenue | name"
           }
         ],
         "security": [
@@ -177643,7 +181454,7 @@
                         "items": {
                           "type": "array",
                           "items": {
-                            "$ref": "#/components/schemas/PromotionCampaign"
+                            "$ref": "#/components/schemas/PromotionCampaignRow"
                           }
                         },
                         "page": {
@@ -177676,6 +181487,32 @@
                             "minimum": -9007199254740991,
                             "maximum": 9007199254740991
                           }
+                        },
+                        "horizonCounts": {
+                          "type": "object",
+                          "properties": {
+                            "past": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "now": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "next": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "past",
+                            "now",
+                            "next"
+                          ],
+                          "additionalProperties": false
                         }
                       },
                       "required": [
@@ -177684,7 +181521,8 @@
                         "pageSize",
                         "total",
                         "pages",
-                        "counts"
+                        "counts",
+                        "horizonCounts"
                       ],
                       "additionalProperties": false
                     },
@@ -178080,7 +181918,7 @@
     },
     "/api/v1/promotions/campaigns/{id}": {
       "get": {
-        "summary": "One campaign with its results and velocity lift",
+        "summary": "One campaign with its results, velocity lift and margin risk",
         "tags": [
           "Promotions"
         ],
@@ -179994,7 +183832,7 @@
         "tags": [
           "Promotions"
         ],
-        "description": "Original and promotional price, status (eligible, pending_sync, live, ineligible with the reason) and the channels of every campaign product. Finished items are hidden unless `filter[status]=ended`. `counts` follow the other filters, not the status filter.",
+        "description": "Original and promotional price, status (eligible, pending_sync, live, ineligible with the reason) and the channels of every campaign product, with today's stock, cost, margin at the regular and the promotional price against the pricing-policy target (null = unknown), the lowest price that still earns the target, and any clash with another campaign or an existing sale. Finished items are hidden unless `filter[status]=ended` (they carry no margin analysis). `counts` follow the other filters, not the status filter.",
         "parameters": [
           {
             "schema": {
@@ -180165,6 +184003,665 @@
                         "total",
                         "pages",
                         "counts"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "requestId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/promotions/candidates": {
+      "get": {
+        "summary": "Products tab: what can be promoted, per product and channel",
+        "tags": [
+          "Promotions"
+        ],
+        "description": "One row per product on a channel where it has an active priced listing (a product that is not listed cannot be promoted: see `summary.unlistedVariants`). Each row has the regular price, cost, fees and the margin after both (null = no cost price), the pricing-policy target and the deepest discount that still earns it, available stock and the shared low-stock verdict, units sold in 30 days, the product-intelligence recommendation with its reasons, the campaign it is already in, and what would clash with a new sale (another running or scheduled campaign, a sale somebody set, a pending price proposal). `eligibility` and `promotionStatus` are computed here, never on the screen: connector_unavailable when the connector cannot take prices; recommended = intelligence says promote and nothing blocks it; review = something needs a look first. `counts` follow every filter except the segment and the status. `summary` is the whole workspace: recommended products, listed products, unlisted variants. The thresholds used are returned in `thresholds`.",
+        "parameters": [
+          {
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000
+            },
+            "in": "query",
+            "name": "page",
+            "required": false
+          },
+          {
+            "schema": {
+              "default": 25,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "in": "query",
+            "name": "pageSize",
+            "required": false
+          },
+          {
+            "schema": {
+              "default": "recommended",
+              "type": "string",
+              "enum": [
+                "recommended",
+                "all"
+              ]
+            },
+            "in": "query",
+            "name": "filter[segment]",
+            "required": false,
+            "description": "recommended = what product intelligence recommends plus what needs a look first (status recommended or review); all = every placement"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "recommended",
+                "review",
+                "not_selected",
+                "connector_unavailable"
+              ]
+            },
+            "in": "query",
+            "name": "filter[status]",
+            "required": false,
+            "description": "overrides the segment"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "high_margin",
+                "strong_sellers",
+                "eligible",
+                "high_inventory",
+                "not_in_campaign"
+              ]
+            },
+            "in": "query",
+            "name": "filter[quick]",
+            "required": false,
+            "description": "high_margin (margin >= 30%), strong_sellers (>= 50 units in 30 days), eligible, high_inventory (>= 30 available), not_in_campaign"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "query",
+            "name": "filter[accountId]",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40
+            },
+            "in": "query",
+            "name": "filter[marketplace]",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "query",
+            "name": "q",
+            "required": false
+          },
+          {
+            "schema": {
+              "default": "priority",
+              "type": "string",
+              "enum": [
+                "priority",
+                "sales",
+                "margin",
+                "stock",
+                "name"
+              ]
+            },
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "description": "priority (recommended first, then fastest sellers) | sales | margin (unknown last) | stock | name"
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "promotions:read",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/PromotionCandidate"
+                          }
+                        },
+                        "page": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "pageSize": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "total": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "pages": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "counts": {
+                          "type": "object",
+                          "properties": {
+                            "all": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "recommended": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "review": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "not_selected": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "connector_unavailable": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "all",
+                            "recommended",
+                            "review",
+                            "not_selected",
+                            "connector_unavailable"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "summary": {
+                          "type": "object",
+                          "properties": {
+                            "recommendedProducts": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "listedProducts": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "unlistedVariants": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "placements": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "recommendedProducts",
+                            "listedProducts",
+                            "unlistedVariants",
+                            "placements"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "thresholds": {
+                          "type": "object",
+                          "properties": {
+                            "highMarginBps": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "strongSellerUnits30d": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "highInventoryUnits": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "minHealthyMarginBps": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "endingSoonHours": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "highMarginBps",
+                            "strongSellerUnits30d",
+                            "highInventoryUnits",
+                            "minHealthyMarginBps",
+                            "endingSoonHours"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "items",
+                        "page",
+                        "pageSize",
+                        "total",
+                        "pages",
+                        "counts",
+                        "summary",
+                        "thresholds"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "requestId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/promotions/preview": {
+      "post": {
+        "summary": "Preview a campaign before saving it (nothing is written)",
+        "tags": [
+          "Promotions"
+        ],
+        "description": "For the Create Campaign dialog: the same terms as `POST /promotions/campaigns` plus the variants to look at (at most 200). For every product on every target channel: regular price (the channel's own), promotional price, discount, margin after cost and fees at both prices against the pricing-policy target (null = no cost price or no target), the lowest price that still earns the target, whether the campaign can run there and why not, and any clash with another campaign or a sale. `summary` counts what would run, what is below the margin target, what has no cost price, and how many channels cannot take prices. Variants that do not exist are counted in `summary.unknownVariants`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "percentage_discount",
+                      "flat_discount",
+                      "bogo",
+                      "bundle"
+                    ]
+                  },
+                  "valueBps": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "valueMinor": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "buyQuantity": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "getQuantity": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "accountIds": {
+                    "maxItems": 50,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    }
+                  },
+                  "variantIds": {
+                    "minItems": 1,
+                    "maxItems": 200,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    }
+                  },
+                  "startsAt": {
+                    "anyOf": [
+                      {},
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "endsAt": {
+                    "anyOf": [
+                      {},
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "type",
+                  "variantIds"
+                ]
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "promotions:read",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "summary": {
+                          "type": "object",
+                          "properties": {
+                            "products": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "placements": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "runnable": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "notRunnable": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "notListed": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "belowMarginTarget": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "unknownCost": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "conflicts": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "connectorCannotPush": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "avgDiscountBps": {
+                              "anyOf": [
+                                {
+                                  "type": "integer",
+                                  "minimum": -9007199254740991,
+                                  "maximum": 9007199254740991
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "unknownVariants": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "products",
+                            "placements",
+                            "runnable",
+                            "notRunnable",
+                            "notListed",
+                            "belowMarginTarget",
+                            "unknownCost",
+                            "conflicts",
+                            "connectorCannotPush",
+                            "avgDiscountBps",
+                            "unknownVariants"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/PromotionPreviewRow"
+                          }
+                        }
+                      },
+                      "required": [
+                        "summary",
+                        "items"
                       ],
                       "additionalProperties": false
                     },

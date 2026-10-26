@@ -1041,7 +1041,7 @@ Audit trail
 | GET | `/api/v1/promotions/campaigns` | `promotions:read` | Campaign ledger |
 | POST | `/api/v1/promotions/campaigns` | `promotions:write` | Create a draft campaign |
 | DELETE | `/api/v1/promotions/campaigns/{id}` | `promotions:write` | Delete a draft campaign |
-| GET | `/api/v1/promotions/campaigns/{id}` | `promotions:read` | One campaign with its results and velocity lift |
+| GET | `/api/v1/promotions/campaigns/{id}` | `promotions:read` | One campaign with its results, velocity lift and margin risk |
 | PATCH | `/api/v1/promotions/campaigns/{id}` | `promotions:write` | Edit a draft campaign |
 | POST | `/api/v1/promotions/campaigns/{id}/activate` | `promotions:write` | Start a campaign now |
 | POST | `/api/v1/promotions/campaigns/{id}/cancel` | `promotions:write` | Cancel a draft or scheduled campaign |
@@ -1052,7 +1052,9 @@ Audit trail
 | GET | `/api/v1/promotions/campaigns/{id}/products` | `promotions:read` | Products of a campaign |
 | PUT | `/api/v1/promotions/campaigns/{id}/products` | `promotions:write` | Set the products of a draft campaign |
 | POST | `/api/v1/promotions/campaigns/{id}/schedule` | `promotions:write` | Schedule a draft campaign |
+| GET | `/api/v1/promotions/candidates` | `promotions:read` | Products tab: what can be promoted, per product and channel |
 | GET | `/api/v1/promotions/overview` | `promotions:read` | Tiles of the Promotions page |
+| POST | `/api/v1/promotions/preview` | `promotions:read` | Preview a campaign before saving it (nothing is written) |
 | POST | `/api/v1/promotions/process` | `promotions:write` | Run the campaign scheduler now |
 | GET | `/api/v1/promotions/products` | `promotions:read` | Promoted SKUs across campaigns |
 
