@@ -370,6 +370,26 @@ describe('candidates (the Products tab)', () => {
   });
 });
 
+describe('across modules', () => {
+  it('shows the running sale in Pricing next to the regular price, and the Listing price, then restores both when the campaign ends', async () => {
+    const w = await world();
+    const camp = await create(w, { name: 'Cross check', type: 'percentage_discount', valueBps: 1000, startsAt: at(-HOUR), endsAt: at(2 * DAY), selection: { variantIds: [w.variant.variantId] } });
+    const table = async () => (await c.get(`/api/v1/pricing/price-table?q=${w.variant.sku}`, w.admin)).body.data.items[0];
+    expect(await table()).toMatchObject({ currentPriceMinor: 49_900, salePriceMinor: null, saleEndsAt: null });
+    await act(w, camp.id, 'schedule');
+    const during = await table();
+    expect(during).toMatchObject({ currentPriceMinor: 49_900, marginBps: 2988, salePriceMinor: 44_910 });
+    expect(new Date(during.saleEndsAt).getTime()).toBe(new Date(camp.endsAt).getTime());
+    expect((await c.get(`/api/v1/listings/${w.variant.listingId}`, w.admin)).body.data.effectivePriceMinor).toBe(44_910);
+    expect((await c.get(`${P}/overview`, w.admin)).body.data.channels[0]).toMatchObject({ activeCampaigns: 1, liveProducts: 1 });
+    expect((await c.get(`/api/v1/inventory/variants/${w.variant.variantId}`, w.admin)).body.data.totals.available).toBe(100);
+    await act(w, camp.id, 'end');
+    expect(await table()).toMatchObject({ currentPriceMinor: 49_900, salePriceMinor: null, saleEndsAt: null });
+    expect((await c.get(`/api/v1/listings/${w.variant.listingId}`, w.admin)).body.data.effectivePriceMinor).toBe(49_900);
+    expect((await c.get(`${P}/overview`, w.admin)).body.data.channels[0]).toMatchObject({ activeCampaigns: 0, liveProducts: 0 });
+  });
+});
+
 describe('promotion notifications', () => {
   it('tells the team when a campaign is created, starts and ends', async () => {
     const w = await world();

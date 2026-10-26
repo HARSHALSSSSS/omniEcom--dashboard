@@ -35,6 +35,9 @@ export interface PriceTableRow {
   proposalState: "none" | "proposed";
   proposalId: string | null;
   proposedPriceMinor: number | null;
+  /** the sale price in force now on this channel (a promotion's or a manual one); the price and margin above are the regular ones */
+  salePriceMinor?: number | null;
+  saleEndsAt?: string | null;
 }
 
 export const PRICE_TABLE_SORTS = ["product", "margin_asc", "margin_desc", "price_desc"] as const;

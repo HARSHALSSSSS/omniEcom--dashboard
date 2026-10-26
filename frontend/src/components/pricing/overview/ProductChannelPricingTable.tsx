@@ -7,7 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/utils/cn";
 import { PricingPagination } from "@/components/pricing/PricingPagination";
 import { usePriceTable } from "@/hooks/usePricing";
-import { formatINR, formatNumber } from "@/utils/format";
+import { formatDate, formatINR, formatNumber } from "@/utils/format";
 import { errorMessage } from "@/api/errors";
 import type { ChannelMargin, MarginOverview, PriceTableQuery, PriceTableRow, PriceTableSort, PriceTableState } from "@/types/pricing";
 import { marginText, moneyText } from "./marginText";
@@ -185,7 +185,15 @@ export function ProductChannelPricingTable({ channels, totals, onSelectPriceItem
                     <p className="text-[11px] text-muted-foreground mt-0.5">{item.sku}</p>
                   </td>
                   <td className="py-3 font-medium text-foreground">{item.channel}</td>
-                  <td className="py-3 font-semibold text-foreground">{formatINR(item.currentPriceMinor)}</td>
+                  <td className="py-3 font-semibold text-foreground">
+                    {formatINR(item.currentPriceMinor)}
+                    {item.salePriceMinor != null && (
+                      <p className="mt-0.5 text-[11px] font-medium text-emerald-700">
+                        On sale {formatINR(item.salePriceMinor)}
+                        {item.saleEndsAt ? ` until ${formatDate(item.saleEndsAt)}` : ""}
+                      </p>
+                    )}
+                  </td>
                   <td className="py-3 text-muted-foreground">
                     {item.unitCostMinor === null ? (
                       <Link

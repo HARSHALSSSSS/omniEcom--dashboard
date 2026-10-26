@@ -126,6 +126,7 @@ export const proposalRoutes: FastifyPluginAsync = async (app) => {
           listingId: z.string(), variantId: z.string(), productId: z.string(), productTitle: z.string(), sku: z.string(), accountId: z.string(), channel: z.string(), marketplace: z.string(), currentPriceMinor: z.number().int(),
           unitCostMinor: z.number().int().nullable(), feesMinor: z.number().int().nullable(), marginBps: z.number().int().nullable(), targetMarginBps: z.number().int().nullable(), belowTarget: z.boolean().nullable(),
           proposalState: z.enum(['none', 'proposed']), proposalId: z.string().nullable(), proposedPriceMinor: z.number().int().nullable(),
+          salePriceMinor: z.number().int().nullable().describe('the sale price in force now on this channel; `currentPriceMinor` and the margin are at the regular price'), saleEndsAt: IsoDate.nullable(),
         })),
         page: z.number().int(), pageSize: z.number().int(), total: z.number().int(), pages: z.number().int(),
       })) },

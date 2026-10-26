@@ -153,6 +153,14 @@ describe("Pricing overview tab (real data)", () => {
     expect(screen.getByRole("button", { name: "Review price proposals" })).toBeInTheDocument();
   });
 
+  it("shows a running sale next to the regular price (the margin stays the regular one)", async () => {
+    api.priceTable.mockResolvedValue(tablePage([row({ salePriceMinor: 44910, saleEndsAt: "2026-10-30T17:30:00.000Z" }), row({ listingId: "l9", sku: "PLAIN-1", productTitle: "Plain Tee" })]));
+    renderOverviewPage();
+    const line = await screen.findByText(/^On sale ₹449\.10 until /);
+    expect(line.closest("td")).toHaveTextContent("₹499");
+    expect(screen.getAllByText(/^On sale/)).toHaveLength(1);
+  });
+
   it("renders the price table from the server with dashes for unknown cost, and filters on the server", async () => {
     const user = userEvent.setup();
     renderOverviewPage();

@@ -79,6 +79,8 @@ export interface PricedListing {
   listingId: string; variantId: string; productId: string; productTitle: string; sku: string; accountId: string; channel: string; marketplace: string;
   currentPriceMinor: number; unitCostMinor: number | null; feesMinor: number | null; feesConfigured: boolean; marginBps: number | null;
   targetMarginBps: number | null; belowTarget: boolean | null; proposalId: string | null; proposedPriceMinor: number | null;
+  /** the sale price in force right now on this channel (a campaign's or a manual one); null = no sale running. The margin above is at the regular price. */
+  salePriceMinor: number | null; saleEndsAt: Date | null;
 }
 export interface AccountFacts { accountId: string; channel: string; marketplace: string; fees: FeeTerms | null; targetMarginBps: number | null }
 export interface MarginView { rows: PricedListing[]; accounts: AccountFacts[]; targetMarginBps: number | null }
@@ -96,7 +98,7 @@ export async function loadMarginView(tx: Tx, vendorId: string, f: { accountId?: 
     tx.select({ accountId: POL.accountId, targetMarginMinBps: POL.targetMarginMinBps, params: POL.params }).from(POL).where(and(eq(POL.vendorId, vendorId), eq(POL.status, 'active'))),
     tx.select({
       listingId: L.id, variantId: L.variantId, accountId: L.marketplaceAccountId, productId: P.id, title: P.title, sku: V.sku, cost: V.costPriceMinor,
-      price: sql<number | null>`coalesce(${MP.priceMinor}, ${V.sellingPriceMinor})`,
+      price: sql<number | null>`coalesce(${MP.priceMinor}, ${V.sellingPriceMinor})`, sale: MP.salePriceMinor, saleStarts: MP.saleStartsAt, saleEnds: MP.saleEndsAt,
     }).from(L)
       .innerJoin(A, and(eq(A.id, L.marketplaceAccountId), eq(A.vendorId, L.vendorId)))
       .innerJoin(V, and(eq(V.id, L.variantId), eq(V.vendorId, L.vendorId)))
@@ -115,6 +117,7 @@ export async function loadMarginView(tx: Tx, vendorId: string, f: { accountId?: 
   const byAccount = new Map(accountFacts.map((a) => [a.accountId, a]));
   const pendingBy = new Map(pending.map((p) => [`${p.variantId}:${p.accountId}`, p]));
   const seen = new Set<string>();
+  const now = new Date();
   const rows: PricedListing[] = [];
   for (const l of listings) {
     const key = `${l.variantId}:${l.accountId}`;
@@ -123,11 +126,12 @@ export async function loadMarginView(tx: Tx, vendorId: string, f: { accountId?: 
     seen.add(key);
     const facts = priceFacts(l.price, l.cost, a.fees);
     const pend = pendingBy.get(key);
+    const onSale = l.sale !== null && (l.saleStarts === null || l.saleStarts <= now) && (l.saleEnds === null || l.saleEnds > now);
     rows.push({
       listingId: l.listingId, variantId: l.variantId, productId: l.productId, productTitle: l.title, sku: l.sku, accountId: l.accountId, channel: a.channel, marketplace: a.marketplace,
       currentPriceMinor: l.price, ...facts, feesConfigured: a.fees !== null, targetMarginBps: a.targetMarginBps,
       belowTarget: facts.marginBps === null || a.targetMarginBps === null ? null : facts.marginBps < a.targetMarginBps,
-      proposalId: pend?.id ?? null, proposedPriceMinor: pend?.proposed ?? null,
+      proposalId: pend?.id ?? null, proposedPriceMinor: pend?.proposed ?? null, salePriceMinor: onSale ? l.sale : null, saleEndsAt: onSale ? l.saleEnds : null,
     });
   }
   return { rows, accounts: accountFacts, targetMarginBps: strictest(targets.filter((t) => !f.accountId || t.accountId === null || t.accountId === f.accountId).map((t) => t.target)) };
@@ -179,6 +183,7 @@ export async function priceTable(tx: Tx, vendorId: string, q: PriceTableQuery) {
     listingId: r.listingId, variantId: r.variantId, productId: r.productId, productTitle: r.productTitle, sku: r.sku, accountId: r.accountId, channel: r.channel, marketplace: r.marketplace,
     currentPriceMinor: r.currentPriceMinor, unitCostMinor: r.unitCostMinor, feesMinor: r.feesMinor, marginBps: r.marginBps, targetMarginBps: r.targetMarginBps, belowTarget: r.belowTarget,
     proposalState: (r.proposalId ? 'proposed' : 'none') as 'none' | 'proposed', proposalId: r.proposalId, proposedPriceMinor: r.proposedPriceMinor,
+    salePriceMinor: r.salePriceMinor, saleEndsAt: r.saleEndsAt?.toISOString() ?? null,
   }));
   return { items, total: rows.length };
 }

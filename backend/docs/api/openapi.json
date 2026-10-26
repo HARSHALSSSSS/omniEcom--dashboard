@@ -119902,6 +119902,31 @@
                                     "type": "null"
                                   }
                                 ]
+                              },
+                              "salePriceMinor": {
+                                "anyOf": [
+                                  {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "description": "the sale price in force now on this channel; `currentPriceMinor` and the margin are at the regular price"
+                              },
+                              "saleEndsAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "example": "2026-01-31T10:15:30.000Z"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
                               }
                             },
                             "required": [
@@ -119921,7 +119946,9 @@
                               "belowTarget",
                               "proposalState",
                               "proposalId",
-                              "proposedPriceMinor"
+                              "proposedPriceMinor",
+                              "salePriceMinor",
+                              "saleEndsAt"
                             ],
                             "additionalProperties": false
                           }
