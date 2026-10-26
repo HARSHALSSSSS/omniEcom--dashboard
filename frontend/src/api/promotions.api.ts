@@ -5,6 +5,8 @@ import type {
   CampaignsPage,
   CampaignsQuery,
   CampaignWrite,
+  CandidatesPage,
+  CandidatesQuery,
   CategoryOption,
   CreateCampaignResult,
   LifecycleResult,
@@ -100,17 +102,14 @@ export const promotionsApi = {
   /** starts due campaigns, ends finished ones and refreshes results now (the scheduler does it every minute) */
   process: async () => unwrap<ProcessResult>(await client.post(ENDPOINTS.PROMOTIONS_PROCESS, {})),
 
-  /** recent promotion activity from audit log */
-  recentActivity: async (signal?: AbortSignal) => {
-    try {
-      const res = await client.get<{ data: Array<{ id: number; action: string; createdAt: string; metadata?: Record<string, unknown>; resourceId: string | null; resourceType: string | null }> }>(
-        ENDPOINTS.AUDIT_LOGS,
-        { params: { "filter[actionPrefix]": "promotion.", limit: 10 }, signal }
-      );
-      return res.data.data;
-    } catch {
-      return [];
-    }
+  /** the Products tab list: one product on one channel per row, with margin, stock, eligibility and the recommendation */
+  candidates: async (query: CandidatesQuery, signal?: AbortSignal) => {
+    const params: Record<string, string | number> = { pageSize: query.pageSize, "filter[segment]": query.segment };
+    if (query.page > 1) params.page = query.page;
+    if (query.q) params.q = query.q;
+    if (query.status) params["filter[status]"] = query.status;
+    if (query.accountId) params["filter[accountId]"] = query.accountId;
+    return unwrap<CandidatesPage>(await client.get(ENDPOINTS.PROMOTIONS_CANDIDATES, { params, signal }));
   },
 
   /** connected accounts a campaign can target */

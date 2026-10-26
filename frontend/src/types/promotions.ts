@@ -15,6 +15,8 @@ export interface PromotionChannel {
   accountId: string;
   marketplace: string;
   displayName: string;
+  /** false: the connector cannot take price changes */
+  canPushPrices: boolean;
 }
 
 export interface PromotionItemCounts {
@@ -24,6 +26,54 @@ export interface PromotionItemCounts {
   live: number;
   ineligible: number;
   ended: number;
+}
+
+export type ContributionBasis = "after_cost_and_fees" | "after_cost_only";
+export type ChannelCapability = "supported" | "not_supported" | "verification_required";
+export type Eligibility = "eligible" | "margin_risk" | "low_inventory" | "verification_required" | "not_provided" | "conflict";
+export type CandidateStatus = "recommended" | "review" | "not_selected" | "connector_unavailable";
+
+export interface PromotionThresholds {
+  highMarginBps: number;
+  strongSellerUnits30d: number;
+  highInventoryUnits: number;
+  minHealthyMarginBps: number;
+  endingSoonHours: number;
+}
+
+export interface OverviewChannel {
+  accountId: string;
+  marketplace: string;
+  displayName: string;
+  status: string;
+  canPushPrices: boolean;
+  capability: ChannelCapability;
+  activeCampaigns: number;
+  scheduledCampaigns: number;
+  liveProducts: number;
+  listedProducts: number;
+  opportunities: number;
+}
+
+export interface PressurePick {
+  variantId: string;
+  productName: string;
+  sku: string;
+  accountId: string;
+  channel: string;
+  availableStock: number;
+  marginBps: number | null;
+  unitsSold30d: number;
+  eligibility: string;
+  reasons: Array<{ key: string; text: string }>;
+}
+
+export interface PromotionActivity {
+  id: number;
+  action: string;
+  createdAt: string;
+  campaignId: string | null;
+  campaignName: string | null;
 }
 
 export interface PromotionOverview {
@@ -40,6 +90,78 @@ export interface PromotionOverview {
   velocityLiftBps: number | null;
   velocityCampaigns: number;
   statsUpdatedAt: string | null;
+  productsOnPromotion: number;
+  liveProducts: number;
+  eligibleProducts: number;
+  conflictItems: number;
+  /** null: nothing scheduled or running to check */
+  belowMarginTargetItems: number | null;
+  endingSoonCampaigns: number;
+  nextEndsAt: string | null;
+  resultsCampaigns: number;
+  opportunities: number;
+  listedProducts: number;
+  unlistedVariants: number;
+  connectorLimitations: number;
+  /** null: nothing sold, or a promoted unit has no cost price */
+  contributionMinor: number | null;
+  contributionBps: number | null;
+  contributionBasis: ContributionBasis | null;
+  channels: OverviewChannel[];
+  pressure: { strongCandidate: PressurePick | null; reviewFirst: PressurePick | null };
+  recentActivity: PromotionActivity[];
+  thresholds: PromotionThresholds;
+}
+
+/** one product on one channel, as the Products tab lists it */
+export interface PromotionCandidate {
+  variantId: string;
+  productId: string;
+  productName: string;
+  sku: string;
+  accountId: string;
+  marketplace: string;
+  channel: string;
+  canPushPrices: boolean;
+  regularPriceMinor: number;
+  unitCostMinor: number | null;
+  feesMinor: number | null;
+  marginBps: number | null;
+  targetMarginBps: number | null;
+  minPromoPriceMinor: number | null;
+  maxDiscountBps: number | null;
+  availableStock: number;
+  lowStock: boolean;
+  unitsSold30d: number;
+  salesVelocity: number;
+  recommendedAction: "reorder" | "raise_price" | "liquidate" | "promote" | "hold";
+  recommendationReasons: Array<{ key: string; text: string }>;
+  existingCampaign: { id: string; name: string; status: string; endsAt: string | null } | null;
+  conflicts: Array<{ kind: "pending_price_proposal" | "other_campaign" | "existing_sale"; message: string }>;
+  pendingProposal: { id: string; proposedPriceMinor: number } | null;
+  eligibility: Eligibility;
+  eligibilityReason: string | null;
+  promotionStatus: CandidateStatus;
+}
+
+export interface CandidatesQuery {
+  segment: "recommended" | "all";
+  status?: CandidateStatus;
+  accountId?: string;
+  q?: string;
+  page: number;
+  pageSize: number;
+}
+
+export interface CandidatesPage {
+  items: PromotionCandidate[];
+  page: number;
+  pageSize: number;
+  total: number;
+  pages: number;
+  counts: Record<"all" | CandidateStatus, number>;
+  summary: { recommendedProducts: number; listedProducts: number; unlistedVariants: number; placements: number };
+  thresholds: PromotionThresholds;
 }
 
 export interface PromotionCampaign {

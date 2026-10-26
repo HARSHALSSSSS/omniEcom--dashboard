@@ -1,9 +1,11 @@
 import { keepPreviousData, useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useGuardedMutation } from "@/hooks/useSubmitGuard";
 import { promotionsApi } from "@/api/promotions.api";
+import { refreshAfterPromotionChange } from "@/lib/channelRefresh";
 import { useWorkspaceStore } from "@/store/workspace.store";
 import type {
   CampaignsQuery,
+  CandidatesQuery,
   CampaignWrite,
   ProductSelection,
   ProductsQuery,
@@ -18,7 +20,7 @@ export const promotionKeys = {
   campaign: (b: string | undefined, id: string) => ["promotions", "campaign", b, id] as const,
   campaignProducts: (b: string | undefined, id: string, q: object) => ["promotions", "campaign-products", b, id, q] as const,
   accounts: (b: string | undefined) => ["promotions", "accounts", b] as const,
-  activity: (b: string | undefined) => ["promotions", "activity", b] as const,
+  candidates: (b: string | undefined, q: CandidatesQuery) => ["promotions", "candidates", b, q] as const,
   categories: (b: string | undefined) => ["promotions", "categories", b] as const,
   variants: (b: string | undefined, q: string) => ["promotions", "variants", b, q] as const,
 };
@@ -78,9 +80,16 @@ export function usePromotionAccounts() {
   return useQuery({ queryKey: promotionKeys.accounts(b), queryFn: promotionsApi.accounts, staleTime: 5 * 60_000 });
 }
 
-export function useRecentPromotionActivity() {
+/** products that can be promoted, one row per product and channel (the opportunities of the Overview, the Products tab) */
+export function usePromotionCandidates(query: CandidatesQuery, enabled = true) {
   const b = useBusinessId();
-  return useQuery({ queryKey: promotionKeys.activity(b), queryFn: ({ signal }) => promotionsApi.recentActivity(signal), staleTime: 30_000 });
+  return useQuery({
+    queryKey: promotionKeys.candidates(b, query),
+    queryFn: ({ signal }) => promotionsApi.candidates(query, signal),
+    staleTime: 15_000,
+    placeholderData: keepPreviousData,
+    enabled,
+  });
 }
 
 export function usePromotionCategories(enabled: boolean) {
@@ -101,13 +110,10 @@ export function usePickerVariants(q: string, enabled: boolean) {
   });
 }
 
-/** every write moves campaign numbers and the sale prices shown on the listings screens */
+/** every write moves campaign numbers and the sale prices shown on Pricing, Listings, the Hub, Inventory, Needs attention, the dashboard and the badges */
 function useAfterWrite() {
   const queryClient = useQueryClient();
-  return () => {
-    void queryClient.invalidateQueries({ queryKey: promotionKeys.all });
-    void queryClient.invalidateQueries({ queryKey: ["listings"] });
-  };
+  return () => refreshAfterPromotionChange(queryClient);
 }
 
 export function useCreateCampaign() {

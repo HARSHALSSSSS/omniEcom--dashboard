@@ -1,5 +1,5 @@
 import { currencySymbol, formatCurrency, formatInZone, getFormatPreferences } from "@/utils/format";
-import type { PromotionCampaign, PromotionItemStatus, PromotionLifecycleAction, PromotionStatus, PromotionType } from "@/types/promotions";
+import type { ChannelCapability, ContributionBasis, PromotionCampaign, PromotionItemStatus, PromotionLifecycleAction, PromotionOverview, PromotionStatus, PromotionType } from "@/types/promotions";
 
 export const WRITE_REASON = "You need the promotions:write permission to change campaigns.";
 
@@ -195,4 +195,81 @@ export function localInputToIso(value: string): string | null {
     guess += wall - Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute);
   }
   return Number.isNaN(guess) ? null : new Date(guess).toISOString();
+}
+
+// ---------------------------------------------------------------------------- Overview
+
+/** "amazon_in" -> "Amazon In": the marketplace code as a label when the account has no display name */
+export const marketplaceLabel = (code: string): string => code.split(/[_-]/).filter(Boolean).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+
+export const CAPABILITY_LABELS: Record<ChannelCapability, string> = {
+  supported: "Supported",
+  not_supported: "Not supported",
+  verification_required: "Connection required",
+};
+
+export const CONTRIBUTION_NOTES: Record<ContributionBasis, string> = {
+  after_cost_and_fees: "After cost and marketplace fees",
+  after_cost_only: "After cost; a channel has no fee profile, so its fees count as zero",
+};
+
+const ACTIVITY_LABELS: Record<string, string> = {
+  "promotion.created": "created",
+  "promotion.updated": "edited",
+  "promotion.scheduled": "scheduled",
+  "promotion.activated": "started",
+  "promotion.ended": "ended",
+  "promotion.cancelled": "cancelled",
+  "promotion.deleted": "draft deleted",
+  "promotion.duplicated": "copied as a new draft",
+  "promotion.products_changed": "products changed",
+};
+
+/** one audit row as a sentence: "Festive Flash started" */
+export function activityText(a: { action: string; campaignName: string | null }): string {
+  const verb = ACTIVITY_LABELS[a.action] ?? a.action.replace(/^promotion\./, "").replace(/_/g, " ");
+  return a.campaignName ? `${a.campaignName} ${verb}` : `Campaign ${verb}`;
+}
+
+const csvCell = (value: string | number | null | undefined): string => {
+  let text = value === null || value === undefined ? "" : String(value);
+  if (typeof value === "string" && /^[=+\-@\t\r]/.test(text)) text = `'${text}`; // a spreadsheet would run it as a formula
+  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+};
+const rupeeText = (minor: number | null): string => (minor === null ? "" : `${minor < 0 ? "-" : ""}${Math.floor(Math.abs(minor) / 100)}.${String(Math.abs(minor) % 100).padStart(2, "0")}`);
+const percentOf = (bps: number | null): string => (bps === null ? "" : (bps / 100).toFixed(2));
+
+/** the Overview as CSV: the summary figures (rupees, blank = unknown) then one row per channel */
+export function overviewCsv(o: PromotionOverview): string {
+  const rows: Array<Array<string | number | null>> = [
+    ["Measure", "Value"],
+    ["Active campaigns", o.activeCampaigns],
+    ["Scheduled campaigns", o.scheduledCampaigns],
+    ["Draft campaigns", o.draftCampaigns],
+    ["Ended campaigns", o.endedCampaigns],
+    ["Campaigns with results", o.resultsCampaigns],
+    ["Products on promotion", o.productsOnPromotion],
+    ["Live products", o.liveProducts],
+    ["Eligible products", o.eligibleProducts],
+    ["Opportunities", o.opportunities],
+    ["Campaigns ending within " + o.thresholds.endingSoonHours + " hours", o.endingSoonCampaigns],
+    ["Next campaign ends", o.nextEndsAt ?? ""],
+    ["Products in conflict", o.conflictItems],
+    ["Products below the margin target", o.belowMarginTargetItems],
+    ["Units sold in campaigns", o.unitsMoved],
+    ["Revenue (" + o.currency + ")", rupeeText(o.revenueMinor)],
+    ["Discount given (" + o.currency + ")", rupeeText(o.spendMinor)],
+    ["Discount budget (" + o.currency + ")", o.budgetMinor > 0 ? rupeeText(o.budgetMinor) : ""],
+    ["Contribution (" + o.currency + ")", rupeeText(o.contributionMinor)],
+    ["Contribution margin %", percentOf(o.contributionBps)],
+    ["Contribution basis", o.contributionBasis ? CONTRIBUTION_NOTES[o.contributionBasis] : ""],
+    ["Sales lift %", percentOf(o.velocityLiftBps)],
+    ["Connector limitations", o.connectorLimitations],
+  ];
+  const channels: Array<Array<string | number | null>> = [
+    [],
+    ["Marketplace", "Account", "Account status", "Promotion capability", "Active campaigns", "Scheduled campaigns", "Live products", "Listed products", "Opportunities"],
+    ...o.channels.map((c) => [marketplaceLabel(c.marketplace), c.displayName, c.status, CAPABILITY_LABELS[c.capability], c.activeCampaigns, c.scheduledCampaigns, c.liveProducts, c.listedProducts, c.opportunities]),
+  ];
+  return [...rows, ...channels].map((r) => r.map(csvCell).join(",")).join("\r\n");
 }

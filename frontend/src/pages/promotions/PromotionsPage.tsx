@@ -1,6 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Plus, Download, RefreshCw, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { downloadText } from "@/components/pricing/pricingFormat";
+import { ROUTES } from "@/constants/routes";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { AddProductsDialog } from "@/components/promotions/AddProductsDialog";
 import { CampaignDrawer } from "@/components/promotions/CampaignDrawer";
@@ -8,7 +12,7 @@ import { CampaignFormDialog } from "@/components/promotions/CampaignFormDialog";
 import { OverviewTab } from "@/components/promotions/OverviewTab";
 import { ProductsTab } from "@/components/promotions/ProductsTab";
 import { CampaignsTab } from "@/components/promotions/CampaignsTab";
-import { ACTION_LABELS, WRITE_REASON } from "@/components/promotions/promoFormat";
+import { ACTION_LABELS, WRITE_REASON, overviewCsv } from "@/components/promotions/promoFormat";
 import { campaignsQueryOf, productsQueryOf, usePromotionsUrlState } from "@/components/promotions/promoParams";
 import { errorMessage, isApiError } from "@/api/errors";
 import { useCan } from "@/hooks/useCan";
@@ -17,19 +21,23 @@ import {
   useDeleteCampaign,
   useDuplicateCampaign,
   usePromotedProducts,
+  usePromotionCandidates,
   usePromotionAccounts,
   usePromotionCampaigns,
   usePromotionOverview,
   useProcessPromotions,
-  useRecentPromotionActivity,
 } from "@/hooks/usePromotions";
 import { useProductIntelligence } from "@/hooks/useProductIntelligence";
 import { toast } from "@/hooks/useToast";
 import type { ProductIntelligenceQuery } from "@/types/intelligence";
-import type { PickerVariant, PromotionCampaign, PromotionLifecycleAction, PromotionView } from "@/types/promotions";
+import type { CandidatesQuery, PickerVariant, PromotionCampaign, PromotionLifecycleAction } from "@/types/promotions";
+import { formatNumber } from "@/utils/format";
 
 /** the recommendations the Overview and Products tabs read (one page of the best-ranked variants) */
 const INTEL_QUERY: ProductIntelligenceQuery = { action: undefined, categoryId: undefined, warehouseId: undefined, q: undefined, sort: "priority", page: 1, pageSize: 50 };
+
+/** the few recommended products the Overview lists as opportunities */
+const OPPORTUNITIES_QUERY: CandidatesQuery = { segment: "recommended", page: 1, pageSize: 5 };
 
 type CampaignRef = Pick<PromotionCampaign, "id" | "name" | "code" | "version" | "status">;
 type Confirm = { kind: "lifecycle"; campaign: CampaignRef; action: PromotionLifecycleAction } | { kind: "delete"; campaign: CampaignRef };
@@ -45,7 +53,8 @@ export default function PromotionsPage() {
   const campaigns = usePromotionCampaigns(campaignsQueryOf(url), true);
   const products = usePromotedProducts(productsQueryOf(url), true);
   const productIntel = useProductIntelligence(INTEL_QUERY, true);
-  const recentActivityQuery = useRecentPromotionActivity();
+  const candidates = usePromotionCandidates(OPPORTUNITIES_QUERY, view === "overview");
+  const navigate = useNavigate();
 
   // Mutations
   const lifecycle = useCampaignLifecycle();
@@ -67,15 +76,20 @@ export default function PromotionsPage() {
   const campaignList = useMemo(() => campaigns.data?.items ?? [], [campaigns.data?.items]);
   const intelItems = useMemo(() => productIntel.data?.items ?? [], [productIntel.data?.items]);
   const intelTotal = productIntel.data?.total ?? 0;
-  const recommendationsCount = productIntel.data?.summary?.promote ?? 0;
   const promotedList = useMemo(() => products.data?.items ?? [], [products.data?.items]);
-  const activityList = useMemo(() => recentActivityQuery.data ?? [], [recentActivityQuery.data]);
 
-  // Derived counts for sub-status bar
-  const activeCampaignsCount = overview.data?.activeCampaigns ?? campaignList.filter((c) => c.status === "active").length;
-  const oppCount = recommendationsCount || intelItems.filter((i) => i.recommendedAction === "promote").length || 4;
-  const eligibleProductsCount = campaignList.reduce((acc, c) => acc + (c.itemCounts?.eligible ?? 0), 0) || 12;
-  const connectorLimitationsCount = accountList.filter((a) => a.marketplace.toLowerCase().includes("shopify")).length || 1;
+  // the header counts come from the overview only: no figure is shown before it is loaded
+  const o = overview.data;
+  const statusBar = o
+    ? `${o.activeCampaigns} active campaign${o.activeCampaigns === 1 ? "" : "s"} · ${formatNumber(o.eligibleProducts)} eligible product${o.eligibleProducts === 1 ? "" : "s"} · ${formatNumber(o.opportunities)} opportunit${o.opportunities === 1 ? "y" : "ies"} · ${o.connectorLimitations} connector limitation${o.connectorLimitations === 1 ? "" : "s"}`
+    : overview.isError
+      ? "Counts unavailable"
+      : "Loading counts…";
+
+  const exportOverview = () => {
+    if (!o) return;
+    downloadText(`promotions-overview-${new Date().toISOString().slice(0, 10)}.csv`, overviewCsv(o));
+  };
 
   const openCampaign = (id: string | null) => update({ open: id });
 
@@ -247,16 +261,9 @@ export default function PromotionsPage() {
               variant="outline"
               size="sm"
               className="gap-1.5 text-xs"
-              onClick={() => {
-                const csv = `Promotion,Active Campaigns,Eligible Products,Opportunities\nAll,${activeCampaignsCount},${eligibleProductsCount},${oppCount}\n`;
-                const blob = new Blob([csv], { type: "text/csv" });
-                const urlObj = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = urlObj;
-                a.download = `promotions-summary-${new Date().toISOString().slice(0, 10)}.csv`;
-                a.click();
-                URL.revokeObjectURL(urlObj);
-              }}
+              disabled={!o}
+              title={o ? "Download the overview figures and the channel table" : "The overview is not loaded yet"}
+              onClick={exportOverview}
             >
               <Download className="h-3.5 w-3.5" /> Export
             </Button>
@@ -271,9 +278,25 @@ export default function PromotionsPage() {
             >
               <RefreshCw className="h-3.5 w-3.5" /> Sync Promotions
             </Button>
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground" aria-label="More options">
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground" aria-label="More options">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[200px] text-xs">
+                <DropdownMenuItem
+                  onSelect={() => {
+                    void overview.refetch();
+                    void candidates.refetch();
+                  }}
+                >
+                  Reload the numbers
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => navigate(ROUTES.PRICING)}>Open Pricing</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => navigate(ROUTES.LISTINGS)}>Open Listings</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 
@@ -300,9 +323,7 @@ export default function PromotionsPage() {
 
           <div className="flex items-center gap-1.5 pb-2 text-[11px] text-muted-foreground">
             <RefreshCw className="h-3 w-3" />
-            <span>
-              {activeCampaignsCount} active campaign{activeCampaignsCount === 1 ? "" : "s"} · {eligibleProductsCount} eligible product{eligibleProductsCount === 1 ? "" : "s"} · {oppCount} opportunit{oppCount === 1 ? "y" : "ies"} · {connectorLimitationsCount} connector limitation
-            </span>
+            <span>{statusBar}</span>
           </div>
         </div>
       </div>
@@ -312,15 +333,15 @@ export default function PromotionsPage() {
         <OverviewTab
           overview={overview.data}
           loading={overview.isLoading}
-          accounts={accountList}
-          campaigns={campaignList}
-          intelItems={intelItems}
-          intelTotal={intelTotal}
-          recommendationsCount={recommendationsCount}
-          recentActivity={activityList}
-          onCreateCampaign={() => startCreate()}
-          onNavigateToProducts={(f) => update({ view: "products" })}
+          error={overview.error}
+          onRetry={() => void overview.refetch()}
+          candidates={candidates.data}
+          candidatesLoading={candidates.isLoading}
+          candidatesError={candidates.error}
+          onRetryCandidates={() => void candidates.refetch()}
+          canWrite={canWrite}
           onReviewProduct={(vId) => startCreate([vId])}
+          onNavigateToProducts={() => update({ view: "products" })}
         />
       )}
 
