@@ -6,7 +6,7 @@ export const manifest = defineModule({
   title: "Promotions",
   responsibility: "Discount campaigns (percentage, flat, buy-X-get-Y, bundle) on selected products and channels, scheduled through the pricing module as sale prices, with campaign results computed from real orders.",
   owns: ["promotion_campaigns", "promotion_items"],
-  dependsOn: ["catalog", "pricing", "orders", "marketplace-accounts", "listings", "inventory", "jobs"],
+  dependsOn: ["catalog", "pricing", "orders", "marketplace-accounts", "listings", "inventory", "jobs", "ai"],
   api: ["/api/v1/promotions"],
   publishes: ["promotion.created", "promotion.activated", "promotion.ended"],
   consumes: [],

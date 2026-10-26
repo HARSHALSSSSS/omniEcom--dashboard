@@ -1130,6 +1130,9 @@ importers:
 
   modules/promotions:
     dependencies:
+      '@oms/mod-ai':
+        specifier: workspace:*
+        version: link:../ai
       '@oms/mod-catalog':
         specifier: workspace:*
         version: link:../catalog

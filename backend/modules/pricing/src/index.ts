@@ -12,6 +12,8 @@ export { computePrice, effectivePrice, saleActive, applyChange, type PriceResult
 export { setMarketplacePrice, clearMarketplacePrice, processSales, applyRules, bulkUpdate, SyncWork } from './service';
 export { latestCompetitorPrices, type CompetitorPrice } from './competitors';
 export { createPriceProposal, type PriceProposalInput } from './proposals';
+export { loadCostFacts, loadMarginView, priceFacts, policyTargetBps, type MarginView, type PricedListing } from './margins';
+export { priceForMargin, marginBps, feeAmount, type FeeTerms } from './proposal-domain';
 
 export const JOB_PROCESS_SALES = 'pricing.process-sales';
 export const JOB_PROPOSALS_TICK = 'pricing.proposals-tick';
