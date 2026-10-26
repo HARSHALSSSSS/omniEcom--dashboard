@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ShieldCheck, Info, X } from "lucide-react";
@@ -10,6 +10,7 @@ import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { promotionsApi } from "@/api/promotions.api";
 import { errorMessage, isApiError } from "@/api/errors";
 import { useCampaignLifecycle, useCreateCampaign, useUpdateCampaign } from "@/hooks/usePromotions";
+import { useSubmitLock } from "@/hooks/useSubmitGuard";
 import { toast } from "@/hooks/useToast";
 import { PROMOTION_TYPES, type PickerVariant, type PromotionAccount, type PromotionCampaign, type PromotionType } from "@/types/promotions";
 import { EMPTY_FORM, campaignFormSchema, formFromCampaign, serverFieldErrors, toCampaignWrite, type CampaignFormValues } from "./campaignForm";
@@ -58,7 +59,7 @@ export function CampaignFormDialog({ open, onOpenChange, campaign, accounts, ini
   const [conflict, setConflict] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   // a double click can fire the save twice before the buttons re-render as disabled: only the first call goes out
-  const saving = useRef(false);
+  const acquireSave = useSubmitLock();
 
   const form = useForm<CampaignFormValues>({ resolver: zodResolver(campaignFormSchema), defaultValues: EMPTY_FORM, mode: "onTouched" });
   const { register, handleSubmit, reset, watch, setValue, setError, formState } = form;
@@ -146,8 +147,8 @@ export function CampaignFormDialog({ open, onOpenChange, campaign, accounts, ini
         if (!body.endsAt) setError("endsAt", { type: "required", message: "A scheduled campaign needs an end" });
         return;
       }
-      if (saving.current) return;
-      saving.current = true;
+      const release = acquireSave();
+      if (!release) return;
       try {
         let saved: PromotionCampaign;
         if (base) {
@@ -171,7 +172,7 @@ export function CampaignFormDialog({ open, onOpenChange, campaign, accounts, ini
       } catch (e) {
         applyServerError(e);
       } finally {
-        saving.current = false;
+        release();
       }
     })();
 
@@ -283,6 +284,12 @@ export function CampaignFormDialog({ open, onOpenChange, campaign, accounts, ini
                 {(type === "bogo" || type === "bundle") && (
                   <Field label={type === "bundle" ? "Items in the bundle" : "Buy quantity"} required htmlFor="promo-buy" error={errors.buyQuantity?.message}>
                     <Input id="promo-buy" inputMode="numeric" placeholder={type === "bundle" ? "3" : "2"} {...register("buyQuantity")} error={Boolean(errors.buyQuantity)} className="text-xs font-mono" />
+                  </Field>
+                )}
+
+                {type === "bogo" && (
+                  <Field label="Get quantity" required htmlFor="promo-get" error={errors.getQuantity?.message}>
+                    <Input id="promo-get" inputMode="numeric" placeholder="1" {...register("getQuantity")} error={Boolean(errors.getQuantity)} className="text-xs font-mono" />
                   </Field>
                 )}
               </div>
