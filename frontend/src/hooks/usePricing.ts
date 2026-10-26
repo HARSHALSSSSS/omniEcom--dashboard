@@ -1,6 +1,7 @@
 import { keepPreviousData, useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useGuardedMutation } from "@/hooks/useSubmitGuard";
 import { pricingApi } from "@/api/pricing.api";
+import { refreshPromotions } from "@/lib/channelRefresh";
 import { refreshShell } from "@/lib/session";
 import { useWorkspaceStore } from "@/store/workspace.store";
 import type { CompetitorWrite, CompetitorsQuery, DecisionAction, GenerateInput, HistoryQuery, PolicyWrite, PriceTableQuery, ProposalsQuery } from "@/types/pricing";
@@ -98,6 +99,7 @@ function useAfterDecision() {
   const queryClient = useQueryClient();
   return () => {
     void queryClient.invalidateQueries({ queryKey: pricingKeys.all });
+    refreshPromotions(queryClient);
     void queryClient.invalidateQueries({ queryKey: ["listings"] });
     void queryClient.invalidateQueries({ predicate: (q) => (q.queryKey[0] === "products" && q.queryKey[1] !== "thumbnail") || q.queryKey[0] === "productDetail" });
     refreshShell().catch(() => undefined);
@@ -133,7 +135,11 @@ export function useGenerateProposals() {
 
 function useAfterPolicy() {
   const queryClient = useQueryClient();
-  return () => void queryClient.invalidateQueries({ queryKey: pricingKeys.all });
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: pricingKeys.all });
+    // the margin target and the fee terms decide which products a campaign may run
+    refreshPromotions(queryClient);
+  };
 }
 
 export function useCreatePolicy() {

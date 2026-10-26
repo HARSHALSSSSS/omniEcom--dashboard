@@ -13,6 +13,21 @@ export function refreshAfterChannelChange(qc: QueryClient): void {
   void refreshShell().catch(() => undefined);
 }
 
+/** Promotion numbers (overview, candidates, campaigns) depend on prices, listings, stock and fees: refresh them after any of those change. */
+export function refreshPromotions(qc: QueryClient): void {
+  void qc.invalidateQueries({ queryKey: ["promotions"] });
+}
+
+/**
+ * A campaign was created, changed, scheduled, started, ended or deleted: sale prices moved, so Pricing, Listings, the Hub's listing counts,
+ * Inventory, Needs attention, the dashboard and the sidebar badges read stale numbers until they are refreshed.
+ */
+export function refreshAfterPromotionChange(qc: QueryClient): void {
+  for (const queryKey of [["promotions"], ["listings"], ["pricing"], ["inventory"], ["attention"], ["dashboard"]] as const) void qc.invalidateQueries({ queryKey });
+  refreshHubListingCounts(qc);
+  void refreshShell().catch(() => undefined);
+}
+
 /** A listing was created, edited or published: the listing counts on the Hub cards and in Connection health change with it. */
 export function refreshHubListingCounts(qc: QueryClient): void {
   void qc.invalidateQueries({ queryKey: ["hub"] });

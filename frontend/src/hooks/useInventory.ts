@@ -3,6 +3,7 @@ import { useGuardedMutation } from "@/hooks/useSubmitGuard";
 import { useEffect, useRef } from "react";
 import { inventoryApi } from "@/api/inventory.api";
 import { useWorkspaceStore } from "@/store/workspace.store";
+import { refreshPromotions } from "@/lib/channelRefresh";
 import {
   SYNC_JOB_DONE,
   type FeedQuery,
@@ -193,6 +194,7 @@ function useRefreshAfterWrite() {
     void qc.invalidateQueries({ queryKey: INVENTORY_KEYS.all });
     void qc.invalidateQueries({ queryKey: ["products"] });
     void qc.invalidateQueries({ queryKey: ["dashboard"] });
+    refreshPromotions(qc);
   };
 }
 
