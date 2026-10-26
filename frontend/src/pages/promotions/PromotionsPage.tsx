@@ -25,7 +25,11 @@ import {
 } from "@/hooks/usePromotions";
 import { useProductIntelligence } from "@/hooks/useProductIntelligence";
 import { toast } from "@/hooks/useToast";
+import type { ProductIntelligenceQuery } from "@/types/intelligence";
 import type { PickerVariant, PromotionCampaign, PromotionLifecycleAction, PromotionView } from "@/types/promotions";
+
+/** the recommendations the Overview and Products tabs read (one page of the best-ranked variants) */
+const INTEL_QUERY: ProductIntelligenceQuery = { action: undefined, categoryId: undefined, warehouseId: undefined, q: undefined, sort: "priority", page: 1, pageSize: 50 };
 
 type CampaignRef = Pick<PromotionCampaign, "id" | "name" | "code" | "version" | "status">;
 type Confirm = { kind: "lifecycle"; campaign: CampaignRef; action: PromotionLifecycleAction } | { kind: "delete"; campaign: CampaignRef };
@@ -40,7 +44,7 @@ export default function PromotionsPage() {
   const accounts = usePromotionAccounts();
   const campaigns = usePromotionCampaigns(campaignsQueryOf(url), true);
   const products = usePromotedProducts(productsQueryOf(url), true);
-  const productIntel = useProductIntelligence({ sort: "priority", pageSize: 50 }, true);
+  const productIntel = useProductIntelligence(INTEL_QUERY, true);
   const recentActivityQuery = useRecentPromotionActivity();
 
   // Mutations
@@ -96,9 +100,9 @@ export default function PromotionsPage() {
       if (promo) {
         return {
           id: promo.variantId,
-          productId: promo.variantId,
+          productId: promo.productId,
           sku: promo.sku,
-          productTitle: promo.productTitle,
+          productTitle: promo.productName,
           optionValues: {},
           sellingPriceMinor: promo.originalPriceMinor,
           status: "active",
