@@ -1,3 +1,4 @@
+import { marginBps } from '@oms/mod-pricing';
 import { marginFloorPrice } from './terms';
 
 /** why a variant cannot take part on an account (stable codes; the message is what the seller reads) */
@@ -10,6 +11,7 @@ export const REASONS = {
   no_active_listing: 'no active listing on this account',
   below_cost: 'the promotional price is below the cost price',
   below_margin_floor: 'the promotional price is below the pricing margin floor',
+  below_margin_target: 'the margin at the promotional price, after marketplace fees, is below the pricing margin target',
   conflicting_campaign: 'another scheduled or active campaign already covers it',
   not_below_regular_price: 'the promotional price is not below the price on this account',
   existing_sale: 'a sale is already scheduled or running on this account',
@@ -26,6 +28,10 @@ export interface AccountFacts {
   foreignSale: boolean;
   /** highest margin floor of the active pricing policies for the account (basis points; 0 = none) */
   marginFloorBps: number;
+  /** strictest margin target (basis points, after cost and the channel's fees) of the active pricing policies for the account; null = none */
+  targetMarginBps: number | null;
+  /** the account's fee terms; null = no fee profile (fees count as 0) */
+  fees: { feeBps: number; fixedMinor: number } | null;
   conflictingCampaign: string | null;
   canPush: boolean;
 }
@@ -61,6 +67,10 @@ export function evaluateVariant(v: VariantFacts, lastOriginalMinor: number, prom
     if (own <= 0) return fail(a, 'price_zero', own);
     if (v.costMinor !== null && own < v.costMinor) return fail(a, 'below_cost', own);
     if (v.costMinor !== null && a.marginFloorBps > 0 && own < marginFloorPrice(v.costMinor, a.marginFloorBps)) return fail(a, 'below_margin_floor', own);
+    if (v.costMinor !== null && a.targetMarginBps !== null) {
+      const m = marginBps(own, v.costMinor, a.fees ?? { feeBps: 0, fixedMinor: 0 });
+      if (m !== null && m < a.targetMarginBps) return fail(a, 'below_margin_target', own);
+    }
     if (a.conflictingCampaign) return fail(a, 'conflicting_campaign', own, a.conflictingCampaign);
     if (own >= a.regularMinor) return fail(a, 'not_below_regular_price', own);
     if (a.foreignSale) return fail(a, 'existing_sale', own);

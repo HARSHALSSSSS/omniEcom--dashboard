@@ -62,6 +62,30 @@ async function order(w: World, o: { variantId: string; sku: string; qty: number;
     select '${w.admin.vendorId}', o.id, 'IT-${n}', '${o.variantId}', '${o.sku}', 'Test item', ${o.qty}, ${o.unitMinor} from o`);
 }
 
+describe('eligibility is fee-aware', () => {
+  it('refuses a price whose margin after fees is under the target, in create, preview and activation, and keeps the gross floor too', async () => {
+    const w = await world();
+    expect((await policy(w, 2000)).status).toBe(201);
+    // 20% off leaves 14.85% after cost and the 10% commission: under the 20% target although it is above the gross floor (cost / 0.8 = 375.00)
+    const camp = await create(w, { name: 'Too deep', ...pct20, selection: { variantIds: [w.variant.variantId] } });
+    expect((await products(w, camp.id)).items[0]).toMatchObject({ status: 'ineligible' });
+    expect((await products(w, camp.id)).items[0].reason).toMatch(/after marketplace fees, is below the pricing margin target/);
+    expect((await act(w, camp.id, 'activate')).body.error.details.rule).toBe('no_eligible_items');
+    const preview = await c.post(`${P}/preview`, { ...pct20, variantIds: [w.variant.variantId] }, w.admin);
+    expect(preview.body.data.items[0]).toMatchObject({ ok: false, belowTarget: true });
+    expect(preview.body.data.summary).toMatchObject({ runnable: 0, notRunnable: 1 });
+    // 10% off keeps 23.20%
+    expect((await c.post(`${P}/preview`, { type: 'percentage_discount', valueBps: 1000, variantIds: [w.variant.variantId] }, w.admin)).body.data.items[0]).toMatchObject({ ok: true, belowTarget: false });
+    await c.patch(`${P}/campaigns/${camp.id}`, { version: 1, valueBps: 1000 }, w.admin);
+    expect((await act(w, camp.id, 'activate')).status).toBe(200);
+    // a deep discount below the gross floor is still refused by the floor rule first
+    const w2 = await world();
+    expect((await policy(w2, 5000)).status).toBe(201);
+    const deep = await create(w2, { name: 'Floor', type: 'percentage_discount', valueBps: 1000, selection: { variantIds: [w2.variant.variantId] } });
+    expect((await products(w2, deep.id)).items[0].reason).toMatch(/pricing margin floor/);
+  });
+});
+
 describe('candidate rules (pure)', () => {
   const base = { canPushPrices: true, conflict: null, lowStock: false, marginBps: 3000, targetMarginBps: null, recommendedByIntelligence: false };
   it('puts the reasons in priority order and derives the status from them', () => {
@@ -97,11 +121,12 @@ describe('candidate rules (pure)', () => {
 describe('overview insights', () => {
   it('counts products on promotion, earned contribution (after cost and fees), margin risk, channels and activity from real data', async () => {
     const w = await world();
-    expect((await policy(w, 2000)).status).toBe(201);
     const camp = await create(w, { name: 'Festive', ...pct20, startsAt: at(-2 * DAY), endsAt: at(2 * DAY), selection: { variantIds: [w.variant.variantId] } });
     expect((await act(w, camp.id, 'schedule')).body.data.campaign.status).toBe('active');
     await order(w, { ...w.variant, qty: 8, unitMinor: 39_920, placedAt: at(-DAY) });
     await c.post(`${P}/process`, {}, w.admin);
+    // the pricing team raises the margin target after the campaign went live
+    expect((await policy(w, 2000)).status).toBe(201);
 
     const o = await overview(w);
     expect(o).toMatchObject({ activeCampaigns: 1, productsOnPromotion: 1, liveProducts: 1, eligibleProducts: 1, conflictItems: 0, endingSoonCampaigns: 1, resultsCampaigns: 1, connectorLimitations: 0, listedProducts: 1, unlistedVariants: 0 });
@@ -183,11 +208,11 @@ describe('campaign list: filters and columns', () => {
 
   it('puts the contribution of a campaign\'s own sales on its row and its margin risk on the detail', async () => {
     const w = await world();
-    expect((await policy(w, 2000)).status).toBe(201);
     const camp = await create(w, { name: 'Risky', ...pct20, startsAt: at(-DAY), endsAt: at(3 * DAY), selection: { variantIds: [w.variant.variantId] } });
     await act(w, camp.id, 'schedule');
     await order(w, { ...w.variant, qty: 2, unitMinor: 39_920, placedAt: at(-HOUR) });
     await c.post(`${P}/process`, {}, w.admin);
+    expect((await policy(w, 2000)).status).toBe(201);
     const row = (await c.get(`${P}/campaigns`, w.admin)).body.data.items[0];
     expect(row).toMatchObject({ contributionMinor: 2 * 39_920 - 2 * 30_000 - Math.round(2 * 39_920 * 0.1), contributionBps: 1485, contributionBasis: 'after_cost_and_fees' });
     const d = (await c.get(`${P}/campaigns/${camp.id}`, w.admin)).body.data;
@@ -204,13 +229,15 @@ describe('promoted products: margin, stock and conflicts', () => {
     expect((await policy(w, 2000)).status).toBe(201);
     const camp = await create(w, { name: 'Margins', ...pct20, selection: { variantIds: [w.variant.variantId] } });
     const item = (await products(w, camp.id)).items[0];
+    expect(item).toMatchObject({ status: 'ineligible' });
+    expect(item.reason).toMatch(/margin target/);
     // 499.00: 29.88% margin; 399.20 less cost 300.00 less 39.92 commission = 59.28 = 14.85%; 20% needs 428.58
     expect(item).toMatchObject({ originalPriceMinor: 49_900, promoPriceMinor: 39_920, unitCostMinor: 30_000, marginRegularBps: 2988, marginPromoBps: 1485, targetMarginBps: 2000, belowTarget: true, minPromoPriceMinor: 42_858, availableStock: 100, lowStock: false, conflict: null });
-    expect(item.channelDetails).toEqual([expect.objectContaining({ accountId: w.account.id, listed: true, canPushPrices: true, regularPriceMinor: 49_900, promoPriceMinor: 39_920, discountBps: 2000, ok: true, reason: null, feesConfigured: true, maxDiscountBps: 1411 })]);
+    expect(item.channelDetails).toEqual([expect.objectContaining({ accountId: w.account.id, listed: true, canPushPrices: true, regularPriceMinor: 49_900, promoPriceMinor: 39_920, discountBps: 2000, ok: false, feesConfigured: true, maxDiscountBps: 1411 })]);
     expect((await c.get(`${P}/products`, w.admin)).body.data.items[0]).toMatchObject({ marginPromoBps: 1485, belowTarget: true });
     // a smaller discount stays above the target
     await c.patch(`${P}/campaigns/${camp.id}`, { version: 1, valueBps: 1000 }, w.admin);
-    expect((await products(w, camp.id)).items[0]).toMatchObject({ promoPriceMinor: 44_910, marginPromoBps: 2320, belowTarget: false });
+    expect((await products(w, camp.id)).items[0]).toMatchObject({ status: 'eligible', promoPriceMinor: 44_910, marginPromoBps: 2320, belowTarget: false });
     // finished campaigns keep their prices as history and carry no analysis
     await act(w, camp.id, 'activate');
     await act(w, camp.id, 'end');
@@ -352,21 +379,21 @@ describe('preview (the Create Campaign dialog)', () => {
     const res = await c.post(`${P}/preview`, { ...pct20, variantIds: [w.variant.variantId, nocost.variantId, unlisted.variantId, '018f0000-0000-7000-8000-000000000001'] }, w.admin);
     expect(res.status, JSON.stringify(res.body)).toBe(200);
     const d = res.body.data;
-    expect(d.summary).toMatchObject({ products: 3, placements: 3, notListed: 1, belowMarginTarget: 1, unknownCost: 1, conflicts: 0, connectorCannotPush: 0, unknownVariants: 1, avgDiscountBps: 2000 });
+    expect(d.summary).toMatchObject({ products: 3, placements: 3, notListed: 1, belowMarginTarget: 1, unknownCost: 1, conflicts: 0, connectorCannotPush: 0, unknownVariants: 1, avgDiscountBps: 2000, runnable: 1, notRunnable: 2 });
     const by = Object.fromEntries(d.items.map((i: any) => [i.sku, i]));
-    expect(by[w.variant.sku]).toMatchObject({ regularPriceMinor: 49_900, promoPriceMinor: 39_920, discountBps: 2000, marginRegularBps: 2988, marginPromoBps: 1485, targetMarginBps: 2000, belowTarget: true, minPromoPriceMinor: 42_858, maxDiscountBps: 1411, ok: true, availableStock: 100, productName: expect.any(String) });
+    expect(by[w.variant.sku]).toMatchObject({ regularPriceMinor: 49_900, promoPriceMinor: 39_920, discountBps: 2000, marginRegularBps: 2988, marginPromoBps: 1485, targetMarginBps: 2000, belowTarget: true, minPromoPriceMinor: 42_858, maxDiscountBps: 1411, ok: false, availableStock: 100, productName: expect.any(String) });
+    expect(by[w.variant.sku].reason).toMatch(/margin target/);
     expect(by['NOCOST-1']).toMatchObject({ marginPromoBps: null, belowTarget: null, ok: true });
     expect(by['NOTLISTED-1']).toMatchObject({ listed: false, ok: false });
     expect(by['NOTLISTED-1'].reason).toMatch(/no active listing/);
-    expect(d.summary.notRunnable).toBe(1);
     expect((await c.get(`${P}/campaigns`, w.admin)).body.data.total).toBe(before); // nothing saved
 
     // a flat discount larger than the price, and the other campaign's window
     const flat = await c.post(`${P}/preview`, { type: 'flat_discount', valueMinor: 60_000, variantIds: [w.variant.variantId] }, w.admin);
     expect(flat.body.data.items[0]).toMatchObject({ ok: false, promoPriceMinor: 0 });
-    const camp = await create(w, { name: 'Taken', ...pct20, startsAt: at(DAY), endsAt: at(4 * DAY), selection: { variantIds: [w.variant.variantId] } });
+    const camp = await create(w, { name: 'Taken', type: 'percentage_discount', valueBps: 1000, startsAt: at(DAY), endsAt: at(4 * DAY), selection: { variantIds: [w.variant.variantId] } });
     await act(w, camp.id, 'schedule');
-    const clash = await c.post(`${P}/preview`, { ...pct20, startsAt: at(2 * DAY).toISOString(), endsAt: at(3 * DAY).toISOString(), variantIds: [w.variant.variantId] }, w.admin);
+    const clash = await c.post(`${P}/preview`, { type: 'percentage_discount', valueBps: 1000, startsAt: at(2 * DAY).toISOString(), endsAt: at(3 * DAY).toISOString(), variantIds: [w.variant.variantId] }, w.admin);
     expect(clash.body.data.summary).toMatchObject({ conflicts: 1, runnable: 0 });
     expect(clash.body.data.items[0].conflict).toMatchObject({ kind: 'other_campaign' });
   });

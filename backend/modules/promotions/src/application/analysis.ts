@@ -1,13 +1,12 @@
 import { and, eq, isLowStock, schema, sql, type Tx } from '@oms/database';
 import type { Container } from '@oms/module-kit';
-import { loadCostFacts, policyTargetBps, priceFacts, priceForMargin } from '@oms/mod-pricing';
+import { loadCostFacts, priceFacts, priceForMargin } from '@oms/mod-pricing';
 import { evaluateVariant, type AccountFacts, type Reason, type Verdict } from '../domain/eligibility';
 import { maxDiscountBps } from '../domain/candidates';
 import { discountBps, promoPrice } from '../domain/terms';
-import { accountFacts, saleLineFilter, targetAccounts, variantInfo, type CampaignRow, type TargetAccount, type VariantInfo } from '../infrastructure/queries';
+import { accountFacts, marginTargets, saleLineFilter, targetAccounts, variantInfo, type CampaignRow, type TargetAccount, type VariantInfo } from '../infrastructure/queries';
 import { termsOf } from './items';
 
-const POL = schema.pricingPolicies;
 const OI = schema.orderItems;
 const O = schema.orders;
 const V = schema.productVariants;
@@ -17,15 +16,7 @@ const FP = schema.feeProfiles;
 export type CanPush = (marketplace: string) => boolean;
 export const canPushOf = (c: Container): CanPush => (marketplace) => { try { return c.connectors.get(marketplace as never).capabilities.pricing.push; } catch { return false; } };
 
-/** the margin each account asks for: the strictest active pricing policy that applies to it (null = no target) */
-export async function marginTargets(tx: Tx, vendorId: string): Promise<(accountId: string) => number | null> {
-  const rows = await tx.select({ accountId: POL.accountId, floor: POL.targetMarginMinBps, params: POL.params }).from(POL).where(and(eq(POL.vendorId, vendorId), eq(POL.status, 'active')));
-  const targets = rows.map((p) => ({ accountId: p.accountId, bps: policyTargetBps({ targetMarginMinBps: p.floor, params: p.params }) })).filter((t): t is { accountId: string | null; bps: number } => t.bps !== null);
-  return (accountId) => {
-    const own = targets.filter((t) => t.accountId === null || t.accountId === accountId).map((t) => t.bps);
-    return own.length ? Math.max(...own) : null;
-  };
-}
+export { marginTargets };
 
 // ------------------------------------------------------------------------------------------------
 // one variant on one channel under a campaign's terms

@@ -1,5 +1,6 @@
 import { and, eq, escapeLike, gte, inArray, isNull, like, lt, or, schema, sql, type Tx } from '@oms/database';
 import { Errors } from '@oms/shared';
+import { loadCostFacts, policyTargetBps } from '@oms/mod-pricing';
 import { windowsOverlap, type AccountFacts, type VariantFacts } from '../domain/eligibility';
 
 const C = schema.promotionCampaigns;
@@ -98,11 +99,23 @@ export async function resolveSelection(tx: Tx, vendorId: string, sel: Selection,
 // ------------------------------------------------------------------------------------------------
 export const sameTime = (a: Date | null, b: Date | null): boolean => (a === null ? b === null : b !== null && a.getTime() === b.getTime());
 
+/** the margin each account asks for: the strictest active pricing policy that applies to it (null = no target) */
+export async function marginTargets(tx: Tx, vendorId: string): Promise<(accountId: string) => number | null> {
+  const rows = await tx.select({ accountId: schema.pricingPolicies.accountId, floor: schema.pricingPolicies.targetMarginMinBps, params: schema.pricingPolicies.params }).from(schema.pricingPolicies)
+    .where(and(eq(schema.pricingPolicies.vendorId, vendorId), eq(schema.pricingPolicies.status, 'active')));
+  const targets = rows.map((p) => ({ accountId: p.accountId, bps: policyTargetBps({ targetMarginMinBps: p.floor, params: p.params }) })).filter((t): t is { accountId: string | null; bps: number } => t.bps !== null);
+  return (accountId) => {
+    const own = targets.filter((t) => t.accountId === null || t.accountId === accountId).map((t) => t.bps);
+    return own.length ? Math.max(...own) : null;
+  };
+}
+
 export async function accountFacts(tx: Tx, vendorId: string, campaign: CampaignRow, accounts: TargetAccount[], variants: Map<string, VariantInfo>, canPush: (marketplace: string) => boolean, now: Date): Promise<Map<string, AccountFacts[]>> {
   const variantIds = [...variants.keys()];
   const accountIds = accounts.map((a) => a.id);
   const out = new Map<string, AccountFacts[]>();
   if (variantIds.length === 0 || accountIds.length === 0) { for (const id of variantIds) out.set(id, []); return out; }
+  const [costFacts, targetOf] = await Promise.all([loadCostFacts(tx, vendorId, variantIds.flatMap((variantId) => accountIds.map((id) => ({ variantId, accountId: id })))), marginTargets(tx, vendorId)]);
   const [listings, prices, others, policies] = await Promise.all([
     tx.select({ variantId: L.variantId, accountId: L.marketplaceAccountId }).from(L).where(and(eq(L.vendorId, vendorId), eq(L.status, 'active'), inArray(L.variantId, variantIds), inArray(L.marketplaceAccountId, accountIds))),
     tx.select().from(MP).where(and(eq(MP.vendorId, vendorId), inArray(MP.variantId, variantIds), inArray(MP.marketplaceAccountId, accountIds))),
@@ -125,7 +138,7 @@ export async function accountFacts(tx: Tx, vendorId: string, campaign: CampaignR
       const clash = others.find((o) => o.variantId === variantId && (o.accountIds.length === 0 || o.accountIds.includes(a.id)) && windowsOverlap(campaign.startsAt, campaign.endsAt, o.startsAt, o.endsAt));
       return {
         accountId: a.id, label: a.displayName, hasActiveListing: listed.has(`${variantId}|${a.id}`), regularMinor: row?.priceMinor ?? v.sellingPriceMinor ?? 0,
-        foreignSale: Boolean(sale) && !own, marginFloorBps: floorOf(a.id), conflictingCampaign: clash?.name ?? null, canPush: canPush(a.marketplace),
+        foreignSale: Boolean(sale) && !own, marginFloorBps: floorOf(a.id), targetMarginBps: targetOf(a.id), fees: costFacts.feesOf(a.id), conflictingCampaign: clash?.name ?? null, canPush: canPush(a.marketplace),
       };
     }));
   }
