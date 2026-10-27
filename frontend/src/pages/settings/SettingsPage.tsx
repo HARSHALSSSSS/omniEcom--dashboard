@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
-import { Navigate, useNavigate, useParams, Link } from "react-router-dom";
+import { Navigate, useNavigate, useParams } from "react-router-dom";
 import {
   User,
   Sliders,
@@ -26,6 +26,8 @@ import { NotificationsTab } from "@/components/settings/NotificationsTab";
 import { OperationsTab } from "@/components/settings/OperationsTab";
 import { PricingMarginsTab } from "@/components/settings/PricingMarginsTab";
 import { ProfileTab } from "@/components/settings/ProfileTab";
+import { IntegrationsTab, isConnected } from "@/components/settings/IntegrationsTab";
+import { useHubAccounts } from "@/hooks/useHub";
 import { RegionalTab } from "@/components/settings/RegionalTab";
 import { SecurityTab } from "@/components/settings/SecurityTab";
 import { SettingsConflictDialog } from "@/components/settings/SettingsConflictDialog";
@@ -98,7 +100,6 @@ const TABS: TabDef[] = [
     subtitle: "Marketplaces & Courier APIs",
     icon: Plug,
     form: false,
-    badge: "4 LIVE",
   },
   {
     id: "gstin",
@@ -226,9 +227,13 @@ export default function SettingsPage() {
   const ctl = useSettingsController();
   const { settings: s, values: v, query, blocker } = ctl;
 
+  // the Integrations badge is the real number of connected marketplace accounts (nothing until the first one connects)
+  const hubAccounts = useHubAccounts();
+  const connectedCount = (hubAccounts.data?.items ?? []).filter(isConnected).length;
   const tabs = useMemo(
-    () => TABS.filter((t) => t.id !== "team" || canReadTeam),
-    [canReadTeam],
+    () =>
+      TABS.filter((t) => t.id !== "team" || canReadTeam).map((t) => (t.id === "integrations" && connectedCount > 0 ? { ...t, badge: `${connectedCount} CONNECTED` } : t)),
+    [canReadTeam, connectedCount],
   );
 
   // If no module or invalid, default to business
@@ -329,66 +334,7 @@ export default function SettingsPage() {
       if (query.isError || !s) return formPanel();
       return <GstinTab gstins={s.gstins} canWrite={ctl.canWrite} />;
     }
-    if (active.id === "integrations") {
-      return (
-        <div className="rounded-xl border border-border bg-card p-6 shadow-sm space-y-6">
-          <div className="flex items-center justify-between border-b border-border/80 pb-4">
-            <div>
-              <h3 className="text-base font-semibold text-foreground">
-                Connected Marketplace Channels & Courier APIs
-              </h3>
-              <p className="text-xs text-muted-foreground mt-1">
-                Active multi-channel connectors synchronized with workspace inventory and orders.
-              </p>
-            </div>
-            <Link
-              to={ROUTES.MARKETPLACE_HUB}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
-            >
-              Open Marketplace Hub &rarr;
-            </Link>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="rounded-lg border border-border/70 p-4 bg-muted/20 flex items-center justify-between">
-              <div>
-                <span className="text-sm font-bold text-foreground">Amazon India (SP-API)</span>
-                <p className="text-xs text-muted-foreground">FBA / MFN Real-time Order Sync</p>
-              </div>
-              <Badge className="bg-emerald-500/10 text-emerald-600 font-mono text-[10px] font-bold">
-                HEALTHY
-              </Badge>
-            </div>
-            <div className="rounded-lg border border-border/70 p-4 bg-muted/20 flex items-center justify-between">
-              <div>
-                <span className="text-sm font-bold text-foreground">Flipkart Commerce</span>
-                <p className="text-xs text-muted-foreground">Direct Fulfillment & Smart Listing</p>
-              </div>
-              <Badge className="bg-emerald-500/10 text-emerald-600 font-mono text-[10px] font-bold">
-                HEALTHY
-              </Badge>
-            </div>
-            <div className="rounded-lg border border-border/70 p-4 bg-muted/20 flex items-center justify-between">
-              <div>
-                <span className="text-sm font-bold text-foreground">Shopify Plus Storefront</span>
-                <p className="text-xs text-muted-foreground">Webhook Events & SKU Catalog Sync</p>
-              </div>
-              <Badge className="bg-emerald-500/10 text-emerald-600 font-mono text-[10px] font-bold">
-                CONNECTED
-              </Badge>
-            </div>
-            <div className="rounded-lg border border-border/70 p-4 bg-muted/20 flex items-center justify-between">
-              <div>
-                <span className="text-sm font-bold text-foreground">Bluedart & Delhivery Logistics</span>
-                <p className="text-xs text-muted-foreground">Automated AWB & E-way Bill Generation</p>
-              </div>
-              <Badge className="bg-emerald-500/10 text-emerald-600 font-mono text-[10px] font-bold">
-                ACTIVE
-              </Badge>
-            </div>
-          </div>
-        </div>
-      );
-    }
+    if (active.id === "integrations") return <IntegrationsTab />;
     return formPanel();
   };
 

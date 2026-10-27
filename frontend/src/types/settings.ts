@@ -230,6 +230,12 @@ export interface CursorPage<T> {
 
 // ---- Account security ---------------------------------------------------------------------------------
 
+/** GET/PATCH /me/profile */
+export interface MyProfile {
+  user: { id: string; email: string; fullName: string; emailVerified: boolean; lastLoginAt: string | null; phone: string | null; roleTitle: string | null; roles: string[] };
+  vendor: { id: string; displayName: string } | null;
+}
+
 export interface AccountSession {
   id: string;
   current: boolean;

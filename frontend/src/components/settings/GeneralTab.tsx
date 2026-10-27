@@ -36,7 +36,7 @@ export function GeneralTab({ canWrite = true, s, v, ctl }: GeneralTabProps) {
     v?.displayName ||
     s?.business.displayName ||
     shell?.business?.name ||
-    "Omni-OS India Operations Hub";
+    "";
 
   const [workspaceName, setWorkspaceName] = useState(initialWorkspaceName);
   const [defaultRoute, setDefaultRoute] = useState(savedPrefs.defaultRoute || "/orders");
@@ -82,7 +82,7 @@ export function GeneralTab({ canWrite = true, s, v, ctl }: GeneralTabProps) {
   };
 
   const resetIdentity = () => {
-    const defaultName = s?.business.displayName || "Omni-OS India Operations Hub";
+    const defaultName = s?.business.displayName ?? "";
     setWorkspaceName(defaultName);
     if (ctl) ctl.setField("displayName", defaultName);
     setDefaultRoute("/orders");

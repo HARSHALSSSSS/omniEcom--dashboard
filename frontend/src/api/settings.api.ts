@@ -10,6 +10,7 @@ import type {
   GstinPatchBody,
   GstState,
   Invitation,
+  MyProfile,
   Member,
   MemberStatus,
   Role,
@@ -73,5 +74,7 @@ export const settingsApi = {
   sessions: async (): Promise<AccountSession[]> => unwrap(await client.get(ENDPOINTS.ME_SESSIONS)),
   revokeOtherSessions: async (): Promise<{ revoked: number }> => unwrap(await client.delete(ENDPOINTS.ME_SESSIONS)),
   revokeSession: async (id: string): Promise<{ message: string }> => unwrap(await client.delete(ENDPOINTS.ME_SESSION(id))),
-  updateProfile: async (fullName: string): Promise<{ user: { id: string; fullName: string; email: string } }> => unwrap(await client.patch(ENDPOINTS.ME_PROFILE, { fullName })),
+  profile: async (signal?: AbortSignal): Promise<MyProfile> => unwrap(await client.get(ENDPOINTS.ME_PROFILE, { signal })),
+  /** `phone` and `roleTitle` are left alone when omitted and cleared by null or an empty string */
+  updateProfile: async (fullName: string, extra?: { phone?: string | null; roleTitle?: string | null }): Promise<MyProfile> => unwrap(await client.patch(ENDPOINTS.ME_PROFILE, { fullName, ...extra })),
 };

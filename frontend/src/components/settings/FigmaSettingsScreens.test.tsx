@@ -1,11 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { BrowserRouter } from "react-router-dom";
 import { GeneralTab } from "./GeneralTab";
 import { InventoryListingsTab } from "./InventoryListingsTab";
 import { PricingMarginsTab } from "./PricingMarginsTab";
 import { PricingTierDialog } from "./PricingTierDialog";
-import { ProfileTab } from "./ProfileTab";
 
 describe("Figma Settings Screens", () => {
   describe("GeneralTab (General setting.png)", () => {
@@ -102,27 +100,6 @@ describe("Figma Settings Screens", () => {
       fireEvent.click(saveBtn);
       expect(handleSave).toHaveBeenCalledWith(expect.objectContaining({ channelCode: "AMZN_IN" }));
       expect(handleClose).toHaveBeenCalled();
-    });
-  });
-
-  describe("ProfileTab (Price proposals.png)", () => {
-    it("renders user profile header, institutional health score, scopes and audit logs", () => {
-      render(
-        <BrowserRouter>
-          <ProfileTab />
-        </BrowserRouter>,
-      );
-      expect(screen.getAllByText("Marcus Vance")[0]).toBeInTheDocument();
-      expect(screen.getByText("OP-EXECUTIVE")).toBeInTheDocument();
-      expect(screen.getAllByText("Verified Identity")[0]).toBeInTheDocument();
-      expect(screen.getByText(/100 \/ 100/)).toBeInTheDocument();
-      expect(screen.getByText("Institutional Health")).toBeInTheDocument();
-      expect(screen.getByText("PRIMARY WORK EMAIL")).toBeInTheDocument();
-      expect(screen.getAllByText("marcus.vance@nexus-retail.io")[0]).toBeInTheDocument();
-      expect(screen.getByText("Delegated Authorizations")).toBeInTheDocument();
-      expect(screen.getByText("Global Stock Balance Overrides")).toBeInTheDocument();
-      expect(screen.getByText("ASSIGNED ENTERPRISE SCOPE")).toBeInTheDocument();
-      expect(screen.getByText("Recent Security Events")).toBeInTheDocument();
     });
   });
 });

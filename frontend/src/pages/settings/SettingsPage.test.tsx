@@ -31,6 +31,8 @@ const api = vi.hoisted(() => ({
   updateProfile: vi.fn(),
 }));
 vi.mock("@/api/settings.api", () => ({ settingsApi: api }));
+const hub = vi.hoisted(() => ({ accounts: vi.fn() }));
+vi.mock("@/api/hub.api", () => ({ hubApi: hub }));
 const session = vi.hoisted(() => ({ refreshShell: vi.fn() }));
 vi.mock("@/lib/session", () => session);
 
@@ -71,6 +73,16 @@ beforeEach(() => {
 });
 
 describe("SettingsPage loading and routing", () => {
+  beforeEach(() => {
+    hub.accounts.mockResolvedValue({ items: [], summary: { total: 0, healthy: 0, warning: 0, error: 0, paused: 0 } });
+  });
+
+  it("the Integrations badge is the real number of connected accounts, and absent when none is connected", async () => {
+    renderPage("/settings/integrations");
+    expect(await screen.findByText("No marketplace is connected yet")).toBeInTheDocument();
+    expect(screen.queryByText(/4 LIVE|CONNECTED$/)).not.toBeInTheDocument();
+  });
+
   it("loads everything with one read and shows the business profile", async () => {
     renderPage();
     expect(await screen.findByLabelText("Legal entity name")).toHaveValue("Nova Living Brands Pvt Ltd");
