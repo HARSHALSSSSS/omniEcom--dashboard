@@ -210,6 +210,24 @@ describe('profile', () => {
     expect((await c().patch('/api/v1/me/profile', { fullName: 'x' }, a)).status).toBe(400);
   });
 
+  it('stores my phone and role title, keeps them when omitted, clears them with null and validates them', async () => {
+    const a = await c().registerVendor();
+    expect((await c().get('/api/v1/me/profile', a)).body.data.user).toMatchObject({ phone: null, roleTitle: null });
+    const set = await c().patch('/api/v1/me/profile', { fullName: 'Asha Rao', phone: '+91 98765 43210', roleTitle: 'Operations lead' }, a);
+    expect(set.status, JSON.stringify(set.body)).toBe(200);
+    expect(set.body.data.user).toMatchObject({ fullName: 'Asha Rao', phone: '+91 98765 43210', roleTitle: 'Operations lead' });
+    // a rename that leaves the other fields out keeps them
+    expect((await c().patch('/api/v1/me/profile', { fullName: 'Asha R' }, a)).body.data.user).toMatchObject({ fullName: 'Asha R', phone: '+91 98765 43210', roleTitle: 'Operations lead' });
+    expect((await c().get('/api/v1/me/profile', a)).body.data.user).toMatchObject({ phone: '+91 98765 43210', roleTitle: 'Operations lead' });
+    // bad phone numbers are refused and change nothing
+    for (const phone of ['abc', '12', '+91 98765 43210 98765 43210 1']) expect((await c().patch('/api/v1/me/profile', { fullName: 'Asha R', phone }, a)).status, phone).toBe(400);
+    expect((await c().patch('/api/v1/me/profile', { fullName: 'Asha R', roleTitle: 'x' }, a)).status).toBe(400);
+    expect((await c().get('/api/v1/me/profile', a)).body.data.user.phone).toBe('+91 98765 43210');
+    // null and blank clear
+    const cleared = await c().patch('/api/v1/me/profile', { fullName: 'Asha R', phone: null, roleTitle: '  ' }, a);
+    expect(cleared.body.data.user).toMatchObject({ phone: null, roleTitle: null });
+  });
+
   it('lists the assignable roles with their permissions', async () => {
     const a = await c().registerVendor();
     const roles = await c().get('/api/v1/roles', a);

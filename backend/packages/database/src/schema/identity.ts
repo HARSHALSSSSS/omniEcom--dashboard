@@ -54,6 +54,9 @@ export const users = pgTable('users', {
   email: text('email').notNull(),
   passwordHash: text('password_hash'),
   fullName: text('full_name').notNull(),
+  /** profile details the person edits themselves (Settings > Profile) */
+  phone: text('phone'),
+  roleTitle: text('role_title'),
   status: text('status').notNull().default('invited'),
   emailVerifiedAt: tz('email_verified_at'),
   lastLoginAt: tz('last_login_at'),

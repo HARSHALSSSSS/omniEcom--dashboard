@@ -6,10 +6,10 @@ import { PageQuerySchema, successEnvelope } from '@oms/contracts';
 import { ok, pageWindow, vendorTx } from '@oms/module-kit';
 import { allowedWarehouses } from '@oms/mod-warehouses';
 import { STAGES } from './queue-domain';
-import { exceptionsView, listQueue, workspace } from './queue';
+import { exceptionsView, listQueue, recentActivity, workspace } from './queue';
 
 const Loose = z.looseObject({});
-const Counts = z.object({ awaiting_pick: z.number().int(), picking: z.number().int(), packing: z.number().int(), ready_to_ship: z.number().int(), all: z.number().int(), onHold: z.number().int(), exceptions: z.number().int() });
+const Counts = z.object({ awaiting_pick: z.number().int(), picking: z.number().int(), packing: z.number().int(), ready_to_ship: z.number().int(), all: z.number().int(), onHold: z.number().int(), exceptions: z.number().int(), packed: z.number().int().describe('Fulfillments packed and waiting for a carrier (a status inside ready_to_ship)'), dispatchedToday: z.number().int().describe('Fulfillments handed to a carrier since midnight UTC') });
 const pagedWith = <T extends z.ZodType, E extends z.ZodRawShape>(item: T, extra: E) =>
   successEnvelope(z.object({ items: z.array(item), page: z.number().int(), pageSize: z.number().int(), total: z.number().int(), pages: z.number().int(), ...extra }));
 
@@ -46,6 +46,14 @@ export const fulfillmentQueueRoutes: FastifyPluginAsync = async (app) => {
       params: z.object({ orderId: z.uuid() }), querystring: z.object({ fulfillmentId: z.uuid().optional() }), response: { 200: successEnvelope(Loose) },
     },
   }, async (req) => ok(req, await vendorTx(req, async (tx, vendorId) => workspace(tx, vendorId, await allowedWarehouses(tx, req.ctx.principal, vendorId), req.params.orderId, req.query.fulfillmentId))));
+
+  r.get('/fulfillment/activity', {
+    config: { access: { permission: 'fulfillment:read' } },
+    schema: {
+      tags: TAGS, summary: 'Recent fulfillment activity', description: 'The latest status changes (picked, packed, handed over, held...) across the warehouses the caller may see, newest first, with real timestamps and who did it.',
+      querystring: z.object({ limit: z.coerce.number().int().min(1).max(50).default(10) }), response: { 200: successEnvelope(z.array(Loose)) },
+    },
+  }, async (req) => ok(req, await vendorTx(req, async (tx, vendorId) => recentActivity(tx, vendorId, await allowedWarehouses(tx, req.ctx.principal, vendorId), req.query.limit))));
 
   r.get('/fulfillment/exceptions', {
     config: { access: { permission: 'fulfillment:read' } },

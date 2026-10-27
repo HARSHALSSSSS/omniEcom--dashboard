@@ -45,7 +45,7 @@ describe('fulfillment queue', () => {
 
     const qr = await c.get(`${FQ}/queue`, w.admin);
     const q = qr.body.data;
-    expect(q.counts).toEqual({ awaiting_pick: 1, picking: 1, packing: 0, ready_to_ship: 2, all: 4, onHold: 0, exceptions: 0 });
+    expect(q.counts).toEqual({ awaiting_pick: 1, picking: 1, packing: 0, ready_to_ship: 2, all: 4, onHold: 0, exceptions: 0, packed: 1, dispatchedToday: 1 });
     expect(q.total).toBe(4);
     // urgent first, then by SLA deadline
     expect(q.items[0]).toMatchObject({ orderId: p.order.id, priority: 'urgent', stage: 'ready_to_ship' });
@@ -174,6 +174,39 @@ describe('order workspace and one-click actions', () => {
     expect((await act(w, order.id, { action: 'handover' })).body.data).toMatchObject({ applied: false, alreadyDone: true });
     // after shipping, an exception can no longer be raised
     expect((await act(w, order.id, { action: 'exception', kind: 'damaged' })).status).toBe(409);
+  });
+
+  it('drawer picking: each item carries its pick task, a scan is checked by the server, partial picks add up and the activity feed has real times', async () => {
+    const w = await buildWorld(t, c, { warehouses: 1, stock: [30] });
+    const order = await orderArrives(t, c, w, 3);
+    await act(w, order.id, { action: 'start' });
+    await act(w, order.id, { action: 'start' });
+    const ws = (await c.get(`${FQ}/workspace/${order.id}`, w.admin)).body.data;
+    const taskId = ws.fulfillment.items[0].pickTaskId as string;
+    expect(taskId).toEqual(expect.any(String));
+
+    const wrong = await c.post(`/api/v1/pick-tasks/${taskId}/scan`, { itemBarcode: 'NOT-THE-ITEM' }, w.admin);
+    expect(wrong.status).toBe(400);
+    expect(wrong.body.error.details.rule).toBe('wrong_item');
+    expect((await c.post(`/api/v1/pick-tasks/${taskId}/pick`, { quantity: 1 }, w.admin)).body.error.details.rule).toBe('scan_required');
+
+    expect((await c.post(`/api/v1/pick-tasks/${taskId}/scan`, { itemBarcode: w.variant.sku }, w.admin)).status).toBe(200);
+    const one = await c.post(`/api/v1/pick-tasks/${taskId}/pick`, { quantity: 1 }, w.admin);
+    expect(one.status, JSON.stringify(one.body)).toBe(200);
+    expect((await c.post(`/api/v1/pick-tasks/${taskId}/pick`, { quantity: 5 }, w.admin)).status).toBeGreaterThanOrEqual(400); // over-pick refused
+    const mid = (await c.get(`${FQ}/workspace/${order.id}`, w.admin)).body.data;
+    expect(mid.fulfillment.items[0]).toMatchObject({ pickedQuantity: 1, pickState: 'partial', scanned: true });
+    expect((await c.post(`/api/v1/pick-tasks/${taskId}/pick`, { quantity: 2 }, w.admin)).status).toBe(200);
+    expect((await c.get(`${FQ}/workspace/${order.id}`, w.admin)).body.data.fulfillment).toMatchObject({ status: 'picked' });
+
+    const feed = await c.get(`${FQ}/activity?limit=5`, w.admin);
+    expect(feed.status).toBe(200);
+    expect(feed.body.data[0]).toMatchObject({ orderId: order.id, orderNumber: order.orderNumber, to: 'picked', at: expect.any(String) });
+    expect(feed.body.data.length).toBeLessThanOrEqual(5);
+    expect((await c.get(`${FQ}/activity?limit=500`, w.admin)).status).toBe(400);
+    const other = await c.registerVendor({ businessName: 'Activity other' });
+    expect((await c.get(`${FQ}/activity`, other)).body.data).toEqual([]);
+    expect((await c.get(`${FQ}/activity`)).status).toBe(401);
   });
 
   it('raises an exception that shows up in the exceptions list, the queue counts and the drawer', async () => {

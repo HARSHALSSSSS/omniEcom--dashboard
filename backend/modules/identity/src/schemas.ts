@@ -12,6 +12,9 @@ export const UserSummarySchema = z
     emailVerified: z.boolean(),
     status: z.string(),
     lastLoginAt: IsoDate.nullable(),
+    /** the person's own details (additive): null until they set them */
+    phone: z.string().nullable(),
+    roleTitle: z.string().nullable(),
   })
   .meta({ id: 'UserSummary' });
 
@@ -35,7 +38,13 @@ export const TokenBodySchema = z.object({ token: z.string().min(20).max(200) });
 export const ForgotBodySchema = z.object({ email: EmailSchema });
 export const ResetBodySchema = z.object({ token: z.string().min(20).max(200), password: PasswordSchema });
 export const ChangePasswordBodySchema = z.object({ currentPassword: z.string().min(1).max(128), newPassword: PasswordSchema });
-export const UpdateProfileBodySchema = z.object({ fullName: z.string().trim().min(2).max(120) });
+/** `phone` and `roleTitle` are optional: leave them out to keep them, send null (or an empty string) to clear them */
+const blankToNull = (v: unknown) => (typeof v === 'string' && v.trim() === '' ? null : v);
+export const UpdateProfileBodySchema = z.object({
+  fullName: z.string().trim().min(2).max(120),
+  phone: z.preprocess(blankToNull, z.string().trim().regex(/^\+?[0-9][0-9 ()-]{5,18}[0-9]$/, 'Enter a phone number with 7 to 20 digits, for example +91 98765 43210').nullable()).optional(),
+  roleTitle: z.preprocess(blankToNull, z.string().trim().min(2).max(80).nullable()).optional(),
+});
 
 export const SessionTokensSchema = z
   .object({

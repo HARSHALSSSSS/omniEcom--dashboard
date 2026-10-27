@@ -115,7 +115,7 @@ export const automationRoutes: FastifyPluginAsync = async (app) => {
   // ---------------------------------------------------------------- screen read models: overview, approvals queue, run log
   r.get('/automation/overview', {
     config: { access: { permission: 'automation:read' } },
-    schema: { tags: TAGS, summary: 'Metrics strip of the Automation screen', description: 'Active rules, approvals waiting, runs in the last 24 hours, their success rate (percent of attempted runs; null while nothing ran) and the last run.', response: { 200: successEnvelope(z.object({ activeRules: z.number().int(), totalRules: z.number().int(), pendingApprovals: z.number().int(), runs24h: z.number().int(), successRate: z.number().nullable(), lastRunAt: IsoDate.nullable(), lastRunRule: z.string().nullable() }).meta({ id: 'AutomationOverview' })) } },
+    schema: { tags: TAGS, summary: 'Metrics strip of the Automation screen', description: 'Active rules, approvals waiting, runs in the last 24 hours, their success rate (percent of attempted runs; null while nothing ran) and the last run.', response: { 200: successEnvelope(z.object({ activeRules: z.number().int(), totalRules: z.number().int(), pendingApprovals: z.number().int(), runs24h: z.number().int(), signalsObserved24h: z.number().int(), recommendedActions24h: z.number().int(), completedRuns24h: z.number().int(), failedRuns24h: z.number().int(), successRate: z.number().nullable(), lastRunAt: IsoDate.nullable(), lastRunRule: z.string().nullable() }).meta({ id: 'AutomationOverview' })) } },
   }, async (req) => ok(req, await vendorTx(req, (tx, vendorId) => overview(tx, vendorId))));
 
   r.get('/automation/approvals', {

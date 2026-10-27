@@ -1297,6 +1297,18 @@
                 "type": "null"
               }
             ]
+          },
+          "phone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "roleTitle": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -1308,7 +1320,9 @@
           "roles",
           "emailVerified",
           "status",
-          "lastLoginAt"
+          "lastLoginAt",
+          "phone",
+          "roleTitle"
         ]
       },
       "VendorSummaryInput": {
@@ -37954,6 +37968,26 @@
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
           },
+          "signalsObserved24h": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "recommendedActions24h": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "completedRuns24h": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "failedRuns24h": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
           "successRate": {
             "type": [
               "number",
@@ -37984,6 +38018,10 @@
           "totalRules",
           "pendingApprovals",
           "runs24h",
+          "signalsObserved24h",
+          "recommendedActions24h",
+          "completedRuns24h",
+          "failedRuns24h",
           "successRate",
           "lastRunAt",
           "lastRunRule"
@@ -39944,6 +39982,18 @@
                 "type": "null"
               }
             ]
+          },
+          "phone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "roleTitle": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -39955,7 +40005,9 @@
           "roles",
           "emailVerified",
           "status",
-          "lastLoginAt"
+          "lastLoginAt",
+          "phone",
+          "roleTitle"
         ],
         "additionalProperties": false
       },
@@ -77350,6 +77402,26 @@
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
           },
+          "signalsObserved24h": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "recommendedActions24h": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "completedRuns24h": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "failedRuns24h": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
           "successRate": {
             "type": [
               "number",
@@ -77380,6 +77452,10 @@
           "totalRules",
           "pendingApprovals",
           "runs24h",
+          "signalsObserved24h",
+          "recommendedActions24h",
+          "completedRuns24h",
+          "failedRuns24h",
           "successRate",
           "lastRunAt",
           "lastRunRule"
@@ -83002,6 +83078,29 @@
                     "type": "string",
                     "minLength": 2,
                     "maxLength": 120
+                  },
+                  "phone": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^\\+?[0-9][0-9 ()-]{5,18}[0-9]$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "roleTitle": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 2,
+                        "maxLength": 80
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 },
                 "required": [
@@ -134313,6 +134412,18 @@
                               "type": "integer",
                               "minimum": -9007199254740991,
                               "maximum": 9007199254740991
+                            },
+                            "packed": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991,
+                              "description": "Fulfillments packed and waiting for a carrier (a status inside ready_to_ship)"
+                            },
+                            "dispatchedToday": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991,
+                              "description": "Fulfillments handed to a carrier since midnight UTC"
                             }
                           },
                           "required": [
@@ -134322,7 +134433,9 @@
                             "ready_to_ship",
                             "all",
                             "onHold",
-                            "exceptions"
+                            "exceptions",
+                            "packed",
+                            "dispatchedToday"
                           ],
                           "additionalProperties": false
                         }
@@ -134457,6 +134570,121 @@
                       "type": "object",
                       "properties": {},
                       "additionalProperties": {}
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "requestId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/fulfillment/activity": {
+      "get": {
+        "summary": "Recent fulfillment activity",
+        "tags": [
+          "Fulfillment"
+        ],
+        "description": "The latest status changes (picked, packed, handed over, held...) across the warehouses the caller may see, newest first, with real timestamps and who did it.",
+        "parameters": [
+          {
+            "schema": {
+              "default": 10,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "fulfillment:read",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {},
+                        "additionalProperties": {}
+                      }
                     },
                     "requestId": {
                       "type": "string"

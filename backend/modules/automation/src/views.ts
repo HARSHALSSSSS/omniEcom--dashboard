@@ -32,10 +32,17 @@ export async function overview(tx: Tx, vendorId: string, now = new Date()) {
     ok: sql<number>`count(*) filter (where ${EX.status} in ('executed','rolled_back'))::int`,
     failed: sql<number>`count(*) filter (where ${EX.status} = 'failed')::int`,
   }).from(EX).where(and(eq(EX.vendorId, vendorId), sql`${EX.createdAt} >= ${since}`, sql`${EX.status} <> 'skipped'`));
+  // every event a rule looked at in the last 24 hours (a rule that matched or did not): the 'signals observed' of the pipeline
+  const [seen] = await tx.select({ n: sql<number>`count(distinct ${EX.eventId})::int` }).from(EX).where(and(eq(EX.vendorId, vendorId), sql`${EX.createdAt} >= ${since}`));
   const [last] = await tx.select({ e: EX, ruleName: RULE.name }).from(EX).innerJoin(RULE, eq(RULE.id, EX.ruleId)).where(and(eq(EX.vendorId, vendorId), inArray(EX.status, ['executed', 'failed', 'rolled_back']))).orderBy(desc(EX.decidedAt)).limit(1);
   const decided = (day?.ok ?? 0) + (day?.failed ?? 0);
   return {
     activeRules: rules?.active ?? 0, totalRules: rules?.total ?? 0, pendingApprovals: pending?.n ?? 0, runs24h: day?.runs ?? 0,
+    /** distinct events the rules evaluated in the last 24 hours, matched or not */
+    signalsObserved24h: seen?.n ?? 0,
+    /** runs of the last 24 hours that proposed or took an action (everything but skipped): what the engine put in front of you or did */
+    recommendedActions24h: day?.runs ?? 0,
+    completedRuns24h: day?.ok ?? 0, failedRuns24h: day?.failed ?? 0,
     successRate: decided === 0 ? null : Math.round(((day?.ok ?? 0) * 1000) / decided) / 10, // percent of the attempted runs of the last 24 hours; null while nothing ran
     lastRunAt: last?.e.decidedAt ? last.e.decidedAt.toISOString() : null, lastRunRule: last?.ruleName ?? null,
   };

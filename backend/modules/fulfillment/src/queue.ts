@@ -77,12 +77,37 @@ export async function stageCounts(tx: Tx, vendorId: string, allowed: string[] | 
   const rows = await tx.select({ stage: stageExpr, n: sql<number>`count(*)::int`, held: sql<number>`(count(*) filter (where ${F.status} = 'on_hold'))::int`, exceptions: sql<number>`(count(*) filter (where ${openException}))::int` })
     .from(F).innerJoin(O, and(eq(O.id, F.orderId), eq(O.vendorId, F.vendorId)))
     .where(and(...baseWhere(vendorId, allowed, { ...f, stage: undefined }))).groupBy(stageExpr);
-  const out: Record<Stage | 'all' | 'onHold' | 'exceptions', number> = { awaiting_pick: 0, picking: 0, packing: 0, ready_to_ship: 0, all: 0, onHold: 0, exceptions: 0 };
+  const out: Record<Stage | 'all' | 'onHold' | 'exceptions' | 'packed' | 'dispatchedToday', number> = { awaiting_pick: 0, picking: 0, packing: 0, ready_to_ship: 0, all: 0, onHold: 0, exceptions: 0, packed: 0, dispatchedToday: 0 };
   for (const r of rows) {
     if (r.stage) out[r.stage] += r.n;
     out.all += r.n; out.onHold += r.held; out.exceptions += r.exceptions;
   }
+  // 'packed' is a real status (inside the ready_to_ship stage): packed but not yet handed to a carrier
+  const [packed] = await tx.select({ n: sql<number>`count(*)::int` }).from(F).innerJoin(O, and(eq(O.id, F.orderId), eq(O.vendorId, F.vendorId)))
+    .where(and(...baseWhere(vendorId, allowed, { ...f, stage: undefined }), eq(F.status, 'packed')));
+  out.packed = packed?.n ?? 0;
+  // handed over today: fulfillments that moved to 'shipped' since midnight (UTC)
+  const E = schema.fulfillmentEvents;
+  const [shipped] = await tx.select({ n: sql<number>`count(distinct ${E.fulfillmentId})::int` }).from(E)
+    .innerJoin(F, and(eq(F.id, E.fulfillmentId), eq(F.vendorId, E.vendorId)))
+    .where(and(eq(E.vendorId, vendorId), eq(E.toStatus, 'shipped'), sql`${E.createdAt} >= date_trunc('day', now())`, allowed ? inArray(F.warehouseId, allowed.length ? allowed : [ZERO_UUID]) : undefined));
+  out.dispatchedToday = shipped?.n ?? 0;
   return out;
+}
+
+/** the latest status changes across the open fulfillments of the allowed warehouses, newest first (the activity strip of the Fulfillment screen) */
+export async function recentActivity(tx: Tx, vendorId: string, allowed: string[] | null, limit: number) {
+  const E = schema.fulfillmentEvents;
+  const rows = await tx.select({ e: E, number: F.number, orderId: F.orderId, orderNumber: O.orderNumber }).from(E)
+    .innerJoin(F, and(eq(F.id, E.fulfillmentId), eq(F.vendorId, E.vendorId)))
+    .innerJoin(O, and(eq(O.id, F.orderId), eq(O.vendorId, F.vendorId)))
+    .where(and(eq(E.vendorId, vendorId), allowed ? inArray(F.warehouseId, allowed.length ? allowed : [ZERO_UUID]) : undefined))
+    .orderBy(sql`${E.id} desc`).limit(limit);
+  const names = await userNames(tx, vendorId, rows.map((r) => r.e.actorId));
+  return rows.map((r) => ({
+    id: r.e.id, fulfillmentId: r.e.fulfillmentId, fulfillmentNumber: r.number, orderId: r.orderId, orderNumber: r.orderNumber,
+    from: r.e.fromStatus, to: r.e.toStatus, note: r.e.note, at: r.e.createdAt.toISOString(), actor: r.e.actorId ? { id: r.e.actorId, name: names.get(r.e.actorId) ?? null } : null,
+  }));
 }
 
 interface ItemLine { id: string; orderItemId: string; variantId: string; sku: string; title: string; barcode: string | null; quantity: number; pickedQuantity: number; packedQuantity: number; shortQuantity: number; fulfillmentId: string }
@@ -294,7 +319,7 @@ async function focusDetail(tx: Tx, vendorId: string, r: QueueRow, cx: Context) {
     items: lines.map((l) => {
       const task = ts.find((x) => x.fulfillmentItemId === l.id);
       return {
-        id: l.id, orderItemId: l.orderItemId, variantId: l.variantId, sku: l.sku, barcode: l.barcode, title: l.title, quantity: l.quantity, pickedQuantity: l.pickedQuantity, packedQuantity: l.packedQuantity, shortQuantity: l.shortQuantity,
+        id: l.id, pickTaskId: task?.id ?? null, orderItemId: l.orderItemId, variantId: l.variantId, sku: l.sku, barcode: l.barcode, title: l.title, quantity: l.quantity, pickedQuantity: l.pickedQuantity, packedQuantity: l.packedQuantity, shortQuantity: l.shortQuantity,
         pickState: pickState(l), bin: task?.binCode ?? cx.bins.get(`${l.variantId}:${r.f.warehouseId}`) ?? null, scanned: task ? task.verified : null,
       };
     }),

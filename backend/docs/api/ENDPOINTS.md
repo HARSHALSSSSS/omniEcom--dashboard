@@ -456,6 +456,7 @@ Order routing, fulfillment lifecycle and exceptions
 | GET | `/api/v1/fulfillment-exceptions/{id}` | `fulfillment:read` | Get an exception |
 | POST | `/api/v1/fulfillment-exceptions/{id}/resolve` | `fulfillment:write` | Resolve or dismiss an exception |
 | POST | `/api/v1/fulfillment/{orderId}/actions` | `fulfillment:write` | Run a fulfillment action on an order |
+| GET | `/api/v1/fulfillment/activity` | `fulfillment:read` | Recent fulfillment activity |
 | POST | `/api/v1/fulfillment/batch-handover` | `shipping:write` | Hand a batch of orders over to one carrier (manifest) |
 | GET | `/api/v1/fulfillment/exceptions` | `fulfillment:read` | Exceptions of the fulfillment screen |
 | GET | `/api/v1/fulfillment/queue` | `fulfillment:read` | Fulfillment queue (orders by warehouse stage) |

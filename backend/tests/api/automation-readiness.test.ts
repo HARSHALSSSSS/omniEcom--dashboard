@@ -97,7 +97,7 @@ describe('Automation screen walkthrough: rules, overview, approvals, runs', () =
     const list = (await c.get(`${A}/rules`, admin)).body.data;
     expect(list).toHaveLength(3);
     expect(list.every((r: any) => r.runsCount === 0)).toBe(true);
-    expect(await overview(admin)).toMatchObject({ activeRules: 3, totalRules: 3, pendingApprovals: 0, runs24h: 0, successRate: null, lastRunAt: null });
+    expect(await overview(admin)).toMatchObject({ activeRules: 3, totalRules: 3, pendingApprovals: 0, runs24h: 0, signalsObserved24h: 0, recommendedActions24h: 0, completedRuns24h: 0, failedRuns24h: 0, successRate: null, lastRunAt: null });
   });
 
   it('Approvals tab: a low-stock event waits with a human description and the money at stake', async () => {
@@ -109,7 +109,7 @@ describe('Automation screen walkthrough: rules, overview, approvals, runs', () =
       entityName: expect.stringContaining('Stage 4 tee'), skuOrOrder: s.w.variant.sku, financialImpact: 47 * 30_000, currency: 'INR',
       recommendedAction: `Draft a purchase order for 47 unit(s) of ${s.w.variant.sku} (available 3, reorder level 10)`,
     });
-    expect(await overview(s.w.admin)).toMatchObject({ pendingApprovals: 1, runs24h: 1, successRate: null });
+    expect(await overview(s.w.admin)).toMatchObject({ pendingApprovals: 1, runs24h: 1, signalsObserved24h: 1, recommendedActions24h: 1, completedRuns24h: 0, failedRuns24h: 0, successRate: null });
     const r = await runs(s.w.admin);
     expect(r.items[0]).toMatchObject({ ruleName: 'Auto-Draft PO When Stock Runway < 10 Days', executionStatus: 'awaiting_approval', durationMs: 0 });
     expect(r.items[0].summary).toContain('Waiting for approval');
@@ -130,7 +130,7 @@ describe('Automation screen walkthrough: rules, overview, approvals, runs', () =
     expect(r).toMatchObject({ executionStatus: 'success', status: 'executed', ruleName: 'Auto-Draft PO When Stock Runway < 10 Days' });
     expect(r.summary).toBe(`Drafted ${ok.body.data.result.poNumber} for 47 unit(s) of ${s.w.variant.sku}`);
     expect(r.durationMs).toBeGreaterThanOrEqual(0);
-    expect(await overview(s.w.admin)).toMatchObject({ pendingApprovals: 0, runs24h: 1, successRate: 100, lastRunRule: 'Auto-Draft PO When Stock Runway < 10 Days' });
+    expect(await overview(s.w.admin)).toMatchObject({ pendingApprovals: 0, runs24h: 1, completedRuns24h: 1, failedRuns24h: 0, successRate: 100, lastRunRule: 'Auto-Draft PO When Stock Runway < 10 Days' });
     const rules = (await c.get(`${A}/rules`, s.w.admin)).body.data;
     expect(rules.find((x: any) => x.id === ids.po)).toMatchObject({ runsCount: 1 });
     expect(rules.find((x: any) => x.id === ids.po).lastRunAt).not.toBeNull();

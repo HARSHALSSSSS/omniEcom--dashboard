@@ -43,6 +43,8 @@ export async function toUserSummary(tx: Tx, u: UserRow) {
     emailVerified: Boolean(u.emailVerifiedAt),
     status: u.status,
     lastLoginAt: u.lastLoginAt ? u.lastLoginAt.toISOString() : null,
+    phone: u.phone,
+    roleTitle: u.roleTitle,
   };
 }
 
@@ -357,8 +359,8 @@ export async function getProfile(tx: Tx, userId: string) {
   return { user: await toUserSummary(tx, u), vendor: await vendorOf(tx, u.vendorId) };
 }
 
-export async function updateProfile(tx: Tx, userId: string, input: { fullName: string }) {
-  await tx.update(schema.users).set({ fullName: input.fullName, version: sql`${schema.users.version} + 1` }).where(eq(schema.users.id, userId));
+export async function updateProfile(tx: Tx, userId: string, input: { fullName: string; phone?: string | null; roleTitle?: string | null }) {
+  await tx.update(schema.users).set({ fullName: input.fullName, ...(input.phone !== undefined ? { phone: input.phone } : {}), ...(input.roleTitle !== undefined ? { roleTitle: input.roleTitle } : {}), version: sql`${schema.users.version} + 1` }).where(eq(schema.users.id, userId));
   return getProfile(tx, userId);
 }
 
