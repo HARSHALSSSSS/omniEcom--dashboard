@@ -5,6 +5,7 @@ import { createSyncJob, dispatchSyncJob, enqueueSyncJob, type SyncJobRow } from 
 import { getListingRow, loadListingContext, type ListingContext, type ListingRow } from './context';
 import type { Ctx } from './ctx';
 import { fx } from './ctx';
+import { promoteProductOnLive } from './promote';
 import { gateIssues, listingGates } from './catalog-gates';
 import { EDITABLE, fromReport, validateListingInput, type ListingStatus, type ValidationResult } from './domain';
 import { categoryRequirements } from './mappings';
@@ -300,6 +301,7 @@ export async function applyStatusReport(tx: Tx, ctx: Ctx, listing: ListingRow, r
   if (changed) {
     const f = fx(tx, ctx);
     await f.event({ type: 'listing.status_changed', aggregateType: 'listing', aggregateId: listing.id, payload: { from: listing.status, to: next, externalStatus: report.marketplaceStatus, source } });
+    if (becameActive) await promoteProductOnLive(tx, ctx.vendorId, listing.variantId, f);
     if (becameActive) await f.event({ type: 'listing.published', aggregateType: 'listing', aggregateId: listing.id, payload: { variantId: listing.variantId, accountId: listing.marketplaceAccountId, externalListingId: report.externalListingId } });
     if (next === 'rejected' || next === 'correction_required') await f.event({ type: 'listing.failed', aggregateType: 'listing', aggregateId: listing.id, payload: { status: next, issues: report.issues.slice(0, 20) } });
     await f.audit({ action: 'listing.status_changed', resourceType: 'listing', resourceId: listing.id, before: { status: listing.status }, after: { status: next, externalStatus: report.marketplaceStatus }, metadata: { source } });

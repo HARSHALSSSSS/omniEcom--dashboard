@@ -9,6 +9,7 @@ import { loadListingContext } from './context';
 import { fx, systemCtx } from './ctx';
 import { fromReport } from './domain';
 import { catalogImportRunner } from './imports';
+import { promoteProductOnLive } from './promote';
 import { applyStatusReport, storedRequirements } from './service';
 
 const L = schema.marketplaceListings;
@@ -75,6 +76,7 @@ const publishRunner: SyncRunner = async (ctx): Promise<{ stats: Record<string, n
     }).where(eq(L.id, listing.id));
     const f = fx(tx, sctx);
     await f.event({ type: 'listing.submitted', aggregateType: 'listing', aggregateId: listing.id, payload: { status, externalStatus: result.marketplaceStatus, issues: result.issues.length } });
+    if (status === 'active') await promoteProductOnLive(tx, vendorId, listing.variantId, f);
     if (status === 'active') await f.event({ type: 'listing.published', aggregateType: 'listing', aggregateId: listing.id, payload: { variantId: listing.variantId, accountId, externalListingId: result.externalListingId } });
     if (status === 'rejected' || status === 'correction_required') await f.event({ type: 'listing.failed', aggregateType: 'listing', aggregateId: listing.id, payload: { status, issues: result.issues.slice(0, 20) } });
     await f.audit({ action: 'listing.publish', resourceType: 'listing', resourceId: listing.id, before: { status: listing.status }, after: { status, externalListingId: result.externalListingId, externalStatus: result.marketplaceStatus } });

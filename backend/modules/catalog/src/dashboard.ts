@@ -248,8 +248,10 @@ function channelsOf(listings: ChannelRow[], names: ChannelNameFn): CardSummary['
 }
 
 /** the card rules of the design: Active / Low stock / Out of stock / Draft */
-export function cardHint(r: PfRow, o: { attention: number; unitsSold30d: number }): Pick<CardSummary, 'hint' | 'primaryAction'> {
+export function cardHint(r: PfRow, o: { attention: number; unitsSold30d: number; live?: number }): Pick<CardSummary, 'hint' | 'primaryAction'> {
   const base = `/products/${r.id}`;
+  // a product that is live on a channel is not "ready to publish", whatever its status says: the CTA follows the listings
+  if (r.status === 'draft' && (o.live ?? 0) > 0) return { hint: { key: 'live_on_channels', text: `Live on ${o.live} ${o.live === 1 ? 'channel' : 'channels'}` }, primaryAction: { key: 'open', href: base } };
   if (r.status === 'draft') {
     const missing = [!r.c_img ? 'Images' : null, !r.c_desc ? 'description' : null].filter(Boolean) as string[];
     const text = missing.length === 2 ? 'Images and description missing' : missing.length === 1 ? `${missing[0]} missing` : r.pct >= 100 ? 'Ready to publish' : 'Product details incomplete';
@@ -276,7 +278,7 @@ async function decorate(tx: Tx, vendorId: string, list: PfRow[], names: ChannelN
     const ls = byProduct.get(row.id) ?? [];
     const channels = channelsOf(ls, names);
     const attention = ls.filter((l) => listingStatusOf({ status: l.status, error: l.error }) === 'attention').length;
-    const { hint, primaryAction } = cardHint(row, { attention, unitsSold30d: sold.get(row.id) ?? 0 });
+    const { hint, primaryAction } = cardHint(row, { attention, unitsSold30d: sold.get(row.id) ?? 0, live: channels.filter((ch) => ch.listingStatus === 'active').length });
     return {
       row,
       summary: {

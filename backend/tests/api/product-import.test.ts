@@ -351,7 +351,7 @@ describe('the wizard: upload, mapping, issues, commit (screen walkthrough)', () 
     expect((await c.post(api(`/${id}/issues/${of('missing_sku').id}`), { action: 'accept_suggestion' }, admin)).status).toBe(409); // the same answer again: already handled (a different answer changes it, see import-design.test.ts)
 
     // a custom value, validated where it can be (category must exist)
-    const badCat = await c.post(api(`/${id}/issues/${of('category_unmapped').id}`), { action: 'custom_value', customValue: 'Toys' }, admin);
+    const badCat = await c.post(api(`/${id}/issues/${of('category_unmapped').id}`), { action: 'custom_value', customValue: 'Nonexistent Aisle' }, admin);
     expect(badCat.status).toBe(400);
     expect((await c.post(api(`/${id}/issues/${of('category_unmapped').id}`), { action: 'custom_value' }, admin)).status).toBe(400);
     const okCat = await c.post(api(`/${id}/issues/${of('category_unmapped').id}`), { action: 'custom_value', customValue: 'apparel/men/ethnic-wear' }, admin);

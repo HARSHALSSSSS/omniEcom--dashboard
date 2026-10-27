@@ -6,6 +6,7 @@ export * from './db-errors';
 export * as schema from './schema';
 export { seedReferenceData } from './reference-data';
 export { createPlatformUser } from './platform-user';
+export { DEFAULT_CATEGORY_TREE, categorySlug, defaultCategoryRows, seedDefaultCategories } from './default-categories';
 export { sql, eq, ne, and, or, not, desc, asc, inArray, isNull, isNotNull, gt, lt, gte, lte, ilike, like, count } from 'drizzle-orm';
 export type { SQL } from 'drizzle-orm';
 export { isFeatureEnabled, effectiveFlags } from './feature-flags';

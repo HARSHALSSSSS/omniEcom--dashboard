@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import {
   generateRefreshToken, hashPassword, hashRefreshToken, passwordPolicyViolations, signAccessToken, verifyDummy, verifyPassword,
 } from '@oms/auth';
-import { and, eq, gt, inArray, isNull, ne, schema, sql, writeAudit, writeOutboxEvent, type Tx } from '@oms/database';
+import { seedDefaultCategories, and, eq, gt, inArray, isNull, ne, schema, sql, writeAudit, writeOutboxEvent, type Tx } from '@oms/database';
 import { AppError, Errors, newId, normalizeEmail, notifySessionRevoked, slugify } from '@oms/shared';
 import type { Container, MailMessage } from '@oms/module-kit';
 
@@ -174,6 +174,8 @@ export async function register(tx: Tx, c: Container, input: RegisterInput, meta:
   const [role] = await tx.select().from(schema.roles).where(and(isNull(schema.roles.vendorId), eq(schema.roles.key, 'vendor_admin')));
   if (!role) throw new AppError('INTERNAL', 'System roles are not seeded (run db:seed)');
   await tx.insert(schema.userRoles).values({ userId: user!.id, roleId: role.id, vendorId: vendor!.id });
+  // every business starts with the default category tree (the seller adds, never has to build the basics)
+  await seedDefaultCategories(tx, vendor!.id);
 
   const token = await createUserToken(tx, user!.id, 'email_verification', VERIFY_TTL_MS);
 
