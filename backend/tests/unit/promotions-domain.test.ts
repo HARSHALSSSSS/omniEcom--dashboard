@@ -4,7 +4,7 @@ import { stepFor } from '../../modules/promotions/src/domain/lifecycle';
 import { budgetExhausted, discountBps, marginFloorPrice, promoPrice, validateTerms, velocityLiftBps, type Terms } from '../../modules/promotions/src/domain/terms';
 
 const t = (o: Partial<Terms> & Pick<Terms, 'type'>): Terms => ({ valueBps: null, valueMinor: null, buyQuantity: null, getQuantity: null, ...o });
-const account = (o: Partial<AccountFacts> = {}): AccountFacts => ({ accountId: 'a1', label: 'Amazon', hasActiveListing: true, regularMinor: 100_000, foreignSale: false, marginFloorBps: 0, conflictingCampaign: null, canPush: true, ...o });
+const account = (o: Partial<AccountFacts> = {}): AccountFacts => ({ accountId: 'a1', label: 'Amazon', hasActiveListing: true, regularMinor: 100_000, foreignSale: false, marginFloorBps: 0, targetMarginBps: null, fees: null, conflictingCampaign: null, canPush: true, ...o });
 const variant = { active: true, sellingPriceMinor: 100_000, costMinor: 40_000 };
 
 describe('promotion terms', () => {

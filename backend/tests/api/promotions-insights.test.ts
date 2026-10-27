@@ -401,8 +401,8 @@ describe('promotion notifications', () => {
     const by = Object.fromEntries(items.filter((n) => n.type.startsWith('promotion.')).map((n) => [n.type, n]));
     expect(by['promotion.created']).toMatchObject({ title: 'Campaign Festive Flash created as a draft', category: 'system', actionUrl: `/promotions?view=campaigns&open=${camp.id}` });
     expect(by['promotion.activated']).toMatchObject({ title: 'Campaign Festive Flash is running' });
-    expect(by['promotion.ended'].title).toBe('Campaign Festive Flash ended');
-    expect(by['promotion.ended'].body).toMatch(/ended manually\. 0 unit\(s\) sold/);
+    expect(by['promotion.ended']?.title).toBe('Campaign Festive Flash ended');
+    expect(by['promotion.ended']?.body).toMatch(/ended manually\. 0 unit\(s\) sold/);
   });
 });
 
