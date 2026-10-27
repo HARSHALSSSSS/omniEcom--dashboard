@@ -106,6 +106,8 @@ export interface ProductInput {
   customAttributes?: CustomAttributeInput[] | null;
 }
 
+import { assertCatalogRules, loadCatalogRules } from './catalog-rules';
+
 export interface ProductWriteOptions {
   /**
    * HTTP callers: a too-long description / title / brand is a 400. Internal callers (CSV and marketplace imports, product copies) keep their
@@ -256,6 +258,13 @@ export async function createProduct(tx: Tx, vendorId: string, input: ProductInpu
   for (const v of input.variants ?? []) assertPrices(v);
   const skus = (input.variants ?? []).map((v) => v.sku);
   if (new Set(skus).size !== skus.length) throw Errors.validation({ issues: [{ path: 'variants', message: 'duplicate SKU in request' }] });
+  // the SKU and EAN rules the business saved in Settings apply to what a person types (HTTP callers), never to imports or generated codes
+  if (opts.strict && (!opts.generatedCode || (input.variants ?? []).length > 0)) {
+    assertCatalogRules(await loadCatalogRules(tx, vendorId), [
+      ...(opts.generatedCode ? [] : [{ path: 'productCode', kind: 'sku' as const, value: fields.productCode }]),
+      ...(input.variants ?? []).flatMap((v, i) => [{ path: `variants.${i}.sku`, kind: 'sku' as const, value: v.sku }, { path: `variants.${i}.barcode`, kind: 'barcode' as const, value: v.barcode }]),
+    ]);
+  }
 
   const brand = fields.brand ? (await upsertBrand(tx, vendorId, fields.brand, fx)).name : null; // canonical spelling of an existing brand wins
   let p: ProductRow;
@@ -323,6 +332,9 @@ export async function writeProductFields(tx: Tx, vendorId: string, before: Produ
   // E1: the master code is locked once the product is not a draft (the status BEFORE this write decides: a draft may change its code and activate in one call)
   if (fields.productCode !== undefined && fields.productCode !== before.productCode && isCodeLocked(before.status)) throw codeLockedError(before.productCode, fields.productCode);
   if (fields.categoryId) await getCategory(tx, vendorId, fields.categoryId);
+  if (opts.strict && !opts.generatedCode && fields.productCode && fields.productCode !== before.productCode) {
+    assertCatalogRules(await loadCatalogRules(tx, vendorId), [{ path: 'productCode', kind: 'sku', value: fields.productCode }]);
+  }
   if (extra.status === 'active' && before.status !== 'active') await assertCanActivate(tx, vendorId, id);
 
   const set: Partial<typeof schema.products.$inferInsert> = {};
@@ -403,18 +415,26 @@ export async function getVariantDto(tx: Tx, vendorId: string, id: string) {
   return toVariantDto(v, inheritanceOf(await getProductRow(tx, vendorId, v.productId)));
 }
 
-export async function createVariant(tx: Tx, vendorId: string, productId: string, input: VariantInput, fx: Effects) {
+export async function createVariant(tx: Tx, vendorId: string, productId: string, input: VariantInput, fx: Effects, opts: { enforceRules?: boolean } = {}) {
   const product = await getProductRow(tx, vendorId, productId);
   assertPrices(input);
+  if (opts.enforceRules) assertCatalogRules(await loadCatalogRules(tx, vendorId), [{ path: 'sku', kind: 'sku', value: input.sku }, { path: 'barcode', kind: 'barcode', value: input.barcode }]);
   const [row] = await tx.insert(V).values({ vendorId, productId, sku: input.sku, ...variantColumns(input) }).returning();
   await fx.event({ type: 'variant.created', aggregateType: 'variant', aggregateId: row!.id, payload: { productId, sku: input.sku } });
   await fx.audit({ action: 'variant.create', resourceType: 'variant', resourceId: row!.id, after: { sku: input.sku, productId } });
   return toVariantDto(row!, inheritanceOf(product));
 }
 
-export async function updateVariant(tx: Tx, vendorId: string, id: string, patch: Partial<VariantInput> & { version?: number }, fx: Effects) {
+export async function updateVariant(tx: Tx, vendorId: string, id: string, patch: Partial<VariantInput> & { version?: number }, fx: Effects, opts: { enforceRules?: boolean } = {}) {
   const before = await getVariantRow(tx, vendorId, id);
   if (patch.version !== undefined && patch.version !== before.version) throw new AppError('VERSION_CONFLICT', undefined, { details: { currentVersion: before.version } });
+  // only a SKU or barcode that is actually being changed is judged: records that already break a rule stay editable
+  if (opts.enforceRules) {
+    assertCatalogRules(await loadCatalogRules(tx, vendorId), [
+      { path: 'sku', kind: 'sku', value: patch.sku !== undefined && patch.sku !== before.sku ? patch.sku : null },
+      { path: 'barcode', kind: 'barcode', value: patch.barcode !== undefined && patch.barcode !== before.barcode ? patch.barcode : null },
+    ]);
+  }
   assertPrices({ mrpMinor: patch.mrpMinor !== undefined ? patch.mrpMinor : before.mrpMinor, sellingPriceMinor: patch.sellingPriceMinor !== undefined ? patch.sellingPriceMinor : before.sellingPriceMinor, sku: before.sku });
 
   const cols = variantColumns(patch);

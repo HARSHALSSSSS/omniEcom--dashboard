@@ -1,4 +1,4 @@
-import { normalizeFields, type RawFields } from '@oms/mod-catalog';
+import { eanProblem, normalizeFields, skuProblem, type CatalogRules, type RawFields } from '@oms/mod-catalog';
 import { ISSUE_INFO, type DuplicateStrategy, type ExistingInfo, type IssueCode, type Suggestion } from './catalogue';
 import type { CategoryIndex } from './category-index';
 import {
@@ -108,6 +108,8 @@ export interface DeriveContext {
   categories: CategoryIndex;
   index: FileIndex;
   lookup: CatalogLookup;
+  /** the SKU / EAN rules saved in Settings: a row that breaks one is a WARNING (the file is never rejected for it) */
+  catalogRules?: CatalogRules | null;
 }
 
 const SKIP_BY_STRATEGY = (strategy: DuplicateStrategy, existsVariant: boolean, existsProduct: boolean): { plan: Plan | null; skip: string | null } => {
@@ -158,6 +160,8 @@ export function deriveRow(rowNumber: number, input: RowValues, ctx: DeriveContex
     add('invalid_sku', 'sku', 'A SKU may contain letters, digits and . _ - / only (at most 64 characters).', sku, fixed ? { kind: 'set_value', field: 'sku', value: fixed, label: fixed } : null);
   } else {
     data.sku = sku;
+    const ruleProblem = ctx.catalogRules ? skuProblem(sku, ctx.catalogRules) : null;
+    if (ruleProblem) add('invalid_sku', 'sku', ruleProblem, sku, null, 'warning');
     const first = index.skuFirst.get(sku.toLowerCase());
     if (first !== undefined && first !== rowNumber) {
       const next = uniqueSku(sku);
@@ -284,7 +288,11 @@ export function deriveRow(rowNumber: number, input: RowValues, ctx: DeriveContex
     if (!BARCODE_PATTERN.test(barcode)) add('invalid_barcode', 'barcode', 'A barcode has 6 to 32 letters, digits or dashes.', barcode, clear, 'error');
     else if (first !== undefined && first !== rowNumber) add('duplicate_barcode', 'barcode', `Barcode ${barcode} is already used by row ${first} of this file.`, barcode, clear);
     else if (owner && owner.variantId !== ownVariant?.id) add('duplicate_barcode', 'barcode', `Barcode ${barcode} already belongs to SKU ${owner.sku} in your catalogue.`, barcode, clear);
-    else data.barcode = barcode;
+    else {
+      data.barcode = barcode;
+      const eanIssue = ctx.catalogRules ? eanProblem(barcode, ctx.catalogRules) : null;
+      if (eanIssue) add('invalid_barcode', 'barcode', eanIssue, barcode, null, 'warning');
+    }
   }
 
   // ---- weight and options

@@ -23,6 +23,7 @@ export { evaluateCreationReadiness } from './creation-readiness';
 export { sanitizeDescription, toPlainText, DESCRIPTION_MAX_CHARS } from './description';
 export { jobEffects, requestEffects, type Effects } from './effects';
 export type { ProductInput, VariantInput } from './service';
+export { loadCatalogRules, skuProblem, eanProblem, validGtin, assertCatalogRules, type CatalogRules } from './catalog-rules';
 
 const routes: FastifyPluginAsync = async (app) => {
   await app.register(catalogRoutes);

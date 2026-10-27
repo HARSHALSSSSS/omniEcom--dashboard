@@ -23,7 +23,7 @@ const PreferencesOut = z.object({
   guardrails: z.object({ bulkConfirm: Flag, stockAllocationConfirm: Flag, zeroStockDelistWarning: Flag }),
 });
 const CatalogOut = z.object({
-  requireHsn: Flag, skuPrefix: z.string(), skuTemplate: z.string(), skuSeparator: z.enum(['-', '_', '/']), skuCasing: z.enum(SKU_CASINGS), strictEan: Flag,
+  requireHsn: Flag, skuPrefix: z.string(), skuTemplate: z.string(), skuTemplateSet: z.boolean(), skuSeparator: z.enum(['-', '_', '/']), skuCasing: z.enum(SKU_CASINGS), strictEan: Flag,
   gates: z.object({ hsnCode: Flag, countryOfOrigin: Flag, gstRateSlab: Flag }), syncSovereignty: z.enum(SYNC_SOVEREIGNTY),
 });
 const InventoryOut = z.object({

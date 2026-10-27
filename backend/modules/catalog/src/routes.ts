@@ -178,7 +178,7 @@ export const catalogRoutes: FastifyPluginAsync = async (app) => {
     config: { access: { permission: 'products:write' } },
     schema: { tags: VARIANTS, summary: 'Add a variant (SKU) to a product', description: 'SKU and barcode are unique per vendor (409 `CONFLICT` with `details.field`).', params: IdParamSchema, body: VariantInputSchema, response: { 201: successEnvelope(VariantSchema) } },
   }, async (req, reply) => {
-    const dto = await vendorTx(req, (tx, vendorId) => svc.createVariant(tx, vendorId, req.params.id, req.body, requestEffects(tx, req)));
+    const dto = await vendorTx(req, (tx, vendorId) => svc.createVariant(tx, vendorId, req.params.id, req.body, requestEffects(tx, req), { enforceRules: true }));
     return created(req, reply, dto, `/api/v1/variants/${dto.id}`);
   });
 
@@ -210,7 +210,7 @@ export const catalogRoutes: FastifyPluginAsync = async (app) => {
   r.patch('/variants/:id', {
     config: { access: { permission: 'products:write' } },
     schema: { tags: VARIANTS, summary: 'Update a variant (partial)', description: 'Price changes emit `variant.price_changed` for downstream marketplace sync.', params: IdParamSchema, body: VariantUpdateSchema, response: { 200: successEnvelope(VariantSchema) } },
-  }, async (req) => ok(req, await vendorTx(req, (tx, vendorId) => svc.updateVariant(tx, vendorId, req.params.id, req.body, requestEffects(tx, req)))));
+  }, async (req) => ok(req, await vendorTx(req, (tx, vendorId) => svc.updateVariant(tx, vendorId, req.params.id, req.body, requestEffects(tx, req), { enforceRules: true }))));
 
   r.delete('/variants/:id', {
     config: { access: { permission: 'products:write' } },

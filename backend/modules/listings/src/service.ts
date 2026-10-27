@@ -5,6 +5,7 @@ import { createSyncJob, dispatchSyncJob, enqueueSyncJob, type SyncJobRow } from 
 import { getListingRow, loadListingContext, type ListingContext, type ListingRow } from './context';
 import type { Ctx } from './ctx';
 import { fx } from './ctx';
+import { gateIssues, listingGates } from './catalog-gates';
 import { EDITABLE, fromReport, validateListingInput, type ListingStatus, type ValidationResult } from './domain';
 import { categoryRequirements } from './mappings';
 
@@ -177,6 +178,8 @@ export async function evaluate(ctx: Ctx, listingId: string, opts: { signImages?:
   }
   const context = await withVendor(db, vendorId, (tx) => loadListingContext(tx, c, vendorId, listingId, { requirements, signImages: opts.signImages }));
   const result = validateListingInput({ input: context.input, requirements, categoryRequired: connector.capabilities.listings.requiresCategoryMapping, imageCount: context.imageKeys.length });
+  // gates the business turned on (Settings > Products & Listings) are extra blockers here, so readiness, validation and publish all agree; none are on by default
+  result.errors.push(...gateIssues(context.product, await withVendor(db, vendorId, (tx) => listingGates(tx, vendorId))));
   result.errors.unshift(...unavailable);
   if (context.account.status !== 'active') result.errors.unshift({ code: 'account_not_connected', message: 'The marketplace account is not connected' });
   if (!connector.capabilities.listings.create) result.errors.unshift({ code: 'capability_unsupported', message: `${connector.displayName} does not support creating listings through the API` });

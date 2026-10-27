@@ -57,6 +57,8 @@ export const CATALOG_DEFAULTS = {
   requireHsn: false,
   skuPrefix: '',
   skuTemplate: '[BRAND]-[CAT3]-[SEQ6]',
+  /** true once the seller saved a formula: only then is it enforced (the default template is a suggestion) */
+  skuTemplateSet: false,
   skuSeparator: '-' as '-' | '_' | '/',
   skuCasing: 'uppercase' as (typeof SKU_CASINGS)[number],
   strictEan: false,
@@ -170,6 +172,7 @@ export function resolveSettings(raw: unknown): ResolvedSettings {
       requireHsn: bool(ca.requireHsn, CATALOG_DEFAULTS.requireHsn),
       skuPrefix: typeof ca.skuPrefix === 'string' ? ca.skuPrefix : CATALOG_DEFAULTS.skuPrefix,
       skuTemplate: typeof ca.skuTemplate === 'string' && ca.skuTemplate ? ca.skuTemplate : CATALOG_DEFAULTS.skuTemplate,
+      skuTemplateSet: typeof ca.skuTemplate === 'string' && ca.skuTemplate.trim().length > 0,
       skuSeparator: pick(['-', '_', '/'] as const, ca.skuSeparator, CATALOG_DEFAULTS.skuSeparator),
       skuCasing: pick(SKU_CASINGS, ca.skuCasing, CATALOG_DEFAULTS.skuCasing),
       strictEan: bool(ca.strictEan, CATALOG_DEFAULTS.strictEan),

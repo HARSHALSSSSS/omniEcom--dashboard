@@ -1347,6 +1347,9 @@
               "skuTemplate": {
                 "type": "string"
               },
+              "skuTemplateSet": {
+                "type": "boolean"
+              },
               "skuSeparator": {
                 "type": "string",
                 "enum": [
@@ -1397,6 +1400,7 @@
               "requireHsn",
               "skuPrefix",
               "skuTemplate",
+              "skuTemplateSet",
               "skuSeparator",
               "skuCasing",
               "strictEan",
@@ -41120,6 +41124,9 @@
               "skuTemplate": {
                 "type": "string"
               },
+              "skuTemplateSet": {
+                "type": "boolean"
+              },
               "skuSeparator": {
                 "type": "string",
                 "enum": [
@@ -41171,6 +41178,7 @@
               "requireHsn",
               "skuPrefix",
               "skuTemplate",
+              "skuTemplateSet",
               "skuSeparator",
               "skuCasing",
               "strictEan",

@@ -1,6 +1,6 @@
 import { and, asc, eq, gt, inArray, isNull, schema, sql, withVendor, type Db, type Tx } from '@oms/database';
 import type { JobHandler } from '@oms/module-kit';
-import { jobEffects } from '@oms/mod-catalog';
+import { jobEffects, loadCatalogRules } from '@oms/mod-catalog';
 import { cleanBarcode } from '../domain/normalise';
 import { CategoryIndex } from '../domain/category-index';
 import { buildFileIndex, deriveRow, rowValues, type CatalogLookup, type DraftIssue, type RowValues } from '../domain/rows';
@@ -90,6 +90,7 @@ export async function runValidation(db: Db, vendorId: string, sessionId: string)
       const [live] = await tx.select({ status: S.status }).from(S).where(eq(S.id, sessionId));
       if (live?.status !== 'validating') return true; // cancelled or superseded
       const lookup = await catalogLookup(tx, vendorId, batch.map((b) => b.values));
+      const catalogRules = await loadCatalogRules(tx, vendorId);
       const numbers = batch.map((b) => b.row.rowNumber);
       const history = await tx.select().from(I).where(and(eq(I.vendorId, vendorId), eq(I.sessionId, sessionId), inArray(I.rowNumber, numbers), sql`${I.status} <> 'open'`));
       await tx.delete(I).where(and(eq(I.vendorId, vendorId), eq(I.sessionId, sessionId), inArray(I.rowNumber, numbers), eq(I.status, 'open')));
@@ -98,7 +99,7 @@ export async function runValidation(db: Db, vendorId: string, sessionId: string)
       const staleResolved: string[] = [];
       const events: NewActivity[] = [];
       for (const { row, stored, values } of batch) {
-        const d = deriveRow(row.rowNumber, values, { settings, mapping: session.mapping, categories, index, lookup }, { decision: stored.meta.decision });
+        const d = deriveRow(row.rowNumber, values, { settings, mapping: session.mapping, categories, index, lookup, catalogRules }, { decision: stored.meta.decision });
         const dismissed = history.filter((h) => h.rowNumber === row.rowNumber && h.status === 'ignored');
         const active: DraftIssue[] = [];
         let excluded = stored.meta.ignored === true;
