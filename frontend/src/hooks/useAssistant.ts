@@ -2,7 +2,7 @@ import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-quer
 import { useGuardedMutation } from "@/hooks/useSubmitGuard";
 import { assistantApi } from "@/api/assistant.api";
 import { useWorkspaceStore } from "@/store/workspace.store";
-import type { ConversationDetail, ConversationsQuery, ConversationStatus, SendMessageResult } from "@/types/assistant";
+import type { ConversationContext, ConversationDetail, ConversationsQuery, ConversationStatus, SendMessageResult } from "@/types/assistant";
 
 export const assistantKeys = {
   all: ["assistant"] as const,
@@ -79,7 +79,7 @@ export function useCreateConversation() {
   const b = useBusinessId();
   const refresh = useRefreshLists();
   return useGuardedMutation({
-    mutationFn: (title?: string) => assistantApi.create(title),
+    mutationFn: (input?: { title?: string; context?: ConversationContext }) => assistantApi.create(input?.title, input?.context),
     onSuccess: (conv) => {
       // seed the detail so opening it does not race the first answer with an empty read
       qc.setQueryData<ConversationDetail>(assistantKeys.conversation(b, conv.id), { ...conv, messages: [] });

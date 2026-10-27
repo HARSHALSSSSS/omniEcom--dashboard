@@ -21,6 +21,8 @@ const api = vi.hoisted(() => ({
   remove: vi.fn(),
 }));
 vi.mock("@/api/assistant.api", () => ({ assistantApi: api }));
+const intel = vi.hoisted(() => ({ list: vi.fn() }));
+vi.mock("@/api/productIntelligence.api", () => ({ productIntelligenceApi: intel }));
 
 import AiAssistantPage from "./AiAssistantPage";
 
@@ -29,6 +31,7 @@ const conv = (over: Partial<AssistantConversation> = {}): AssistantConversation 
   title: "Stock planning",
   status: "active",
   messagesCount: 2,
+  context: null,
   lastActive: "2026-10-20T05:00:00.000Z",
   createdAt: "2026-10-20T04:00:00.000Z",
   ...over,
@@ -80,14 +83,14 @@ const listPage = (items: AssistantConversation[]) => ({ items, page: 1, pageSize
 
 function Probe() {
   const l = useLocation();
-  return <div data-testid="loc">{l.pathname}</div>;
+  return <div data-testid="loc">{l.pathname + l.search}</div>;
 }
 
-function renderPage() {
+function renderPage(url = "/ai-assistant") {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 0 }, mutations: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={["/ai-assistant"]}>
+      <MemoryRouter initialEntries={[url]}>
         <Routes>
           <Route
             path="*"
@@ -130,6 +133,7 @@ beforeEach(() => {
   api.insights.mockResolvedValue([INSIGHT]);
   api.conversations.mockResolvedValue(listPage([conv()]));
   api.conversation.mockResolvedValue(detail());
+  intel.list.mockResolvedValue({ items: [], page: 1, pageSize: 1, total: 0, pages: 1, summary: {}, variantsAnalysed: 0, portfolio: null });
 });
 
 describe("AiAssistantPage gating", () => {
@@ -204,7 +208,7 @@ describe("AiAssistantPage conversations", () => {
     await user.type(screen.getByLabelText("Ask the assistant"), "How are sales?");
     await user.click(screen.getByRole("button", { name: "Send message" }));
     expect(await screen.findByText("up")).toBeInTheDocument();
-    expect(api.create).toHaveBeenCalledWith(undefined);
+    expect(api.create).toHaveBeenCalledWith(undefined, undefined);
     expect(api.send).toHaveBeenCalledWith("c9", "How are sales?");
     expect(screen.getByLabelText("Ask the assistant")).toHaveValue("");
     expect(screen.getByRole("heading", { name: "How are sales?" })).toBeInTheDocument();
@@ -303,5 +307,97 @@ describe("AiAssistantPage conversations", () => {
     expect(screen.getByText(/Conversations could not be loaded/)).toBeInTheDocument();
     await user.click(retry);
     expect(await screen.findByText("Stock planning")).toBeInTheDocument();
+  });
+});
+
+const SKU_ITEM = {
+  id: "v1",
+  variantId: "v1",
+  productId: "p1",
+  sku: "KURTA-M",
+  productName: "Cotton Kurta",
+  categoryId: null,
+  category: "Apparel",
+  salesVelocity: 2.5,
+  unitsSold30d: 75,
+  velocityTrend: "steady",
+  trendChangePercent: 0,
+  marginPercent: 38.5,
+  sellingPriceMinor: 99900,
+  costPriceMinor: 61000,
+  inventory: { available: 12, onHand: 14, runwayDays: 4.8, ageDays: 3, leadTimeDays: 10, suggestedReorderUnits: 40 },
+  competitor: null,
+  recommendedAction: "reorder",
+  confidence: { score: 80, level: "high", factors: [] },
+  reasons: [{ key: "stockout", text: "Stock runs out in 5 days, before a restock could arrive in 10.", values: {} }],
+};
+
+describe("AiAssistantPage product context", () => {
+  it("shows no product, and no example numbers, when opened without a SKU", async () => {
+    renderPage();
+    await screen.findByLabelText("Ask the assistant");
+    expect(intel.list).not.toHaveBeenCalled();
+    expect(screen.queryByText(/illustrative|Cotton throw|NL-THR|Sep 2026/i)).not.toBeInTheDocument();
+  });
+
+  it("reads the rail from Product Intelligence for ?sku=, and the chat remembers the product", async () => {
+    const user = userEvent.setup();
+    intel.list.mockResolvedValue({ items: [SKU_ITEM], page: 1, pageSize: 1, total: 1, pages: 1, summary: {}, variantsAnalysed: 1, portfolio: null });
+    api.create.mockResolvedValue(conv({ id: "c9", title: "New conversation", messagesCount: 0, context: { sku: "KURTA-M", source: "product_intelligence" } }));
+    api.send.mockResolvedValue({ conversation: conv({ id: "c9" }), userMessage: userMsg({ id: "u9" }), assistantMessage: botMsg({ id: "a9" }), followUp: null });
+    renderPage("/ai-assistant?sku=KURTA-M");
+    expect(await screen.findByText("5 days of cover")).toBeInTheDocument();
+    expect(intel.list).toHaveBeenCalledWith(expect.objectContaining({ sku: "KURTA-M" }), expect.anything());
+    expect(screen.getByText("10-day lead time")).toBeInTheDocument();
+    expect(screen.getByText("38.5%")).toBeInTheDocument();
+    expect(screen.getByText(/Product Intelligence \/ Cotton Kurta/)).toBeInTheDocument();
+    await user.type(screen.getByLabelText("Ask the assistant"), "Should I reorder?");
+    await user.click(screen.getByRole("button", { name: "Send message" }));
+    await waitFor(() => expect(api.create).toHaveBeenCalledWith(undefined, { sku: "KURTA-M", source: "product_intelligence" }));
+  });
+
+  it("says so when the SKU is not found", async () => {
+    renderPage("/ai-assistant?sku=GONE-1");
+    expect(await screen.findByText("GONE-1 was not found")).toBeInTheDocument();
+  });
+});
+
+describe("AiAssistantPage conversation history", () => {
+  it("lists only the real conversations, grouped by their real days, with source chips", async () => {
+    api.conversations.mockResolvedValue(
+      listPage([
+        conv({ id: "a", title: "Reorder review", lastActive: "2026-10-20T05:00:00.000Z", context: { sku: "KURTA-M", source: "product_intelligence" } }),
+        conv({ id: "b", title: "Margin question", lastActive: "2026-10-12T18:40:00.000Z", context: { source: "reports" } }),
+      ]),
+    );
+    renderPage("/ai-assistant?tab=history");
+    expect(await screen.findByRole("button", { name: /Reorder review/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Margin question/ })).toBeInTheDocument();
+    expect(screen.getByText("20 Oct 2026")).toBeInTheDocument();
+    expect(screen.getByText("13 Oct 2026")).toBeInTheDocument(); // 18:40 UTC is already the 13th in Kolkata
+    expect(screen.getByText("KURTA-M")).toBeInTheDocument();
+    expect(screen.queryByText(/Cotton throw|NL-THR|Understand delayed orders|Abhishek/)).not.toBeInTheDocument();
+  });
+
+  it("shows an empty state without sample rows when there are no conversations", async () => {
+    api.conversations.mockResolvedValue(listPage([]));
+    renderPage("/ai-assistant?tab=history");
+    expect(await screen.findByText("No conversations yet.")).toBeInTheDocument();
+  });
+
+  it("asks the server for one source when the source filter changes", async () => {
+    const user = userEvent.setup();
+    renderPage("/ai-assistant?tab=history");
+    await screen.findByRole("button", { name: /Stock planning/ });
+    await user.selectOptions(screen.getByLabelText("Source"), "reports");
+    await waitFor(() => expect(api.conversations).toHaveBeenCalledWith(expect.objectContaining({ source: "reports" }), expect.anything()));
+  });
+
+  it("previews the real first question and opens the conversation", async () => {
+    const user = userEvent.setup();
+    renderPage("/ai-assistant?tab=history");
+    expect(await screen.findByText("Which products will run out?")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Open conversation" }));
+    await waitFor(() => expect(screen.getByTestId("loc")).toHaveTextContent("tab=current"));
   });
 });

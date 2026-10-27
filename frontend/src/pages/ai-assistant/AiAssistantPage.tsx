@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { errorMessage } from "@/api/errors";
 import { PageHeader } from "@/components/common/PageHeader";
 import { NoAccess, NotEnabled, SwitchedOff } from "@/components/ai-assistant/AssistantGate";
-import { blockReason, isFull, type BlockReason } from "@/components/ai-assistant/assistantFormat";
+import { SOURCE_LABELS, blockReason, isFull, type BlockReason } from "@/components/ai-assistant/assistantFormat";
 import { ChatPanel, type SendFailure } from "@/components/ai-assistant/ChatPanel";
 import { ConversationList } from "@/components/ai-assistant/ConversationList";
 import { InsightsPanel } from "@/components/ai-assistant/InsightsPanel";
@@ -25,6 +25,10 @@ import { useSearchParams } from "react-router-dom";
 import { ProductContextRail } from "@/components/ai-assistant/ProductContextRail";
 import { ConversationHistoryView } from "@/components/ai-assistant/ConversationHistoryView";
 import { useConversationList } from "@/hooks/useAssistant";
+import { useIntelBySku } from "@/hooks/useProductIntelligence";
+import { dateKeyInZone } from "@/components/reports/overviewRange";
+import { useWorkspaceStore } from "@/store/workspace.store";
+import { CONTEXT_SOURCES, type ContextSource } from "@/types/assistant";
 import { cn } from "@/utils/cn";
 
 function Workspace({ onBlocked }: { onBlocked: (r: BlockReason) => void }) {
@@ -32,15 +36,21 @@ function Workspace({ onBlocked }: { onBlocked: (r: BlockReason) => void }) {
   const activeTab = searchParams.get("tab") === "history" ? "history" : "current";
   const skuParam = searchParams.get("sku");
   const productParam = searchParams.get("product");
+  const sourceParam = searchParams.get("source");
+  const shell = useWorkspaceStore((s) => s.shell);
+  const timezone = shell?.business.timezone ?? "Asia/Kolkata";
+  const currency = shell?.business.currency ?? "INR";
+  const [historySource, setHistorySource] = useState<ContextSource | "all">("all");
 
   const [selectedId, setSelectedId] = useState<string | null>(searchParams.get("id"));
   const [draft, setDraft] = useState("");
   const [pendingText, setPendingText] = useState<string | null>(null);
   const [failure, setFailure] = useState<SendFailure | null>(null);
-  const [activeRightTab, setActiveRightTab] = useState<"product" | "insights">(skuParam || selectedId ? "product" : "insights");
+  const [activeRightTab, setActiveRightTab] = useState<"product" | "insights">(skuParam ? "product" : "insights");
 
   const insights = useAssistantInsights(true);
-  const conversationsList = useConversationList({ status: "active", q: "" }, true);
+  // the one source of the history: the Conversation history tab reads it, nothing else fetches it
+  const conversationsList = useConversationList({ status: "active", q: "", source: historySource === "all" ? undefined : historySource }, activeTab === "history");
   const detail = useConversationDetail(selectedId);
   const create = useCreateConversation();
   const send = useSendMessage();
@@ -56,6 +66,12 @@ function Workspace({ onBlocked }: { onBlocked: (r: BlockReason) => void }) {
   }, [detail.error, onBlocked]);
 
   const conversation = detail.data;
+  // the rail follows the link's product, or the product the open conversation started from
+  const railSku = skuParam ?? conversation?.context?.sku ?? undefined;
+  const skuLookup = useIntelBySku(railSku, Boolean(railSku));
+  const skuItem = railSku ? (skuLookup.data ? (skuLookup.data.items[0] ?? null) : undefined) : undefined;
+  const today = dateKeyInZone(new Date(), timezone);
+  const periodFrom = dateKeyInZone(new Date(Date.now() - 29 * 86_400_000), timezone);
   const archived = conversation?.status === "archived";
   const full = isFull(conversation);
   const lockedReason = archived
@@ -72,7 +88,9 @@ function Workspace({ onBlocked }: { onBlocked: (r: BlockReason) => void }) {
     try {
       let id = selectedId;
       if (!id) {
-        const created = await create.mutateAsync(undefined);
+        // a chat opened from a product remembers the product and the screen it started on
+        const source: ContextSource = (CONTEXT_SOURCES as readonly string[]).includes(sourceParam ?? "") ? (sourceParam as ContextSource) : "product_intelligence";
+        const created = await create.mutateAsync(skuParam ? { context: { sku: skuParam, source } } : undefined);
         id = created.id;
         setSelectedId(id);
       }
@@ -160,6 +178,15 @@ function Workspace({ onBlocked }: { onBlocked: (r: BlockReason) => void }) {
       {activeTab === "history" ? (
         <ConversationHistoryView
           conversations={conversationsList.data?.pages.flatMap((p) => p.items) ?? []}
+          loading={conversationsList.isLoading}
+          error={conversationsList.error}
+          onRetry={() => void conversationsList.refetch()}
+          hasMore={Boolean(conversationsList.hasNextPage)}
+          loadingMore={conversationsList.isFetchingNextPage}
+          onLoadMore={() => void conversationsList.fetchNextPage()}
+          source={historySource}
+          onSourceChange={setHistorySource}
+          timezone={timezone}
           onOpenConversation={openConversationFromHistory}
         />
       ) : (
@@ -184,19 +211,18 @@ function Workspace({ onBlocked }: { onBlocked: (r: BlockReason) => void }) {
               onRestore={archived ? restore : null}
               restoring={setStatus.isPending}
               breadcrumb={
-                productParam
-                  ? `Product Intelligence / ${productParam} · Stock risk review`
-                  : conversation?.title
-                    ? `Product Intelligence / ${conversation.title}`
-                    : undefined
+                railSku
+                  ? `${conversation?.context?.source && !skuParam ? SOURCE_LABELS[conversation.context.source] : "Product Intelligence"} / ${skuItem?.productName ?? productParam ?? railSku}`
+                  : undefined
               }
+              contextNote={railSku ? `${periodFrom} to ${today} · ${currency} · ${timezone}` : undefined}
               onBack={() => newConversation()}
             />
           </div>
 
           <div className="flex min-h-0 flex-col gap-4 lg:h-[calc(100vh-300px)]">
             {/* Side Rail Tabs if in active conversation with a product context */}
-            {selectedId || skuParam ? (
+            {selectedId || railSku ? (
               <div className="flex flex-col h-full rounded-xl border border-border bg-card overflow-hidden">
                 <div className="flex border-b border-border bg-muted/20 p-1">
                   <button
@@ -228,25 +254,11 @@ function Workspace({ onBlocked }: { onBlocked: (r: BlockReason) => void }) {
                 {activeRightTab === "product" ? (
                   <ProductContextRail
                     className="border-0 w-full"
-                    data={
-                      skuParam
-                        ? {
-                            sku: skuParam,
-                            name: productParam || "Selected Product",
-                            category: "Textiles",
-                            riskBadge: "P1 · Stock risk",
-                            daysOfCover: 5,
-                            leadTimeDays: 12,
-                            onHand: 50,
-                            unitsSold: 300,
-                            dailyDemand: 10,
-                            netSales: "₹4,50,000",
-                            grossProfit: "₹1,53,000",
-                            grossMargin: "34.0%",
-                            month: "September 2026",
-                          }
-                        : undefined
-                    }
+                    sku={railSku}
+                    item={skuItem}
+                    loading={skuLookup.isLoading}
+                    error={skuLookup.isError ? errorMessage(skuLookup.error) : null}
+                    onRetry={() => void skuLookup.refetch()}
                   />
                 ) : (
                   <div className="flex flex-col gap-4 p-3 overflow-y-auto">

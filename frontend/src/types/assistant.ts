@@ -3,11 +3,21 @@
 export type ConversationStatus = "active" | "archived";
 export type ConversationFilter = ConversationStatus | "all";
 
+export const CONTEXT_SOURCES = ["product_intelligence", "reports", "profitability", "inventory", "orders", "procurement", "other"] as const;
+export type ContextSource = (typeof CONTEXT_SOURCES)[number];
+
+/** where a conversation started: the product and the screen */
+export interface ConversationContext {
+  sku?: string;
+  source?: ContextSource;
+}
+
 export interface AssistantConversation {
   id: string;
   title: string;
   status: ConversationStatus;
   messagesCount: number;
+  context: ConversationContext | null;
   /** ISO timestamp of the last message (or of the creation) */
   lastActive: string;
   createdAt: string;
@@ -16,6 +26,8 @@ export interface AssistantConversation {
 export interface ConversationsQuery {
   status: ConversationFilter;
   q: string;
+  /** only conversations that began on this screen */
+  source?: ContextSource;
   page: number;
   pageSize: number;
 }

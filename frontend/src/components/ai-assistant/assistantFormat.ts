@@ -1,3 +1,4 @@
+import type { ContextSource } from "@/types/assistant";
 import { isApiError } from "@/api/errors";
 import { formatInZone } from "@/utils/format";
 import type { AssistantConversation, SuggestedAction } from "@/types/assistant";
@@ -51,4 +52,15 @@ export const SEVERITY_CLASS: Record<string, string> = {
   critical: "bg-red-50 text-red-700 border-red-200",
   warning: "bg-amber-50 text-amber-700 border-amber-200",
   info: "bg-sky-50 text-sky-700 border-sky-200",
+};
+
+/** where a conversation started, in words */
+export const SOURCE_LABELS: Record<ContextSource, string> = {
+  product_intelligence: "Product Intelligence",
+  reports: "Reports",
+  profitability: "Profitability",
+  inventory: "Inventory",
+  orders: "Orders",
+  procurement: "Procurement",
+  other: "Other",
 };

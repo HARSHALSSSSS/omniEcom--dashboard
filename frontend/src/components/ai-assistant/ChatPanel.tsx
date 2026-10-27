@@ -40,6 +40,8 @@ interface ChatPanelProps {
   onRestore: (() => void) | null;
   restoring: boolean;
   breadcrumb?: string;
+  /** the period and the business settings the figures are in, e.g. "2026-09-27 to 2026-10-27 · INR · Asia/Kolkata" */
+  contextNote?: string;
   onBack?: () => void;
   followUps?: string[];
 }
@@ -74,7 +76,7 @@ export function ChatPanel(p: ChatPanelProps) {
             <span className="text-muted-foreground">/</span>
             <span className="font-medium text-foreground">{p.breadcrumb}</span>
           </div>
-          <span className="text-[11px] text-muted-foreground">01–30 Sep 2026 · INR (₹) · Asia/Kolkata</span>
+          {p.contextNote && <span className="text-[11px] text-muted-foreground">{p.contextNote}</span>}
         </div>
       )}
 
@@ -202,7 +204,7 @@ export function ChatPanel(p: ChatPanelProps) {
         )}
 
         <p className="pt-2 text-center text-[10px] text-muted-foreground">
-          All figures are illustrative, not synced or verified. Review source records before making business decisions. No changes applied.
+          Answers are built from your own records. Check the source records before acting on them. Nothing is changed by asking.
         </p>
 
         <div ref={endRef} />

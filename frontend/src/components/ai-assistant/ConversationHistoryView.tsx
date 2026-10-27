@@ -1,419 +1,260 @@
 import { useMemo, useState } from "react";
-import {
-  ArrowUpDown,
-  Calendar,
-  ChevronDown,
-  Layers,
-  MessageSquare,
-  MoreHorizontal,
-  PanelRightClose,
-  PanelRightOpen,
-  Search,
-} from "lucide-react";
+import { Calendar, Layers, MessageSquare, PanelRightClose, PanelRightOpen, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { LoadError } from "@/components/pricing/PricingStates";
+import { dateKeyInZone } from "@/components/reports/overviewRange";
+import { useConversationDetail } from "@/hooks/useAssistant";
+import { errorMessage } from "@/api/errors";
 import { cn } from "@/utils/cn";
-import type { AssistantConversation } from "@/types/assistant";
+import { CONTEXT_SOURCES, type AssistantConversation, type ContextSource } from "@/types/assistant";
+import { SOURCE_LABELS } from "./assistantFormat";
 
-export interface MockHistoryItem {
-  id: string;
-  title: string;
-  snippet: string;
-  source: string;
-  sku?: string;
-  messagesCount: number;
-  time: string;
-  group: "Today" | "Yesterday" | "Earlier this week";
-  question: string;
-  reviewedHeadline: string;
-  onHand?: string;
-  dailyDemand?: string;
-  stockCoverVsLeadTime?: string;
-  stillToVerify?: string;
-}
+const DATE_FILTERS = [
+  { id: "all", label: "All dates", days: null },
+  { id: "today", label: "Today", days: 0 },
+  { id: "week", label: "Last 7 days", days: 6 },
+  { id: "month", label: "Last 30 days", days: 29 },
+] as const;
+type DateFilterId = (typeof DATE_FILTERS)[number]["id"];
 
-const SAMPLE_HISTORY: MockHistoryItem[] = [
-  {
-    id: "hist-1",
-    title: "Review Cotton throw stock risk",
-    snippet: "5 days of cover against a 12-day lead time. Incoming stock still needs verification.",
-    source: "Product Intelligence",
-    sku: "NL-THR-002",
-    messagesCount: 4,
-    time: "10:42",
-    group: "Today",
-    question: "Why is Cotton throw marked as a P1 stock risk, and what should I check before placing a purchase order?",
-    reviewedHeadline: "Stock cover is shorter than the stated lead time.",
-    onHand: "50 units",
-    dailyDemand: "10 units/day",
-    stockCoverVsLeadTime: "5 / 12 days",
-    stillToVerify: "Incoming stock, expected receipt dates and supplier lead time before creating a purchase order.",
-  },
-  {
-    id: "hist-2",
-    title: "Compare September product margins",
-    snippet: "Reviewed gross margin differences across the top-selling homeware products.",
-    source: "Reports",
-    sku: "NL-DIN-004",
-    messagesCount: 6,
-    time: "09:18",
-    group: "Today",
-    question: "How do Stoneware dinner set margins compare with the category average?",
-    reviewedHeadline: "Margin is 4 pp below the 32% benchmark on ₹3.00L net sales.",
-    onHand: "160 units",
-    dailyDemand: "8 units/day",
-    stockCoverVsLeadTime: "20 / 14 days",
-    stillToVerify: "Supplier tier discounts for bulk purchase before updating listing price.",
-  },
-  {
-    id: "hist-3",
-    title: "Check Ceramic planter listing gaps",
-    snippet: "Missing dimensions and care details to verify before updating marketplace listings.",
-    source: "Listings",
-    sku: "NL-PLN-004",
-    messagesCount: 3,
-    time: "16:35",
-    group: "Yesterday",
-    question: "Why did Flipkart suppress the Ceramic planter listing?",
-    reviewedHeadline: "Mandatory attribute 'Package Dimensions' missing in latest SP-API sync.",
-    stillToVerify: "Update dimensions in Product Catalog and run re-sync job.",
-  },
-  {
-    id: "hist-4",
-    title: "Understand delayed orders",
-    snippet: "Reviewed unfulfilled orders and carrier handoff records that need a closer look.",
-    source: "Fulfillment",
-    messagesCount: 5,
-    time: "11:06",
-    group: "Yesterday",
-    question: "Which courier has the highest SLA breach rate this week?",
-    reviewedHeadline: "Bluedart ground pickups experienced a 36-hour delay in West hub.",
-    stillToVerify: "Reroute urgent shipments to air express partner.",
-  },
-  {
-    id: "hist-5",
-    title: "Review Linen cushion return reasons",
-    snippet: "Compared reported return reasons; product quality and listing details need checking.",
-    source: "Returns",
-    sku: "NL-CSH-008",
-    messagesCount: 4,
-    time: "07 Oct",
-    group: "Earlier this week",
-    question: "What is driving the 18% return rate on Linen cushions?",
-    reviewedHeadline: "Color mismatch claims represent 65% of customer return notes.",
-    stillToVerify: "Request revised batch photography from design team.",
-  },
-  {
-    id: "hist-6",
-    title: "Assess Oak side table demand",
-    snippet: "Reviewed September sales and stock cover before considering replenishment.",
-    source: "Product Intelligence",
-    sku: "NL-TBL-003",
-    messagesCount: 6,
-    time: "05 Oct",
-    group: "Earlier this week",
-    question: "Is demand on Oak side table sufficient to justify a 200-unit PO?",
-    reviewedHeadline: "Steady 4 units/day run rate with 18 days of cover remaining.",
-    stillToVerify: "Supplier minimum order quantity threshold.",
-  },
-];
+const dayNumber = (key: string) => Date.parse(`${key}T00:00:00Z`) / 86_400_000;
 
 interface ConversationHistoryViewProps {
+  /** the real conversations, newest first (one list, fetched by the page) */
   conversations: AssistantConversation[];
+  loading?: boolean;
+  error?: unknown;
+  onRetry?: () => void;
+  hasMore?: boolean;
+  loadingMore?: boolean;
+  onLoadMore?: () => void;
+  /** the source filter is applied by the server, so the page owns it */
+  source: ContextSource | "all";
+  onSourceChange: (s: ContextSource | "all") => void;
+  /** the business time zone: the days are its days, not the browser's */
+  timezone: string;
   onOpenConversation: (id: string) => void;
 }
 
-export function ConversationHistoryView({ conversations, onOpenConversation }: ConversationHistoryViewProps) {
+/** the conversations the business really had, grouped by the day they were last active in the business time zone */
+export function ConversationHistoryView({ conversations, loading = false, error = null, onRetry, hasMore = false, loadingMore = false, onLoadMore, source, onSourceChange, timezone, onOpenConversation }: ConversationHistoryViewProps) {
   const [search, setSearch] = useState("");
-  const [sourceFilter, setSourceFilter] = useState("All sources");
-  const [dateFilter, setDateFilter] = useState("All dates");
-  const [selectedId, setSelectedId] = useState<string>("hist-1");
+  const [dateFilter, setDateFilter] = useState<DateFilterId>("all");
+  const [pickedId, setPickedId] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(true);
 
-  // Merge real conversations from backend if available
-  const allItems: MockHistoryItem[] = useMemo(() => {
-    if (conversations.length === 0) return SAMPLE_HISTORY;
-
-    const realMapped: MockHistoryItem[] = conversations.map((c, i) => ({
-      id: c.id,
-      title: c.title,
-      snippet: `Conversation with ${c.messagesCount} message${c.messagesCount === 1 ? "" : "s"}.`,
-      source: "Product Intelligence",
-      messagesCount: c.messagesCount,
-      time: new Date(c.lastActive).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      group: i === 0 ? "Today" : i < 3 ? "Yesterday" : "Earlier this week",
-      question: c.title,
-      reviewedHeadline: "Evidence and records reviewed from your commerce data.",
-      stillToVerify: "Inspect source records before applying automated changes.",
-    }));
-
-    // Keep sample items as fallback if few real conversations exist
-    return [...realMapped, ...SAMPLE_HISTORY.filter((s) => !realMapped.some((r) => r.id === s.id))];
-  }, [conversations]);
+  const todayKey = dateKeyInZone(new Date(), timezone);
+  const dayLabel = (key: string) => {
+    const diff = dayNumber(todayKey) - dayNumber(key);
+    if (diff === 0) return "Today";
+    if (diff === 1) return "Yesterday";
+    return new Intl.DateTimeFormat("en-GB", { timeZone: "UTC", day: "2-digit", month: "short", year: "numeric" }).format(new Date(`${key}T00:00:00Z`));
+  };
+  const timeLabel = (iso: string) => new Intl.DateTimeFormat("en-GB", { timeZone: timezone, hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(iso));
 
   const filtered = useMemo(() => {
-    return allItems.filter((item) => {
-      if (search) {
-        const q = search.toLowerCase();
-        if (!item.title.toLowerCase().includes(q) && !item.snippet.toLowerCase().includes(q) && !(item.sku?.toLowerCase().includes(q))) {
-          return false;
-        }
-      }
-      if (sourceFilter !== "All sources" && item.source !== sourceFilter) {
-        return false;
-      }
+    const q = search.trim().toLowerCase();
+    const span = (DATE_FILTERS.find((d) => d.id === dateFilter) ?? DATE_FILTERS[0]).days;
+    return conversations.filter((c) => {
+      if (q && !c.title.toLowerCase().includes(q) && !(c.context?.sku ?? "").toLowerCase().includes(q)) return false;
+      if (span !== null && dayNumber(todayKey) - dayNumber(dateKeyInZone(new Date(c.lastActive), timezone)) > span) return false;
       return true;
     });
-  }, [allItems, search, sourceFilter]);
+  }, [conversations, search, dateFilter, todayKey, timezone]);
 
-  const selectedItem = allItems.find((x) => x.id === selectedId) || allItems[0];
+  const groups = useMemo(() => {
+    const byDay = new Map<string, AssistantConversation[]>();
+    for (const c of filtered) {
+      const key = dateKeyInZone(new Date(c.lastActive), timezone);
+      byDay.set(key, [...(byDay.get(key) ?? []), c]);
+    }
+    return [...byDay.entries()].sort((a, b) => (a[0] < b[0] ? 1 : -1));
+  }, [filtered, timezone]);
 
-  const groups: Array<MockHistoryItem["group"]> = ["Today", "Yesterday", "Earlier this week"];
+  const selected = filtered.find((c) => c.id === pickedId) ?? filtered[0] ?? null;
+  const detail = useConversationDetail(selected?.id ?? null);
+  const firstQuestion = detail.data?.messages.find((m) => m.role === "user")?.content;
+  const lastAnswer = [...(detail.data?.messages ?? [])].reverse().find((m) => m.role === "assistant")?.content;
+  const filtering = Boolean(search.trim()) || dateFilter !== "all" || source !== "all";
 
   return (
     <div className="flex min-h-[750px] flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card">
-      {/* Header bar */}
       <div className="border-b border-border p-5">
         <h2 className="text-base font-bold text-foreground">Conversation history</h2>
-        <p className="text-xs text-muted-foreground">
-          Find previous questions, revisit the evidence and continue a review.
-        </p>
+        <p className="text-xs text-muted-foreground">Find previous questions and continue where you left off.</p>
 
-        {/* Filter Toolbar */}
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="relative min-w-[260px] flex-1 max-w-md">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search conversations, products or SKUs..."
-              className="h-9 pl-9 text-xs"
-            />
+          <div className="relative min-w-[260px] max-w-md flex-1">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" aria-hidden />
+            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search conversations, products or SKUs..." aria-label="Search conversations" className="h-9 pl-9 text-xs" />
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* Source dropdown */}
-            <button
-              type="button"
-              className="flex items-center gap-1.5 rounded-md border border-border bg-muted/40 px-3 py-1.5 text-xs text-foreground hover:bg-muted"
-              onClick={() =>
-                setSourceFilter(
-                  sourceFilter === "All sources"
-                    ? "Product Intelligence"
-                    : sourceFilter === "Product Intelligence"
-                      ? "Reports"
-                      : "All sources"
-                )
-              }
-            >
-              <Layers className="h-3.5 w-3.5 text-muted-foreground" />
-              {sourceFilter}
-              <ChevronDown className="h-3 w-3 text-muted-foreground" />
-            </button>
-
-            {/* Date dropdown */}
-            <button
-              type="button"
-              className="flex items-center gap-1.5 rounded-md border border-border bg-muted/40 px-3 py-1.5 text-xs text-foreground hover:bg-muted"
-              onClick={() => setDateFilter(dateFilter === "All dates" ? "Today" : "All dates")}
-            >
-              <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-              {dateFilter}
-              <ChevronDown className="h-3 w-3 text-muted-foreground" />
-            </button>
-
-            {/* Sort indicator */}
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <ArrowUpDown className="h-3.5 w-3.5" />
-              <span>Last updated</span>
-            </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <label className="flex items-center gap-1.5 rounded-md border border-border bg-muted/40 px-3 py-1.5">
+              <Layers className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+              <select aria-label="Source" value={source} onChange={(e) => onSourceChange(e.target.value as ContextSource | "all")} className="bg-transparent text-foreground outline-none">
+                <option value="all">All sources</option>
+                {CONTEXT_SOURCES.map((s) => (
+                  <option key={s} value={s}>
+                    {SOURCE_LABELS[s]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex items-center gap-1.5 rounded-md border border-border bg-muted/40 px-3 py-1.5">
+              <Calendar className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+              <select aria-label="Date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value as DateFilterId)} className="bg-transparent text-foreground outline-none">
+                {DATE_FILTERS.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.label}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
         </div>
       </div>
 
-      {/* Main master-detail content */}
       <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_380px]">
-        {/* Left column: Grouped conversation list */}
-        <div className="min-h-0 flex-1 overflow-y-auto divide-y divide-border p-4">
-          <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
-            <span>All conversations {filtered.length}</span>
-            <span>Last updated ↓</span>
-          </div>
-
-          {groups.map((grp) => {
-            const inGroup = filtered.filter((x) => x.group === grp);
-            if (inGroup.length === 0) return null;
-            return (
-              <div key={grp} className="py-3">
-                <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground">
-                  <span>{grp}</span>
-                  <span className="text-[11px] font-normal">
-                    {grp === "Today" ? "09 Oct 2026" : grp === "Yesterday" ? "08 Oct 2026" : "05–07 Oct 2026"}
-                  </span>
-                </div>
-
-                <div className="mt-2 space-y-1.5">
-                  {inGroup.map((item) => {
-                    const active = item.id === selectedId;
-                    return (
-                      <div
-                        key={item.id}
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => setSelectedId(item.id)}
-                        onKeyDown={(e) => e.key === "Enter" && setSelectedId(item.id)}
-                        className={cn(
-                          "group flex cursor-pointer items-start justify-between rounded-lg border p-3 transition-colors",
-                          active
-                            ? "border-foreground bg-muted/30"
-                            : "border-transparent bg-card hover:border-border hover:bg-muted/10"
-                        )}
-                      >
-                        <div className="flex gap-3 min-w-0">
-                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-foreground">
-                            <MessageSquare className="h-3.5 w-3.5" />
-                          </div>
-                          <div className="min-w-0 space-y-1">
-                            <h4 className="truncate text-xs font-semibold text-foreground">{item.title}</h4>
-                            <p className="line-clamp-2 text-xs text-muted-foreground leading-relaxed">{item.snippet}</p>
-                            <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-                              <span className="font-medium text-foreground">{item.source}</span>
-                              {item.sku && <span>· {item.sku}</span>}
-                              <span>· {item.messagesCount} messages</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex shrink-0 flex-col items-end gap-1.5">
-                          <span className="text-[11px] text-muted-foreground">{item.time}</span>
+        <div className="min-h-0 flex-1 overflow-y-auto p-4">
+          {error && conversations.length === 0 ? (
+            <LoadError what="The conversation history" message={errorMessage(error)} onRetry={onRetry ?? (() => undefined)} />
+          ) : loading && conversations.length === 0 ? (
+            <div role="status" aria-label="Loading conversations" className="space-y-2">
+              <Skeleton className="h-16 w-full" />
+              <Skeleton className="h-16 w-full" />
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="space-y-1 py-16 text-center text-xs text-muted-foreground">
+              <p className="font-semibold text-foreground">{filtering ? "No conversations match." : "No conversations yet."}</p>
+              <p>{filtering ? "Change the search or the filters." : "Ask the assistant a question and it will be kept here."}</p>
+            </div>
+          ) : (
+            <>
+              <div className="mb-2 text-xs text-muted-foreground">
+                {filtered.length} conversation{filtered.length === 1 ? "" : "s"}
+                {hasMore ? " loaded" : ""}
+              </div>
+              {groups.map(([key, items]) => (
+                <div key={key} className="py-3">
+                  <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground">
+                    <span>{dayLabel(key)}</span>
+                    <span className="text-[11px] font-normal">{key}</span>
+                  </div>
+                  <ul className="mt-2 space-y-1.5">
+                    {items.map((c) => {
+                      const active = c.id === selected?.id;
+                      return (
+                        <li key={c.id}>
                           <button
                             type="button"
-                            className="rounded p-1 text-muted-foreground opacity-0 hover:bg-muted group-hover:opacity-100"
-                            title="More options"
+                            aria-pressed={active}
+                            onClick={() => setPickedId(c.id)}
+                            className={cn("flex w-full items-start justify-between gap-3 rounded-lg border p-3 text-left transition-colors", active ? "border-foreground bg-muted/30" : "border-transparent bg-card hover:border-border hover:bg-muted/10")}
                           >
-                            <MoreHorizontal className="h-3.5 w-3.5" />
+                            <span className="flex min-w-0 gap-3">
+                              <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-foreground">
+                                <MessageSquare className="h-3.5 w-3.5" aria-hidden />
+                              </span>
+                              <span className="min-w-0 space-y-1">
+                                <span className="block truncate text-xs font-semibold text-foreground">{c.title}</span>
+                                <span className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                                  {c.context?.source && <span className="rounded bg-muted px-1.5 py-0.5 font-medium text-foreground">{SOURCE_LABELS[c.context.source]}</span>}
+                                  {c.context?.sku && <span className="font-mono">{c.context.sku}</span>}
+                                  <span>
+                                    {c.messagesCount} message{c.messagesCount === 1 ? "" : "s"}
+                                  </span>
+                                  {c.status === "archived" && <span>Archived</span>}
+                                </span>
+                              </span>
+                            </span>
+                            <span className="shrink-0 text-[11px] text-muted-foreground">{timeLabel(c.lastActive)}</span>
                           </button>
-                        </div>
-                      </div>
-                    );
-                  })}
+                        </li>
+                      );
+                    })}
+                  </ul>
                 </div>
-              </div>
-            );
-          })}
+              ))}
+              {hasMore && (
+                <div className="py-3 text-center">
+                  <Button size="sm" variant="outline" className="text-xs" disabled={loadingMore} onClick={onLoadMore}>
+                    {loadingMore ? "Loading..." : "Load more"}
+                  </Button>
+                </div>
+              )}
+            </>
+          )}
         </div>
 
-        {/* Right column: Conversation preview */}
         {previewOpen ? (
           <aside className="hidden flex-col overflow-y-auto border-l border-border bg-card p-5 text-xs lg:flex">
             <div className="flex items-center justify-between border-b border-border pb-3">
-              <span className="font-semibold uppercase tracking-wider text-muted-foreground">
-                Conversation preview
-              </span>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 w-7 p-0"
-                title="Collapse"
-                onClick={() => setPreviewOpen(false)}
-              >
+              <span className="font-semibold uppercase tracking-wider text-muted-foreground">Conversation preview</span>
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="Collapse" onClick={() => setPreviewOpen(false)}>
                 <PanelRightClose className="h-4 w-4 text-muted-foreground" />
               </Button>
             </div>
 
-            {selectedItem && (
+            {selected ? (
               <div className="mt-4 flex-1 space-y-4">
-                <span className="inline-block rounded bg-muted px-2 py-0.5 text-[10px] font-semibold text-foreground">
-                  Review only
-                </span>
-
                 <div>
-                  <h3 className="text-base font-bold text-foreground">{selectedItem.title}</h3>
+                  <h3 className="text-base font-bold text-foreground">{selected.title}</h3>
                   <p className="mt-0.5 text-[11px] text-muted-foreground">
-                    09 Oct 2026 · {selectedItem.time} · {selectedItem.messagesCount} messages
-                  </p>
-                  <p className="text-[11px] text-muted-foreground">Started by Abhishek · You</p>
-                </div>
-
-                <div className="space-y-1">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Source context
-                  </span>
-                  <p className="font-semibold text-foreground">
-                    {selectedItem.sku ? `Cotton throw · ${selectedItem.sku}` : selectedItem.source}
-                  </p>
-                  <p className="text-[11px] text-muted-foreground">
-                    {selectedItem.source} · September 2026
+                    {dateKeyInZone(new Date(selected.lastActive), timezone)} · {timeLabel(selected.lastActive)} · {selected.messagesCount} message{selected.messagesCount === 1 ? "" : "s"}
                   </p>
                 </div>
 
-                <div className="space-y-1.5">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Your question
-                  </span>
-                  <div className="rounded-lg border border-border bg-muted/20 p-3 text-xs text-foreground">
-                    {selectedItem.question}
+                {(selected.context?.source || selected.context?.sku) && (
+                  <div className="space-y-1">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Started from</span>
+                    <p className="font-semibold text-foreground">{[selected.context.source ? SOURCE_LABELS[selected.context.source] : null, selected.context.sku].filter(Boolean).join(" · ")}</p>
                   </div>
-                </div>
+                )}
 
-                <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-3.5">
-                  <span className="text-xs font-semibold text-foreground">What we reviewed</span>
-                  <p className="text-xs font-medium text-foreground">{selectedItem.reviewedHeadline}</p>
-                  {selectedItem.onHand && (
-                    <div className="divide-y divide-border pt-1 text-[11px]">
-                      <div className="flex justify-between py-1">
-                        <span className="text-muted-foreground">On hand</span>
-                        <span className="font-semibold text-foreground">{selectedItem.onHand}</span>
-                      </div>
-                      <div className="flex justify-between py-1">
-                        <span className="text-muted-foreground">Daily demand</span>
-                        <span className="font-semibold text-foreground">{selectedItem.dailyDemand}</span>
-                      </div>
-                      <div className="flex justify-between py-1">
-                        <span className="text-muted-foreground">Stock cover / lead time</span>
-                        <span className="font-semibold text-foreground">{selectedItem.stockCoverVsLeadTime}</span>
-                      </div>
-                    </div>
-                  )}
-                  <p className="text-[10px] text-muted-foreground">
-                    Assumes September demand continues. Incoming stock is excluded.
+                {detail.isLoading ? (
+                  <Skeleton className="h-20 w-full" />
+                ) : detail.isError ? (
+                  <p role="alert" className="text-rose-700">
+                    {errorMessage(detail.error)}
                   </p>
-                </div>
-
-                <div className="space-y-1.5 rounded-lg border border-border bg-muted/20 p-3.5">
-                  <span className="text-xs font-semibold text-foreground">Still to verify</span>
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    {selectedItem.stillToVerify ||
-                      "Incoming stock, expected receipt dates and supplier lead time before creating a purchase order."}
-                  </p>
-                </div>
+                ) : (
+                  <>
+                    {firstQuestion && (
+                      <div className="space-y-1.5">
+                        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">First question</span>
+                        <div className="rounded-lg border border-border bg-muted/20 p-3 text-xs text-foreground">{firstQuestion}</div>
+                      </div>
+                    )}
+                    {lastAnswer && (
+                      <div className="space-y-1.5">
+                        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Last answer</span>
+                        <p className="line-clamp-6 whitespace-pre-line leading-relaxed text-muted-foreground">{lastAnswer}</p>
+                      </div>
+                    )}
+                    {!firstQuestion && <p className="text-muted-foreground">No messages in this conversation yet.</p>}
+                  </>
+                )}
+                {/* The earlier "Still to verify" box had no source, so it is left out until answers carry open questions. */}
 
                 <div className="pt-2">
-                  <Button
-                    size="sm"
-                    className="w-full bg-black text-xs text-white hover:bg-neutral-800"
-                    onClick={() => onOpenConversation(selectedItem.id)}
-                  >
+                  <Button size="sm" className="w-full text-xs" onClick={() => onOpenConversation(selected.id)}>
                     Open conversation
                   </Button>
                 </div>
               </div>
+            ) : (
+              <p className="mt-4 text-muted-foreground">Select a conversation to preview it.</p>
             )}
           </aside>
         ) : (
           <div className="hidden h-full w-10 flex-col items-center border-l border-border bg-card py-4 lg:flex">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 w-8 p-0"
-              title="Expand Preview"
-              onClick={() => setPreviewOpen(true)}
-            >
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="Expand Preview" onClick={() => setPreviewOpen(true)}>
               <PanelRightOpen className="h-4 w-4 text-muted-foreground" />
             </Button>
-            <span className="mt-8 -rotate-90 whitespace-nowrap text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-              Conversation preview
-            </span>
+            <span className="mt-8 -rotate-90 whitespace-nowrap text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Conversation preview</span>
           </div>
         )}
       </div>

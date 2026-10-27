@@ -4,6 +4,7 @@ import type {
   AssistantAiSettings,
   AssistantConversation,
   AssistantInsight,
+  ConversationContext,
   ConversationDetail,
   ConversationStatus,
   ConversationsPage,
@@ -15,6 +16,7 @@ export function conversationParams(q: ConversationsQuery): Record<string, string
   const out: Record<string, string | number> = { pageSize: q.pageSize, "filter[status]": q.status };
   if (q.page > 1) out.page = q.page;
   if (q.q) out.q = q.q;
+  if (q.source) out['filter[source]'] = q.source;
   return out;
 }
 
@@ -34,7 +36,7 @@ export const assistantApi = {
     unwrap<ConversationDetail>(await client.get(ENDPOINTS.AI_CONVERSATION(id), { signal })),
 
   /** without a title the server names it after the first question */
-  create: async (title?: string) => unwrap<AssistantConversation>(await client.post(ENDPOINTS.AI_CONVERSATIONS, title ? { title } : {})),
+  create: async (title?: string, context?: ConversationContext) => unwrap<AssistantConversation>(await client.post(ENDPOINTS.AI_CONVERSATIONS, { ...(title ? { title } : {}), ...(context && (context.sku || context.source) ? { context } : {}) })),
 
   /** the answer comes back in the same response: the server does not stream */
   send: async (id: string, text: string) =>
