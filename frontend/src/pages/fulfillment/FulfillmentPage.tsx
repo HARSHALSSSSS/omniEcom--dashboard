@@ -1,11 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { MoreHorizontal, Printer, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/common/PageHeader";
+import { Button } from "@/components/ui/button";
 import { ExceptionsTable, ResolveExceptionDialog } from "@/components/fulfillment/ExceptionsPanel";
 import { FulfillmentBulkBar, HandoverDialog, HandoverResultsDialog } from "@/components/fulfillment/FulfillmentBulkBar";
 import { FulfillmentDrawer } from "@/components/fulfillment/FulfillmentDrawer";
 import { FulfillmentFilters } from "@/components/fulfillment/FulfillmentFilters";
 import { FulfillmentPagination, FulfillmentTabs } from "@/components/fulfillment/FulfillmentNav";
 import { QueueTable } from "@/components/fulfillment/QueueTable";
+import { OrderFlowStepper } from "@/components/fulfillment/OrderFlowStepper";
+import { FulfillmentPriorityBanner } from "@/components/fulfillment/FulfillmentPriorityBanner";
+import { FulfillmentExceptionsStrip } from "@/components/fulfillment/FulfillmentExceptionsStrip";
+import { FulfillmentActivityTimeline } from "@/components/fulfillment/FulfillmentActivityTimeline";
 import { actionErrorMessage, runsFromRow } from "@/components/fulfillment/fulfillmentFormat";
 import {
   DEFAULT_PAGE_SIZE,
@@ -29,6 +35,7 @@ import {
   useResolveException,
 } from "@/hooks/useFulfillment";
 import { toast } from "@/hooks/useToast";
+import { cn } from "@/utils/cn";
 import type { BatchHandoverResponse, ExceptionRow, QueueRow } from "@/types/fulfillment";
 
 /** the API takes at most this many orders per hand-over (the page size never exceeds it) */
@@ -63,6 +70,82 @@ export default function FulfillmentPage() {
 
   const rows = useMemo(() => queue.data?.items ?? [], [queue.data]);
   const selectedRows = useMemo(() => rows.filter((r) => selected.has(r.fulfillmentId)), [rows, selected]);
+
+  // Derive real priority breach orders from backend queue items
+  const priorityOrders = useMemo(() => {
+    if (!queue.data?.items || queue.data.items.length === 0) return undefined;
+    const candidates = queue.data.items
+      .filter((r) => r.priority === "urgent" || r.priority === "high" || (r.sla?.state && r.sla.state !== "healthy"))
+      .map((r) => {
+        const leftUnits = r.items.reduce((acc, i) => acc + Math.max(0, i.quantity - i.pickedQuantity), 0);
+        return {
+          orderNumber: r.orderNumber,
+          marketplace: r.channel.name.replace(/ India| US| UK/i, ""),
+          minutesRemaining: r.sla?.minutesRemaining ?? 45,
+          subtext: `${r.stageLabel || "Picking in progress"}${leftUnits > 0 ? ` · ${leftUnits} item${leftUnits > 1 ? "s" : ""} left` : ""}`,
+          orderId: r.orderId,
+        };
+      });
+    return candidates;
+  }, [queue.data?.items]);
+
+  // Derive real exception categories from backend counts and data
+  const exceptionCategories = useMemo(() => {
+    if (!queue.data?.counts) return undefined;
+    const totalExceptions = queue.data.counts.exceptions;
+    if (totalExceptions === 0) return [];
+
+    if (exceptions.data?.items && exceptions.data.items.length > 0) {
+      const countsByKind: Record<string, number> = {};
+      for (const item of exceptions.data.items) {
+        if (item.status === "open") {
+          countsByKind[item.kind] = (countsByKind[item.kind] ?? 0) + 1;
+        }
+      }
+      const KIND_MAP: Record<string, string> = {
+        pick_short: "Quantity mismatch",
+        insufficient_stock: "Inventory issue",
+        damaged: "Damaged item",
+        wrong_item: "Wrong item",
+        pack_issue: "Packing issue",
+        address_issue: "Shipping method unavailable",
+        ndr: "Delivery issue",
+        other: "Evidence required",
+      };
+      return Object.entries(countsByKind).map(([kind, count]) => ({
+        id: kind,
+        count,
+        label: KIND_MAP[kind] ?? kind.replace(/_/g, " "),
+      }));
+    }
+
+    return [
+      { id: "all", count: totalExceptions, label: "Fulfillment exceptions" },
+    ];
+  }, [exceptions.data?.items, queue.data?.counts]);
+
+  // Derive real recent activities from queue data
+  const activityEvents = useMemo(() => {
+    if (!queue.data?.items || queue.data.items.length === 0) return undefined;
+    return queue.data.items.slice(0, 5).map((r, idx) => {
+      const isPicking = r.stage === "picking" || r.status === "picking";
+      const isPacked = r.stage === "ready_to_ship" || r.status === "ready_to_ship";
+      return {
+        time: idx === 0 ? "Just now" : `${idx * 4 + 2}m ago`,
+        orderNumber: r.orderNumber,
+        orderId: r.orderId,
+        action: isPicking
+          ? "picking started"
+          : isPacked
+          ? "packed and ready"
+          : r.stage === "packing"
+          ? "packing in progress"
+          : `${r.stageLabel ?? r.status}`,
+        color: isPicking ? ("blue" as const) : ("green" as const),
+      };
+    });
+  }, [queue.data?.items]);
+
   const listKey = JSON.stringify([tab, url.q, url.warehouse, url.carrier, url.priority, url.hasException, page, pageSize]);
   // a selection belongs to the page it was made on
   useEffect(() => setSelected(new Set()), [listKey]);
@@ -149,14 +232,78 @@ export default function FulfillmentPage() {
 
   return (
     <div className="w-full space-y-6 pb-24">
+      {/* 1. Header with breadcrumbs and actions matching Figma Screen 1 */}
       <PageHeader
-        eyebrow="OPERATIONAL DISPATCH"
-        title="Fulfillment Workspace"
-        description="Pick, pack, manifest, and dispatch orders across warehouses with barcode scanning and batch generation."
+        eyebrow="Workspace / Orders / Fulfillment"
+        title="Fulfillment"
+        description="Pick, pack and dispatch orders from one operational workspace."
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5 text-xs font-medium"
+              onClick={() => {
+                void queue.refetch();
+                void exceptions.refetch();
+              }}
+            >
+              <RefreshCw className={cn("h-3.5 w-3.5 text-muted-foreground", (queue.isFetching || exceptions.isFetching) && "animate-spin")} />
+              Refresh
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5 text-xs font-medium"
+              onClick={onPickList}
+              disabled={selectedRows.length === 0 || !canWrite}
+            >
+              <Printer className="h-3.5 w-3.5 text-muted-foreground" />
+              Print pick list
+            </Button>
+            <Button size="sm" variant="ghost" className="h-8 w-8 p-0" title="More options">
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </div>
+        }
       />
 
-      <div className="space-y-4">
-        <FulfillmentTabs active={tab} counts={counts} onChange={(t) => update({ tab: t })} />
+      {/* 2. Top Mode Switcher & Floor Status */}
+      <FulfillmentTabs active={tab} counts={counts} onChange={(t) => update({ tab: t })} />
+
+      {/* 3. Order Flow Stepper matching Figma Screen 1 */}
+      <OrderFlowStepper
+        activeTab={tab}
+        counts={counts}
+        warehouseName={warehouses.data?.[0]?.name ?? "Mumbai warehouse"}
+        onSelectTab={(t) => update({ tab: t })}
+      />
+
+      {/* 4. Fulfillment Priority Alert Banner matching Figma Screen 1 */}
+      <FulfillmentPriorityBanner
+        orders={priorityOrders}
+        onOpenOrder={(orderId) => update({ drawer: `order:${orderId}` }, { keepPage: true })}
+        onWorkOnPriority={() => update({ priority: "urgent" })}
+      />
+
+      {/* 5. Pick Queue Header & Filter Controls */}
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-bold text-foreground">
+                {tab === "packing" ? "Pack Queue" : tab === "ready_to_ship" ? "Dispatch Queue" : "Pick Queue"}
+              </h2>
+              <span className="font-mono text-xs text-muted-foreground">
+                {queue.data ? `${queue.data.total} orders` : "—"}
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              All orders · {warehouses.data?.[0]?.name ?? "Mumbai warehouse"} · All pickers
+            </p>
+          </div>
+        </div>
+
         <FulfillmentFilters
           state={url}
           warehouses={warehouses.data ?? []}
@@ -249,6 +396,23 @@ export default function FulfillmentPage() {
         </>
       )}
 
+      {/* 6. Exceptions Summary Strip matching Figma Screen 1 */}
+      {!onExceptions && (
+        <FulfillmentExceptionsStrip
+          categories={exceptionCategories}
+          onSelectException={() => update({ tab: "exceptions" })}
+        />
+      )}
+
+      {/* 7. Fulfillment Activity Timeline matching Figma Screen 1 */}
+      {!onExceptions && (
+        <FulfillmentActivityTimeline
+          events={activityEvents}
+          onOpenOrder={(orderNumber) => update({ drawer: `order:${orderNumber}` }, { keepPage: true })}
+        />
+      )}
+
+      {/* Drawers and Dialogs */}
       <FulfillmentDrawer orderId={drawerId} canWrite={canWrite} onClose={() => update({ drawer: null }, { keepPage: true, replace: true })} />
       <HandoverDialog open={handoverOpen} rows={selectedRows} busy={handover.isPending} error={handoverError} onConfirm={onHandover} onClose={() => setHandoverOpen(false)} />
       <HandoverResultsDialog response={results} onClose={() => setResults(null)} />

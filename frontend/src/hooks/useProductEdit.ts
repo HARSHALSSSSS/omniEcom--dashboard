@@ -47,14 +47,8 @@ export const useEditCategories = () =>
 export const useInsightList = (id: string, enabled = true) =>
   useQuery({ queryKey: EDIT_KEYS.insights(id), queryFn: () => productEditApi.getInsights(id), enabled: enabled && !!id, staleTime: 0 });
 
-export function useDebounced<T>(value: T, ms: number): T {
-  const [v, setV] = useState(value);
-  useEffect(() => {
-    const t = setTimeout(() => setV(value), ms);
-    return () => clearTimeout(t);
-  }, [value, ms]);
-  return v;
-}
+import { useDebounced } from "@/hooks/useDebounced";
+export { useDebounced };
 
 // ------------------------------------------------------------------------------------------------ insights + AI
 export function useInsightDecision(id: string) {

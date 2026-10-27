@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useGuardedMutation } from "@/hooks/useSubmitGuard";
 import { ordersApi } from "@/api/orders.api";
@@ -154,7 +155,14 @@ export function useExportOrders() {
 const TERMINAL: ReadonlyArray<SyncJob["status"]> = ["succeeded", "partially_failed", "failed", "dead_lettered", "cancelled"];
 export const SYNC_POLL_MS = 1500;
 const SYNC_MAX_POLLS = 60;
-const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/** Waits `ms` milliseconds, but resolves early if `signal` is aborted. */
+const wait = (ms: number, signal?: AbortSignal) =>
+  new Promise<void>((resolve) => {
+    if (signal?.aborted) { resolve(); return; }
+    const t = setTimeout(resolve, ms);
+    signal?.addEventListener("abort", () => { clearTimeout(t); resolve(); }, { once: true });
+  });
 
 export interface SyncOutcome {
   accountName: string;
@@ -166,24 +174,41 @@ export interface SyncOutcome {
 /** queues the order import of each account (202), follows every job until it ends, then refreshes the screen */
 export function useSyncOrders() {
   const afterWrite = useAfterWrite();
-  return useGuardedMutation({
-    mutationFn: async (accounts: OrderAccount[]): Promise<SyncOutcome[]> =>
-      Promise.all(
-        accounts.map(async (account): Promise<SyncOutcome> => {
-          const started = await ordersApi.syncOrders(account.id);
-          let job = started.job;
-          for (let polls = 0; !TERMINAL.includes(job.status) && polls < SYNC_MAX_POLLS; polls++) {
-            await wait(SYNC_POLL_MS);
-            job = await ordersApi.syncJob(job.id);
-          }
-          return {
-            accountName: account.displayName,
-            status: TERMINAL.includes(job.status) ? job.status : "running",
-            alreadyQueued: started.alreadyQueued,
-            error: job.error?.message ?? null,
-          };
-        }),
-      ),
+  // one controller per mutation call; aborted if the component unmounts mid-sync
+  const controllerRef = useRef<AbortController | null>(null);
+
+  const mutation = useGuardedMutation({
+    mutationFn: async (accounts: OrderAccount[]): Promise<SyncOutcome[]> => {
+      // cancel any previous in-flight sync
+      controllerRef.current?.abort();
+      const controller = new AbortController();
+      controllerRef.current = controller;
+      const { signal } = controller;
+
+      try {
+        return await Promise.all(
+          accounts.map(async (account): Promise<SyncOutcome> => {
+            const started = await ordersApi.syncOrders(account.id);
+            let job = started.job;
+            for (let polls = 0; !TERMINAL.includes(job.status) && polls < SYNC_MAX_POLLS; polls++) {
+              await wait(SYNC_POLL_MS, signal);
+              if (signal.aborted) break;
+              job = await ordersApi.syncJob(job.id);
+            }
+            return {
+              accountName: account.displayName,
+              status: TERMINAL.includes(job.status) ? job.status : "running",
+              alreadyQueued: started.alreadyQueued,
+              error: job.error?.message ?? null,
+            };
+          }),
+        );
+      } finally {
+        if (controllerRef.current === controller) controllerRef.current = null;
+      }
+    },
     onSettled: afterWrite,
   });
+
+  return mutation;
 }

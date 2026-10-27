@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { cn } from "@/utils/cn";
+import { sanitizeHtml } from "@/utils/security";
 import { DESCRIPTION_MAX, htmlToPlain } from "./form";
 
 interface Props {
@@ -29,7 +30,10 @@ export function RichDescriptionEditor({ id, value, onChange, disabled, invalid, 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    if (value !== emitted.current && el.innerHTML !== value) el.innerHTML = value;
+    if (value !== emitted.current && el.innerHTML !== value) {
+      // DOMPurify sanitization prevents stored XSS from untrusted product data
+      el.innerHTML = sanitizeHtml(value);
+    }
     emitted.current = value;
   }, [value]);
 

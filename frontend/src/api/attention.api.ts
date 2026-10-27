@@ -28,13 +28,18 @@ export function issueQuery(f: IssueFilters): Record<string, string | number> {
 }
 
 export const attentionApi = {
-  list: async (filters: IssueFilters) => unwrap<IssuePage>(await client.get(ENDPOINTS.ISSUES, { params: issueQuery(filters) })),
-  counts: async () => unwrap<IssueCounts>(await client.get(ENDPOINTS.ISSUES_COUNTS)),
-  history: async (status: HistoryStatus, page: number, pageSize: number) =>
-    unwrap<IssueHistory>(await client.get(ENDPOINTS.ISSUES_HISTORY, { params: { status, page, pageSize } })),
-  recommendation: async () => unwrap<QueueRecommendation | null>(await client.get(ENDPOINTS.ISSUES_RECOMMENDATION)),
-  assignees: async () => unwrap<Assignee[]>(await client.get(ENDPOINTS.ISSUES_ASSIGNEES)),
-  detail: async (id: string) => unwrap<IssueDetail>(await client.get(ENDPOINTS.ISSUE(id))),
+  list: async (filters: IssueFilters, signal?: AbortSignal) =>
+    unwrap<IssuePage>(await client.get(ENDPOINTS.ISSUES, { params: issueQuery(filters), ...(signal ? { signal } : {}) })),
+  counts: async (signal?: AbortSignal) =>
+    unwrap<IssueCounts>(await client.get(ENDPOINTS.ISSUES_COUNTS, signal ? { signal } : undefined)),
+  history: async (status: HistoryStatus, page: number, pageSize: number, signal?: AbortSignal) =>
+    unwrap<IssueHistory>(await client.get(ENDPOINTS.ISSUES_HISTORY, { params: { status, page, pageSize }, ...(signal ? { signal } : {}) })),
+  recommendation: async (signal?: AbortSignal) =>
+    unwrap<QueueRecommendation | null>(await client.get(ENDPOINTS.ISSUES_RECOMMENDATION, signal ? { signal } : undefined)),
+  assignees: async (signal?: AbortSignal) =>
+    unwrap<Assignee[]>(await client.get(ENDPOINTS.ISSUES_ASSIGNEES, signal ? { signal } : undefined)),
+  detail: async (id: string, signal?: AbortSignal) =>
+    unwrap<IssueDetail>(await client.get(ENDPOINTS.ISSUE(id), signal ? { signal } : undefined)),
 
   start: async (id: string, note?: string) => unwrap<Issue>(await client.post(ENDPOINTS.ISSUE_ACTION(id, "start"), note ? { note } : {})),
   resolve: async (id: string, mode: "manual" | "attempt" = "manual", note?: string) =>

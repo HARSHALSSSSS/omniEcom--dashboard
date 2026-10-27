@@ -1,3 +1,4 @@
+import DOMPurify from "dompurify";
 import { formatCurrency, formatDate } from "@/utils/format";
 import type { PurchaseOrder, PurchaseOrderStatus, PurchaseOrderSummary, SupplierStatus } from "@/types/procurement";
 
@@ -188,8 +189,18 @@ export function printHtml(html: string): void {
     frame.remove();
     return;
   }
+  // Sanitize full HTML document before writing to the print frame to avoid XSS
+  const cleanHtml = DOMPurify.sanitize(html, {
+    WHOLE_DOCUMENT: true,
+    ALLOWED_TAGS: [
+      "html", "head", "body", "meta", "title", "style",
+      "h1", "h2", "h3", "div", "strong", "br",
+      "table", "thead", "tbody", "tr", "th", "td", "span", "p",
+    ],
+    ALLOWED_ATTR: ["charset", "class", "style"],
+  });
   doc.open();
-  doc.write(html);
+  doc.write(cleanHtml);
   doc.close();
   const win = frame.contentWindow;
   const done = () => setTimeout(() => frame.remove(), 1000);

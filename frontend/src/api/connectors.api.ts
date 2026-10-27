@@ -1,5 +1,6 @@
 import { client, unwrap } from "./client";
 import { ENDPOINTS } from "./endpoints";
+import { isSafeUrl } from "@/utils/security";
 import type {
   ChannelConnection,
   EntitySync,
@@ -312,7 +313,7 @@ export const connectorsApi = {
       };
     }
 
-    if (result.redirect?.authorizationUrl) {
+    if (result.redirect?.authorizationUrl && isSafeUrl(result.redirect.authorizationUrl)) {
       window.location.href = result.redirect.authorizationUrl;
     }
 

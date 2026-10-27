@@ -51,8 +51,9 @@ export const ROUTES = {
   // Settings
   SETTINGS: "/settings",
 
-  // Dev
-  DEV_COMPONENTS: "/dev/components",
+  // Errors & Fallbacks
+  NOT_FOUND: "/404",
+  ERROR: "/error",
 } as const;
 
 export type AppRoute = (typeof ROUTES)[keyof typeof ROUTES];

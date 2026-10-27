@@ -57,7 +57,7 @@ export function useNotListed(query: ListingsQuery, enabled: boolean) {
 /** connected accounts and the marketplaces' names (filter chips, create-listing targets) */
 export function useListingChannels() {
   const businessId = useBusinessId();
-  return useQuery({ queryKey: listingKeys.channels(businessId), queryFn: listingsApi.channels, staleTime: 5 * 60_000, retry: false });
+  return useQuery({ queryKey: listingKeys.channels(businessId), queryFn: ({ signal }) => listingsApi.channels(signal), staleTime: 5 * 60_000, retry: false });
 }
 
 /** the master-catalogue x marketplace matrix: the products that need a look first */

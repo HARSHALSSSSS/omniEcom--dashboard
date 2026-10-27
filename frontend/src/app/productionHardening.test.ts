@@ -8,8 +8,8 @@ const read = (file: string) => readFileSync(path.join(root, file), "utf8");
 describe("production hardening", () => {
   it("keeps the component gallery out of production routes", () => {
     const router = read("src/app/router.tsx");
-    expect(router).toMatch(/import\.meta\.env\.DEV\s*\?\s*lazy\(\(\) => import\("@\/pages\/dev\/ComponentsDevPage"\)\)/);
-    expect(router).toMatch(/ComponentsDevPage\s*\?\s*\[/);
+    expect(router).not.toContain("ComponentsDevPage");
+    expect(router).not.toContain("/dev/components");
   });
 
   it("asks search engines not to index the app", () => {

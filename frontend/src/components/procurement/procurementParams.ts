@@ -61,7 +61,10 @@ export interface ProcurementUrlState {
 }
 
 export function readUrlState(p: URLSearchParams): ProcurementUrlState {
-  const tab = oneOf(p.get("tab"), PROCUREMENT_TABS) ?? "orders";
+  const explicitTab = oneOf(p.get("tab"), PROCUREMENT_TABS);
+  const hasSupplierParam = p.has("sstatus") || p.has("ssort") || p.has("sup");
+  const hasPoParam = p.has("status") || p.has("supplier") || p.has("warehouse") || p.has("from") || p.has("to") || p.has("po");
+  const tab = explicitTab ?? (hasSupplierParam ? "suppliers" : hasPoParam ? "orders" : "overview");
   const page = Number(p.get("page"));
   const size = Number(p.get("size"));
   const q = p.get("q")?.trim() || undefined;
@@ -115,7 +118,7 @@ export function useProcurementUrlState() {
           for (const key of keys) {
             const value = patch[key];
             next.delete(key);
-            if (value !== null && value !== undefined && value !== "" && !(key === "tab" && value === "orders")) next.set(key, value);
+            if (value !== null && value !== undefined && value !== "" && !(key === "tab" && value === "overview")) next.set(key, value);
           }
           return next;
         },

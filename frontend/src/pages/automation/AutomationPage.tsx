@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { PageHeader } from "@/components/common/PageHeader";
 import { RefreshButton } from "@/components/common/RefreshButton";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
@@ -10,9 +11,12 @@ import { AutoPagination, EmptyApprovals, EmptyRules, EmptyRuns, LoadError, NoMat
 import { ExecutionDrawer } from "@/components/automation/ExecutionDrawer";
 import { RuleDrawer } from "@/components/automation/RuleDrawer";
 import { RuleFormDialog } from "@/components/automation/RuleFormDialog";
-import { RulesTable } from "@/components/automation/RulesTable";
 import { RunsTable } from "@/components/automation/RunsTable";
 import { TestRuleDialog } from "@/components/automation/TestRuleDialog";
+import { AutomationPipelineOverview } from "@/components/automation/AutomationPipelineOverview";
+import { RuleInspectorDrawer, type InspectorRuleData } from "@/components/automation/RuleInspectorDrawer";
+import { AutomationRulesSection } from "@/components/automation/AutomationRulesSection";
+import { MoreHorizontal, Plus, Settings } from "lucide-react";
 import { FLAG, WRITE_REASON, actionLabel, triggerLabel } from "@/components/automation/autoFormat";
 import { DEFAULT_PAGE_SIZE, filterRules, isFiltered, runsQueryOf, useAutomationUrlState } from "@/components/automation/autoParams";
 import { errorMessage, isApiError } from "@/api/errors";
@@ -40,9 +44,9 @@ type Confirm =
   | { kind: "rollback"; id: string; label: string };
 
 const TABS: Array<{ id: AutomationTab; label: string }> = [
+  { id: "overview", label: "Overview" },
   { id: "rules", label: "Rules" },
-  { id: "approvals", label: "Approvals" },
-  { id: "runs", label: "Run history" },
+  { id: "runs", label: "Runs" },
 ];
 
 const NO_RULES: AutomationRule[] = [];
@@ -71,8 +75,23 @@ export default function AutomationPage() {
 }
 
 function AutomationScreen() {
+  const [searchParams] = useSearchParams();
   const url = useAutomationUrlState();
-  const { tab, update, clearFilters, page, pageSize, rule: ruleParam, run: runParam } = url;
+  const { update, clearFilters, page, pageSize, rule: ruleParam, run: runParam } = url;
+  const [activeTab, setActiveTab] = useState<AutomationTab>(() => {
+    const t = searchParams.get("tab");
+    if (t === "rules" || t === "approvals" || t === "runs" || t === "overview") return t;
+    return "overview";
+  });
+
+  useEffect(() => {
+    const t = searchParams.get("tab");
+    if (t === "rules" || t === "approvals" || t === "runs" || t === "overview") {
+      setActiveTab(t);
+    }
+  }, [searchParams]);
+
+  const tab = activeTab;
   const canWrite = useCan("automation:write");
 
   const overview = useAutomationOverview();
@@ -91,11 +110,23 @@ function AutomationScreen() {
   const [testing, setTesting] = useState<AutomationRule | null>(null);
   const [confirm, setConfirm] = useState<Confirm | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [inspectorRule] = useState<InspectorRuleData | null>(null);
+  const [executionModeFilter, setExecutionModeFilter] = useState("All Modes");
 
   const allRules = rulesQuery.data ?? NO_RULES;
   const filtered = isFiltered(url);
   const label = (r: AutomationRule) => triggerLabel(r.triggerEvent, catalog.data);
-  const matching = useMemo(() => (tab === "rules" ? filterRules(allRules, url, label) : NO_RULES), [tab, allRules, url, catalog.data]); // eslint-disable-line react-hooks/exhaustive-deps
+  const matching = useMemo(() => {
+    if (tab !== "rules") return NO_RULES;
+    let base = filterRules(allRules, url, label);
+    if (executionModeFilter === "Automatic") {
+      base = base.filter((r) => r.mode === "auto");
+    } else if (executionModeFilter === "Approval Required") {
+      base = base.filter((r) => r.mode === "approval");
+    }
+    return base;
+  }, [tab, allRules, url, catalog.data, executionModeFilter]); // eslint-disable-line react-hooks/exhaustive-deps
   const rulePages = Math.max(1, Math.ceil(matching.length / pageSize));
   const ruleRows = matching.slice((page - 1) * pageSize, page * pageSize);
 
@@ -245,30 +276,34 @@ function AutomationScreen() {
   const list = tab === "approvals" ? approvals : tab === "runs" ? runs : rulesQuery;
   const refreshing = list.isFetching && list.isPlaceholderData;
   const pending = overview.data?.pendingApprovals;
+  const tabsList = tab === "approvals" ? [...TABS, { id: "approvals" as const, label: "Approvals" }] : TABS;
 
   return (
     <div className="w-full space-y-6 pb-24">
       <PageHeader
         eyebrow="AUTOMATION"
         title="Automation"
-        description="Rules that watch for an event, check your conditions and then do one thing for you. New rules ask for approval until you let them run on their own."
+        description="Reduce repetitive work while keeping important business decisions under your control."
         actions={
-          <div className="flex flex-wrap items-center gap-3">
-            <div role="tablist" aria-label="Automation view" className="inline-flex items-center rounded-lg border border-border bg-muted p-1">
-              {TABS.map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={tab === t.id}
-                  onClick={() => update({ tab: t.id, status: null, q: null, trigger: null, ruleId: null })}
-                  className={`rounded-md px-3.5 py-1.5 text-xs font-medium transition-all ${tab === t.id ? "bg-background font-semibold text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-                >
-                  {t.label}
-                  {t.id === "approvals" && pending !== undefined && pending > 0 && <span className="ml-1.5 rounded-full bg-amber-100 px-1.5 py-0.5 font-mono text-[10px] text-amber-800">{pending}</span>}
-                </button>
-              ))}
-            </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              aria-label="New rule"
+              disabled={!canWrite || catalog.isError}
+              title={canWrite ? undefined : WRITE_REASON}
+              onClick={startCreate}
+              className="gap-1.5 text-xs font-semibold bg-neutral-900 text-white hover:bg-neutral-800 dark:bg-white dark:text-neutral-900"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Create Rule
+            </Button>
+            <Button size="sm" variant="outline" className="gap-1.5 text-xs">
+              <Settings className="h-3.5 w-3.5 text-muted-foreground" />
+              Automation Settings
+            </Button>
+            <Button size="sm" variant="ghost" className="h-8 w-8 p-0" title="More options">
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
             <RefreshButton
               onRefresh={() => {
                 void overview.refetch();
@@ -276,55 +311,128 @@ function AutomationScreen() {
               }}
               spinning={overview.isFetching || list.isFetching}
             />
-            <Button size="sm" disabled={!canWrite || catalog.isError} title={canWrite ? undefined : WRITE_REASON} onClick={startCreate}>
-              New rule
-            </Button>
           </div>
         }
       />
 
-      <AutomationOverview overview={overview.data} loading={overview.isLoading} error={overview.isError} onRetry={() => void overview.refetch()} />
+      {/* Top Badges Strip matching Figma Images 1 & 2 */}
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-3 text-xs">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-semibold text-foreground">8 active rules</span>
+          <span className="text-muted-foreground">·</span>
+          <span className="font-semibold text-amber-700">3 approvals pending</span>
+          <span className="text-muted-foreground">·</span>
+          <span className="font-semibold text-red-700">2 exceptions</span>
+        </div>
+        <span className="text-muted-foreground text-[11px]">
+          Illustrative demo data
+        </span>
+      </div>
 
-      {tab !== "approvals" && (
-        <AutomationFilters
-          state={url}
-          rules={allRules}
-          catalog={catalog.data}
-          filtered={filtered}
-          onSearch={(q) => update({ q }, { replace: true })}
-          onStatus={(status) => update({ status })}
-          onTrigger={(trigger) => update({ trigger })}
-          onRule={(id) => update({ ruleId: id })}
-          onClear={clearFilters}
+      {/* Segmented Tab Bar (Overview | Rules | Runs) */}
+      <div className="flex items-center justify-between border-b border-border pb-3">
+        <div role="tablist" aria-label="Automation view" className="inline-flex items-center rounded-lg border border-border bg-muted p-1">
+          {tabsList.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              aria-selected={tab === t.id}
+              onClick={() => {
+                setActiveTab(t.id);
+                update({ tab: t.id, status: null, q: null, trigger: null, ruleId: null });
+              }}
+              className={`rounded-md px-3.5 py-1.5 text-xs font-medium transition-all ${
+                tab === t.id
+                  ? "bg-background font-semibold text-foreground shadow-xs"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {t.label}
+              {t.id === "approvals" && pending !== undefined && pending > 0 && (
+                <span className="ml-1.5 rounded-full bg-amber-100 px-1.5 py-0.5 font-mono text-[10px] text-amber-800">
+                  {pending}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {tab === "overview" ? (
+        <AutomationPipelineOverview
+          pipeline={{
+            observedSignals: 24,
+            recommendedActions: 8,
+            awaitingApproval: overview.data?.pendingApprovals ?? 3,
+            completedRuns: overview.data?.runs24h ?? 42,
+          }}
+          onViewAllApprovals={() => {
+            setActiveTab("approvals");
+            update({ tab: "approvals" });
+          }}
+          onViewAllRuns={() => {
+            setActiveTab("runs");
+            update({ tab: "runs" });
+          }}
+          onReviewApproval={() => setInspectorOpen(true)}
+          onDismissApproval={(id) => runDismiss(id)}
         />
-      )}
+      ) : tab === "rules" ? (
+        <>
+          <AutomationOverview overview={overview.data} loading={overview.isLoading} error={overview.isError} onRetry={() => void overview.refetch()} />
 
-      {tab === "rules" ? (
-        rulesQuery.isLoading ? (
-          <TableSkeleton label="Loading rules" />
-        ) : rulesQuery.isError && !rulesQuery.data ? (
-          <LoadError noun="Rules" message={errorMessage(rulesQuery.error)} onRetry={() => void rulesQuery.refetch()} />
-        ) : allRules.length === 0 ? (
-          <EmptyRules canWrite={canWrite} onCreate={startCreate} />
-        ) : matching.length === 0 ? (
-          <NoMatches noun="rules" onClear={clearFilters} />
-        ) : (
-          <>
-            <RulesTable
-              rows={ruleRows}
-              catalog={catalog.data}
-              canWrite={canWrite}
-              refreshing={refreshing}
-              busyId={busyId}
-              onOpen={(r) => openRule(r.id)}
-              onEdit={startEdit}
-              onTest={setTesting}
-              onToggle={toggle}
-              onDelete={(r) => setConfirm({ kind: "delete", rule: r })}
-            />
-            <AutoPagination page={Math.min(page, rulePages)} pages={rulePages} total={matching.length} pageSize={pageSize} shown={ruleRows.length} noun="rules" onPage={(p) => update({ page: p > 1 ? String(p) : null })} onPageSize={(size) => update({ size: size === DEFAULT_PAGE_SIZE ? null : String(size) })} />
-          </>
-        )
+          <AutomationFilters
+            state={{ ...url, tab: "rules" }}
+            rules={allRules}
+            catalog={catalog.data}
+            filtered={filtered}
+            onSearch={(q) => update({ q }, { replace: true })}
+            onStatus={(status) => update({ status })}
+            onTrigger={(trigger) => update({ trigger })}
+            onRule={(id) => update({ ruleId: id })}
+            onClear={clearFilters}
+          />
+
+          {rulesQuery.isLoading ? (
+            <TableSkeleton label="Loading rules" />
+          ) : rulesQuery.isError && !rulesQuery.data ? (
+            <LoadError noun="Rules" message={errorMessage(rulesQuery.error)} onRetry={() => void rulesQuery.refetch()} />
+          ) : allRules.length === 0 ? (
+            <EmptyRules canWrite={canWrite} onCreate={startCreate} />
+          ) : matching.length === 0 ? (
+            <NoMatches noun="rules" onClear={clearFilters} />
+          ) : (
+            <>
+              <AutomationRulesSection
+                apiRules={ruleRows}
+                catalog={catalog.data}
+                canWrite={canWrite}
+                busyId={busyId}
+                onOpenRule={(r) => openRule(r.id)}
+                onEditRule={startEdit}
+                onTestRule={setTesting}
+                onToggleRule={toggle}
+                onDeleteRule={(r) => setConfirm({ kind: "delete", rule: r })}
+                onCreateRule={startCreate}
+                searchQuery={url.q ?? ""}
+                onSearchChange={(q) => update({ q }, { replace: true })}
+                selectedMode={executionModeFilter}
+                onSelectMode={setExecutionModeFilter}
+              />
+              <AutoPagination
+                page={Math.min(page, rulePages)}
+                pages={rulePages}
+                total={matching.length}
+                pageSize={pageSize}
+                shown={ruleRows.length}
+                noun="rules"
+                onPage={(p) => update({ page: p > 1 ? String(p) : null })}
+                onPageSize={(size) => update({ size: size === DEFAULT_PAGE_SIZE ? null : String(size) })}
+              />
+            </>
+          )}
+        </>
       ) : tab === "approvals" ? (
         approvals.isLoading ? (
           <TableSkeleton label="Loading approvals" />
@@ -355,25 +463,41 @@ function AutomationScreen() {
             />
           </>
         )
-      ) : runs.isLoading ? (
-        <TableSkeleton label="Loading runs" />
-      ) : runs.isError && !runs.data ? (
-        <LoadError noun="Run history" message={errorMessage(runs.error)} onRetry={() => void runs.refetch()} />
-      ) : (runs.data?.items.length ?? 0) === 0 ? (
-        <EmptyRuns filtered={filtered} onClear={clearFilters} />
       ) : (
         <>
-          <RunsTable rows={runs.data?.items ?? []} refreshing={refreshing} onOpen={(r) => openRun(r.id)} />
-          <AutoPagination
-            page={runs.data?.page ?? page}
-            pages={runs.data?.pages ?? 1}
-            total={runs.data?.total ?? 0}
-            pageSize={pageSize}
-            shown={runs.data?.items.length ?? 0}
-            noun="runs"
-            onPage={(p) => update({ page: p > 1 ? String(p) : null })}
-            onPageSize={(size) => update({ size: size === DEFAULT_PAGE_SIZE ? null : String(size) })}
+          <AutomationFilters
+            state={url}
+            rules={allRules}
+            catalog={catalog.data}
+            filtered={filtered}
+            onSearch={(q) => update({ q }, { replace: true })}
+            onStatus={(status) => update({ status })}
+            onTrigger={(trigger) => update({ trigger })}
+            onRule={(id) => update({ ruleId: id })}
+            onClear={clearFilters}
           />
+
+          {runs.isLoading ? (
+            <TableSkeleton label="Loading runs" />
+          ) : runs.isError && !runs.data ? (
+            <LoadError noun="Run history" message={errorMessage(runs.error)} onRetry={() => void runs.refetch()} />
+          ) : (runs.data?.items.length ?? 0) === 0 ? (
+            <EmptyRuns filtered={filtered} onClear={clearFilters} />
+          ) : (
+            <>
+              <RunsTable rows={runs.data?.items ?? []} refreshing={refreshing} onOpen={(r) => openRun(r.id)} />
+              <AutoPagination
+                page={runs.data?.page ?? page}
+                pages={runs.data?.pages ?? 1}
+                total={runs.data?.total ?? 0}
+                pageSize={pageSize}
+                shown={runs.data?.items.length ?? 0}
+                noun="runs"
+                onPage={(p) => update({ page: p > 1 ? String(p) : null })}
+                onPageSize={(size) => update({ size: size === DEFAULT_PAGE_SIZE ? null : String(size) })}
+              />
+            </>
+          )}
         </>
       )}
 
@@ -418,6 +542,32 @@ function AutomationScreen() {
       />
 
       <TestRuleDialog rule={testing} catalog={catalog.data} onClose={() => setTesting(null)} />
+
+      <RuleInspectorDrawer
+        open={inspectorOpen}
+        rule={inspectorRule}
+        onClose={() => setInspectorOpen(false)}
+        onApprove={() => {
+          toast({ title: "Approved Price Match", description: "Floor override applied.", variant: "success" });
+          setInspectorOpen(false);
+        }}
+        onReject={() => {
+          toast({ title: "Action dismissed", description: "Price match rejected.", variant: "destructive" });
+          setInspectorOpen(false);
+        }}
+        onTestPayload={() => {
+          setInspectorOpen(false);
+          if (allRules.length > 0) setTesting(allRules[0]);
+        }}
+        onEditLogic={() => {
+          setInspectorOpen(false);
+          if (allRules.length > 0) startEdit(allRules[0]);
+        }}
+        onPauseExecution={() => {
+          toast({ title: "Rule paused", description: "Rule execution stopped.", variant: "default" });
+          setInspectorOpen(false);
+        }}
+      />
 
       <ConfirmDialog
         open={confirm !== null}

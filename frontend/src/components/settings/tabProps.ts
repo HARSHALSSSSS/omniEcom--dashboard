@@ -8,3 +8,7 @@ export interface TabProps {
   v: SettingsForm;
   ctl: SettingsController;
 }
+
+export type { SettingsController };
+export type SettingsValues = SettingsForm;
+

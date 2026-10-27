@@ -2,6 +2,7 @@ import { z } from "zod";
 import { ApiError } from "@/api/errors";
 import { TAG_LABEL } from "@/components/marketplace-hub/accounts/hubFormat";
 import { ROUTES } from "@/constants/routes";
+import { isSafeUrl } from "@/utils/security";
 import type {
   AuthField,
   ConnectInput,
@@ -38,7 +39,9 @@ export const oauthCallbackUrl = () =>
 
 /** a seam for tests: leaving the app for the marketplace's consent page */
 export const redirectBrowser = (url: string) => {
-  window.location.assign(url);
+  if (isSafeUrl(url)) {
+    window.location.assign(url);
+  }
 };
 
 const fieldRule = (f: AuthField) => {

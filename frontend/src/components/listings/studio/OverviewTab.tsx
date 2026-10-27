@@ -4,6 +4,7 @@ import { StatusPill } from "@/components/common/StatusPill";
 import { ProductImage } from "@/components/products/detail/ProductImage";
 import type { ListingStudio } from "@/types/listingStudio";
 import { formatINR } from "@/utils/format";
+import { isSafeUrl } from "@/utils/security";
 import { StatusIcon } from "./ReadinessTab";
 
 interface Props {
@@ -45,8 +46,8 @@ export function OverviewTab({ s, canChangeCategory, categoryReason, dirty, onCha
               <dt className="text-muted-foreground">Channel ASIN / Identifier</dt>
               <dd className="mt-1 flex items-center gap-2 font-mono font-semibold text-foreground">
                 {s.listing.externalListingId ?? "Pending Creation"}
-                {s.externalUrl && (
-                  <a href={s.externalUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-sans text-[11px] font-medium text-primary hover:underline" aria-label="Open the listing on the marketplace">
+                {s.externalUrl && isSafeUrl(s.externalUrl) && (
+                  <a href={s.externalUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-sans text-[11px] font-medium text-primary hover:underline" aria-label="Open the listing on the marketplace">
                     View <ExternalLink className="h-3 w-3" aria-hidden="true" />
                   </a>
                 )}

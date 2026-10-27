@@ -62,5 +62,3 @@ export function ListingsErrorState({ onRetry, isRetrying = false, message }: Lis
     </div>
   );
 }
-
-export default ListingsErrorState;

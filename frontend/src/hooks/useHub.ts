@@ -35,6 +35,7 @@ export function useHubAccount(id: string | null) {
     queryFn: ({ signal }) => hubApi.account(id as string, signal),
     enabled: Boolean(id),
     retry: false,
+    staleTime: 15_000,
     refetchInterval: (q) => (q.state.data?.syncState === "syncing" ? 4000 : false),
   });
 }
@@ -55,7 +56,12 @@ export function useConnector(code: string | null) {
 }
 
 export function useJobLogs(jobId: string | null) {
-  return useQuery({ queryKey: HUB_KEYS.logs(jobId ?? ""), queryFn: ({ signal }) => hubApi.jobLogs(jobId as string, signal), enabled: Boolean(jobId) });
+  return useQuery({
+    queryKey: HUB_KEYS.logs(jobId ?? ""),
+    queryFn: ({ signal }) => hubApi.jobLogs(jobId as string, signal),
+    enabled: Boolean(jobId),
+    staleTime: 15_000,
+  });
 }
 
 /** after a write: the hub queries and the shell badges are stale */

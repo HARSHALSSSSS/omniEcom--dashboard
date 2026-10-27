@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { sanitizeHtml } from "@/utils/security";
 import { errorClass, hintClass } from "./fieldStyles";
 import { isBlankHtml, normalizeLinkUrl, plainLength } from "./richText";
 
@@ -39,7 +40,10 @@ export function DescriptionEditor({ value, onChange, disabled, maxChars, error }
   // external changes (resume, AI apply) flow into the editor; the editor's own typing never gets reset
   useEffect(() => {
     const el = ref.current;
-    if (el && el.innerHTML !== value) el.innerHTML = value;
+    if (el && el.innerHTML !== value) {
+      // DOMPurify sanitization prevents stored XSS from untrusted product data
+      el.innerHTML = sanitizeHtml(value);
+    }
   }, [value]);
 
   useEffect(() => {

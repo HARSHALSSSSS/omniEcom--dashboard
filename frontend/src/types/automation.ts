@@ -12,7 +12,7 @@ export type ExecutionStatus = (typeof EXECUTION_STATUSES)[number];
 export const RUN_STATUSES = ["success", "awaiting_approval", "failed"] as const;
 export type RunStatus = (typeof RUN_STATUSES)[number];
 
-export type AutomationTab = "rules" | "approvals" | "runs";
+export type AutomationTab = "overview" | "rules" | "approvals" | "runs";
 
 export const OPERATORS = ["eq", "ne", "in", "nin", "gt", "gte", "lt", "lte", "contains", "startsWith", "between", "exists"] as const;
 export type Operator = (typeof OPERATORS)[number];

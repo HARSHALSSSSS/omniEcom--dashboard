@@ -18,7 +18,7 @@ export type Frequency = (typeof FREQUENCIES)[number];
 export const SCHEDULE_STATUSES = ["active", "paused"] as const;
 export type ScheduleStatus = (typeof SCHEDULE_STATUSES)[number];
 
-export const REPORT_TABS = ["reports", "history", "schedules"] as const;
+export const REPORT_TABS = ["overview", "reports", "history", "schedules"] as const;
 export type ReportsTab = (typeof REPORT_TABS)[number];
 
 export type ParamType = "range" | "month" | "date" | "enum" | "uuid" | "integer" | "string";
@@ -140,6 +140,81 @@ export interface ReportsOverview {
   featured: FeaturedReport[];
   recentRuns: ReportRun[];
   schedules: { total: number; active: number; paused: number; nextRunAt: string | null; next: ReportSchedule | null };
+}
+
+export interface SalesReportTotals {
+  orders: number;
+  units: number;
+  subtotalMinor: number;
+  taxMinor: number;
+  shippingMinor: number;
+  discountMinor: number;
+  grossMinor: number;
+  averageOrderValueMinor: number;
+}
+
+export interface SalesReportSeriesItem {
+  bucket: string;
+  orders: number;
+  grossMinor: number;
+}
+
+export interface SalesReportByMarketplaceItem {
+  marketplace: string;
+  orders: number;
+  grossMinor: number;
+}
+
+export interface SalesReportResponse {
+  window: { from: string; to: string };
+  period: string;
+  totals: SalesReportTotals;
+  series: SalesReportSeriesItem[];
+  byMarketplace: SalesReportByMarketplaceItem[];
+  byPaymentMethod: Array<{ method: string; orders: number; grossMinor: number }>;
+}
+
+export interface MarketplaceReportAccount {
+  accountId: string;
+  marketplace: string;
+  displayName: string | null;
+  status: string;
+  orders: number;
+  revenueMinor: number;
+  cancelled: number;
+  cancellationRate: number;
+  returns: number;
+  returnRate: number;
+  listings: Record<string, number>;
+  syncJobs: number;
+  syncFailures: number;
+  syncFailureRate: number;
+}
+
+export interface MarketplacesReportResponse {
+  window: { from: string; to: string };
+  accounts: MarketplaceReportAccount[];
+}
+
+export interface ReturnsReportTotals {
+  returns: number;
+  unitsRequested: number;
+  unitsReceived: number;
+  unitsRestocked: number;
+  unitsDecided: number;
+  unitReturnRate: number;
+  avgDaysToReceive: number | null;
+  avgDaysToComplete: number | null;
+}
+
+export interface ReturnsReportResponse {
+  window: { from: string; to: string };
+  totals: ReturnsReportTotals;
+  byStatus: Array<{ status: string; count: number }>;
+  bySource: Array<{ source: string; count: number }>;
+  byReason: Array<{ reasonCode: string; count: number }>;
+  dispositions: Array<{ disposition: string; units: number }>;
+  refunds: Array<{ status: string; count: number; amountMinor: number }>;
 }
 
 export interface Paged<T> {

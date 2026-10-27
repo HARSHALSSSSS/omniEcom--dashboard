@@ -10,11 +10,60 @@ export const SELECT = "h-9 rounded-lg border border-border bg-card px-2.5 text-x
 export const FIELD_SELECT = "h-9 w-full rounded-md border border-input bg-background px-3 text-xs disabled:opacity-50";
 const CHIP = "inline-flex items-center whitespace-nowrap rounded border px-2 py-0.5 text-[10px] font-semibold";
 
-export function PoStatusPill({ status }: { status: PurchaseOrderStatus }) {
+export function PoStatusPill({ status, isLate }: { status: PurchaseOrderStatus; isLate?: boolean }) {
+  if (isLate) {
+    return (
+      <span className="inline-flex items-center whitespace-nowrap rounded-full border border-rose-200 bg-rose-50 px-2.5 py-0.5 text-[11px] font-medium text-rose-700 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-400">
+        Overdue · 2 days
+      </span>
+    );
+  }
+  if (status === "draft") {
+    return (
+      <span className="inline-flex items-center whitespace-nowrap rounded-full border border-amber-200/80 bg-amber-50 px-2.5 py-0.5 text-[11px] font-medium text-amber-800 dark:border-amber-800/80 dark:bg-amber-950/40 dark:text-amber-300">
+        Awaiting approval
+      </span>
+    );
+  }
+  if (status === "submitted") {
+    return (
+      <span className="inline-flex items-center whitespace-nowrap rounded-full border border-slate-200 bg-slate-100 px-2.5 py-0.5 text-[11px] font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+        In transit
+      </span>
+    );
+  }
+  if (status === "acknowledged") {
+    return (
+      <span className="inline-flex items-center whitespace-nowrap rounded-full border border-emerald-200/80 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-800 dark:border-emerald-800/80 dark:bg-emerald-950/40 dark:text-emerald-300">
+        Confirmed
+      </span>
+    );
+  }
+  if (status === "partially_received") {
+    return (
+      <span className="inline-flex items-center whitespace-nowrap rounded-full border border-slate-200 bg-slate-100 px-2.5 py-0.5 text-[11px] font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+        Partially received
+      </span>
+    );
+  }
   return <span className={cn(CHIP, PO_STATUS_CLASS[status])}>{PO_STATUS_LABEL[status]}</span>;
 }
 
 export function SupplierStatusPill({ status }: { status: SupplierStatus }) {
+  if (status === "active") {
+    return (
+      <span className="inline-flex items-center whitespace-nowrap rounded-full border border-emerald-200/80 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-800 dark:border-emerald-800/80 dark:bg-emerald-950/40 dark:text-emerald-300">
+        Active
+      </span>
+    );
+  }
+  if (status === "inactive") {
+    return (
+      <span className="inline-flex items-center whitespace-nowrap rounded-full border border-amber-200/80 bg-amber-50 px-2.5 py-0.5 text-[11px] font-medium text-amber-800 dark:border-amber-800/80 dark:bg-amber-950/40 dark:text-amber-300">
+        Setup incomplete
+      </span>
+    );
+  }
   return <span className={cn(CHIP, SUPPLIER_STATUS_CLASS[status])}>{SUPPLIER_STATUS_LABEL[status]}</span>;
 }
 
@@ -32,7 +81,7 @@ export function InlineError({ message, id }: { message: string; id?: string }) {
 }
 
 /** a labelled form control with its own error line (the error also reaches screen readers through aria-describedby) */
-export function Field({ id, label, hint, error, required, children, className }: { id: string; label: string; hint?: string; error?: string | null; required?: boolean; children: ReactNode; className?: string }) {
+export function Field({ id, label, hint, error, required, children, className }: { id: string; label: ReactNode; hint?: string; error?: string | null; required?: boolean; children: ReactNode; className?: string }) {
   return (
     <div className={cn("flex flex-col gap-1", className)}>
       <label htmlFor={id} className="text-xs font-semibold">

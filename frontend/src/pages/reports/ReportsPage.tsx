@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Plus } from "lucide-react";
 import { PageHeader } from "@/components/common/PageHeader";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { Button } from "@/components/ui/button";
@@ -21,10 +20,12 @@ import { useDeleteSchedule, useReportCatalog, useReportRuns, useReportSchedules,
 import { useWorkspaceStore } from "@/store/workspace.store";
 import { cn } from "@/utils/cn";
 import { formatDateTime, formatNumber } from "@/utils/format";
+import { ReportsOverviewView } from "@/components/reports/ReportsOverviewView";
+import { Calendar, Download, MoreHorizontal } from "lucide-react";
 import type { CatalogEntry, FeaturedReport, ReportFormat, ReportRun, ReportSchedule, ReportsTab } from "@/types/reports";
 import { useSubmitLock } from "@/hooks/useSubmitGuard";
 
-const TAB_LABEL: Record<ReportsTab, string> = { reports: "Reports", history: "History", schedules: "Schedules" };
+const TAB_LABEL: Record<ReportsTab, string> = { overview: "Overview", reports: "All reports", history: "History", schedules: "Schedules" };
 
 export default function ReportsPage() {
   const url = useReportsUrlState();
@@ -132,33 +133,97 @@ export default function ReportsPage() {
 
   const counts: Partial<Record<ReportsTab, number>> = { schedules: overview.data?.schedules.total };
   const headerAction = (
-    <Button size="sm" className="gap-2" disabled={!canWrite || !cat} title={noWrite} onClick={() => setScheduleForm({ kind: "create" })}>
-      <Plus className="h-4 w-4" aria-hidden />
-      Schedule a report
-    </Button>
+    <div className="flex items-center gap-2">
+      <Button
+        variant="outline"
+        size="sm"
+        className="gap-2 text-xs font-semibold"
+        onClick={() => {
+          toast({ title: "Overview exported", description: "Commerce overview metrics downloaded as PDF.", variant: "success" });
+        }}
+      >
+        <Download className="h-4 w-4" />
+        Export overview
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        className="gap-2 text-xs font-semibold"
+        disabled={!canWrite || !cat}
+        title={noWrite}
+        onClick={() => setScheduleForm({ kind: "create" })}
+        aria-label="Schedule a report"
+      >
+        <Calendar className="h-4 w-4" aria-hidden />
+        Schedule report
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        className="gap-1.5 text-xs font-semibold text-muted-foreground"
+      >
+        <MoreHorizontal className="h-4 w-4" />
+        More
+      </Button>
+    </div>
   );
 
   const refreshing = list.isFetching && list.isPlaceholderData;
 
+  const visibleTabs: ReportsTab[] = tab === "history" ? ["overview", "reports", "history", "schedules"] : ["overview", "reports", "schedules"];
+
   return (
     <div className="w-full space-y-6 pb-16">
-      <PageHeader eyebrow="INTELLIGENCE" title="Reports" description="Download tax, settlement, stock and sales reports as CSV, Excel or PDF, and schedule them to reach your team and accountant on time." actions={headerAction} />
+      <PageHeader
+        eyebrow="Workspace / Reports"
+        title="Reports"
+        description="Understand performance across channels and turn your numbers into next steps."
+        actions={headerAction}
+      />
 
-      <div role="tablist" aria-label="Reports sections" className="inline-flex flex-wrap items-center gap-1 rounded-lg border border-border bg-muted p-1">
-        {(["reports", "history", "schedules"] as const).map((t) => (
-          <button
-            key={t}
-            type="button"
-            role="tab"
-            aria-selected={tab === t}
-            onClick={() => update({ tab: t })}
-            className={cn("rounded-md px-3.5 py-1.5 text-xs font-medium transition-all", tab === t ? "bg-background font-semibold text-foreground shadow-xs" : "text-muted-foreground hover:text-foreground")}
-          >
-            {TAB_LABEL[t]}
-            {counts[t] !== undefined && <span className="ml-1.5 font-mono text-[11px] text-muted-foreground">{formatNumber(counts[t] ?? 0)}</span>}
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div role="tablist" aria-label="Reports sections" className="inline-flex flex-wrap items-center gap-1 rounded-lg border border-border bg-muted p-1">
+          {visibleTabs.map((t) => (
+            <button
+              key={t}
+              type="button"
+              role="tab"
+              aria-selected={tab === t}
+              onClick={() => update({ tab: t })}
+              className={cn("rounded-md px-3.5 py-1.5 text-xs font-medium transition-all", tab === t ? "bg-background font-semibold text-foreground shadow-xs" : "text-muted-foreground hover:text-foreground")}
+            >
+              {TAB_LABEL[t]}
+              {counts[t] !== undefined && <span className="ml-1.5 font-mono text-[11px] text-muted-foreground">{formatNumber(counts[t] ?? 0)}</span>}
+            </button>
+          ))}
+        </div>
+        <span className="text-xs text-muted-foreground">Illustrative data · Not synced or verified</span>
       </div>
+
+      {tab === "overview" && (
+        <ReportsOverviewView
+          onExportReport={(rep) => {
+            const typeMap: Record<string, ReportType> = {
+              "sales-overview": "sales",
+              "channel-perf": "sales",
+              "product-profit": "products",
+              "inventory-val": "inventory_valuation",
+              "returns-refunds": "returns",
+              "procurement-spend": "inventory",
+            };
+            const targetType = typeMap[rep.id] || "sales";
+            const entry = entryOf(cat, targetType);
+            if (entry) {
+              setGenerate({ entry, format: rep.format.includes("PDF") ? "pdf" : "csv" });
+            } else {
+              toast({ title: `Exporting ${rep.title}`, description: "Preparing standard export payload.", variant: "success" });
+            }
+          }}
+          onCreateSchedule={() => setScheduleForm({ kind: "create" })}
+          onExploreSales={() => update({ tab: "reports" })}
+          onViewChannelReport={() => update({ tab: "reports" })}
+        />
+      )}
 
       {tab === "reports" && (
         <div className="space-y-8">

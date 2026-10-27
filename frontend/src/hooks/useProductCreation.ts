@@ -35,12 +35,20 @@ export const CREATION_KEYS = {
 };
 
 // ------------------------------------------------------------------------------------------------ lookups
-export const useFormOptions = () => useQuery({ queryKey: CREATION_KEYS.formOptions, queryFn: productCreationApi.formOptions, staleTime: 30 * 60 * 1000 });
-export const useCategoryTree = () => useQuery({ queryKey: CREATION_KEYS.categories, queryFn: productCreationApi.categoryTree, staleTime: 60 * 1000 });
-export const useBrands = () => useQuery({ queryKey: CREATION_KEYS.brands, queryFn: productCreationApi.brands, staleTime: 30 * 1000 });
-export const useDrafts = (enabled: boolean) => useQuery({ queryKey: CREATION_KEYS.drafts, queryFn: () => productCreationApi.listDrafts(5), enabled, staleTime: 0, refetchOnMount: "always" });
+export const useFormOptions = () =>
+  useQuery({ queryKey: CREATION_KEYS.formOptions, queryFn: ({ signal }) => productCreationApi.formOptions(signal), staleTime: 30 * 60 * 1000 });
+export const useCategoryTree = () =>
+  useQuery({ queryKey: CREATION_KEYS.categories, queryFn: ({ signal }) => productCreationApi.categoryTree(signal), staleTime: 5 * 60 * 1000 });
+export const useBrands = () =>
+  useQuery({ queryKey: CREATION_KEYS.brands, queryFn: ({ signal }) => productCreationApi.brands(signal), staleTime: 5 * 60 * 1000 });
+export const useDrafts = (enabled: boolean) =>
+  useQuery({ queryKey: CREATION_KEYS.drafts, queryFn: () => productCreationApi.listDrafts(5), enabled, staleTime: 0, refetchOnMount: "always" });
 export const useStandardCategories = (q: string) =>
-  useQuery({ queryKey: CREATION_KEYS.standardCategories(q), queryFn: () => productCreationApi.standardCategories(q || undefined), staleTime: 60 * 1000 });
+  useQuery({
+    queryKey: CREATION_KEYS.standardCategories(q),
+    queryFn: ({ signal }) => productCreationApi.standardCategories(q || undefined, signal),
+    staleTime: 5 * 60 * 1000,
+  });
 
 // ------------------------------------------------------------------------------------------------ the flow
 export type SaveStatus = "idle" | "saving" | "saved" | "error" | "conflict";

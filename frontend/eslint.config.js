@@ -3,9 +3,11 @@ import globals from "globals";
 import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
+import pluginSecurity from "eslint-plugin-security";
 
 export default tseslint.config(
   { ignores: ["dist", "node_modules", "public", "src/components/ui"] },
+  pluginSecurity.configs.recommended,
   {
     extends: [js.configs.recommended, ...tseslint.configs.strict],
     files: ["**/*.{ts,tsx}"],
@@ -31,6 +33,7 @@ export default tseslint.config(
       ],
       "no-console": ["warn", { allow: ["warn", "error"] }],
       "prefer-const": "error",
+      "security/detect-object-injection": "off",
     },
   },
   {

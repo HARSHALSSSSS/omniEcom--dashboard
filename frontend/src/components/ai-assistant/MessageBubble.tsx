@@ -98,6 +98,18 @@ export function MessageBubble({ message }: { message: AssistantMessage }) {
           <time dateTime={message.timestamp}>{formatMessageTime(message.timestamp)}</time>
           {bot && message.confidence === "none" && <span>No matching data</span>}
           {bot && message.sources.length > 0 && <span>Source: {message.sources.join(", ")}</span>}
+          {bot && (
+            <div className="ml-auto flex items-center gap-1 opacity-70 hover:opacity-100">
+              <button
+                type="button"
+                className="rounded p-1 hover:bg-muted"
+                title="Copy response"
+                onClick={() => navigator.clipboard.writeText(message.content)}
+              >
+                <span className="text-[10px]">Copy</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </article>

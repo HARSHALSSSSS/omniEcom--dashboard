@@ -9,6 +9,7 @@ import { ROUTES } from "@/constants/routes";
 import { toast } from "@/hooks/useToast";
 import { useCancelShipment, useNdrAction, useNdrCases, useRefreshTracking, useShipmentRow, useTracking } from "@/hooks/useShipping";
 import { formatINR } from "@/utils/format";
+import { isSafeUrl } from "@/utils/security";
 import type { NdrAction, NdrCase, ShipmentRow, TrackingEvent } from "@/types/shipping";
 import { ShipmentStatusPill } from "./shippingUi";
 import { NO_WRITE_REASON, dateOrDash, orDash, paymentText } from "./shippingFormat";
@@ -191,8 +192,8 @@ export function ShipmentDrawer({ shipmentId, canWrite, labelBusy, onClose, onLab
                   <Row label="Expected delivery" value={dateOrDash(row.estimatedDeliveryAt)} />
                   {row.deliveredAt && <Row label="Delivered" value={dateOrDash(row.deliveredAt)} />}
                   <Row label="Delivery attempts" value={row.attempts} />
-                  {row.trackingUrl && (
-                    <Row label="Carrier tracking" value={<a href={row.trackingUrl} target="_blank" rel="noreferrer" className="font-semibold text-primary hover:underline">Open page</a>} />
+                  {row.trackingUrl && isSafeUrl(row.trackingUrl) && (
+                    <Row label="Carrier tracking" value={<a href={row.trackingUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-primary hover:underline">Open page</a>} />
                   )}
                 </div>
               </Section>

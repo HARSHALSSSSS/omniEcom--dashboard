@@ -1,4 +1,5 @@
-import { Field, SectionCard, TextField } from "./fields";
+import { useState } from "react";
+import { Field, SectionCard, TextField, selectClass } from "./fields";
 import type { TabProps } from "./tabProps";
 
 const BUSINESS_TYPE_LABEL: Record<string, string> = {
@@ -22,6 +23,9 @@ export function BusinessTab({ s, v, ctl }: TabProps) {
     onChange: (x: string) => ctl.setField(key, x),
   });
   const type = s.business.businessType;
+  const currentLabel = type ? (BUSINESS_TYPE_LABEL[type] ?? type) : "Direct-to-consumer brand";
+  const [businessType, setBusinessType] = useState(currentLabel);
+
   return (
     <div className="space-y-6">
       <SectionCard title="Legal entity" description="How your business is identified on commercial invoices, shipping labels and marketplace registrations.">
@@ -30,8 +34,20 @@ export function BusinessTab({ s, v, ctl }: TabProps) {
           <TextField {...bind("displayName")} label="Brand name" maxLength={120} hint="Shown in the app and to your team." />
           <TextField {...bind("cin")} label="CIN (Corporate Identification Number)" mono upper maxLength={21} hint="21 characters. Leave empty if you are not a company." />
           <TextField {...bind("pan")} label="PAN" mono upper maxLength={10} hint="10 characters. It must match the PAN inside your GSTINs." />
-          <Field id="settings-businessType" label="Business type" hint="Chosen when the account was created. Contact support to change it.">
-            <input id="settings-businessType" type="text" readOnly value={type ? (BUSINESS_TYPE_LABEL[type] ?? type) : "Not set"} className="flex h-9 w-full rounded-md border border-input bg-muted/40 px-3 py-1 text-sm shadow-sm" />
+          <Field id="settings-businessType" label="Business type" hint="Organization business model classification.">
+            <select
+              id="settings-businessType"
+              className={selectClass}
+              value={businessType}
+              disabled={ro}
+              onChange={(e) => setBusinessType(e.target.value)}
+            >
+              {Object.values(BUSINESS_TYPE_LABEL).map((label) => (
+                <option key={label} value={label}>
+                  {label}
+                </option>
+              ))}
+            </select>
           </Field>
           <Field id="settings-primaryGstin" label="Primary GSTIN" hint="Managed in the GSTIN tab.">
             <input id="settings-primaryGstin" type="text" readOnly value={s.business.gstin ?? "Not registered"} className="flex h-9 w-full rounded-md border border-input bg-muted/40 px-3 py-1 font-mono text-sm shadow-sm" />

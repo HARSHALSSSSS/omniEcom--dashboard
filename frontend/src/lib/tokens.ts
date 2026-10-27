@@ -28,14 +28,15 @@ export function getRefreshToken(): string | null {
 
 /** Where a rotated token goes: the same place the previous one lived (or `remember` for a fresh login). */
 export function setRefreshToken(token: string, remember?: boolean): void {
+  if (!token || typeof token !== "string" || token.trim() === "") return;
   safe(() => {
     const inLocal = window.localStorage.getItem(REFRESH_KEY) !== null;
     const persist = remember ?? inLocal;
     if (persist) {
-      window.localStorage.setItem(REFRESH_KEY, token);
+      window.localStorage.setItem(REFRESH_KEY, token.trim());
       window.sessionStorage.removeItem(REFRESH_KEY);
     } else {
-      window.sessionStorage.setItem(REFRESH_KEY, token);
+      window.sessionStorage.setItem(REFRESH_KEY, token.trim());
       window.localStorage.removeItem(REFRESH_KEY);
     }
   }, undefined);

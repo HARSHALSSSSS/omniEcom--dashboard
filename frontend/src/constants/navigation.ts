@@ -13,6 +13,7 @@ import {
   Megaphone,
   ClipboardList,
   BarChart3,
+  CircleDollarSign,
   Lightbulb,
   Bot,
   Workflow,
@@ -67,6 +68,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Intelligence",
     items: [
       { label: "Reports", href: ROUTES.REPORTS, icon: BarChart3 },
+      { label: "Profitability", href: ROUTES.PROFITABILITY, icon: CircleDollarSign },
       {
         label: "Product Intelligence",
         href: ROUTES.PRODUCT_INTELLIGENCE,

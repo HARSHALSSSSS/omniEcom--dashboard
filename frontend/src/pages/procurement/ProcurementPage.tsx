@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Plus } from "lucide-react";
+import { MoreHorizontal, Plus } from "lucide-react";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Button } from "@/components/ui/button";
 import { RefreshButton } from "@/components/common/RefreshButton";
@@ -8,6 +8,10 @@ import { PoFilters, PoStatusTabs } from "@/components/procurement/PoFilters";
 import { PoFormDialog, type PoFormTarget } from "@/components/procurement/PoFormDialog";
 import { PoTable } from "@/components/procurement/PoTable";
 import { ProcurementKpis } from "@/components/procurement/ProcurementKpis";
+import { ProcurementPulse } from "@/components/procurement/ProcurementPulse";
+import { ProcurementOverviewTab } from "@/components/procurement/ProcurementOverviewTab";
+import { AddSupplierSheet } from "@/components/procurement/AddSupplierSheet";
+import { KeepOrdersMoving, KeepSupplyMoving } from "@/components/procurement/ProcurementActionCards";
 import { ReorderPanel } from "@/components/procurement/ReorderPanel";
 import { SupplierDialog, type SupplierFormTarget } from "@/components/procurement/SupplierDialog";
 import { SupplierDrawer } from "@/components/procurement/SupplierDrawer";
@@ -20,12 +24,17 @@ import { procurementApi } from "@/api/procurement.api";
 import { errorMessage } from "@/api/errors";
 import { useCan } from "@/hooks/useCan";
 import { toast } from "@/hooks/useToast";
-import { useActiveSuppliers, useProcurementOverview, useProcurementWarehouses, usePurchaseOrders, useSuppliers } from "@/hooks/useProcurement";
+import { useActiveSuppliers, useProcurementOverview, useProcurementWarehouses, usePurchaseOrders, useReorderSuggestions, useSuppliers } from "@/hooks/useProcurement";
 import { cn } from "@/utils/cn";
 import { formatNumber } from "@/utils/format";
 import type { ProcurementTab } from "@/types/procurement";
 
-const TAB_LABEL: Record<ProcurementTab, string> = { orders: "Purchase orders", suppliers: "Suppliers", reorder: "Reorder suggestions" };
+const TAB_LABEL: Record<ProcurementTab, string> = {
+  overview: "Overview",
+  orders: "Purchase Orders",
+  suppliers: "Suppliers",
+  reorder: "Reorder suggestions",
+};
 
 export default function ProcurementPage() {
   const url = useProcurementUrlState();
@@ -36,22 +45,24 @@ export default function ProcurementPage() {
   const overview = useProcurementOverview();
   const poQuery = poQueryOf(url);
   const supplierQuery = supplierQueryOf(url);
-  const orders = usePurchaseOrders(poQuery, tab === "orders");
-  const suppliers = useSuppliers(supplierQuery, tab === "suppliers");
-  const supplierChoices = useActiveSuppliers(tab === "orders");
+  const orders = usePurchaseOrders(poQuery, tab === "orders" || tab === "overview");
+  const suppliers = useSuppliers(supplierQuery, tab === "suppliers" || tab === "overview");
+  const supplierChoices = useActiveSuppliers(tab === "orders" || tab === "overview");
+  const suggestions = useReorderSuggestions(tab === "overview" || tab === "reorder");
   const warehouses = useProcurementWarehouses();
 
   const [poForm, setPoForm] = useState<PoFormTarget | null>(null);
   const [supplierForm, setSupplierForm] = useState<SupplierFormTarget | null>(null);
+  const [addSupplierSheetOpen, setAddSupplierSheetOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
 
-  const list = tab === "orders" ? orders : suppliers;
+  const list = tab === "suppliers" ? suppliers : orders;
   const poRows = useMemo(() => orders.data?.items ?? [], [orders.data]);
   const supplierRows = useMemo(() => suppliers.data?.items ?? [], [suppliers.data]);
 
   // a page past the end (a shrinking result set, an old link) falls back to the last page
   useEffect(() => {
-    const d = tab === "reorder" ? undefined : list.data;
+    const d = tab === "reorder" || tab === "overview" ? undefined : list.data;
     if (d && d.total > 0 && d.items.length === 0 && page > d.pages) update({ page: String(d.pages) }, { replace: true });
   }, [list.data, tab, page, update]);
 
@@ -71,67 +82,111 @@ export default function ProcurementPage() {
     }
   }, [url.po, url.poSort]);
 
-  const counts: Record<ProcurementTab, number | undefined> = {
-    orders: orders.data?.counts.all ?? (overview.data ? Object.values(overview.data.statusCounts).reduce((a, b) => a + b, 0) : undefined),
-    suppliers: overview.data?.totalSuppliers,
-    reorder: overview.data?.reorderSuggestionsCount,
-  };
-
   const headerAction =
     tab === "suppliers" ? (
-      <Button size="sm" className="gap-2" disabled={!canWrite} title={noWrite} onClick={() => setSupplierForm({ kind: "create" })}>
+      <Button
+        size="sm"
+        aria-label="Add supplier"
+        className="gap-2 bg-slate-900 text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200"
+        disabled={!canWrite}
+        title={noWrite}
+        onClick={() => setAddSupplierSheetOpen(true)}
+      >
         <Plus className="h-4 w-4" aria-hidden />
-        Add supplier
+        Add Supplier
       </Button>
     ) : (
-      <Button size="sm" className="gap-2" disabled={!canWrite} title={noWrite} onClick={() => setPoForm({ kind: "create" })}>
+      <Button
+        size="sm"
+        aria-label="New purchase order"
+        className="gap-2 bg-slate-900 text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200"
+        disabled={!canWrite}
+        title={noWrite}
+        onClick={() => setPoForm({ kind: "create" })}
+      >
         <Plus className="h-4 w-4" aria-hidden />
-        New purchase order
+        Create Purchase Order
       </Button>
     );
 
   const refreshing = list.isFetching && list.isPlaceholderData;
 
+  // The primary 3 navigation tabs shown in Figma: Overview, Purchase Orders, Suppliers
+  const displayedTabs: ProcurementTab[] = tab === "reorder" ? ["overview", "orders", "suppliers", "reorder"] : ["overview", "orders", "suppliers"];
+
   return (
     <div className="w-full space-y-6 pb-16">
       <PageHeader
         eyebrow="COMMERCE OPERATIONS"
-        title="Procurement and Inbound"
-        description="Manage suppliers and their price lists, raise purchase orders, and receive stock into your warehouses before products run out."
+        title="Procurement"
+        description="Plan replenishment, manage purchase orders and keep supply moving."
         actions={
-          <>
+          <div className="flex flex-wrap items-center gap-2">
             <RefreshButton
               onRefresh={() => {
                 void overview.refetch();
-                if (tab !== "reorder") void list.refetch();
+                if (tab === "orders" || tab === "overview") void orders.refetch();
+                if (tab === "suppliers" || tab === "overview") void suppliers.refetch();
+                if (tab === "reorder" || tab === "overview") void suggestions.refetch();
               }}
               spinning={overview.isFetching || (tab !== "reorder" && list.isFetching)}
             />
             {headerAction}
-          </>
+            <Button variant="outline" size="sm" disabled={exporting} onClick={() => void exportCsv()}>
+              Export
+            </Button>
+            <Button variant="outline" size="sm" className="gap-1.5 px-3 text-xs">
+              <MoreHorizontal className="h-4 w-4" aria-hidden />
+              More
+            </Button>
+          </div>
         }
       />
 
-      <ProcurementKpis overview={overview.data} loading={overview.isLoading} failed={overview.isError} />
-
-      <div role="tablist" aria-label="Procurement sections" className="inline-flex flex-wrap items-center gap-1 rounded-lg border border-border bg-muted p-1">
-        {(["orders", "suppliers", "reorder"] as const).map((t) => (
-          <button
-            key={t}
-            type="button"
-            role="tab"
-            aria-selected={tab === t}
-            onClick={() => update({ tab: t })}
-            className={cn("rounded-md px-3.5 py-1.5 text-xs font-medium transition-all", tab === t ? "bg-background font-semibold text-foreground shadow-xs" : "text-muted-foreground hover:text-foreground")}
-          >
-            {TAB_LABEL[t]}
-            {counts[t] !== undefined && <span className="ml-1.5 font-mono text-[11px] text-muted-foreground">{formatNumber(counts[t] ?? 0)}</span>}
-          </button>
-        ))}
+      {/* Main Tab Navigation Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-1">
+        <div role="tablist" aria-label="Procurement sections" className="flex items-center gap-6">
+          {displayedTabs.map((t) => (
+            <button
+              key={t}
+              type="button"
+              role="tab"
+              aria-selected={tab === t}
+              onClick={() => update({ tab: t })}
+              className={cn(
+                "relative pb-2 text-sm font-medium transition-colors",
+                tab === t
+                  ? "font-semibold text-foreground after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {TAB_LABEL[t]}
+            </button>
+          ))}
+        </div>
+        <span className="text-xs text-muted-foreground">Illustrative data · No orders sent automatically</span>
       </div>
 
+      {/* Overview Tab Content */}
+      {tab === "overview" && (
+        <ProcurementOverviewTab
+          overview={overview.data}
+          suggestions={suggestions.data ?? []}
+          orders={poRows}
+          suppliers={supplierRows}
+          onOpenOrder={(id) => update({ po: id, tab: "orders" })}
+          onOpenSupplier={(id) => update({ sup: id, tab: "suppliers" })}
+          onNavigateTab={(t) => update({ tab: t })}
+          onCreatePoWithSuggestion={(s) => setPoForm({ kind: "create", supplierId: s.supplier?.id })}
+        />
+      )}
+
+      {/* Purchase Orders Tab Content */}
       {tab === "orders" && (
         <>
+          <ProcurementPulse overview={overview.data} variant="orders" />
+          <ProcurementKpis overview={overview.data} loading={overview.isLoading} failed={overview.isError} />
+
           <PoStatusTabs active={url.po.status} counts={orders.data?.counts} onChange={(status) => update({ status: status ?? null })} />
           <PoFilters
             filters={url.po}
@@ -184,13 +239,17 @@ export default function ProcurementPage() {
                 onPage={(p) => update({ page: p > 1 ? String(p) : null })}
                 onPageSize={(size) => update({ size: size === DEFAULT_PAGE_SIZE ? null : String(size) })}
               />
+              <KeepOrdersMoving orders={poRows} onOpenOrder={(id) => update({ po: id })} />
             </>
           )}
         </>
       )}
 
+      {/* Suppliers Tab Content */}
       {tab === "suppliers" && (
         <>
+          <ProcurementPulse overview={overview.data} variant="supplier" />
+
           <SupplierFilters
             q={url.supplierQ ?? ""}
             status={url.supplierStatus}
@@ -215,7 +274,7 @@ export default function ProcurementPage() {
               </StateBox>
             ) : (
               <StateBox title="No suppliers yet." description="A supplier sells you products. Add one with its price list and lead time so purchase orders and reorder suggestions can use it.">
-                <Button size="sm" className="text-xs" disabled={!canWrite} title={noWrite} onClick={() => setSupplierForm({ kind: "create" })}>
+                <Button size="sm" className="text-xs" disabled={!canWrite} title={noWrite} onClick={() => setAddSupplierSheetOpen(true)}>
                   Add supplier
                 </Button>
               </StateBox>
@@ -233,11 +292,13 @@ export default function ProcurementPage() {
                 onPage={(p) => update({ page: p > 1 ? String(p) : null })}
                 onPageSize={(size) => update({ size: size === DEFAULT_PAGE_SIZE ? null : String(size) })}
               />
+              <KeepSupplyMoving suppliers={supplierRows} onOpenSupplier={(id) => update({ sup: id })} onOpenOrder={(id) => update({ po: id, tab: "orders" })} />
             </>
           )}
         </>
       )}
 
+      {/* Reorder Suggestions Tab */}
       {tab === "reorder" && <ReorderPanel onOpenOrder={(id) => update({ tab: "orders", po: id })} onOpenSuppliers={() => update({ tab: "suppliers" })} />}
 
       <PoDrawer orderId={url.orderId} onClose={() => update({ po: null })} onEdit={(id) => setPoForm({ kind: "edit", id })} onOpen={(id) => update({ po: id })} />
@@ -263,6 +324,14 @@ export default function ProcurementPage() {
         onSaved={(s, mode) => {
           setSupplierForm(null);
           if (mode === "create") update({ sup: s.id, tab: "suppliers" });
+        }}
+      />
+      <AddSupplierSheet
+        open={addSupplierSheetOpen}
+        onClose={() => setAddSupplierSheetOpen(false)}
+        onSaved={(s) => {
+          setAddSupplierSheetOpen(false);
+          update({ sup: s.id, tab: "suppliers" });
         }}
       />
     </div>

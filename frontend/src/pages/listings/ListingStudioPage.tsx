@@ -20,6 +20,7 @@ import { PricingStockTab } from "@/components/listings/studio/PricingStockTab";
 import { ReadinessTab } from "@/components/listings/studio/ReadinessTab";
 import { ContentSyncPanel, FlowCard, JobBanner } from "@/components/listings/studio/StudioBanners";
 import { ROUTES } from "@/constants/routes";
+import { isSafeUrl } from "@/utils/security";
 import { isApiError, errorMessage } from "@/api/errors";
 import { useActivityTimeline, useStudioController } from "@/hooks/useListingStudio";
 import { isJobDone, type ContentState, type ReadinessItem, type StudioActionKey } from "@/types/listingStudio";
@@ -202,8 +203,8 @@ export default function ListingStudioPage() {
         {listing.externalListingId && (
           <span className="flex items-center gap-1.5 font-mono text-muted-foreground">
             {listing.externalListingId}
-            {s.externalUrl && (
-              <a href={s.externalUrl} target="_blank" rel="noreferrer" aria-label="Open the listing on the marketplace" className="text-primary">
+            {s.externalUrl && isSafeUrl(s.externalUrl) && (
+              <a href={s.externalUrl} target="_blank" rel="noopener noreferrer" aria-label="Open the listing on the marketplace" className="text-primary">
                 <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
               </a>
             )}

@@ -159,3 +159,70 @@ export interface SpendImportResult {
   dryRun: boolean;
   errors: Array<{ row: number; field: string | null; message: string }>;
 }
+
+// ---- product profitability & review drawer ----
+
+export interface ProductCostBreakdown {
+  productCostMinor: number;
+  marketplaceCommissionMinor: number;
+  paymentFeesMinor: number;
+  shippingMinor: number;
+  discountsMinor: number;
+  returnsMinor: number;
+}
+
+export interface ProductChannelComparison {
+  marketplace: string;
+  sellingPriceMinor: number;
+  marginPercent: number;
+  isBest?: boolean;
+}
+
+export interface ProductProfitSignal {
+  summary: string;
+  bullets: string[];
+  recommendation: string;
+}
+
+export interface ProductProfitItem {
+  id: string;
+  name: string;
+  sku: string;
+  revenueMinor: number;
+  units: number;
+  productCostMinor: number;
+  feesMinor: number;
+  shippingMinor: number;
+  returnsMinor: number;
+  contributionMinor: number;
+  marginPercent: number;
+  status: "Healthy" | "Review" | "Below target";
+  calculatedContributionMinor?: number;
+  differenceMinor?: number;
+  reconciles?: boolean;
+  costBreakdown: ProductCostBreakdown;
+  channelComparison: ProductChannelComparison[];
+  signal: ProductProfitSignal;
+  quadrant: {
+    demand: "low" | "high";
+    margin: "low" | "high";
+    category: "marketing" | "scale" | "review" | "optimize";
+    x: number; // percentage (0 - 100)
+    y: number; // percentage (0 - 100)
+  };
+}
+
+export interface ChannelContributionItem {
+  marketplace: string;
+  revenueMinor: number;
+  contributionMinor: number;
+  marginPercent: number;
+  isBest?: boolean;
+}
+
+export interface MarginPressureMetrics {
+  healthyCount: number;
+  belowTargetCount: number;
+  lowContributionCount: number;
+}
+

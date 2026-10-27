@@ -6,8 +6,8 @@ export type PurchaseOrderStatus = (typeof PO_STATUSES)[number];
 export const SUPPLIER_STATUSES = ["active", "inactive", "blocked"] as const;
 export type SupplierStatus = (typeof SUPPLIER_STATUSES)[number];
 
-export type ProcurementTab = "orders" | "suppliers" | "reorder";
-export const PROCUREMENT_TABS: readonly ProcurementTab[] = ["orders", "suppliers", "reorder"];
+export type ProcurementTab = "overview" | "orders" | "suppliers" | "reorder";
+export const PROCUREMENT_TABS: readonly ProcurementTab[] = ["overview", "orders", "suppliers", "reorder"];
 
 export const PO_SORTS = ["-orderDate", "orderDate", "-expectedAt", "expectedAt", "-totalMinor", "totalMinor", "-poNumber", "poNumber"] as const;
 export type PoSort = (typeof PO_SORTS)[number];

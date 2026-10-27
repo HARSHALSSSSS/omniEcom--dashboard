@@ -168,7 +168,7 @@ function Probe() {
   return <div data-testid="loc">{l.pathname + l.search}</div>;
 }
 
-function renderPage(url = "/procurement") {
+function renderPage(url = "/procurement?tab=orders") {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 0 }, mutations: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
@@ -237,7 +237,7 @@ describe("ProcurementPage: purchase orders", () => {
     await screen.findByTestId("po-row-PO-2026-0001");
 
     await user.click(screen.getByRole("tab", { name: /Draft/ }));
-    expect(loc()).toBe("/procurement?status=draft");
+    expect(loc()).toContain("status=draft");
     await waitFor(() => expect(lastOrdersQuery()).toMatchObject({ status: "draft" }));
 
     await user.selectOptions(screen.getByLabelText("Supplier"), ID.sup1);
@@ -254,7 +254,7 @@ describe("ProcurementPage: purchase orders", () => {
     expect(loc()).toContain("q=apex");
 
     await user.click(screen.getByRole("button", { name: "Clear filters" }));
-    await waitFor(() => expect(loc()).toBe("/procurement?sort=-totalMinor"));
+    await waitFor(() => expect(loc()).toContain("sort=-totalMinor"));
   });
 
   it("opens in the state the URL describes and pages with numbered buttons", async () => {
@@ -621,5 +621,28 @@ describe("ProcurementPage: reorder suggestions", () => {
     api.suggestions.mockResolvedValue([]);
     renderPage("/procurement?tab=reorder");
     expect(await screen.findByText("Nothing to reorder right now.")).toBeInTheDocument();
+  });
+});
+
+describe("ProcurementPage: overview tab flow", () => {
+  it("opens on the overview tab by default when visiting /procurement", async () => {
+    renderPage("/procurement");
+    expect(await screen.findByText("Replenishment needs")).toBeInTheDocument();
+    expect(screen.getByText("Procurement intelligence")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /Overview/ })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("renders the procurement pulse, replenishment needs, intelligence card and previews", async () => {
+    const user = userEvent.setup();
+    renderPage("/procurement?tab=overview");
+
+    expect(await screen.findByText("Replenishment needs")).toBeInTheDocument();
+    expect(screen.getByText("Procurement intelligence")).toBeInTheDocument();
+    expect(screen.getByText("Supplier context")).toBeInTheDocument();
+    expect(await screen.findByText("Travel Bag")).toBeInTheDocument();
+    expect(await screen.findByText("PO-2026-0001")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Review replenishment" }));
+    expect(loc()).toBe("/procurement?tab=reorder");
   });
 });
