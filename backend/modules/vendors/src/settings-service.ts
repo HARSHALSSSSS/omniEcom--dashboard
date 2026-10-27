@@ -42,13 +42,21 @@ export async function assertWarehouse(tx: Tx, vendorId: string, id: string): Pro
   if (row.status !== 'active') throw invalid('Choose an active warehouse', 'warehouse_inactive', 'operations.defaultWarehouseId');
 }
 
+/** The connected marketplace accounts: what the channel-level settings (price tiers, stock reserves) are keyed by. */
+export async function channelChoices(tx: Tx, vendorId: string) {
+  const a = schema.marketplaceAccounts;
+  const rows = await tx.select({ id: a.id, name: a.displayName, marketplace: a.marketplace, status: a.status }).from(a).where(eq(a.vendorId, vendorId)).orderBy(asc(a.displayName), asc(a.id));
+  return rows.map((r) => ({ id: r.id, name: r.name, marketplace: String(r.marketplace), status: String(r.status) }));
+}
+
 /** Everything the Settings screen shows, in one read. */
 export async function settingsOverview(tx: Tx, vendorId: string) {
   const v: VendorRow = await getVendor(tx, vendorId);
   const s = resolveSettings(v.settings);
-  const [gstins, warehouses, ai] = await Promise.all([
+  const [gstins, warehouses, channels, ai] = await Promise.all([
     listGstins(tx, vendorId),
     warehouseChoices(tx, vendorId),
+    channelChoices(tx, vendorId),
     tx.select({ enabled: schema.aiSettings.enabled, mode: schema.aiSettings.mode }).from(schema.aiSettings).where(eq(schema.aiSettings.vendorId, vendorId)),
   ]);
   const address = v.address as Record<string, string | undefined>;
@@ -65,6 +73,11 @@ export async function settingsOverview(tx: Tx, vendorId: string) {
     gstins: gstins.map(toGstinDto),
     operations: { ...s.operations, lowStockThreshold: s.lowStockThreshold, effectiveWarehouseId: defaultWh?.id ?? null },
     alerts: s.alerts,
+    preferences: s.preferences,
+    catalog: s.catalog,
+    inventory: { mode: s.inventory.mode, startingMethod: s.inventory.startingMethod, defaultLeadTimeDays: s.inventory.defaultLeadTimeDays, minSafetyStockUnits: s.inventory.minSafetyStockUnits, spikeProtectionUnitsPerHour: s.inventory.spikeProtectionUnitsPerHour, negativeStockTwoStepApproval: s.inventory.negativeStockTwoStepApproval },
+    pricing: s.pricing,
+    channels,
     alertMatrix: alertMatrix(s.alerts),
     ai: { enabled: ai[0]?.enabled ?? true, mode: ai[0]?.mode ?? 'recommend', manageUrl: '/api/v1/ai/settings' },
     warehouses,
@@ -79,5 +92,10 @@ export async function applySettingsPatch(tx: Tx, vendorId: string, patch: Record
   if (version !== undefined && version !== before.version) throw new AppError('VERSION_CONFLICT', undefined, { details: { currentVersion: before.version } });
   const wh = (patch.operations as { defaultWarehouseId?: string | null } | undefined)?.defaultWarehouseId;
   if (wh) await assertWarehouse(tx, vendorId, wh);
+  const tiers = (patch.pricing as { channelTiers?: Record<string, unknown> } | undefined)?.channelTiers;
+  if (tiers) {
+    const known = new Set((await channelChoices(tx, vendorId)).map((c) => c.id));
+    for (const id of Object.keys(tiers)) if (!known.has(id)) throw invalid('That marketplace account does not exist', 'channel_not_found', `pricing.channelTiers.${id}`);
+  }
   return updateSettings(tx, vendorId, patch);
 }

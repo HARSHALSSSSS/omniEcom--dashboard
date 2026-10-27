@@ -6,7 +6,7 @@ export const manifest = defineModule({
   title: "Analytics",
   responsibility: "Reporting / aggregation layer: daily roll-ups (sales, products, returns, cancellations) maintained by a job, so dashboards never scan operational tables; profitability with actual / estimated / missing data kept apart; product, inventory and business health services.",
   owns: ["analytics_daily_sales", "analytics_daily_products", "order_financials", "fee_profiles", "marketing_spend"],
-  dependsOn: ["orders", "inventory", "listings", "catalog"],
+  dependsOn: ["orders", "inventory", "listings", "catalog", "vendors"],
   api: ["/api/v1/analytics"],
   publishes: [],
   consumes: [],

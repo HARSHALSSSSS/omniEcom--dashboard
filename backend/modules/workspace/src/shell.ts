@@ -40,7 +40,7 @@ export async function shellData(tx: Tx, p: { vendorId: string; actorType: string
   const unreadBySeverity = Object.fromEntries(severityRows.map((x) => [String(x.severity), n(x.c)]));
   return {
     user: { id: p.actorId, name, initials: initialsOf(name), roleLabel: role ? ROLE_LABELS[role]! : p.actorType === 'user' ? 'Team member' : 'Integration', email, role: role ?? null },
-    business: { id: facts.id, name: facts.name, plan: facts.plan, tier: tierOf(facts.teamSize), timezone: facts.timezone, currency: facts.currency, numberFormat: facts.numberFormat },
+    business: { id: facts.id, name: facts.name, plan: facts.plan, tier: tierOf(facts.teamSize), timezone: facts.timezone, currency: facts.currency, numberFormat: facts.numberFormat, preferences: facts.preferences },
     businesses: [{ id: facts.id, name: facts.name, current: true }],
     unreadBySeverity,
     badges: await badges(tx, p.vendorId, p.actorType === 'user' ? p.actorId : null, facts.atRiskMinutes, can),

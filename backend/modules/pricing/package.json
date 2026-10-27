@@ -17,6 +17,7 @@
     "@oms/mod-analytics": "workspace:*",
     "@oms/mod-marketplace-accounts": "workspace:*",
     "@oms/mod-orders": "workspace:*",
+    "@oms/mod-vendors": "workspace:*",
     "@oms/mod-inventory": "workspace:*"
   }
 }

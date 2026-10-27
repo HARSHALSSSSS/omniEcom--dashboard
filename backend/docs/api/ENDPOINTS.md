@@ -645,6 +645,7 @@ Marketplace prices, sales, price rules, bulk updates and price history
 | POST | `/api/v1/pricing/proposals/bulk` | `pricing:approve` | Approve or reject many proposals |
 | POST | `/api/v1/pricing/proposals/generate` | `pricing:write` | Generate proposals from the active policies |
 | POST | `/api/v1/pricing/sales/process` | `pricing:write` | Start / end due sales now |
+| POST | `/api/v1/pricing/simulate` | `pricing:read` | Simulate the unit economics of one price |
 | GET | `/api/v1/pricing/variants/{id}` | `pricing:read` | All prices of a variant |
 
 ## Notifications

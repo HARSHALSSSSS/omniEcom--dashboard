@@ -1,4 +1,5 @@
 import { and, asc, eq, gte, inArray, schema, withSystem, withVendor, type Tx } from '@oms/database';
+import { resolveSettings } from '@oms/mod-vendors';
 import type { Container, OpCtx } from '@oms/module-kit';
 import { loadSubjects, pairKey, type Pair } from './proposal-context';
 import { decide, moveBps, type PolicyView } from './proposal-domain';
@@ -44,6 +45,9 @@ async function activePolicies(tx: Tx, vendorId: string, policyId?: string): Prom
  */
 export async function generateProposals(tx: Tx, ctx: OpCtx, work: SyncWork, input: GenerateInput, pairs: Pair[], now = new Date()): Promise<GenerateResult> {
   const policies = await activePolicies(tx, ctx.vendorId, input.policyId);
+  // workspace pricing rules from Settings: the price ending (9 / 0 / exact) and the MRP gate
+  const [vendorRow] = await tx.select({ settings: schema.vendors.settings }).from(schema.vendors).where(eq(schema.vendors.id, ctx.vendorId));
+  const rules = { ending: resolveSettings(vendorRow?.settings).pricing.priceEnding, mrpGate: resolveSettings(vendorRow?.settings).pricing.legalMetrologyMrpGate };
   const subjects = await loadSubjects(tx, ctx.vendorId, pairs, now);
   const open = await openProposals(tx, ctx.vendorId, [...new Set(pairs.map((p) => p.variantId))]);
   const since = new Date(now.getTime() - REJECT_COOLDOWN_DAYS * 86_400_000);
@@ -61,7 +65,7 @@ export async function generateProposals(tx: Tx, ctx: OpCtx, work: SyncWork, inpu
     let reason = 'no policy proposes a change';
     let chosen: { policy: PolicyView; price: number; reasoning: string } | null = null;
     for (const policy of applicable) {
-      const d = decide(policy, s.subject);
+      const d = decide(policy, s.subject, rules);
       if (d.kind === 'propose') { chosen = { policy, price: d.proposedMinor, reasoning: d.reasoning }; break; }
       reason = `${policy.name}: ${d.reason}`;
     }

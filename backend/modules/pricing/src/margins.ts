@@ -1,5 +1,5 @@
 import { and, eq, inArray, schema, sql, type Tx } from '@oms/database';
-import { policyTargetBps } from '@oms/mod-analytics';
+import { policyTargetBps, workspaceMarginFloorBps } from '@oms/mod-analytics';
 import { NO_FEES, feeAmount, marginBps, rupees, type FeeTerms } from './proposal-domain';
 
 const V = schema.productVariants;
@@ -105,7 +105,9 @@ export async function loadMarginView(tx: Tx, vendorId: string, f: { accountId?: 
     tx.select({ id: PP.id, variantId: PP.variantId, accountId: PP.accountId, proposed: PP.proposedPriceMinor }).from(PP).where(and(eq(PP.vendorId, vendorId), eq(PP.status, 'pending_review'), f.accountId ? eq(PP.accountId, f.accountId) : undefined)),
   ]);
   const targets = policies.map((p) => ({ accountId: p.accountId, target: policyTargetBps(p) })).filter((p): p is { accountId: string | null; target: number } => p.target !== null);
-  const strictest = (xs: number[]): number | null => (xs.length ? Math.max(...xs) : null);
+  // precedence: the strictest active policy that applies > the workspace margin floor from Settings > no target
+  const floor = await workspaceMarginFloorBps(tx, vendorId);
+  const strictest = (xs: number[]): number | null => (xs.length ? Math.max(...xs) : floor);
   const accountFacts = accounts.map((a): AccountFacts => ({
     accountId: a.id, channel: a.name, marketplace: a.marketplace, fees: a.hasFee ? { feeBps: a.feeBps ?? 0, fixedMinor: a.fixedMinor ?? 0 } : null,
     targetMarginBps: strictest(targets.filter((t) => t.accountId === null || t.accountId === a.id).map((t) => t.target)),

@@ -40,7 +40,7 @@ export async function vendorFacts(tx: Tx, vendorId: string) {
   return {
     id: vendorId, name: String(v?.display_name ?? ''), plan: String(v?.plan ?? 'free'), teamSize: (v?.team_size as string | null) ?? null,
     timezone: String(v?.timezone ?? 'UTC'), currency: String(v?.currency ?? 'INR').trim(),
-    lowStockThreshold: Number(settings.lowStockThreshold ?? 5), defaultLeadDays: Number(inv.defaultLeadTimeDays ?? 7), numberFormat: resolveSettings(settings).numberFormat, inventoryMode: (inv.mode ?? null) as 'simple' | 'warehouse' | null, atRiskMinutes: Number(sla.atRiskMinutes ?? 90),
+    lowStockThreshold: Number(settings.lowStockThreshold ?? 5), defaultLeadDays: Number(inv.defaultLeadTimeDays ?? 7), numberFormat: resolveSettings(settings).numberFormat, preferences: resolveSettings(settings).preferences, inventoryMode: (inv.mode ?? null) as 'simple' | 'warehouse' | null, atRiskMinutes: Number(sla.atRiskMinutes ?? 90),
   };
 }
 export type VendorFacts = Awaited<ReturnType<typeof vendorFacts>>;

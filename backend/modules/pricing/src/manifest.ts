@@ -6,7 +6,7 @@ export const manifest = defineModule({
   title: "Pricing",
   responsibility: "Base / marketplace / sale prices, price rules (through the rules engine), bulk updates and the price history. Not every marketplace takes prices through an API: pushes go through the listing layer and respect each connector's capabilities.",
   owns: ["marketplace_prices", "price_history", "pricing_policies", "competitor_prices", "price_proposals"],
-  dependsOn: ["catalog", "listings", "rules", "analytics", "marketplace-accounts", "orders", "inventory"],
+  dependsOn: ["catalog", "listings", "rules", "analytics", "marketplace-accounts", "orders", "inventory", "vendors"],
   api: ["/api/v1/pricing"],
   publishes: ["pricing.changed", "pricing.sale_started", "pricing.sale_ended", "pricing.proposal_created", "pricing.proposal_approved", "pricing.proposal_rejected"],
   consumes: ["variant.price_changed"],

@@ -6,6 +6,7 @@ import { channelOverrides, overriddenFields } from './content-domain';
 import { lookupMarketplaceCategory } from './content';
 import type { Ctx } from './ctx';
 import { computeSellable } from './domain';
+import { afterWorkspaceBuffer, stockDefaults } from './stock-defaults';
 import { evaluate, getListingDto, joined, toListingDto, type Evaluation } from './service';
 import { asPolicy, enrichListings, listNotListed, listTable, marketplaceNameOf, notListedCounts, overviewCounts, type OverviewFilter, type TableBlock, type TableFilter } from './workspace-data';
 import { ATTENTION_STATUSES, buildReadiness, describeActivity, externalListingUrl, listingActions, SCREEN_STATUSES, type ReadinessFacts, type Readiness, type ScreenStatus } from './workspace-domain';
@@ -85,10 +86,11 @@ async function facts(tx: Tx, ctx: Ctx, ev: Evaluation): Promise<ReadinessFacts> 
   const [primary] = await tx.select({ width: DOC.width, height: DOC.height }).from(DOC)
     .where(and(eq(DOC.vendorId, ctx.vendorId), eq(DOC.productId, product.id), eq(DOC.kind, 'image'), isNull(DOC.deletedAt), inArray(DOC.status, ['uploaded', 'processed']))).orderBy(desc(DOC.isPrimary), asc(DOC.sortOrder), asc(DOC.createdAt)).limit(1);
   const connector = ctx.c.connectors.get(account.marketplace);
+  const sd = await stockDefaults(tx, ctx.vendorId);
   return {
     title: input.title, description: input.description ?? null, brand: input.brand ?? null, barcode: input.barcode ?? null, imageCount: ev.context.imageKeys.length, primaryImage: primary ?? null,
     priceMinor: input.priceMinor, mrpMinor: input.mrpMinor ?? null, marketplaceCategoryId: input.marketplaceCategoryId ?? null, categoryRequired: connector.capabilities.listings.requiresCategoryMapping,
-    available: av, sellable: computeSellable(av, asPolicy(policyRow ?? undefined), { buffer: listing.bufferOverride, max: listing.maxQuantityOverride }),
+    available: av, sellable: computeSellable(afterWorkspaceBuffer(av, sd), asPolicy(policyRow ?? undefined), { buffer: listing.bufferOverride, max: listing.maxQuantityOverride }),
     validation: { validated: true, errors: ev.result.errors, warnings: ev.result.warnings, requiredAttributes: ev.requirements.filter((r) => r.required).length },
     marketplaceIssues: listing.issues,
   };

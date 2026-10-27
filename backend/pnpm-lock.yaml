@@ -467,6 +467,9 @@ importers:
       '@oms/mod-orders':
         specifier: workspace:*
         version: link:../orders
+      '@oms/mod-vendors':
+        specifier: workspace:*
+        version: link:../vendors
       '@oms/module-kit':
         specifier: workspace:*
         version: link:../../packages/module-kit
@@ -788,6 +791,9 @@ importers:
       '@oms/mod-sync':
         specifier: workspace:*
         version: link:../sync
+      '@oms/mod-vendors':
+        specifier: workspace:*
+        version: link:../vendors
       '@oms/mod-warehouses':
         specifier: workspace:*
         version: link:../warehouses
@@ -1034,6 +1040,9 @@ importers:
       '@oms/mod-rules':
         specifier: workspace:*
         version: link:../rules
+      '@oms/mod-vendors':
+        specifier: workspace:*
+        version: link:../vendors
       '@oms/module-kit':
         specifier: workspace:*
         version: link:../../packages/module-kit

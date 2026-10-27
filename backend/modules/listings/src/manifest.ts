@@ -6,7 +6,7 @@ export const manifest = defineModule({
   title: "Listings & Channels",
   responsibility: "Master product -> marketplace listing flow (category/attribute mapping, validation, preview, merchant approval, publish, status tracking), marketplace catalogue import, and channel inventory/price synchronisation (safety buffer, allocation, overselling protection).",
   owns: ["marketplace_listings", "category_mappings", "attribute_mappings", "imported_products", "channel_inventory_policies", "channel_stock_updates"],
-  dependsOn: ["catalog", "marketplace-accounts", "marketplace-connectors", "inventory", "sync", "warehouses"],
+  dependsOn: ["catalog", "marketplace-accounts", "marketplace-connectors", "inventory", "sync", "warehouses", "vendors"],
   api: ["/api/v1/listings", "/api/v1/category-mappings", "/api/v1/attribute-mappings", "/api/v1/imported-products", "/api/v1/marketplace-accounts/:id/categories", "/api/v1/marketplace-accounts/:id/import-products", "/api/v1/marketplace-accounts/:id/inventory-policy", "/api/v1/marketplace-accounts/:id/inventory-sync", "/api/v1/marketplace-accounts/:id/refresh-listing-status", "/api/v1/products/:id/listing-content"],
   publishes: ["listing.created", "listing.approved", "listing.submitted", "listing.published", "listing.failed", "listing.deactivated", "listing.status_changed"],
   consumes: ["product.updated", "inventory.adjusted", "inventory.reserved", "inventory.released", "variant.price_changed", "marketplace_account.disconnected", "marketplace_account.connected"],

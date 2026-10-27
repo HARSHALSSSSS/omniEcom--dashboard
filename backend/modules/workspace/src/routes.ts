@@ -21,7 +21,7 @@ const BadgeSchema = z.object({ key: z.string(), label: z.string(), tone: z.enum(
 
 const ShellSchema = z.object({
   user: z.object({ id: z.string(), name: z.string(), initials: z.string(), roleLabel: z.string(), email: z.string().nullable(), role: z.string().nullable() }),
-  business: z.object({ id: z.string(), name: z.string(), plan: z.string(), tier: z.enum(['starter', 'growing', 'scale']), timezone: z.string(), currency: z.string(), numberFormat: z.enum(['indian', 'international']) }),
+  business: z.object({ id: z.string(), name: z.string(), plan: z.string(), tier: z.enum(['starter', 'growing', 'scale']), timezone: z.string(), currency: z.string(), numberFormat: z.enum(['indian', 'international']), preferences: z.object({ defaultRoute: z.string(), pageSize: z.number().int(), reportingPeriod: z.enum(['7d', '30d', 'qtd', 'fytd']), catalogView: z.enum(['all_active', 'low_stock', 'primary_warehouse']), language: z.string(), telemetrySeconds: z.number().int(), showThumbnails: z.boolean() }).describe('Workspace defaults from Settings > General: what screens start with (the URL always wins)') }),
   businesses: z.array(z.object({ id: z.string(), name: z.string(), current: z.boolean() })),
   badges: z.object({ needsAttention: z.number().int(), orders: z.number().int(), returns: z.number().int(), notifications: z.number().int() }),
   unreadBySeverity: z.record(z.string(), z.number().int()).describe('Unread notifications of the caller by severity (the dot colour of the bell)'),

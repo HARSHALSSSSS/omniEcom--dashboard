@@ -86,14 +86,31 @@ const num = (v: unknown, d: number): number => (typeof v === 'number' && Number.
 export const rupees = (minor: number): string => `Rs ${(minor / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const pct = (bps: number): string => `${(bps / 100).toFixed(bps % 100 === 0 ? 0 : 1)}%`;
 
+export type PriceEnding = 'nine' | 'zero' | 'exact';
+/** workspace rules (Settings > Pricing & Margins) that shape a proposed price */
+export interface PriceRules { ending?: PriceEnding; mrpGate?: boolean }
+
+/**
+ * Moves a price to the nearest whole-rupee price that ends in 9 ('nine': 999, 1,499) or 0 ('zero': 1,000, 1,500), but only to a price the
+ * guardrails still allow (between `min` and `max`): when neither neighbour fits, the price stays exactly as computed. 'exact' = untouched.
+ */
+export function applyEnding(priceMinor: number, ending: PriceEnding, min: number, max: number): number {
+  if (ending === 'exact') return priceMinor;
+  const rupees = priceMinor / 100;
+  const down = ending === 'nine' ? Math.floor((rupees + 1) / 10) * 10 - 1 : Math.floor(rupees / 10) * 10;
+  const candidates = [down, down + 10].map((r) => r * 100).filter((p) => p >= 100 && p >= min && p <= max);
+  if (candidates.length === 0) return priceMinor;
+  return candidates.reduce((best, p) => (Math.abs(p - priceMinor) < Math.abs(best - priceMinor) ? p : best));
+}
+
 /**
  * Evaluate ONE policy for ONE variant on ONE account. A decrease never goes under the margin floor nor further than the maximum
  * discount; a raise never goes above the MRP. Moves smaller than `params.minChangeBps` (default 50 = 0.5%) are noise and ignored.
  */
-export function decide(policy: PolicyView, s: Subject): Decision {
+export function decide(policy: PolicyView, s: Subject, rules: PriceRules = {}): Decision {
   const { currentMinor: cur } = s;
   const lower = lowerBound(cur, s.costMinor, policy, s.fees);
-  const upper = Math.min(s.mrpMinor ?? Number.MAX_SAFE_INTEGER, Math.floor((cur * (10_000 + num(policy.params.maxIncreaseBps, 5_000))) / 10_000));
+  const upper = Math.min(rules.mrpGate === false ? Number.MAX_SAFE_INTEGER : (s.mrpMinor ?? Number.MAX_SAFE_INTEGER), Math.floor((cur * (10_000 + num(policy.params.maxIncreaseBps, 5_000))) / 10_000));
   let target: number;
   let why: string;
   switch (policy.strategy) {
@@ -142,6 +159,7 @@ export function decide(policy: PolicyView, s: Subject): Decision {
     if (lower >= cur) return { kind: 'none', reason: 'the price is already at the lowest the guardrails allow' };
     clamped = Math.max(lower, target);
   }
+  if (rules.ending && rules.ending !== 'exact') clamped = applyEnding(clamped, rules.ending, target >= cur ? cur + 1 : lower, target >= cur ? upper : cur - 1);
   const note = clamped !== target ? ` Limited to ${rupees(clamped)} by the policy guardrails (margin floor ${pct(policy.targetMarginMinBps)}, maximum discount ${pct(policy.maxDiscountBps)}, MRP).` : '';
   if (Math.abs(moveBps(cur, clamped)) < num(policy.params.minChangeBps, 50)) return { kind: 'none', reason: 'the change is too small to matter' };
   return { kind: 'propose', proposedMinor: clamped, reasoning: `${policy.name}: ${why}${note}` };

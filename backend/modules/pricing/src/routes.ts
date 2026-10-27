@@ -5,6 +5,7 @@ import { schema, type Tx } from '@oms/database';
 import { IdParamSchema, IsoDate, successEnvelope } from '@oms/contracts';
 import { ok, opCtxFromRequest, requireVendor, vendorTx, type OpCtx } from '@oms/module-kit';
 import { proposalRoutes } from './proposal-routes';
+import { simulateRoutes } from './simulate';
 import { SyncWork, applyRules, bulkUpdate, clearMarketplacePrice, listHistory, listPrices, processSales, setMarketplacePrice, toPriceDto, variantPricing } from './service';
 
 const Minor = z.number().int().min(1).max(100_000_000_000);
@@ -30,6 +31,7 @@ export const pricingRoutes: FastifyPluginAsync = async (app) => {
   const r = app.withTypeProvider<ZodTypeProvider>();
   const TAGS = ['Pricing'];
   await app.register(proposalRoutes);
+  await app.register(simulateRoutes);
   /** one request = one transaction; price pushes are queued only after it commits */
   async function run<T>(req: FastifyRequest, fn: (tx: Tx, ctx: OpCtx, work: SyncWork) => Promise<T>): Promise<{ out: T; sync: Awaited<ReturnType<SyncWork['flush']>> }> {
     const vendorId = requireVendor(req);

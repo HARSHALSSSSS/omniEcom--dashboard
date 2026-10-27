@@ -5,8 +5,8 @@ import { audit, emit, ok, vendorTx } from '@oms/module-kit';
 import { IsoDate, successEnvelope } from '@oms/contracts';
 import { schema } from '@oms/database';
 import { AppError } from '@oms/shared';
-import { AddressSchema, AlertsSchema, OperationsSchema, UpdateVendorBodySchema } from './schemas';
-import { FULFILLMENT_METHODS, NUMBER_FORMATS } from './settings-defaults';
+import { AddressSchema, AlertsSchema, OperationsSchema, PreferencesSchema, PricingSettingsSchema, UpdateVendorBodySchema, VendorSettingsSchema } from './schemas';
+import { resolveSettings, CATALOG_VIEWS, FULFILLMENT_METHODS, LANDING_ROUTES, LANGUAGES, NUMBER_FORMATS, PRICE_ENDINGS, REPORTING_PERIODS, SKU_CASINGS, SYNC_SOVEREIGNTY, TIER_STATUSES } from './settings-defaults';
 import { GstinSchema } from './gst-routes';
 import * as svc from './service';
 import { applySettingsPatch, settingsOverview } from './settings-service';
@@ -15,6 +15,28 @@ const AlertRow = z.object({ key: z.string(), label: z.string(), description: z.s
 const ResolvedAlerts = z.object({
   dispatchSlaBreach: z.object({ enabled: z.boolean(), thresholdMinutes: z.number().int() }),
   criticalStockouts: z.boolean(), tokenRenewals: z.boolean(), syncFailures: z.boolean(), returns: z.boolean(),
+});
+
+const Flag = z.boolean();
+const PreferencesOut = z.object({
+  defaultRoute: z.enum(LANDING_ROUTES), language: z.enum(LANGUAGES), pageSize: z.number().int(), catalogView: z.enum(CATALOG_VIEWS), reportingPeriod: z.enum(REPORTING_PERIODS), telemetrySeconds: z.number().int(), showThumbnails: Flag,
+  guardrails: z.object({ bulkConfirm: Flag, stockAllocationConfirm: Flag, zeroStockDelistWarning: Flag }),
+});
+const CatalogOut = z.object({
+  requireHsn: Flag, skuPrefix: z.string(), skuTemplate: z.string(), skuSeparator: z.enum(['-', '_', '/']), skuCasing: z.enum(SKU_CASINGS), strictEan: Flag,
+  gates: z.object({ hsnCode: Flag, countryOfOrigin: Flag, gstRateSlab: Flag }), syncSovereignty: z.enum(SYNC_SOVEREIGNTY),
+});
+const InventoryOut = z.object({
+  mode: z.enum(['simple', 'warehouse']), startingMethod: z.enum(['manual', 'marketplace', 'file']).nullable(), defaultLeadTimeDays: z.number().int(),
+  minSafetyStockUnits: z.number().int(), spikeProtectionUnitsPerHour: z.number().int(), negativeStockTwoStepApproval: Flag,
+});
+const TierOut = z.object({
+  baseMarkupBps: z.number().int(), fixedFeeBufferMinor: z.number().int(), hardFloorMinor: z.number().int().nullable(), maxDiscountBps: z.number().int(), repriceIntervalMinutes: z.number().int(),
+  minNetMarginBps: z.number().int().nullable(), autoDelistOnBreach: Flag, dealFloorMinor: z.number().int().nullable(), mandate2faForMarkdown: Flag, status: z.enum(TIER_STATUSES),
+});
+const PricingOut = z.object({
+  marginFloorBps: z.number().int().nullable(), maxVelocityShiftBps: z.number().int(), priceEnding: z.enum(PRICE_ENDINGS), legalMetrologyMrpGate: Flag, withholdBufferBps: z.number().int(),
+  autoDelistOnBreach: Flag, mandate2faBulkMarkdown: Flag, channelTiers: z.record(z.string(), TierOut),
 });
 
 const SettingsOverviewSchema = z
@@ -30,6 +52,11 @@ const SettingsOverviewSchema = z
       defaultWarehouseId: z.string().nullable(), lowStockThreshold: z.number().int(), effectiveWarehouseId: z.string().nullable().describe('The chosen default warehouse, else the one flagged default'),
     }),
     alerts: ResolvedAlerts,
+    preferences: PreferencesOut,
+    catalog: CatalogOut,
+    inventory: InventoryOut,
+    pricing: PricingOut,
+    channels: z.array(z.object({ id: z.string(), name: z.string(), marketplace: z.string(), status: z.string() })).describe('The connected marketplace accounts the channel-level settings are keyed by'),
     alertMatrix: z.array(AlertRow),
     ai: z.object({ enabled: z.boolean(), mode: z.string(), manageUrl: z.string() }),
     warehouses: z.array(z.object({ id: z.string(), code: z.string(), name: z.string(), city: z.string().nullable(), isDefault: z.boolean(), status: z.string() })),
@@ -48,6 +75,10 @@ const SaveBody = z
     regional: z.object({ timezone: UpdateVendorBodySchema.shape.timezone, currency: UpdateVendorBodySchema.shape.currency, numberFormat: z.enum(NUMBER_FORMATS).optional() }).strict().optional(),
     operations: OperationsSchema.extend({ lowStockThreshold: z.number().int().min(0).max(1_000_000).optional() }).optional(),
     alerts: AlertsSchema.optional(),
+    preferences: PreferencesSchema.optional(),
+    catalog: VendorSettingsSchema.shape.catalog,
+    inventory: VendorSettingsSchema.shape.inventory,
+    pricing: PricingSettingsSchema.optional(),
     version: z.number().int().optional().describe('Optimistic lock: send the `version` you read; 409 VERSION_CONFLICT when the settings changed meanwhile'),
   })
   .strict();
@@ -72,11 +103,11 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
     config: { access: { permission: 'vendors:write' } },
     schema: {
       tags: TAGS, summary: 'Save the settings screen',
-      description: 'One save for every tab (business, regional, operations, alerts); omitted sections are untouched, objects are merged. Validation errors name the field in `details.issues[].path`. Returns the refreshed aggregate.',
+      description: 'One save for every tab (business, regional, operations, alerts, preferences, catalog, inventory, pricing); omitted sections are untouched, objects are merged. Validation errors name the field in `details.issues[].path`. Returns the refreshed aggregate.',
       body: SaveBody, response: { 200: successEnvelope(SettingsOverviewSchema) },
     },
   }, async (req) => ok(req, await vendorTx(req, async (tx, vendorId) => {
-    const { business, regional, operations, alerts, version } = req.body;
+    const { business, regional, operations, alerts, preferences, catalog, inventory, pricing, version } = req.body;
     const profile = { ...business, ...(regional?.timezone ? { timezone: regional.timezone } : {}), ...(regional?.currency ? { currency: regional.currency } : {}) };
     const before = await svc.getVendor(tx, vendorId);
     if (version !== undefined && version !== before.version) throw new AppError('VERSION_CONFLICT', undefined, { details: { currentVersion: before.version } });
@@ -88,6 +119,21 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
       if (lowStockThreshold !== undefined) patch.lowStockThreshold = lowStockThreshold;
     }
     if (alerts) patch.alerts = alerts;
+    if (preferences) patch.preferences = preferences;
+    if (catalog) patch.catalog = catalog;
+    if (inventory) patch.inventory = inventory;
+    if (pricing) {
+      patch.pricing = pricing;
+      // the three-way price ending and the older "round to 9" switch are one setting: keep them in step
+      if (pricing.priceEnding) patch.operations = { ...(patch.operations as Record<string, unknown> | undefined), roundPriceToNine: pricing.priceEnding === 'nine' };
+    }
+    // the older "round to 9" switch changed alone: keep the three-way price ending in step with it
+    const roundNine = (patch.operations as { roundPriceToNine?: boolean } | undefined)?.roundPriceToNine;
+    if (roundNine !== undefined && !pricing?.priceEnding) {
+      const cur = resolveSettings(before.settings).pricing.priceEnding;
+      if (roundNine) patch.pricing = { ...(pricing ?? {}), priceEnding: 'nine' };
+      else if (cur === 'nine') patch.pricing = { ...(pricing ?? {}), priceEnding: 'exact' };
+    }
     if (regional?.numberFormat) patch.numberFormat = regional.numberFormat;
     if (Object.keys(patch).length > 0) await applySettingsPatch(tx, vendorId, patch);
     const after = await svc.getVendor(tx, vendorId);

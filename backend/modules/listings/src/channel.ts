@@ -8,6 +8,7 @@ import type { Container } from '@oms/module-kit';
 import type { Ctx } from './ctx';
 import { fx } from './ctx';
 import { computeSellable, DEFAULT_POLICY, type ChannelPolicy } from './domain';
+import { afterWorkspaceBuffer, stockDefaults } from './stock-defaults';
 
 const L = schema.marketplaceListings;
 const POLICY = schema.channelInventoryPolicies;
@@ -122,9 +123,10 @@ export const inventoryRunner: SyncRunner = async (ctx) => {
     const batch = await withVendor(db, vendorId, async (tx) => {
       const dirty = await tx.select().from(L).where(and(eq(L.vendorId, vendorId), eq(L.marketplaceAccountId, accountId), eq(L.status, 'active'), eq(L.quantityDirty, true))).orderBy(asc(L.quantityDirtyAt)).limit(BATCH);
       const av = await availabilityFor(tx, vendorId, [...new Set(dirty.map((l) => l.variantId))], setup.policy?.warehouseIds?.length ? setup.policy.warehouseIds : undefined);
+      const sd = await stockDefaults(tx, vendorId);
       const items = dirty.map((l) => {
         const available = av.get(l.variantId)?.available ?? 0;
-        return { listing: l, available, sellable: computeSellable(available, policy, { buffer: l.bufferOverride, max: l.maxQuantityOverride }) };
+        return { listing: l, available, sellable: computeSellable(afterWorkspaceBuffer(available, sd), policy, { buffer: l.bufferOverride, max: l.maxQuantityOverride }) };
       });
       // nothing to tell the marketplace when it already shows this number
       const same = items.filter((i) => i.listing.pushedQuantity === i.sellable);

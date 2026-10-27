@@ -6,6 +6,7 @@ import { successEnvelope } from '@oms/contracts';
 import { ok, vendorTx } from '@oms/module-kit';
 import { availabilityFor } from '@oms/mod-inventory';
 import { computeSellable, DEFAULT_POLICY, type ChannelPolicy } from './domain';
+import { afterWorkspaceBuffer, stockDefaults } from './stock-defaults';
 
 /**
  * Per variant: what each marketplace account may sell right now. This lives in listings because it needs both the channel policy
@@ -35,6 +36,7 @@ export async function channelAllocations(tx: Tx, vendorId: string, variantIds: s
     return cache.get(variantId) ?? 0;
   };
 
+  const sd = await stockDefaults(tx, vendorId);
   const items = [];
   for (const variantId of variantIds) {
     const channels = [];
@@ -44,7 +46,7 @@ export async function channelAllocations(tx: Tx, vendorId: string, variantIds: s
       const available = await availableFor(variantId, p?.warehouseIds ?? []);
       channels.push({
         channel: { code: marketplace, name: nameOf(marketplace), accountId: l.marketplaceAccountId, accountName }, listingId: l.id,
-        allocated: computeSellable(available, policy, { buffer: l.bufferOverride, max: l.maxQuantityOverride }), pushed: l.pushedQuantity, dirty: l.quantityDirty,
+        allocated: computeSellable(afterWorkspaceBuffer(available, sd), policy, { buffer: l.bufferOverride, max: l.maxQuantityOverride }), pushed: l.pushedQuantity, dirty: l.quantityDirty,
         mode: policy.mode, allocationPercent: policy.allocationPercent, safetyBuffer: l.bufferOverride ?? policy.safetyBuffer, maxQuantity: l.maxQuantityOverride ?? policy.maxQuantity,
       });
     }

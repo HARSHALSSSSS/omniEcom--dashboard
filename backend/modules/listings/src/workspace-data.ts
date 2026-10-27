@@ -4,6 +4,7 @@ import { availabilityFor } from '@oms/mod-inventory';
 import type { Container } from '@oms/module-kit';
 import { CHANNEL_NAMES } from './content-domain';
 import { computeSellable, DEFAULT_POLICY, type ChannelPolicy } from './domain';
+import { afterWorkspaceBuffer, stockDefaults } from './stock-defaults';
 import { categoryPredicate, marketplaceSql } from './list-filters';
 import type { ListingJoin } from './service';
 import { buildReadiness, externalListingUrl, screenStatusOf, SCREEN_STATUS_SQL, SCREEN_STATUSES, type Readiness, type ReadinessFacts, type ScreenStatus } from './workspace-domain';
@@ -116,13 +117,14 @@ export async function enrichListings(tx: Tx, c: Pick<Container, 'storage' | 'con
   const sales = new Map((await tx.select().from(MP).where(and(eq(MP.vendorId, vendorId), inArray(MP.variantId, variantIds), inArray(MP.marketplaceAccountId, accountIds), sql`${MP.salePriceMinor} is not null`)))
     .filter((s) => (!s.saleStartsAt || s.saleStartsAt <= now) && (!s.saleEndsAt || s.saleEndsAt > now)).map((s) => [`${s.marketplaceAccountId}:${s.variantId}`, s]));
 
+  const sd = await stockDefaults(tx, vendorId);
   for (const r of rows) {
     const v = variants.get(r.l.variantId);
     const acct = accounts.get(r.l.marketplaceAccountId);
     const connector = c.connectors.has(r.marketplace) ? c.connectors.get(r.marketplace) : null;
     const policy = asPolicy(policies.get(r.l.marketplaceAccountId));
     const avail = available.get(`${r.l.marketplaceAccountId}:${r.l.variantId}`) ?? 0;
-    const sellable = computeSellable(avail, policy, { buffer: r.l.bufferOverride, max: r.l.maxQuantityOverride });
+    const sellable = computeSellable(afterWorkspaceBuffer(avail, sd), policy, { buffer: r.l.bufferOverride, max: r.l.maxQuantityOverride });
     const priceMinor = r.l.priceMinor ?? r.variantPriceMinor;
     const mrpMinor = r.l.mrpMinor ?? r.variantMrpMinor;
     const imgs = imagesOf.get(r.productId) ?? [];

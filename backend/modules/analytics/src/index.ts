@@ -10,7 +10,7 @@ export { manifest };
 export { analyticsRoutes } from './routes';
 export { profitRoutes } from './profit-routes';
 export { spendRoutes } from './spend-routes';
-export { policyTargetBps, marginTargetBps } from './margin-target';
+export { policyTargetBps, marginTargetBps, workspaceMarginFloorBps } from './margin-target';
 export { previousRange, overview, productPerformance, marketplacePerformance, dailyUnits, dailyRevenueSeries } from './queries';
 export { inventoryHealth, productHealth, businessHealth, classifyStock, healthScore, stockLines, DEFAULT_THRESHOLDS, type InventoryFinding, type InventoryThresholds, type HealthIssue } from './health';
 export { profitability, collectProfit, computeProfit, splitWindows, type Profit } from './profit';

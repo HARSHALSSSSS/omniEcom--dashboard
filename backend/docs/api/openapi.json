@@ -320,6 +320,242 @@
         },
         "additionalProperties": false
       },
+      "WorkspacePreferencesInput": {
+        "type": "object",
+        "properties": {
+          "defaultRoute": {
+            "type": "string",
+            "enum": [
+              "/",
+              "/orders",
+              "/listings",
+              "/inventory",
+              "/pricing",
+              "/reports",
+              "/products",
+              "/profitability",
+              "/product-intelligence",
+              "/returns",
+              "/shipping",
+              "/procurement"
+            ]
+          },
+          "language": {
+            "type": "string",
+            "enum": [
+              "en-IN",
+              "en-US",
+              "en-GB"
+            ]
+          },
+          "pageSize": {
+            "anyOf": [
+              {
+                "type": "number",
+                "const": 10
+              },
+              {
+                "type": "number",
+                "const": 25
+              },
+              {
+                "type": "number",
+                "const": 50
+              },
+              {
+                "type": "number",
+                "const": 100
+              }
+            ]
+          },
+          "catalogView": {
+            "type": "string",
+            "enum": [
+              "all_active",
+              "low_stock",
+              "primary_warehouse"
+            ]
+          },
+          "reportingPeriod": {
+            "type": "string",
+            "enum": [
+              "7d",
+              "30d",
+              "qtd",
+              "fytd"
+            ]
+          },
+          "telemetrySeconds": {
+            "anyOf": [
+              {
+                "type": "number",
+                "const": 15
+              },
+              {
+                "type": "number",
+                "const": 30
+              },
+              {
+                "type": "number",
+                "const": 60
+              }
+            ]
+          },
+          "showThumbnails": {
+            "type": "boolean"
+          },
+          "guardrails": {
+            "type": "object",
+            "properties": {
+              "bulkConfirm": {
+                "type": "boolean"
+              },
+              "stockAllocationConfirm": {
+                "type": "boolean"
+              },
+              "zeroStockDelistWarning": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "ChannelPricingTierInput": {
+        "type": "object",
+        "properties": {
+          "baseMarkupBps": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000
+          },
+          "fixedFeeBufferMinor": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000000000
+          },
+          "hardFloorMinor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100000000000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "maxDiscountBps": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "repriceIntervalMinutes": {
+            "type": "integer",
+            "minimum": 5,
+            "maximum": 1440
+          },
+          "minNetMarginBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 10000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "autoDelistOnBreach": {
+            "type": "boolean"
+          },
+          "dealFloorMinor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100000000000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mandate2faForMarkdown": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "draft",
+              "paused"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "PricingSettingsInput": {
+        "type": "object",
+        "properties": {
+          "marginFloorBps": {
+            "description": "Workspace gross margin floor: the margin target when no active pricing policy sets one",
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 10000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "maxVelocityShiftBps": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "priceEnding": {
+            "type": "string",
+            "enum": [
+              "nine",
+              "zero",
+              "exact"
+            ]
+          },
+          "legalMetrologyMrpGate": {
+            "type": "boolean"
+          },
+          "withholdBufferBps": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "autoDelistOnBreach": {
+            "type": "boolean"
+          },
+          "mandate2faBulkMarkdown": {
+            "type": "boolean"
+          },
+          "channelTiers": {
+            "description": "Keyed by marketplace account id",
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ChannelPricingTierInput"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
       "VendorSettingsInput": {
         "type": "object",
         "properties": {
@@ -356,6 +592,12 @@
             },
             "additionalProperties": false
           },
+          "preferences": {
+            "$ref": "#/components/schemas/WorkspacePreferencesInput"
+          },
+          "pricing": {
+            "$ref": "#/components/schemas/PricingSettingsInput"
+          },
           "catalog": {
             "type": "object",
             "properties": {
@@ -365,6 +607,52 @@
               "skuPrefix": {
                 "type": "string",
                 "maxLength": 12
+              },
+              "skuTemplate": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 60
+              },
+              "skuSeparator": {
+                "type": "string",
+                "enum": [
+                  "-",
+                  "_",
+                  "/"
+                ]
+              },
+              "skuCasing": {
+                "type": "string",
+                "enum": [
+                  "uppercase",
+                  "lowercase",
+                  "as_is"
+                ]
+              },
+              "strictEan": {
+                "type": "boolean"
+              },
+              "gates": {
+                "type": "object",
+                "properties": {
+                  "hsnCode": {
+                    "type": "boolean"
+                  },
+                  "countryOfOrigin": {
+                    "type": "boolean"
+                  },
+                  "gstRateSlab": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "syncSovereignty": {
+                "type": "string",
+                "enum": [
+                  "master_catalog",
+                  "channel_autonomous"
+                ]
               }
             },
             "additionalProperties": false
@@ -391,6 +679,19 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 365
+              },
+              "minSafetyStockUnits": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1000000
+              },
+              "spikeProtectionUnitsPerHour": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1000000
+              },
+              "negativeStockTwoStepApproval": {
+                "type": "boolean"
               }
             },
             "additionalProperties": false
@@ -945,6 +1246,391 @@
               "returns"
             ]
           },
+          "preferences": {
+            "type": "object",
+            "properties": {
+              "defaultRoute": {
+                "type": "string",
+                "enum": [
+                  "/",
+                  "/orders",
+                  "/listings",
+                  "/inventory",
+                  "/pricing",
+                  "/reports",
+                  "/products",
+                  "/profitability",
+                  "/product-intelligence",
+                  "/returns",
+                  "/shipping",
+                  "/procurement"
+                ]
+              },
+              "language": {
+                "type": "string",
+                "enum": [
+                  "en-IN",
+                  "en-US",
+                  "en-GB"
+                ]
+              },
+              "pageSize": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "catalogView": {
+                "type": "string",
+                "enum": [
+                  "all_active",
+                  "low_stock",
+                  "primary_warehouse"
+                ]
+              },
+              "reportingPeriod": {
+                "type": "string",
+                "enum": [
+                  "7d",
+                  "30d",
+                  "qtd",
+                  "fytd"
+                ]
+              },
+              "telemetrySeconds": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "showThumbnails": {
+                "type": "boolean"
+              },
+              "guardrails": {
+                "type": "object",
+                "properties": {
+                  "bulkConfirm": {
+                    "type": "boolean"
+                  },
+                  "stockAllocationConfirm": {
+                    "type": "boolean"
+                  },
+                  "zeroStockDelistWarning": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "bulkConfirm",
+                  "stockAllocationConfirm",
+                  "zeroStockDelistWarning"
+                ]
+              }
+            },
+            "required": [
+              "defaultRoute",
+              "language",
+              "pageSize",
+              "catalogView",
+              "reportingPeriod",
+              "telemetrySeconds",
+              "showThumbnails",
+              "guardrails"
+            ]
+          },
+          "catalog": {
+            "type": "object",
+            "properties": {
+              "requireHsn": {
+                "type": "boolean"
+              },
+              "skuPrefix": {
+                "type": "string"
+              },
+              "skuTemplate": {
+                "type": "string"
+              },
+              "skuSeparator": {
+                "type": "string",
+                "enum": [
+                  "-",
+                  "_",
+                  "/"
+                ]
+              },
+              "skuCasing": {
+                "type": "string",
+                "enum": [
+                  "uppercase",
+                  "lowercase",
+                  "as_is"
+                ]
+              },
+              "strictEan": {
+                "type": "boolean"
+              },
+              "gates": {
+                "type": "object",
+                "properties": {
+                  "hsnCode": {
+                    "type": "boolean"
+                  },
+                  "countryOfOrigin": {
+                    "type": "boolean"
+                  },
+                  "gstRateSlab": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "hsnCode",
+                  "countryOfOrigin",
+                  "gstRateSlab"
+                ]
+              },
+              "syncSovereignty": {
+                "type": "string",
+                "enum": [
+                  "master_catalog",
+                  "channel_autonomous"
+                ]
+              }
+            },
+            "required": [
+              "requireHsn",
+              "skuPrefix",
+              "skuTemplate",
+              "skuSeparator",
+              "skuCasing",
+              "strictEan",
+              "gates",
+              "syncSovereignty"
+            ]
+          },
+          "inventory": {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "simple",
+                  "warehouse"
+                ]
+              },
+              "startingMethod": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "manual",
+                      "marketplace",
+                      "file"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "defaultLeadTimeDays": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "minSafetyStockUnits": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "spikeProtectionUnitsPerHour": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "negativeStockTwoStepApproval": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "mode",
+              "startingMethod",
+              "defaultLeadTimeDays",
+              "minSafetyStockUnits",
+              "spikeProtectionUnitsPerHour",
+              "negativeStockTwoStepApproval"
+            ]
+          },
+          "pricing": {
+            "type": "object",
+            "properties": {
+              "marginFloorBps": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "maxVelocityShiftBps": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "priceEnding": {
+                "type": "string",
+                "enum": [
+                  "nine",
+                  "zero",
+                  "exact"
+                ]
+              },
+              "legalMetrologyMrpGate": {
+                "type": "boolean"
+              },
+              "withholdBufferBps": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "autoDelistOnBreach": {
+                "type": "boolean"
+              },
+              "mandate2faBulkMarkdown": {
+                "type": "boolean"
+              },
+              "channelTiers": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "baseMarkupBps": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "fixedFeeBufferMinor": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "hardFloorMinor": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "maxDiscountBps": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "repriceIntervalMinutes": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "minNetMarginBps": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "autoDelistOnBreach": {
+                      "type": "boolean"
+                    },
+                    "dealFloorMinor": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "mandate2faForMarkdown": {
+                      "type": "boolean"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "active",
+                        "draft",
+                        "paused"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "baseMarkupBps",
+                    "fixedFeeBufferMinor",
+                    "hardFloorMinor",
+                    "maxDiscountBps",
+                    "repriceIntervalMinutes",
+                    "minNetMarginBps",
+                    "autoDelistOnBreach",
+                    "dealFloorMinor",
+                    "mandate2faForMarkdown",
+                    "status"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "marginFloorBps",
+              "maxVelocityShiftBps",
+              "priceEnding",
+              "legalMetrologyMrpGate",
+              "withholdBufferBps",
+              "autoDelistOnBreach",
+              "mandate2faBulkMarkdown",
+              "channelTiers"
+            ]
+          },
+          "channels": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "marketplace": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "marketplace",
+                "status"
+              ]
+            },
+            "description": "The connected marketplace accounts the channel-level settings are keyed by"
+          },
           "alertMatrix": {
             "type": "array",
             "items": {
@@ -1064,6 +1750,11 @@
           "gstins",
           "operations",
           "alerts",
+          "preferences",
+          "catalog",
+          "inventory",
+          "pricing",
+          "channels",
           "alertMatrix",
           "ai",
           "warehouses",
@@ -15178,6 +15869,312 @@
           "createdAt"
         ]
       },
+      "PriceSimulationInput": {
+        "type": "object",
+        "properties": {
+          "variant": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "sku": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "costMinor": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "mrpMinor": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "sellingPriceMinor": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "gstRateBps": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "sku",
+              "title",
+              "costMinor",
+              "mrpMinor",
+              "sellingPriceMinor",
+              "gstRateBps"
+            ]
+          },
+          "account": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "marketplace": {
+                    "type": "string"
+                  },
+                  "feesConfigured": {
+                    "type": "boolean"
+                  },
+                  "feeBps": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "fixedFeeMinor": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "marketplace",
+                  "feesConfigured",
+                  "feeBps",
+                  "fixedFeeMinor"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rules": {
+            "type": "object",
+            "properties": {
+              "workspaceFloorBps": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "effectiveTargetBps": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "withholdBufferBps": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "legalMetrologyMrpGate": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "workspaceFloorBps",
+              "effectiveTargetBps",
+              "withholdBufferBps",
+              "legalMetrologyMrpGate"
+            ]
+          },
+          "priceMinor": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "breakdown": {
+            "type": "object",
+            "properties": {
+              "gstMinor": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "GST contained in the price (reverse-calculated); null when the product has no GST rate"
+              },
+              "feeMinor": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Marketplace commission + fixed fee at this price; null when the channel has no fee profile"
+              },
+              "withholdMinor": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "costMinor": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "netRealizationMinor": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "contributionMinor": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "gstMinor",
+              "feeMinor",
+              "withholdMinor",
+              "costMinor",
+              "netRealizationMinor",
+              "contributionMinor"
+            ]
+          },
+          "marginBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Margin after cost and marketplace fees: the same figure the Pricing screens show"
+          },
+          "belowTarget": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "floorPriceMinor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Lowest price that still earns the effective target margin"
+          },
+          "exceedsMrp": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "variant",
+          "account",
+          "rules",
+          "priceMinor",
+          "breakdown",
+          "marginBps",
+          "belowTarget",
+          "floorPriceMinor",
+          "exceedsMrp"
+        ]
+      },
       "MarketplacePriceInput": {
         "type": "object",
         "properties": {
@@ -24167,6 +25164,57 @@
                   "indian",
                   "international"
                 ]
+              },
+              "preferences": {
+                "type": "object",
+                "properties": {
+                  "defaultRoute": {
+                    "type": "string"
+                  },
+                  "pageSize": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "reportingPeriod": {
+                    "type": "string",
+                    "enum": [
+                      "7d",
+                      "30d",
+                      "qtd",
+                      "fytd"
+                    ]
+                  },
+                  "catalogView": {
+                    "type": "string",
+                    "enum": [
+                      "all_active",
+                      "low_stock",
+                      "primary_warehouse"
+                    ]
+                  },
+                  "language": {
+                    "type": "string"
+                  },
+                  "telemetrySeconds": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "showThumbnails": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "defaultRoute",
+                  "pageSize",
+                  "reportingPeriod",
+                  "catalogView",
+                  "language",
+                  "telemetrySeconds",
+                  "showThumbnails"
+                ],
+                "description": "Workspace defaults from Settings > General: what screens start with (the URL always wins)"
               }
             },
             "required": [
@@ -24176,7 +25224,8 @@
               "tier",
               "timezone",
               "currency",
-              "numberFormat"
+              "numberFormat",
+              "preferences"
             ]
           },
           "businesses": {
@@ -39035,6 +40084,242 @@
         },
         "additionalProperties": false
       },
+      "WorkspacePreferences": {
+        "type": "object",
+        "properties": {
+          "defaultRoute": {
+            "type": "string",
+            "enum": [
+              "/",
+              "/orders",
+              "/listings",
+              "/inventory",
+              "/pricing",
+              "/reports",
+              "/products",
+              "/profitability",
+              "/product-intelligence",
+              "/returns",
+              "/shipping",
+              "/procurement"
+            ]
+          },
+          "language": {
+            "type": "string",
+            "enum": [
+              "en-IN",
+              "en-US",
+              "en-GB"
+            ]
+          },
+          "pageSize": {
+            "anyOf": [
+              {
+                "type": "number",
+                "const": 10
+              },
+              {
+                "type": "number",
+                "const": 25
+              },
+              {
+                "type": "number",
+                "const": 50
+              },
+              {
+                "type": "number",
+                "const": 100
+              }
+            ]
+          },
+          "catalogView": {
+            "type": "string",
+            "enum": [
+              "all_active",
+              "low_stock",
+              "primary_warehouse"
+            ]
+          },
+          "reportingPeriod": {
+            "type": "string",
+            "enum": [
+              "7d",
+              "30d",
+              "qtd",
+              "fytd"
+            ]
+          },
+          "telemetrySeconds": {
+            "anyOf": [
+              {
+                "type": "number",
+                "const": 15
+              },
+              {
+                "type": "number",
+                "const": 30
+              },
+              {
+                "type": "number",
+                "const": 60
+              }
+            ]
+          },
+          "showThumbnails": {
+            "type": "boolean"
+          },
+          "guardrails": {
+            "type": "object",
+            "properties": {
+              "bulkConfirm": {
+                "type": "boolean"
+              },
+              "stockAllocationConfirm": {
+                "type": "boolean"
+              },
+              "zeroStockDelistWarning": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "ChannelPricingTier": {
+        "type": "object",
+        "properties": {
+          "baseMarkupBps": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000
+          },
+          "fixedFeeBufferMinor": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000000000
+          },
+          "hardFloorMinor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100000000000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "maxDiscountBps": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "repriceIntervalMinutes": {
+            "type": "integer",
+            "minimum": 5,
+            "maximum": 1440
+          },
+          "minNetMarginBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 10000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "autoDelistOnBreach": {
+            "type": "boolean"
+          },
+          "dealFloorMinor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100000000000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mandate2faForMarkdown": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "draft",
+              "paused"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "PricingSettings": {
+        "type": "object",
+        "properties": {
+          "marginFloorBps": {
+            "description": "Workspace gross margin floor: the margin target when no active pricing policy sets one",
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 10000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "maxVelocityShiftBps": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "priceEnding": {
+            "type": "string",
+            "enum": [
+              "nine",
+              "zero",
+              "exact"
+            ]
+          },
+          "legalMetrologyMrpGate": {
+            "type": "boolean"
+          },
+          "withholdBufferBps": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "autoDelistOnBreach": {
+            "type": "boolean"
+          },
+          "mandate2faBulkMarkdown": {
+            "type": "boolean"
+          },
+          "channelTiers": {
+            "description": "Keyed by marketplace account id",
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ChannelPricingTier"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
       "VendorSettings": {
         "type": "object",
         "properties": {
@@ -39071,6 +40356,12 @@
             },
             "additionalProperties": false
           },
+          "preferences": {
+            "$ref": "#/components/schemas/WorkspacePreferences"
+          },
+          "pricing": {
+            "$ref": "#/components/schemas/PricingSettings"
+          },
           "catalog": {
             "type": "object",
             "properties": {
@@ -39080,6 +40371,52 @@
               "skuPrefix": {
                 "type": "string",
                 "maxLength": 12
+              },
+              "skuTemplate": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 60
+              },
+              "skuSeparator": {
+                "type": "string",
+                "enum": [
+                  "-",
+                  "_",
+                  "/"
+                ]
+              },
+              "skuCasing": {
+                "type": "string",
+                "enum": [
+                  "uppercase",
+                  "lowercase",
+                  "as_is"
+                ]
+              },
+              "strictEan": {
+                "type": "boolean"
+              },
+              "gates": {
+                "type": "object",
+                "properties": {
+                  "hsnCode": {
+                    "type": "boolean"
+                  },
+                  "countryOfOrigin": {
+                    "type": "boolean"
+                  },
+                  "gstRateSlab": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "syncSovereignty": {
+                "type": "string",
+                "enum": [
+                  "master_catalog",
+                  "channel_autonomous"
+                ]
               }
             },
             "additionalProperties": false
@@ -39106,6 +40443,19 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 365
+              },
+              "minSafetyStockUnits": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1000000
+              },
+              "spikeProtectionUnitsPerHour": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1000000
+              },
+              "negativeStockTwoStepApproval": {
+                "type": "boolean"
               }
             },
             "additionalProperties": false
@@ -39667,6 +41017,399 @@
             ],
             "additionalProperties": false
           },
+          "preferences": {
+            "type": "object",
+            "properties": {
+              "defaultRoute": {
+                "type": "string",
+                "enum": [
+                  "/",
+                  "/orders",
+                  "/listings",
+                  "/inventory",
+                  "/pricing",
+                  "/reports",
+                  "/products",
+                  "/profitability",
+                  "/product-intelligence",
+                  "/returns",
+                  "/shipping",
+                  "/procurement"
+                ]
+              },
+              "language": {
+                "type": "string",
+                "enum": [
+                  "en-IN",
+                  "en-US",
+                  "en-GB"
+                ]
+              },
+              "pageSize": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "catalogView": {
+                "type": "string",
+                "enum": [
+                  "all_active",
+                  "low_stock",
+                  "primary_warehouse"
+                ]
+              },
+              "reportingPeriod": {
+                "type": "string",
+                "enum": [
+                  "7d",
+                  "30d",
+                  "qtd",
+                  "fytd"
+                ]
+              },
+              "telemetrySeconds": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "showThumbnails": {
+                "type": "boolean"
+              },
+              "guardrails": {
+                "type": "object",
+                "properties": {
+                  "bulkConfirm": {
+                    "type": "boolean"
+                  },
+                  "stockAllocationConfirm": {
+                    "type": "boolean"
+                  },
+                  "zeroStockDelistWarning": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "bulkConfirm",
+                  "stockAllocationConfirm",
+                  "zeroStockDelistWarning"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "defaultRoute",
+              "language",
+              "pageSize",
+              "catalogView",
+              "reportingPeriod",
+              "telemetrySeconds",
+              "showThumbnails",
+              "guardrails"
+            ],
+            "additionalProperties": false
+          },
+          "catalog": {
+            "type": "object",
+            "properties": {
+              "requireHsn": {
+                "type": "boolean"
+              },
+              "skuPrefix": {
+                "type": "string"
+              },
+              "skuTemplate": {
+                "type": "string"
+              },
+              "skuSeparator": {
+                "type": "string",
+                "enum": [
+                  "-",
+                  "_",
+                  "/"
+                ]
+              },
+              "skuCasing": {
+                "type": "string",
+                "enum": [
+                  "uppercase",
+                  "lowercase",
+                  "as_is"
+                ]
+              },
+              "strictEan": {
+                "type": "boolean"
+              },
+              "gates": {
+                "type": "object",
+                "properties": {
+                  "hsnCode": {
+                    "type": "boolean"
+                  },
+                  "countryOfOrigin": {
+                    "type": "boolean"
+                  },
+                  "gstRateSlab": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "hsnCode",
+                  "countryOfOrigin",
+                  "gstRateSlab"
+                ],
+                "additionalProperties": false
+              },
+              "syncSovereignty": {
+                "type": "string",
+                "enum": [
+                  "master_catalog",
+                  "channel_autonomous"
+                ]
+              }
+            },
+            "required": [
+              "requireHsn",
+              "skuPrefix",
+              "skuTemplate",
+              "skuSeparator",
+              "skuCasing",
+              "strictEan",
+              "gates",
+              "syncSovereignty"
+            ],
+            "additionalProperties": false
+          },
+          "inventory": {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "simple",
+                  "warehouse"
+                ]
+              },
+              "startingMethod": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "manual",
+                      "marketplace",
+                      "file"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "defaultLeadTimeDays": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "minSafetyStockUnits": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "spikeProtectionUnitsPerHour": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "negativeStockTwoStepApproval": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "mode",
+              "startingMethod",
+              "defaultLeadTimeDays",
+              "minSafetyStockUnits",
+              "spikeProtectionUnitsPerHour",
+              "negativeStockTwoStepApproval"
+            ],
+            "additionalProperties": false
+          },
+          "pricing": {
+            "type": "object",
+            "properties": {
+              "marginFloorBps": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "maxVelocityShiftBps": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "priceEnding": {
+                "type": "string",
+                "enum": [
+                  "nine",
+                  "zero",
+                  "exact"
+                ]
+              },
+              "legalMetrologyMrpGate": {
+                "type": "boolean"
+              },
+              "withholdBufferBps": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "autoDelistOnBreach": {
+                "type": "boolean"
+              },
+              "mandate2faBulkMarkdown": {
+                "type": "boolean"
+              },
+              "channelTiers": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "baseMarkupBps": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "fixedFeeBufferMinor": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "hardFloorMinor": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "maxDiscountBps": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "repriceIntervalMinutes": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "minNetMarginBps": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "autoDelistOnBreach": {
+                      "type": "boolean"
+                    },
+                    "dealFloorMinor": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "mandate2faForMarkdown": {
+                      "type": "boolean"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "active",
+                        "draft",
+                        "paused"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "baseMarkupBps",
+                    "fixedFeeBufferMinor",
+                    "hardFloorMinor",
+                    "maxDiscountBps",
+                    "repriceIntervalMinutes",
+                    "minNetMarginBps",
+                    "autoDelistOnBreach",
+                    "dealFloorMinor",
+                    "mandate2faForMarkdown",
+                    "status"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "marginFloorBps",
+              "maxVelocityShiftBps",
+              "priceEnding",
+              "legalMetrologyMrpGate",
+              "withholdBufferBps",
+              "autoDelistOnBreach",
+              "mandate2faBulkMarkdown",
+              "channelTiers"
+            ],
+            "additionalProperties": false
+          },
+          "channels": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "marketplace": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "marketplace",
+                "status"
+              ],
+              "additionalProperties": false
+            },
+            "description": "The connected marketplace accounts the channel-level settings are keyed by"
+          },
           "alertMatrix": {
             "type": "array",
             "items": {
@@ -39789,6 +41532,11 @@
           "gstins",
           "operations",
           "alerts",
+          "preferences",
+          "catalog",
+          "inventory",
+          "pricing",
+          "channels",
           "alertMatrix",
           "ai",
           "warehouses",
@@ -54221,6 +55969,317 @@
         ],
         "additionalProperties": false
       },
+      "PriceSimulation": {
+        "type": "object",
+        "properties": {
+          "variant": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "sku": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "costMinor": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "mrpMinor": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "sellingPriceMinor": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "gstRateBps": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "sku",
+              "title",
+              "costMinor",
+              "mrpMinor",
+              "sellingPriceMinor",
+              "gstRateBps"
+            ],
+            "additionalProperties": false
+          },
+          "account": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "marketplace": {
+                    "type": "string"
+                  },
+                  "feesConfigured": {
+                    "type": "boolean"
+                  },
+                  "feeBps": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "fixedFeeMinor": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "marketplace",
+                  "feesConfigured",
+                  "feeBps",
+                  "fixedFeeMinor"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rules": {
+            "type": "object",
+            "properties": {
+              "workspaceFloorBps": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "effectiveTargetBps": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "withholdBufferBps": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "legalMetrologyMrpGate": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "workspaceFloorBps",
+              "effectiveTargetBps",
+              "withholdBufferBps",
+              "legalMetrologyMrpGate"
+            ],
+            "additionalProperties": false
+          },
+          "priceMinor": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "breakdown": {
+            "type": "object",
+            "properties": {
+              "gstMinor": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "GST contained in the price (reverse-calculated); null when the product has no GST rate"
+              },
+              "feeMinor": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Marketplace commission + fixed fee at this price; null when the channel has no fee profile"
+              },
+              "withholdMinor": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "costMinor": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "netRealizationMinor": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "contributionMinor": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "gstMinor",
+              "feeMinor",
+              "withholdMinor",
+              "costMinor",
+              "netRealizationMinor",
+              "contributionMinor"
+            ],
+            "additionalProperties": false
+          },
+          "marginBps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Margin after cost and marketplace fees: the same figure the Pricing screens show"
+          },
+          "belowTarget": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "floorPriceMinor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Lowest price that still earns the effective target margin"
+          },
+          "exceedsMrp": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "variant",
+          "account",
+          "rules",
+          "priceMinor",
+          "breakdown",
+          "marginBps",
+          "belowTarget",
+          "floorPriceMinor",
+          "exceedsMrp"
+        ],
+        "additionalProperties": false
+      },
       "MarketplacePrice": {
         "type": "object",
         "properties": {
@@ -63362,6 +65421,58 @@
                   "indian",
                   "international"
                 ]
+              },
+              "preferences": {
+                "type": "object",
+                "properties": {
+                  "defaultRoute": {
+                    "type": "string"
+                  },
+                  "pageSize": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "reportingPeriod": {
+                    "type": "string",
+                    "enum": [
+                      "7d",
+                      "30d",
+                      "qtd",
+                      "fytd"
+                    ]
+                  },
+                  "catalogView": {
+                    "type": "string",
+                    "enum": [
+                      "all_active",
+                      "low_stock",
+                      "primary_warehouse"
+                    ]
+                  },
+                  "language": {
+                    "type": "string"
+                  },
+                  "telemetrySeconds": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "showThumbnails": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "defaultRoute",
+                  "pageSize",
+                  "reportingPeriod",
+                  "catalogView",
+                  "language",
+                  "telemetrySeconds",
+                  "showThumbnails"
+                ],
+                "additionalProperties": false,
+                "description": "Workspace defaults from Settings > General: what screens start with (the URL always wins)"
               }
             },
             "required": [
@@ -63371,7 +65482,8 @@
               "tier",
               "timezone",
               "currency",
-              "numberFormat"
+              "numberFormat",
+              "preferences"
             ],
             "additionalProperties": false
           },
@@ -79484,7 +81596,7 @@
         "tags": [
           "Vendors"
         ],
-        "description": "One save for every tab (business, regional, operations, alerts); omitted sections are untouched, objects are merged. Validation errors name the field in `details.issues[].path`. Returns the refreshed aggregate.",
+        "description": "One save for every tab (business, regional, operations, alerts, preferences, catalog, inventory, pricing); omitted sections are untouched, objects are merged. Validation errors name the field in `details.issues[].path`. Returns the refreshed aggregate.",
         "requestBody": {
           "required": true,
           "content": {
@@ -79629,6 +81741,110 @@
                   },
                   "alerts": {
                     "$ref": "#/components/schemas/AlertPreferencesInput"
+                  },
+                  "preferences": {
+                    "$ref": "#/components/schemas/WorkspacePreferencesInput"
+                  },
+                  "catalog": {
+                    "type": "object",
+                    "properties": {
+                      "requireHsn": {
+                        "type": "boolean"
+                      },
+                      "skuPrefix": {
+                        "type": "string",
+                        "maxLength": 12
+                      },
+                      "skuTemplate": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 60
+                      },
+                      "skuSeparator": {
+                        "type": "string",
+                        "enum": [
+                          "-",
+                          "_",
+                          "/"
+                        ]
+                      },
+                      "skuCasing": {
+                        "type": "string",
+                        "enum": [
+                          "uppercase",
+                          "lowercase",
+                          "as_is"
+                        ]
+                      },
+                      "strictEan": {
+                        "type": "boolean"
+                      },
+                      "gates": {
+                        "type": "object",
+                        "properties": {
+                          "hsnCode": {
+                            "type": "boolean"
+                          },
+                          "countryOfOrigin": {
+                            "type": "boolean"
+                          },
+                          "gstRateSlab": {
+                            "type": "boolean"
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      "syncSovereignty": {
+                        "type": "string",
+                        "enum": [
+                          "master_catalog",
+                          "channel_autonomous"
+                        ]
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "inventory": {
+                    "type": "object",
+                    "properties": {
+                      "mode": {
+                        "type": "string",
+                        "enum": [
+                          "simple",
+                          "warehouse"
+                        ]
+                      },
+                      "startingMethod": {
+                        "type": "string",
+                        "enum": [
+                          "manual",
+                          "marketplace",
+                          "file"
+                        ]
+                      },
+                      "defaultLeadTimeDays": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 365
+                      },
+                      "minSafetyStockUnits": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 1000000
+                      },
+                      "spikeProtectionUnitsPerHour": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1000000
+                      },
+                      "negativeStockTwoStepApproval": {
+                        "type": "boolean"
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "pricing": {
+                    "$ref": "#/components/schemas/PricingSettingsInput"
                   },
                   "version": {
                     "description": "Optimistic lock: send the `version` you read; 409 VERSION_CONFLICT when the settings changed meanwhile",
@@ -123002,6 +125218,135 @@
                         "pushed"
                       ],
                       "additionalProperties": false
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data",
+                    "requestId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/pricing/simulate": {
+      "post": {
+        "summary": "Simulate the unit economics of one price",
+        "tags": [
+          "Pricing"
+        ],
+        "description": "Real variant (cost, MRP, selling price), the fee profile of the chosen channel and the rules saved in Settings (workspace margin floor, TCS/TDS withholding buffer, MRP gate). The margin is the one the proposal engine and the margin view use, so the numbers agree everywhere. Nothing is saved.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "variantId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "accountId": {
+                    "description": "The channel whose fee profile to use; without it no marketplace fees are charged",
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "priceMinor": {
+                    "description": "The price to test; default: the channel price, else the variant selling price",
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100000000000
+                  }
+                },
+                "required": [
+                  "variantId"
+                ]
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "pricing:read",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/PriceSimulation"
                     },
                     "requestId": {
                       "type": "string"
