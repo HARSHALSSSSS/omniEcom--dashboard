@@ -25,6 +25,7 @@ describe("Formatting utils", () => {
     expect(formatLakh(10000000)).toBe("₹1.00Cr");
     expect(formatLakh(50000)).toBe("₹50.0K");
     expect(formatLakh(500)).toBe("₹500");
+    expect(formatLakh(-2098)).toBe("-₹2.1K");
   });
 
   it("formats numbers with Indian grouping", () => {

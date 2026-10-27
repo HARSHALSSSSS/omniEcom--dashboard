@@ -75,6 +75,8 @@ export function formatINR(paise: number, compact = false): string {
  * thousand / million / billion (₹284K, ₹2.84M) for the international one.
  */
 export function formatLakh(rupees: number): string {
+  // a loss reads -₹2.1K, not ₹-2100
+  if (rupees < 0) return `-${formatLakh(-rupees)}`;
   const symbol = currencySymbol();
   if (preferences.numberFormat === "international") {
     if (rupees >= 1_000_000_000) return `${symbol}${(rupees / 1_000_000_000).toFixed(2)}B`;
