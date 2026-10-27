@@ -112,6 +112,9 @@ export const OverviewSchema = z.object({
   averageLeadTimeDays: z.number().nullable().describe('From real receipts; null without a delivered purchase order'), configuredLeadTimeDays: z.number().nullable().describe('Average of the lead times set on active suppliers'),
   leadTimeBySupplier: z.array(z.object({ supplierId: z.string(), supplierName: z.string().nullable(), averageLeadTimeDays: z.number().nullable(), deliveredPurchaseOrders: z.number().int() })),
   statusCounts: z.record(z.string(), z.number().int()), reorderSuggestionsCount: z.number().int(),
+  awaitingApproval: z.number().int().describe('Draft purchase orders: the lifecycle is draft -> approve (submitted) -> acknowledged -> received, so a draft is what waits for a person with procurement:approve'),
+  belowCoverCount: z.number().int().describe('Reorder suggestions whose days of cover are shorter than the lead time of the supplier that would deliver them (a variant nobody supplies uses the average lead time of the active suppliers and is left out when there is none)'),
+  setupIncompleteSuppliers: z.number().int().describe('Active suppliers that cannot be ordered from properly yet: no contact email, or no product on their list'),
 }).meta({ id: 'ProcurementOverview' });
 
 export const FromSuggestionsResultSchema = z.object({

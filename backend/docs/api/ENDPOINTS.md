@@ -674,6 +674,7 @@ Sales, orders, inventory, product, marketplace, returns and fulfillment reports
 | GET | `/api/v1/reports/inventory` | `reports:read` | Inventory report |
 | GET | `/api/v1/reports/marketplaces` | `reports:read` | Marketplace performance |
 | GET | `/api/v1/reports/orders` | `reports:read` | Order report |
+| GET | `/api/v1/reports/overview-kpis` | `reports:read` | Overview of the Reports screen in one read |
 | GET | `/api/v1/reports/products` | `reports:read` | Product performance |
 | GET | `/api/v1/reports/returns` | `reports:read` | Returns report |
 | GET | `/api/v1/reports/sales` | `reports:read` | Sales report |

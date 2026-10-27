@@ -98,11 +98,18 @@ export async function procurementOverview(tx: Tx, vendorId: string) {
   const deliveredCount = withLead.reduce((s, l) => s + l.deliveredPurchaseOrders, 0);
   const counts: Record<string, number> = Object.fromEntries(schema.PURCHASE_ORDER_STATUSES.map((s) => [s, 0]));
   for (const r of byStatus) counts[String(r.status)] = num(r.n);
+  // an active supplier is ready to order from when it has a contact email and at least one product on its list (lead time always has a value)
+  const [incomplete] = await rows(tx, sql`select count(*)::int n from suppliers s where s.vendor_id = ${vendorId} and s.deleted_at is null and s.status = 'active'
+    and (coalesce(trim(s.email), '') = '' or not exists (select 1 from supplier_products sp where sp.vendor_id = s.vendor_id and sp.supplier_id = s.id))`);
+  const suggestions = await reorderSuggestions(tx, vendorId);
+  // cover shorter than the lead time of the supplier that would deliver it (a variant nobody supplies is compared with the average lead time of the active suppliers, and left out when there is none)
+  const fallbackLead = sup?.configured === null || sup?.configured === undefined ? null : Number(sup.configured);
+  const belowCover = suggestions.filter((s) => s.daysOfCover !== null && (s.supplier?.leadTimeDays ?? fallbackLead) !== null && s.daysOfCover < (s.supplier?.leadTimeDays ?? fallbackLead)!).length;
   return {
     openPurchaseOrders: num(t?.open_pos), unitsInTransit: num(owed?.units), valueInTransitMinor: num(owed?.value), latePurchaseOrders: num(late?.n), dueThisWeek: num(week?.n),
     warehousesCount: num(wh?.n), warehousesWithInbound: num(t?.inbound_warehouses), activeSuppliers: num(sup?.active), totalSuppliers: num(sup?.total),
     averageLeadTimeDays: deliveredCount > 0 ? round1(weighted / deliveredCount) : null,
     configuredLeadTimeDays: sup?.configured === null || sup?.configured === undefined ? null : round1(Number(sup.configured)),
-    leadTimeBySupplier: leadTimes, statusCounts: counts, reorderSuggestionsCount: (await reorderSuggestions(tx, vendorId)).length,
+    leadTimeBySupplier: leadTimes, statusCounts: counts, awaitingApproval: counts.draft ?? 0, reorderSuggestionsCount: suggestions.length, belowCoverCount: belowCover, setupIncompleteSuppliers: num(incomplete?.n),
   };
 }

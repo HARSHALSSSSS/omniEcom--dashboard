@@ -501,7 +501,7 @@ describe('lists, scorecards and overview', () => {
   it('overview tiles from real purchase orders', async () => {
     const s = await shop();
     const empty = (await c.get('/api/v1/procurement/overview', s.viewer)).body.data;
-    expect(empty).toMatchObject({ openPurchaseOrders: 0, valueInTransitMinor: 0, unitsInTransit: 0, latePurchaseOrders: 0, dueThisWeek: 0, averageLeadTimeDays: null, activeSuppliers: 0, warehousesCount: 1, reorderSuggestionsCount: 0 });
+    expect(empty).toMatchObject({ awaitingApproval: 0, belowCoverCount: 0, setupIncompleteSuppliers: 0, openPurchaseOrders: 0, valueInTransitMinor: 0, unitsInTransit: 0, latePurchaseOrders: 0, dueThisWeek: 0, averageLeadTimeDays: null, activeSuppliers: 0, warehousesCount: 1, reorderSuggestionsCount: 0 });
 
     const sup = await mkSupplier(s);
     await priceList(s, sup.id, [{ variantId: s.a.variantId, costMinor: 125000 }, { variantId: s.b.variantId, costMinor: 120000 }]);
@@ -565,6 +565,11 @@ describe('reorder suggestions', () => {
     await c.put(`${SUP}/${cheap.id}/products`, { items: [{ variantId: w.variant.variantId, costMinor: 80000 }] }, admin);
     await c.put(`${SUP}/${pref.id}/products`, { items: [{ variantId: w.variant.variantId, costMinor: 100000, minOrderQuantity: 20, isPreferred: true }] }, admin);
     expect((await c.get('/api/v1/procurement/reorder-suggestions', admin)).body.data.items.find((i: any) => i.sku === 'SUG-1').supplier).toMatchObject({ id: pref.id, costMinor: 100000 });
+    // 2 units left at 0.6 a day is about 3 days of cover, shorter than the 7-day lead time of the supplier that would deliver it; both suppliers have a product list but no contact email yet
+    const ov = (await c.get('/api/v1/procurement/overview', admin)).body.data;
+    expect(ov).toMatchObject({ belowCoverCount: 1, awaitingApproval: 0, setupIncompleteSuppliers: 2 });
+    await c.patch(`${SUP}/${cheap.id}`, { email: 'sales@cheap.example', version: cheap.version }, admin);
+    expect((await c.get('/api/v1/procurement/overview', admin)).body.data.setupIncompleteSuppliers).toBe(1);
 
     const dry = await c.post(`${PO}/from-suggestions`, { dryRun: true }, admin);
     expect(dry.body.data.orders).toMatchObject([{ id: null, supplierId: pref.id, units: 20, totalMinor: 2_000_000, skus: ['SUG-1'] }]); // 16 raised to the MOQ of 20
@@ -572,6 +577,7 @@ describe('reorder suggestions', () => {
 
     const made = await c.post(`${PO}/from-suggestions`, {}, admin);
     expect(made.status, JSON.stringify(made.body)).toBe(200);
+    expect((await c.get('/api/v1/procurement/overview', admin)).body.data).toMatchObject({ awaitingApproval: 1, belowCoverCount: 0 }); // the draft waits for approval and covers the need
     expect(made.body.data.orders).toHaveLength(1);
     const po = (await c.get(`${PO}/${made.body.data.orders[0].id}`, admin)).body.data;
     expect(po).toMatchObject({ status: 'draft', supplierId: pref.id, unitsOrdered: 20, reference: 'reorder-suggestions' });

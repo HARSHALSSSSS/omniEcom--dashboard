@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { AppError } from '@oms/shared';
 import { IsoDate, successEnvelope } from '@oms/contracts';
 import { ok, vendorTx } from '@oms/module-kit';
+import { COMPARES, overviewKpis, parseRange } from './overview-kpis';
 import { fulfillmentReport, inventoryReport, marketplacesReport, ordersReport, productsReport, returnsReport, salesReport, type Window } from './queries';
 
 const DAY = 86_400_000;
@@ -120,4 +121,24 @@ export const reportRoutes: FastifyPluginAsync = async (app) => {
       })) },
     },
   }, async (req) => ok(req, await vendorTx(req, (tx, vendorId) => fulfillmentReport(tx, vendorId, win(req.query), { warehouseId: req.query.warehouseId }))));
+
+  const Day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'YYYY-MM-DD');
+  const Totals = z.object({ orders: z.number().int(), units: z.number().int(), grossMinor: Money, taxMinor: Money, shippingMinor: Money, discountMinor: Money, netSalesMinor: Money, averageOrderValueMinor: Money });
+  const Refunds = z.object({ amountMinor: Money, rateBps: z.number().int().nullable(), returns: z.number().int() });
+  const Margin = z.object({ marginBps: z.number().int().nullable(), contributionMinor: z.number().int().nullable(), coverage: z.number(), completeness: z.enum(['complete', 'estimated', 'incomplete']), missing: z.array(z.string()) });
+  r.get('/reports/overview-kpis', {
+    config: { access: { permission: 'reports:read' } },
+    schema: {
+      tags: TAGS, summary: 'Overview of the Reports screen in one read',
+      description: 'For an inclusive range of UTC days (default the last 30, at most 366): sales totals, the same for the comparison range (`compare=previous` is the same number of days right before, `previous_year` the same dates a year earlier, `none` skips it), processed refunds, the margin (null while a product cost is missing, with the share of revenue whose cost is known), the sales trend in day / week / month buckets (chosen from the length of the range unless `period` is given) and one row per marketplace (sales, orders, share, average order value, change against the comparison). Money in minor units, rates in basis points. Net sales are the order subtotal less discounts, before tax and shipping.',
+      querystring: z.object({ from: Day.optional(), to: Day.optional(), compare: z.enum(COMPARES).default('previous'), period: z.enum(['day', 'week', 'month']).optional() }),
+      response: { 200: successEnvelope(z.object({
+        range: z.object({ from: Day, to: Day }), previousRange: z.object({ from: Day, to: Day }).nullable(), compare: z.enum(COMPARES), period: z.enum(['day', 'week', 'month']),
+        totals: Totals, previous: Totals.nullable(), refunds: Refunds, previousRefunds: Refunds.nullable(), margin: Margin, previousMargin: Margin.nullable(),
+        series: Series({ orders: z.number().int(), grossMinor: Money }), previousSeries: Series({ orders: z.number().int(), grossMinor: Money }).nullable(),
+        channels: z.array(z.object({ marketplace: z.string(), orders: z.number().int(), grossMinor: Money, shareBps: z.number().int(), averageOrderValueMinor: Money, marginBps: z.number().int().nullable(), previousGrossMinor: Money.nullable(), changeBps: z.number().int().nullable() })),
+        connectedAccounts: z.number().int(), totalAccounts: z.number().int(),
+      })) },
+    },
+  }, async (req) => ok(req, await vendorTx(req, (tx, vendorId) => overviewKpis(tx, vendorId, parseRange(req.query), req.query.compare, req.query.period))));
 };
