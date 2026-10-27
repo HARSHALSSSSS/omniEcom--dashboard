@@ -31,6 +31,12 @@ export interface ProcurementOverview {
   leadTimeBySupplier: Array<{ supplierId: string; supplierName: string | null; averageLeadTimeDays: number | null; deliveredPurchaseOrders: number }>;
   statusCounts: Record<string, number>;
   reorderSuggestionsCount: number;
+  /** draft purchase orders: the lifecycle is draft, approve (submitted), acknowledged, received */
+  awaitingApproval: number;
+  /** reorder suggestions whose days of cover are shorter than the lead time of the supplier that would deliver them */
+  belowCoverCount: number;
+  /** active suppliers with no contact email or no product on their price list */
+  setupIncompleteSuppliers: number;
 }
 
 // ---------------------------------------------------------------- purchase orders

@@ -117,6 +117,9 @@ const overview = (over: Partial<ProcurementOverview> = {}): ProcurementOverview 
   leadTimeBySupplier: [],
   statusCounts: { draft: 1, submitted: 3 },
   reorderSuggestionsCount: 2,
+  awaitingApproval: 1,
+  belowCoverCount: 2,
+  setupIncompleteSuppliers: 1,
   ...over,
 });
 
@@ -632,17 +635,69 @@ describe("ProcurementPage: overview tab flow", () => {
     expect(screen.getByRole("tab", { name: /Overview/ })).toHaveAttribute("aria-selected", "true");
   });
 
-  it("renders the procurement pulse, replenishment needs, intelligence card and previews", async () => {
+  it("shows the server's numbers in the pulse and the chips, and no invented data", async () => {
+    renderPage("/procurement?tab=overview");
+    expect(await screen.findByText("SKUs to replenish")).toBeInTheDocument();
+    expect(await screen.findByText("2 below lead-time cover")).toBeInTheDocument();
+    expect(await screen.findByText("1 awaiting approval")).toBeInTheDocument();
+    expect(await screen.findByText("PO-2026-0001")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /Overdue\s*1/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Awaiting approval\s*1/ })).toBeInTheDocument();
+    expect(screen.queryByText(/Illustrative|Urban Textiles|Terra Home|Craft Leather|08 Oct 2026/)).not.toBeInTheDocument();
+  });
+
+  it("an overdue order is the one the server flags, not one judged against a fixed date", async () => {
+    api.listOrders.mockResolvedValue(poPage([summary({ isLate: false, expectedAt: "2020-01-01T00:00:00.000Z" })]));
     const user = userEvent.setup();
     renderPage("/procurement?tab=overview");
+    await screen.findByText("PO-2026-0001");
+    await user.click(screen.getByRole("button", { name: /Overdue/ }));
+    expect(screen.getByText("No delivery is overdue")).toBeInTheDocument();
+  });
 
-    expect(await screen.findByText("Replenishment needs")).toBeInTheDocument();
-    expect(screen.getByText("Procurement intelligence")).toBeInTheDocument();
-    expect(screen.getByText("Supplier context")).toBeInTheDocument();
-    expect(await screen.findByText("Travel Bag")).toBeInTheDocument();
-    expect(await screen.findByText("PO-2026-0001")).toBeInTheDocument();
+  it("explains an empty business instead of showing demo rows, with the right way forward", async () => {
+    api.overview.mockResolvedValue(overview({ openPurchaseOrders: 0, awaitingApproval: 0, latePurchaseOrders: 0, dueThisWeek: 0, unitsInTransit: 0, valueInTransitMinor: 0, reorderSuggestionsCount: 0, belowCoverCount: 0, activeSuppliers: 0, totalSuppliers: 0, setupIncompleteSuppliers: 0, statusCounts: {} }));
+    api.listOrders.mockResolvedValue(poPage([], { total: 0 }));
+    api.listSuppliers.mockResolvedValue({ items: [], page: 1, pageSize: 25, total: 0, pages: 1, counts: { active: 0, inactive: 0, blocked: 0 } });
+    api.suggestions.mockResolvedValue([]);
+    renderPage("/procurement?tab=overview");
+    expect(await screen.findByText("Stock levels are fine")).toBeInTheDocument();
+    expect(screen.getByText("No purchase orders yet")).toBeInTheDocument();
+    expect(screen.getByText("No suppliers yet")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Create purchase order" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Add supplier" })).toBeEnabled();
+    expect(screen.queryByText("Travel Bag")).not.toBeInTheDocument();
+  });
 
-    await user.click(screen.getByRole("button", { name: "Review replenishment" }));
+  it("Create PO on a suggestion makes the draft through the from-suggestions flow and opens it", async () => {
+    api.fromSuggestions.mockResolvedValue({ dryRun: false, warehouseId: ID.wh1, unassigned: [], orders: [{ id: ID.po2, poNumber: "PO-2026-0009", supplierId: ID.sup1, supplierName: "Apex Tex Fab", lines: 1, units: 100, totalMinor: 12500000, skus: ["TRV-1042"] }] });
+    const user = userEvent.setup();
+    renderPage("/procurement?tab=overview");
+    const row = (await screen.findByText("Travel Bag", { selector: "div" })).closest("tr") as HTMLElement;
+    await user.click(within(row).getByRole("button", { name: "Create PO >" }));
+    await waitFor(() => expect(api.fromSuggestions).toHaveBeenCalledWith({ variantIds: [ID.var1], dryRun: false }));
+    await waitFor(() => expect(loc()).toContain(`po=${ID.po2}`));
+  });
+
+  it("a viewer cannot create orders from a suggestion", async () => {
+    grant("procurement:read");
+    renderPage("/procurement?tab=overview");
+    const row = (await screen.findByText("Travel Bag", { selector: "div" })).closest("tr") as HTMLElement;
+    expect(within(row).getByRole("button", { name: "Create PO >" })).toBeDisabled();
+    expect(api.fromSuggestions).not.toHaveBeenCalled();
+  });
+
+  it("a supplier without email or products is flagged for setup", async () => {
+    api.listSuppliers.mockResolvedValue({ items: [supplier({ email: null, activeSkusCount: 0 })], page: 1, pageSize: 25, total: 1, pages: 1, counts: { active: 1, inactive: 0, blocked: 0 } });
+    renderPage("/procurement?tab=overview");
+    expect(await screen.findByText("No products on its price list yet")).toBeInTheDocument();
+    expect(screen.getAllByText("Complete setup >").length).toBeGreaterThan(0);
+  });
+
+  it("the review button goes to the reorder tab", async () => {
+    const user = userEvent.setup();
+    renderPage("/procurement?tab=overview");
+    await user.click(await screen.findByRole("button", { name: "Review replenishment" }));
     expect(loc()).toBe("/procurement?tab=reorder");
   });
 });

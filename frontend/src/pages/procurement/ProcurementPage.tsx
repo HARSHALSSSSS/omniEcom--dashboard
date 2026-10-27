@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { MoreHorizontal, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Button } from "@/components/ui/button";
 import { RefreshButton } from "@/components/common/RefreshButton";
@@ -111,7 +111,7 @@ export default function ProcurementPage() {
 
   const refreshing = list.isFetching && list.isPlaceholderData;
 
-  // The primary 3 navigation tabs shown in Figma: Overview, Purchase Orders, Suppliers
+  // The primary 3 navigation tabs: Overview, Purchase Orders, Suppliers
   const displayedTabs: ProcurementTab[] = tab === "reorder" ? ["overview", "orders", "suppliers", "reorder"] : ["overview", "orders", "suppliers"];
 
   return (
@@ -134,10 +134,6 @@ export default function ProcurementPage() {
             {headerAction}
             <Button variant="outline" size="sm" disabled={exporting} onClick={() => void exportCsv()}>
               Export
-            </Button>
-            <Button variant="outline" size="sm" className="gap-1.5 px-3 text-xs">
-              <MoreHorizontal className="h-4 w-4" aria-hidden />
-              More
             </Button>
           </div>
         }
@@ -164,7 +160,7 @@ export default function ProcurementPage() {
             </button>
           ))}
         </div>
-        <span className="text-xs text-muted-foreground">Illustrative data · No orders sent automatically</span>
+        <span className="text-xs text-muted-foreground">Nothing is sent to a supplier until you approve a purchase order</span>
       </div>
 
       {/* Overview Tab Content */}
@@ -172,12 +168,15 @@ export default function ProcurementPage() {
         <ProcurementOverviewTab
           overview={overview.data}
           suggestions={suggestions.data ?? []}
+          suggestionsLoading={suggestions.isLoading}
           orders={poRows}
           suppliers={supplierRows}
+          canWrite={canWrite}
           onOpenOrder={(id) => update({ po: id, tab: "orders" })}
           onOpenSupplier={(id) => update({ sup: id, tab: "suppliers" })}
-          onNavigateTab={(t) => update({ tab: t })}
-          onCreatePoWithSuggestion={(s) => setPoForm({ kind: "create", supplierId: s.supplier?.id })}
+          onNavigateTab={(t, status) => update({ tab: t, status: status ?? null })}
+          onCreateOrder={() => setPoForm({ kind: "create" })}
+          onAddSupplier={() => setAddSupplierSheetOpen(true)}
         />
       )}
 
@@ -292,7 +291,7 @@ export default function ProcurementPage() {
                 onPage={(p) => update({ page: p > 1 ? String(p) : null })}
                 onPageSize={(size) => update({ size: size === DEFAULT_PAGE_SIZE ? null : String(size) })}
               />
-              <KeepSupplyMoving suppliers={supplierRows} onOpenSupplier={(id) => update({ sup: id })} onOpenOrder={(id) => update({ po: id, tab: "orders" })} />
+              <KeepSupplyMoving suppliers={supplierRows} orders={poRows} onOpenSupplier={(id) => update({ sup: id })} onOpenOrder={(id) => update({ po: id, tab: "orders" })} />
             </>
           )}
         </>

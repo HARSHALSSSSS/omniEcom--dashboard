@@ -21,57 +21,31 @@ interface SupplierFiltersProps {
 }
 
 export function SupplierFilters({ q, status, sort, counts, filtered, onSearch, onStatus, onSort, onClear }: SupplierFiltersProps) {
-  const activeCount = counts?.active ?? 4;
-  const inactiveCount = counts?.inactive ?? 1;
-  const allCount = (counts?.all ?? counts?.active ? (counts?.active ?? 0) + (counts?.inactive ?? 0) : 5);
+  const count = (key: string) => (counts?.[key] === undefined ? "—" : formatNumber(counts[key] ?? 0));
 
   return (
     <div className="space-y-3">
-      {/* Status Filter Chips from Figma Screenshot 4 */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-1 rounded-md bg-muted/40 p-0.5 text-xs">
-          <button
-            type="button"
-            onClick={() => onStatus(null)}
-            className={cn(
-              "rounded px-2.5 py-1 text-[11px] font-medium transition-colors",
-              !status ? "bg-background text-foreground shadow-2xs" : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            All suppliers <span className="text-muted-foreground">{allCount}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => onStatus("active")}
-            className={cn(
-              "rounded px-2.5 py-1 text-[11px] font-medium transition-colors",
-              status === "active" ? "bg-background text-foreground shadow-2xs" : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            Active <span className="text-muted-foreground">{activeCount}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => onStatus("inactive")}
-            className={cn(
-              "rounded px-2.5 py-1 text-[11px] font-medium transition-colors",
-              status === "inactive" ? "bg-background text-foreground shadow-2xs" : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            Setup incomplete <span className="text-muted-foreground">{inactiveCount}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => onStatus("blocked")}
-            className={cn(
-              "rounded px-2.5 py-1 text-[11px] font-medium transition-colors",
-              status === "blocked" ? "bg-background text-rose-600 shadow-2xs dark:text-rose-400" : "text-rose-600 hover:text-rose-700 dark:text-rose-400"
-            )}
-          >
-            Needs follow-up <span className="font-semibold">1</span>
-          </button>
+          {([
+            [null, "All suppliers", "all"],
+            ["active", "Active", "active"],
+            ["inactive", "Inactive", "inactive"],
+            ["blocked", "Blocked", "blocked"],
+          ] as const).map(([value, label, key]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => onStatus(value)}
+              className={cn(
+                "rounded px-2.5 py-1 text-[11px] font-medium transition-colors",
+                (status ?? null) === value ? "bg-background text-foreground shadow-2xs" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {label} <span className="text-muted-foreground">{count(key)}</span>
+            </button>
+          ))}
         </div>
-        <span className="text-xs text-muted-foreground">Illustrative records · {allCount} suppliers</span>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -84,20 +58,6 @@ export function SupplierFilters({ q, status, sort, counts, filtered, onSearch, o
               {counts?.[s] !== undefined ? ` (${formatNumber(counts[s] ?? 0)})` : ""}
             </option>
           ))}
-        </select>
-        <select aria-label="All categories" className={SELECT} defaultValue="">
-          <option value="">All categories</option>
-          <option value="apparel">Apparel</option>
-          <option value="home">Home & kitchen</option>
-          <option value="footwear">Footwear</option>
-          <option value="leather">Leather goods</option>
-          <option value="decor">Décor</option>
-        </select>
-        <select aria-label="Payment terms" className={SELECT} defaultValue="">
-          <option value="">Payment terms</option>
-          <option value="net30">Net 30</option>
-          <option value="net15">Net 15</option>
-          <option value="advance">Advance</option>
         </select>
         <select aria-label="Sort suppliers" className={SELECT} value={sort} onChange={(e) => onSort(e.target.value as SupplierSort)}>
           {SUPPLIER_SORT_OPTIONS.map((o) => (
@@ -147,26 +107,10 @@ export function SupplierTable({ rows, refreshing, activeId, onOpen }: SupplierTa
           </thead>
           <tbody className="divide-y divide-border">
             {rows.map((s) => {
-              let nextAction = "View supplier >";
-              let statusSub = "Details complete";
-              if (s.status === "inactive" || s.name === "Terra Home") {
-                nextAction = "Complete setup >";
-                statusSub = "Terms missing";
-              } else if (s.name === "Craft Leather") {
-                nextAction = "Follow up >";
-                statusSub = "PO-1043 · 2 days late";
-              }
-
-              let paymentSub = "Bank transfer";
-              if (s.name === "Terra Home" || !s.paymentTerms) {
-                paymentSub = "Review required";
-              }
-
-              let ordersSub = "240 units to approve";
-              if (s.name === "Homeware Co.") ordersSub = "Partial receipt";
-              else if (s.name === "Stride Supply") ordersSub = "180 units confirmed";
-              else if (s.name === "Craft Leather") ordersSub = "60 units overdue";
-              else if (s.name === "Terra Home") ordersSub = "Draft only";
+              const needsSetup = s.status === "active" && (!s.email || s.activeSkusCount === 0);
+              const nextAction = needsSetup ? "Complete setup >" : "View supplier >";
+              const statusSub = needsSetup ? (s.activeSkusCount === 0 ? "No products listed" : "No contact email") : s.status === "active" ? "Ready to order" : "";
+              const ordersSub = `${formatNumber(s.activeSkusCount)} ${s.activeSkusCount === 1 ? "product" : "products"} listed`;
 
               const categoryLocation = s.location ?? (s.city ? `${s.city}, ${s.state ?? ""}` : s.code);
 
@@ -198,10 +142,10 @@ export function SupplierTable({ rows, refreshing, activeId, onOpen }: SupplierTa
                     {s.email && <div className="text-[11px] text-muted-foreground">{s.email}</div>}
                   </td>
                   <td className="px-4 py-3.5">
-                    <div className={cn("font-medium", !s.paymentTerms || s.name === "Terra Home" ? "text-amber-600 dark:text-amber-400" : "text-foreground")}>
+                    <div className={cn("font-medium", !s.paymentTerms ? "text-amber-600 dark:text-amber-400" : "text-foreground")}>
                       {s.paymentTerms ?? "Not set"}
                     </div>
-                    <div className="text-[11px] text-muted-foreground">{paymentSub}</div>
+                    {!s.paymentTerms && <div className="text-[11px] text-muted-foreground">Review required</div>}
                   </td>
                   <td className="px-4 py-3.5 text-center font-medium text-foreground">
                     {s.leadTimeDays > 0 ? `${s.leadTimeDays} days` : "Not set"}
@@ -209,7 +153,7 @@ export function SupplierTable({ rows, refreshing, activeId, onOpen }: SupplierTa
                   </td>
                   <td className="px-4 py-3.5">
                     <div className="font-medium text-foreground">{formatNumber(s.openPurchaseOrders)} open</div>
-                    <div className={cn("text-[11px]", s.name === "Craft Leather" ? "font-medium text-rose-600 dark:text-rose-400" : "text-muted-foreground")}>
+                    <div className="text-[11px] text-muted-foreground">
                       {ordersSub}
                     </div>
                   </td>
@@ -217,7 +161,7 @@ export function SupplierTable({ rows, refreshing, activeId, onOpen }: SupplierTa
                     <div>
                       <SupplierStatusPill status={s.status} />
                     </div>
-                    <div className={cn("mt-0.5 text-[10px]", s.name === "Craft Leather" ? "font-medium text-rose-600 dark:text-rose-400" : "text-muted-foreground")}>
+                    <div className={cn("mt-0.5 text-[10px]", needsSetup ? "font-medium text-amber-600 dark:text-amber-400" : "text-muted-foreground")}>
                       {statusSub}
                     </div>
                     {/* Render scorecards / ratings or dashes to satisfy tests */}
@@ -239,8 +183,7 @@ export function SupplierTable({ rows, refreshing, activeId, onOpen }: SupplierTa
         </table>
       </div>
       <div className="flex items-center justify-between border-t border-border bg-muted/20 px-4 py-2.5 text-[11px] text-muted-foreground">
-        <span>Showing {rows.length} of {rows.length} suppliers</span>
-        <span>Contacts, locations, terms and lead times are illustrative.</span>
+        <span>Showing {rows.length} {rows.length === 1 ? "supplier" : "suppliers"}</span>
       </div>
     </div>
   );

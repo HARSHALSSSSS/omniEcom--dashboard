@@ -9,9 +9,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { errorMessage, isApiError } from "@/api/errors";
 import { toast } from "@/hooks/useToast";
 import { useActiveSuppliers, useCreatePurchaseOrder, useProcurementWarehouses, usePurchaseOrder, useUpdatePurchaseOrder } from "@/hooks/useProcurement";
-import { formatCurrency, formatNumber } from "@/utils/format";
+import { formatCurrency, formatInZone, formatNumber } from "@/utils/format";
 import type { PoWrite, PurchaseOrder, VariantOffer } from "@/types/procurement";
-import { dayOf, dayToIso, gstLabel, minorToInput, parseMinor, parseQty, previewTotals } from "./procurementFormat";
+import { dateOrDash, dayOf, dayToIso, gstLabel, minorToInput, parseMinor, parseQty, previewTotals } from "./procurementFormat";
 import { Field, FIELD_SELECT, InlineError } from "./procurementUi";
 import { fieldError } from "./procurementErrors";
 import { PoLinePicker } from "./PoLinePicker";
@@ -366,11 +366,10 @@ function PoForm({ order, presetSupplierId, refetch, onDirty, onCancel, onSaved }
         <div className="flex flex-wrap items-center justify-between gap-4 pt-2 text-xs">
           <div>
             <span className="text-muted-foreground">Purchase order </span>
-            <span className="font-mono font-semibold text-foreground">{order ? order.poNumber : "PO-1049"}</span>
-            <span className="text-muted-foreground"> · Auto-generated</span>
+            <span className="font-mono font-semibold text-foreground">{order ? order.poNumber : "Assigned on save"}</span>
           </div>
           <div className="flex items-center gap-4 text-muted-foreground">
-            <div>Order date: <span className="font-medium text-foreground">08 Oct 2026</span></div>
+            <div>Order date: <span className="font-medium text-foreground">{order ? dateOrDash(order.orderDate) : formatInZone(new Date().toISOString(), { day: "2-digit", month: "short", year: "numeric" })}</span></div>
             <div>Currency: <span className="font-medium text-foreground">INR (₹)</span></div>
           </div>
         </div>
@@ -529,9 +528,7 @@ function PoForm({ order, presetSupplierId, refetch, onDirty, onCancel, onSaved }
               placeholder="Please confirm availability and delivery date before dispatch. Include the PO number on your invoice."
               className="text-xs"
             />
-            <span className="text-[11px] text-muted-foreground">
-              Illustrative data. Verify pricing, GST and supplier commitments before approval.
-            </span>
+            <span className="text-[11px] text-muted-foreground">Verify pricing, GST and supplier commitments before approval.</span>
           </Field>
         </div>
 

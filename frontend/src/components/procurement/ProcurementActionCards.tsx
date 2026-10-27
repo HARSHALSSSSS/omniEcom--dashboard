@@ -1,156 +1,145 @@
-import { AlertCircle, CheckCircle2, Clock, Truck } from "lucide-react";
+import { AlertCircle, CheckCircle2, Clock, Truck, type LucideIcon } from "lucide-react";
+import { formatCurrency, formatNumber } from "@/utils/format";
 import type { PurchaseOrderSummary, Supplier } from "@/types/procurement";
+import { dateOrDash } from "./procurementFormat";
+
+interface Card {
+  title: string;
+  icon: LucideIcon;
+  /** what it is about: a purchase order and its supplier, or a supplier */
+  subject: string | null;
+  description: string;
+  actionLabel: string;
+  /** null when there is nothing to act on: the card then says so */
+  onAction: (() => void) | null;
+}
+
+const daysLate = (expectedAt: string | null): number | null => (expectedAt ? Math.max(0, Math.floor((Date.now() - new Date(expectedAt).getTime()) / 86_400_000)) : null);
+
+function Cards({ heading, hint, cards }: { heading: string; hint: string; cards: Card[] }) {
+  return (
+    <div className="space-y-3 pt-4">
+      <div className="flex flex-wrap items-center justify-between">
+        <h3 className="text-xs font-semibold text-foreground">{heading}</h3>
+        <span className="text-[11px] text-muted-foreground">{hint}</span>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
+        {cards.map((c) => {
+          const Icon = c.icon;
+          return (
+            <div key={c.title} className="flex flex-col justify-between rounded-xl border border-border/80 bg-card p-4 shadow-2xs">
+              <div className="space-y-2">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                  <Icon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+                  <span>{c.title}</span>
+                </div>
+                {c.subject && <div className="text-xs font-medium text-foreground">{c.subject}</div>}
+                <p className="text-[11px] leading-relaxed text-muted-foreground">{c.description}</p>
+              </div>
+              {c.onAction && (
+                <div className="pt-3">
+                  <button type="button" onClick={c.onAction} className="inline-flex items-center text-xs font-semibold text-foreground hover:underline">
+                    {c.actionLabel}
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 interface KeepOrdersMovingProps {
   orders?: PurchaseOrderSummary[];
   onOpenOrder?: (id: string) => void;
 }
 
+/** the next step for the orders on screen: a draft to approve, a late delivery to chase, a partial receipt to finish; a card with nothing to do says so */
 export function KeepOrdersMoving({ orders = [], onOpenOrder }: KeepOrdersMovingProps) {
-  const cards = [
+  const draft = orders.find((o) => o.status === "draft");
+  const late = orders.find((o) => o.isLate);
+  const partial = orders.find((o) => o.status === "partially_received");
+  const open = (o: PurchaseOrderSummary | undefined) => (o && onOpenOrder ? () => onOpenOrder(o.id) : null);
+
+  const cards: Card[] = [
     {
       title: "Approval check",
       icon: CheckCircle2,
-      poNumber: "PO-1048",
-      supplier: "Urban Textiles",
-      description: "Review 3 SKUs, 240 units and ₹72,000. Confirm pricing and the 18 Oct commitment before approval.",
+      subject: draft ? `${draft.poNumber} · ${draft.supplierName}` : null,
+      description: draft
+        ? `Review ${formatNumber(draft.itemsCount)} line${draft.itemsCount === 1 ? "" : "s"}, ${formatNumber(draft.unitsOrdered)} units and ${formatCurrency(draft.totalMinor, draft.currency)}. Confirm the pricing${draft.expectedAt ? ` and the ${dateOrDash(draft.expectedAt)} delivery date` : ""} before approval.`
+        : "No draft purchase order is waiting for approval.",
       actionLabel: "Review & approve →",
-      orderId: orders.find((o) => o.status === "draft")?.id ?? orders[0]?.id,
+      onAction: open(draft),
     },
     {
       title: "Delivery follow-up",
       icon: AlertCircle,
-      poNumber: "PO-1043",
-      supplier: "Craft Leather",
-      description: "Expected 06 Oct; now 2 days overdue. Contact the supplier and confirm a revised delivery date.",
+      subject: late ? `${late.poNumber} · ${late.supplierName}` : null,
+      description: late
+        ? `Expected ${dateOrDash(late.expectedAt)}${daysLate(late.expectedAt) ? `, ${daysLate(late.expectedAt)} day${daysLate(late.expectedAt) === 1 ? "" : "s"} ago` : ""}. Contact the supplier and confirm a revised delivery date.`
+        : "No delivery is overdue.",
       actionLabel: "Follow up →",
-      orderId: orders.find((o) => o.isLate)?.id ?? orders[1]?.id,
+      onAction: open(late),
     },
     {
       title: "Receipt reconciliation",
       icon: Truck,
-      poNumber: "PO-1041",
-      supplier: "Homeware Co.",
-      description: "This order is partially received. Record delivered quantities against the PO and check any outstanding balance.",
+      subject: partial ? `${partial.poNumber} · ${partial.supplierName}` : null,
+      description: partial
+        ? `${formatNumber(partial.unitsOutstanding)} of ${formatNumber(partial.unitsOrdered)} units are still outstanding. Record what arrived against the order.`
+        : "No order is partially received.",
       actionLabel: "Record receipt →",
-      orderId: orders.find((o) => o.status === "partially_received")?.id ?? orders[2]?.id,
+      onAction: open(partial),
     },
   ];
 
-  return (
-    <div className="space-y-3 pt-4">
-      <div className="flex flex-wrap items-center justify-between">
-        <h3 className="text-xs font-semibold text-foreground">Keep orders moving</h3>
-        <span className="text-[11px] text-muted-foreground">Next steps from the displayed orders</span>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
-        {cards.map((c, i) => {
-          const Icon = c.icon;
-          return (
-            <div key={i} className="flex flex-col justify-between rounded-xl border border-border/80 bg-card p-4 shadow-2xs">
-              <div className="space-y-2">
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
-                  <Icon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
-                  <span>{c.title}</span>
-                </div>
-                <div className="text-xs font-medium text-foreground">
-                  {c.poNumber} · <span className="text-muted-foreground">{c.supplier}</span>
-                </div>
-                <p className="text-[11px] leading-relaxed text-muted-foreground">
-                  {c.description}
-                </p>
-              </div>
-              <div className="pt-3">
-                <button
-                  type="button"
-                  onClick={() => c.orderId && onOpenOrder?.(c.orderId)}
-                  className="inline-flex items-center text-xs font-semibold text-foreground hover:underline"
-                >
-                  {c.actionLabel}
-                </button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      <div className="pt-2 text-[11px] text-muted-foreground">
-        ⓘ All procurement records, dates, quantities and statuses are illustrative, not synced or verified. Confirm supplier commitments, pricing and payment terms before approval; record receipts against delivered quantities. Your review and approval are required. No orders sent automatically.
-      </div>
-    </div>
-  );
+  return <Cards heading="Keep orders moving" hint="Next steps from the displayed orders" cards={cards} />;
 }
 
 interface KeepSupplyMovingProps {
   suppliers?: Supplier[];
+  orders?: PurchaseOrderSummary[];
   onOpenSupplier?: (id: string) => void;
   onOpenOrder?: (id: string) => void;
 }
 
-export function KeepSupplyMoving({ suppliers = [], onOpenSupplier }: KeepSupplyMovingProps) {
-  const cards = [
+/** the next step for the supplier network: a late delivery, a draft waiting on a supplier's commitment, a supplier that cannot be ordered from yet */
+export function KeepSupplyMoving({ suppliers = [], orders = [], onOpenSupplier, onOpenOrder }: KeepSupplyMovingProps) {
+  const late = orders.find((o) => o.isLate);
+  const draft = orders.find((o) => o.status === "draft");
+  const incomplete = suppliers.find((s) => s.status === "active" && (!s.email || s.activeSkusCount === 0));
+
+  const cards: Card[] = [
     {
       title: "Delivery follow-up",
       icon: AlertCircle,
-      supplierLabel: "Craft Leather · PO-1043",
-      description: "60 units expected on 06 Oct are now 2 days overdue. Contact the supplier and confirm a revised delivery date.",
+      subject: late ? `${late.supplierName} · ${late.poNumber}` : null,
+      description: late ? `${formatNumber(late.unitsOutstanding)} units expected on ${dateOrDash(late.expectedAt)} have not arrived. Contact the supplier and confirm a revised date.` : "No supplier delivery is overdue.",
       actionLabel: "Follow up →",
-      supplierId: suppliers[0]?.id,
+      onAction: late && onOpenOrder ? () => onOpenOrder(late.id) : null,
     },
     {
       title: "Confirm supplier commitment",
       icon: CheckCircle2,
-      supplierLabel: "Urban Textiles · PO-1048",
-      description: "Review 3 SKUs, 240 units and ₹72,000. Confirm pricing and the 18 Oct commitment before approving the order.",
+      subject: draft ? `${draft.supplierName} · ${draft.poNumber}` : null,
+      description: draft ? `Review ${formatNumber(draft.unitsOrdered)} units and ${formatCurrency(draft.totalMinor, draft.currency)} and confirm pricing with the supplier before approving.` : "No draft purchase order is waiting on a supplier.",
       actionLabel: "Review purchase order →",
-      supplierId: suppliers[1]?.id ?? suppliers[0]?.id,
+      onAction: draft && onOpenOrder ? () => onOpenOrder(draft.id) : null,
     },
     {
       title: "Complete supplier setup",
       icon: Clock,
-      supplierLabel: "Terra Home · Illustrative supplier",
-      description: "Confirm the primary contact, agree payment terms and record lead time before approving the draft purchase order.",
+      subject: incomplete ? incomplete.name : null,
+      description: incomplete
+        ? `${!incomplete.email ? "Add a contact email" : "Add the products this supplier sells"} so purchase orders and reorder suggestions can use it.`
+        : "Every active supplier has a contact email and a product list.",
       actionLabel: "Complete setup →",
-      supplierId: suppliers[2]?.id ?? suppliers[0]?.id,
+      onAction: incomplete && onOpenSupplier ? () => onOpenSupplier(incomplete.id) : null,
     },
   ];
 
-  return (
-    <div className="space-y-3 pt-4">
-      <div className="flex flex-wrap items-center justify-between">
-        <h3 className="text-xs font-semibold text-foreground">Keep supply moving</h3>
-        <span className="text-[11px] text-muted-foreground">Next steps from your supplier network</span>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
-        {cards.map((c, i) => {
-          const Icon = c.icon;
-          return (
-            <div key={i} className="flex flex-col justify-between rounded-xl border border-border/80 bg-card p-4 shadow-2xs">
-              <div className="space-y-2">
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
-                  <Icon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
-                  <span>{c.title}</span>
-                </div>
-                <div className="text-xs font-medium text-foreground">{c.supplierLabel}</div>
-                <p className="text-[11px] leading-relaxed text-muted-foreground">
-                  {c.description}
-                </p>
-              </div>
-              <div className="pt-3">
-                <button
-                  type="button"
-                  onClick={() => c.supplierId && onOpenSupplier?.(c.supplierId)}
-                  className="inline-flex items-center text-xs font-semibold text-foreground hover:underline"
-                >
-                  {c.actionLabel}
-                </button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      <div className="pt-2 text-[11px] text-muted-foreground">
-        ⓘ All supplier records, contacts, terms, lead times and statuses are illustrative, not synced or verified. Terra Home is a conceptual supplier. Confirm supplier details, pricing and payment terms before approval. Your review and approval are required. No orders sent automatically.
-      </div>
-    </div>
-  );
+  return <Cards heading="Keep supply moving" hint="Next steps from your supplier network" cards={cards} />;
 }

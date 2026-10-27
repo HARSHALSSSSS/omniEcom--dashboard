@@ -108,6 +108,7 @@ function useAfterStockWrite() {
     void qc.invalidateQueries({ queryKey: ["attention"] });
     void qc.invalidateQueries({ queryKey: ["needs-attention"] });
     void qc.invalidateQueries({ queryKey: ["recommendations"] });
+    void qc.invalidateQueries({ queryKey: ["notifications"] });
     refreshShell().catch(() => undefined);
   };
 }
