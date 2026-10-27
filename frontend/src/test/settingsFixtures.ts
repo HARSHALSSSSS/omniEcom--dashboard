@@ -50,7 +50,7 @@ export const settings = (over: Partial<SettingsOverview> = {}): SettingsOverview
   operations: { autoAcknowledgeOrders: false, roundPriceToNine: false, defaultInventoryBufferPercent: 10, defaultFulfillmentMethod: "seller", defaultWarehouseId: null, lowStockThreshold: 5, effectiveWarehouseId: WAREHOUSE_A },
   alerts: { dispatchSlaBreach: { enabled: true, thresholdMinutes: 45 }, criticalStockouts: true, tokenRenewals: true, syncFailures: true, returns: true },
   preferences: { defaultRoute: "/", language: "en-IN", pageSize: 25, catalogView: "all_active", reportingPeriod: "30d", telemetrySeconds: 30, showThumbnails: true, guardrails: { bulkConfirm: true, stockAllocationConfirm: true, zeroStockDelistWarning: true } },
-  catalog: { requireHsn: false, skuPrefix: "", skuTemplate: "[BRAND]-[CAT3]-[SEQ6]", skuSeparator: "-", skuCasing: "uppercase", strictEan: false, gates: { hsnCode: false, countryOfOrigin: false, gstRateSlab: false }, syncSovereignty: "master_catalog" },
+  catalog: { requireHsn: false, skuPrefix: "", skuTemplate: "[BRAND]-[CAT3]-[SEQ6]", skuTemplateSet: false, skuSeparator: "-", skuCasing: "uppercase", strictEan: false, gates: { hsnCode: false, countryOfOrigin: false, gstRateSlab: false }, syncSovereignty: "master_catalog" },
   inventory: { mode: "simple", startingMethod: null, defaultLeadTimeDays: 7, minSafetyStockUnits: 0, spikeProtectionUnitsPerHour: 200, negativeStockTwoStepApproval: false },
   pricing: { marginFloorBps: null, maxVelocityShiftBps: 1500, priceEnding: "exact", legalMetrologyMrpGate: true, withholdBufferBps: 0, autoDelistOnBreach: false, mandate2faBulkMarkdown: false, channelTiers: {} },
   channels: [

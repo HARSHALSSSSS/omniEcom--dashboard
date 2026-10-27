@@ -301,6 +301,18 @@ describe("VariantsPage: add and edit", () => {
     expect(await within(dialog).findByText("Invalid barcode")).toBeInTheDocument();
   });
 
+  it("shows the business SKU rule under the SKU input", async () => {
+    const user = userEvent.setup();
+    api.create.mockRejectedValue(new ApiError({ code: "VALIDATION_FAILED", message: "Invalid", status: 400, details: { issues: [{ path: "sku", message: "The SKU must follow your SKU formula [BRAND]-[CAT3]-[SEQ6]." }] } }));
+    renderPage();
+    await screen.findByText("TRV-1042-B-C");
+    await user.click(screen.getByRole("button", { name: "Add variant" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.type(within(dialog).getByLabelText("SKU"), "TRV-NEW");
+    await user.click(within(dialog).getByRole("button", { name: "Add variant" }));
+    expect(await within(dialog).findByText(/must follow your SKU formula/)).toBeInTheDocument();
+  });
+
   it("edits with only the changed fields and the version, then the lead time through its own call", async () => {
     const user = userEvent.setup();
     api.update.mockResolvedValue(detail({ version: 4 }));

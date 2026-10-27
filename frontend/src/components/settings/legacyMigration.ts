@@ -20,8 +20,6 @@ const clean = <T extends Raw>(o: T): T => Object.fromEntries(Object.entries(o).f
 /** the server still holds only defaults for these groups, so the old browser values may move over without overwriting anyone's choice */
 const prefsAreDefault = (s: SettingsOverview) =>
   JSON.stringify({ ...s.preferences, guardrails: undefined }) === JSON.stringify({ ...PREFERENCE_DEFAULTS, guardrails: undefined }) && Object.values(s.preferences.guardrails).every(Boolean);
-const catalogIsDefault = (s: SettingsOverview) =>
-  s.catalog.skuTemplate === "[BRAND]-[CAT3]-[SEQ6]" && s.catalog.skuSeparator === "-" && s.catalog.skuCasing === "uppercase" && !s.catalog.strictEan && !Object.values(s.catalog.gates).some(Boolean) && s.catalog.syncSovereignty === "master_catalog";
 const inventoryIsDefault = (s: SettingsOverview) => s.inventory.minSafetyStockUnits === 0 && s.inventory.spikeProtectionUnitsPerHour === 200 && !s.inventory.negativeStockTwoStepApproval;
 const pricingIsDefault = (s: SettingsOverview) =>
   s.pricing.marginFloorBps === null && s.pricing.maxVelocityShiftBps === 1500 && s.pricing.withholdBufferBps === 0 && s.pricing.legalMetrologyMrpGate && s.pricing.priceEnding === (s.operations.roundPriceToNine ? "nine" : "exact") && Object.keys(s.pricing.channelTiers).length === 0;
@@ -47,20 +45,8 @@ export function legacyPatch(raw: Partial<Record<(typeof LEGACY_KEYS)[number], un
     if (Object.keys(prefs).length) patch.preferences = prefs;
   }
 
-  const gates = obj(raw.omni_listing_gates);
-  if (Object.keys(gates).length && catalogIsDefault(s)) {
-    const mg = obj(gates.mandatoryGates);
-    const template = typeof gates.skuSyntaxTemplate === "string" && gates.skuSyntaxTemplate.trim().length > 0 && gates.skuSyntaxTemplate.length <= 60 ? gates.skuSyntaxTemplate.trim() : undefined;
-    const catalog = clean({
-      skuTemplate: template,
-      skuSeparator: pick(["-", "_", "/"] as const, gates.skuSeparator),
-      skuCasing: pick(["uppercase", "lowercase", "as_is"] as const, gates.skuCasing),
-      strictEan: bool(gates.strictEanValidation),
-      gates: clean({ hsnCode: bool(mg.hsnCode), countryOfOrigin: bool(mg.countryOfOrigin), gstRateSlab: bool(mg.gstRateSlab) }),
-      syncSovereignty: pick(["master_catalog", "channel_autonomous"] as const, gates.syncSovereignty),
-    });
-    if (Object.keys(catalog).length) patch.catalog = catalog;
-  }
+  // omni_listing_gates (SKU formula, EAN switch, gates) is deliberately NOT moved: the old screen saved its on-by-default values with any Save,
+  // and these settings are enforced now, so carrying them over would switch rules on that nobody chose.
 
   const buf = obj(raw.omni_channel_buffers);
   if (Object.keys(buf).length && inventoryIsDefault(s)) {

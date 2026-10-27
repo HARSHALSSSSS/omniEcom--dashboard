@@ -290,6 +290,8 @@ export interface CatalogSettings {
   requireHsn: boolean;
   skuPrefix: string;
   skuTemplate: string;
+  /** true once a formula was saved: only then is it enforced */
+  skuTemplateSet: boolean;
   skuSeparator: "-" | "_" | "/";
   skuCasing: "uppercase" | "lowercase" | "as_is";
   strictEan: boolean;

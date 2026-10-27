@@ -33,7 +33,7 @@ export function skuPreview(template: string, separator: string, casing: "upperca
   return casing === "uppercase" ? out.toUpperCase() : casing === "lowercase" ? out.toLowerCase() : out;
 }
 
-const STORED_NOTE = "Saved with your workspace. Product creation and publishing do not enforce this yet.";
+const GATE_NOTE = "A gate that is switched on blocks publishing a listing whose product lacks that attribute. Gates that are off change nothing, and nothing is switched on until you save it.";
 
 export function InventoryListingsTab({ canWrite = true, s, v, ctl }: InventoryListingsTabProps) {
   const shell = useWorkspaceStore((st) => st.shell);
@@ -132,10 +132,15 @@ export function InventoryListingsTab({ canWrite = true, s, v, ctl }: InventoryLi
             <p className="text-[11px] text-muted-foreground">
               Example from this formula: <span className="font-mono font-bold text-primary">{preview}</span>
             </p>
+            <p className="text-[11px] text-muted-foreground" data-testid="sku-enforcement">
+              {s.catalog.skuTemplateSet
+                ? "Enforced: a new or changed SKU must follow this formula. Existing SKUs are left alone, and imports only get a warning."
+                : "Not enforced yet: a formula is enforced only after you save one. Until then any SKU is accepted."}
+            </p>
           </div>
 
           <div className="space-y-4">
-            <Field id="settings-barcode-gate" label="Barcode & EAN Strictness" hint="Reject a product without a valid GTIN/EAN. Saved for later enforcement.">
+            <Field id="settings-barcode-gate" label="Barcode & EAN Strictness" hint="When on, a new or changed barcode must be a valid EAN / UPC (correct check digit). Existing barcodes are left alone, and imports only get a warning.">
               <div className="flex items-center justify-between rounded-lg border border-border/70 p-3">
                 <div className="flex items-center gap-2">
                   <Barcode className="h-4 w-4 text-muted-foreground" />
@@ -155,7 +160,7 @@ export function InventoryListingsTab({ canWrite = true, s, v, ctl }: InventoryLi
 
         <div className="mt-5 rounded-lg border border-border/80 bg-muted/20 p-4">
           <p className="text-xs font-semibold text-foreground">Mandatory Listing Compliance Gates</p>
-          <p className="mb-3 text-[11px] text-muted-foreground">Attributes a product must have before it is published. {STORED_NOTE}</p>
+          <p className="mb-3 text-[11px] text-muted-foreground">Attributes a product must have before it is published. {GATE_NOTE}</p>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             {[
               { key: "hsnCode" as const, title: "HSN Code (6-8 Digits)", text: "Statutory GST tariff classification" },
@@ -311,7 +316,7 @@ export function InventoryListingsTab({ canWrite = true, s, v, ctl }: InventoryLi
           )}
         </SectionCard>
 
-        <SectionCard title="Operational Guardrails & Anomaly Locks" description={`Protect stock against rogue bulk updates and sudden order spikes. ${STORED_NOTE}`}>
+        <SectionCard title="Operational Guardrails & Anomaly Locks" description={`Protect stock against rogue bulk updates and sudden order spikes. Saved with your workspace; these two are stored preferences that nothing enforces yet.`}>
           <div className="space-y-4">
             <div className="flex items-center justify-between rounded-lg border border-border/70 p-3">
               <div>

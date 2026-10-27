@@ -140,6 +140,9 @@ describe("Products & Listings tab", () => {
     expect(body.inventory).toMatchObject({ minSafetyStockUnits: 15 });
     expect(body.catalog).toMatchObject({ strictEan: true });
     expect(body.catalog.requireHsn).toBeUndefined();
+    // the untouched default SKU formula is never sent: a saved formula would be enforced
+    expect(body.catalog.skuTemplate).toBeUndefined();
+    expect(await screen.findByTestId("sku-enforcement")).toHaveTextContent("Not enforced yet");
   });
 
   it("without warehouses or channels it says so instead of showing examples", async () => {

@@ -340,7 +340,21 @@ export function buildPatch(s: SettingsOverview, base: SettingsForm, cur: Setting
   if (Object.keys(alerts).length) patch.alerts = alerts;
 
   if (has("ext:preferences") && !problems["ext:preferences"]) patch.preferences = cur.ext.preferences;
-  if (has("ext:catalog") && !problems["ext:catalog"]) patch.catalog = { ...cur.ext.catalog, skuTemplate: cur.ext.catalog.skuTemplate.trim() };
+  if (has("ext:catalog") && !problems["ext:catalog"]) {
+    // only what changed travels: sending the untouched SKU formula would count as saving one, and a saved formula is enforced
+    const b = base.ext.catalog;
+    const c = cur.ext.catalog;
+    const catalog: NonNullable<SettingsPatch["catalog"]> = {};
+    if (c.skuTemplate.trim() !== b.skuTemplate) catalog.skuTemplate = c.skuTemplate.trim();
+    if (c.skuSeparator !== b.skuSeparator) catalog.skuSeparator = c.skuSeparator;
+    if (c.skuCasing !== b.skuCasing) catalog.skuCasing = c.skuCasing;
+    if (c.strictEan !== b.strictEan) catalog.strictEan = c.strictEan;
+    if (c.syncSovereignty !== b.syncSovereignty) catalog.syncSovereignty = c.syncSovereignty;
+    const gates: Partial<typeof c.gates> = {};
+    for (const k of ["hsnCode", "countryOfOrigin", "gstRateSlab"] as const) if (c.gates[k] !== b.gates[k]) gates[k] = c.gates[k];
+    if (Object.keys(gates).length) catalog.gates = gates;
+    if (Object.keys(catalog).length) patch.catalog = catalog;
+  }
   if (has("ext:inventory") && !problems["ext:inventory"]) patch.inventory = cur.ext.inventory;
   if (has("ext:pricing") && !problems["ext:pricing"]) {
     const { channelTiers, ...rest } = cur.ext.pricing;
