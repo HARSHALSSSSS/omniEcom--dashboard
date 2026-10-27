@@ -9,7 +9,7 @@ import type {
   WorkspaceFulfillment,
 } from "@/types/fulfillment";
 
-export const counts = (over: Partial<QueueCounts> = {}): QueueCounts => ({ awaiting_pick: 3, picking: 2, packing: 1, ready_to_ship: 4, all: 10, onHold: 0, exceptions: 2, ...over });
+export const counts = (over: Partial<QueueCounts> = {}): QueueCounts => ({ awaiting_pick: 3, picking: 2, packing: 1, ready_to_ship: 4, all: 10, onHold: 0, exceptions: 2, packed: 1, dispatchedToday: 3, ...over });
 
 export function row(over: Partial<QueueRow> = {}): QueueRow {
   return {
@@ -88,7 +88,7 @@ export function workspace(over: Partial<Workspace> = {}, focus: Partial<Workspac
     fulfillment: {
       ...base,
       id: "f1",
-      items: [{ id: "i1", sku: "TRV-1042", title: "Travel mug", barcode: null, quantity: 2, pickedQuantity: 0, packedQuantity: 0, shortQuantity: 0, pickState: "pending", bin: "A-04-02", scanned: false }],
+      items: [{ id: "i1", sku: "TRV-1042", title: "Travel mug", barcode: null, quantity: 2, pickedQuantity: 0, packedQuantity: 0, shortQuantity: 0, pickState: "pending", bin: "A-04-02", scanned: false, pickTaskId: "t1" }],
       packages: [],
       shipment: null,
       exceptions: [],

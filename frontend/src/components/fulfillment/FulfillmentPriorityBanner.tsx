@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 interface PriorityOrderSummary {
   orderNumber: string;
   marketplace: string;
-  minutesRemaining: number;
+  minutesRemaining: number | null;
   subtext: string;
   orderId?: string;
 }
@@ -15,29 +15,14 @@ interface FulfillmentPriorityBannerProps {
   onWorkOnPriority?: () => void;
 }
 
-const DEFAULT_PRIORITY_ORDERS: PriorityOrderSummary[] = [
-  {
-    orderNumber: "ORD-10291",
-    marketplace: "Amazon",
-    minutesRemaining: 42,
-    subtext: "Picking in progress · 1 item left",
-    orderId: "ORD-10291",
-  },
-  {
-    orderNumber: "ORD-10287",
-    marketplace: "Flipkart",
-    minutesRemaining: 58,
-    subtext: "2 items awaiting verification",
-    orderId: "ORD-10287",
-  },
-];
-
 export function FulfillmentPriorityBanner({
   orders,
   onOpenOrder,
   onWorkOnPriority,
 }: FulfillmentPriorityBannerProps) {
-  const displayOrders = orders ?? DEFAULT_PRIORITY_ORDERS;
+  // nothing is shown until the queue has loaded: no invented orders
+  if (!orders) return null;
+  const displayOrders = orders;
   const breachCount = displayOrders.length;
 
   return (
@@ -48,8 +33,8 @@ export function FulfillmentPriorityBanner({
           <span className="text-xs font-bold text-foreground">Fulfillment Priority</span>
           <span className="text-xs text-muted-foreground">
             {breachCount > 0
-              ? `${breachCount} ${breachCount === 1 ? "order" : "orders"} may breach dispatch SLA within 90 minutes.`
-              : "All active orders are currently meeting dispatch SLAs."}
+              ? `${breachCount} ${breachCount === 1 ? "order" : "orders"} at or near the dispatch SLA, or marked high priority.`
+              : "No order is near its dispatch SLA right now."}
           </span>
         </div>
 
@@ -79,7 +64,7 @@ export function FulfillmentPriorityBanner({
                     {item.orderNumber}
                   </span>
                   <span className="font-semibold text-amber-700 dark:text-amber-400">
-                    {item.minutesRemaining} min remaining
+                    {item.minutesRemaining === null ? "No deadline" : item.minutesRemaining < 0 ? `Overdue by ${-item.minutesRemaining} min` : `${item.minutesRemaining} min remaining`}
                   </span>
                 </div>
                 <div className="mt-0.5 text-[11px] text-muted-foreground">

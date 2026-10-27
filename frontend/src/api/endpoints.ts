@@ -244,6 +244,10 @@ export const ENDPOINTS = {
   FULFILLMENT_BATCH_HANDOVER: `${BASE}/fulfillment/batch-handover`,
   FULFILLMENT_EXCEPTION_RESOLVE: (id: string) => `${BASE}/fulfillment-exceptions/${id}/resolve`,
   PICK_LISTS: `${BASE}/pick-lists`,
+  PICK_LIST_ASSIGN: (id: string) => `${BASE}/pick-lists/${id}/assign`,
+  PICK_TASK_SCAN: (id: string) => `${BASE}/pick-tasks/${id}/scan`,
+  PICK_TASK_PICK: (id: string) => `${BASE}/pick-tasks/${id}/pick`,
+  FULFILLMENT_ACTIVITY: `${BASE}/fulfillment/activity`,
 
   // Shipping
   SHIPPING_SUMMARY: `${BASE}/shipping/summary`,

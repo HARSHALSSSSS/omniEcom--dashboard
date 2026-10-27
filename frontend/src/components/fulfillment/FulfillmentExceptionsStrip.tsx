@@ -11,18 +11,13 @@ interface FulfillmentExceptionsStripProps {
   onSelectException?: (type: string) => void;
 }
 
-const DEFAULT_EXCEPTIONS: ExceptionSummaryItem[] = [
-  { id: "inventory_issue", count: 2, label: "Inventory issue" },
-  { id: "quantity_mismatch", count: 3, label: "Quantity mismatch" },
-  { id: "shipping_unavailable", count: 1, label: "Shipping method unavailable" },
-  { id: "evidence_required", count: 2, label: "Evidence required" },
-];
-
 export function FulfillmentExceptionsStrip({
   categories,
   onSelectException,
 }: FulfillmentExceptionsStripProps) {
-  const displayItems = categories ?? DEFAULT_EXCEPTIONS;
+  // nothing is shown until the queue has loaded: no invented exceptions
+  if (!categories) return null;
+  const displayItems = categories;
 
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-3 text-xs shadow-2xs">

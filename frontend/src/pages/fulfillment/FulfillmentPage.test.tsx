@@ -13,6 +13,9 @@ const api = vi.hoisted(() => ({
   exceptions: vi.fn(),
   workspace: vi.fn(),
   act: vi.fn(),
+  activity: vi.fn(),
+  scanAndPick: vi.fn(),
+  assignPicker: vi.fn(),
   batchHandover: vi.fn(),
   createPickList: vi.fn(),
   resolveException: vi.fn(),
@@ -83,6 +86,7 @@ beforeEach(() => {
   api.queue.mockResolvedValue(queuePage([R1, R2], { total: 60, pages: 3 }));
   api.exceptions.mockResolvedValue(exceptionsPage([exception()]));
   api.workspace.mockResolvedValue(workspace());
+  api.activity.mockResolvedValue([]);
   api.warehouses.mockResolvedValue([{ id: "11111111-1111-4111-8111-111111111111", code: "MAIN", name: "Main warehouse" }]);
   api.carriers.mockResolvedValue([{ providerCode: "sandbox", name: "Sandbox Express" }]);
 });
@@ -244,11 +248,48 @@ describe("order workspace drawer", () => {
     expect(await screen.findByRole("heading", { name: "Order ORD-1001" })).toBeInTheDocument();
     expect(api.workspace).toHaveBeenCalledWith("o1", undefined, expect.anything());
     const dialog = screen.getByRole("dialog");
-    expect(within(dialog).getByText(/Bin A-04-02 · Qty 2/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/Bin A-04-02/)).toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: "Start picking" })).toBeEnabled();
     expect(within(dialog).getByRole("button", { name: "Pack" })).toBeDisabled();
     expect(within(dialog).getByText("Only picked items can be packed")).toBeInTheDocument();
     expect(within(dialog).getByText("Create the label first")).toBeInTheDocument();
+  });
+
+  it("scanning sends the code to the server for the line's pick task and refreshes the drawer", async () => {
+    api.scanAndPick.mockResolvedValue({});
+    renderPage("/fulfillment?drawer=order:o1");
+    await userEvent.click(await screen.findByRole("button", { name: "Scan barcode" }));
+    await userEvent.type(screen.getByPlaceholderText("Scan barcode..."), "TRV-1042");
+    await userEvent.click(screen.getByRole("button", { name: "Scan" }));
+    await waitFor(() => expect(api.scanAndPick).toHaveBeenCalledWith({ taskId: "t1", code: "TRV-1042" }));
+    await waitFor(() => expect(toasts().at(-1)).toMatchObject({ title: "Unit picked", variant: "success" }));
+    await waitFor(() => expect(api.workspace.mock.calls.length).toBeGreaterThan(1)); // refetched, not a client-side count
+  });
+
+  it("shows the server's refusal for a wrong item, and never says a unit was picked", async () => {
+    api.scanAndPick.mockRejectedValue(new ApiError({ code: "BAD_REQUEST", message: "Scanned code does not match TRV-1042", status: 400, details: { rule: "wrong_item" } }));
+    renderPage("/fulfillment?drawer=order:o1");
+    await userEvent.click(await screen.findByRole("button", { name: "Scan barcode" }));
+    await userEvent.type(screen.getByPlaceholderText("Scan barcode..."), "NOPE");
+    await userEvent.click(screen.getByRole("button", { name: "Scan" }));
+    expect(await screen.findAllByText(/does not match/)).not.toHaveLength(0);
+    expect(toasts().some((t) => t.title === "Unit picked")).toBe(false);
+    expect(toasts().at(-1)).toMatchObject({ title: "Scan refused", variant: "destructive" });
+  });
+
+  it("a viewer cannot scan", async () => {
+    grant("fulfillment:read");
+    renderPage("/fulfillment?drawer=order:o1");
+    expect(await screen.findByRole("button", { name: "Scan barcode" })).toBeDisabled();
+    expect(api.scanAndPick).not.toHaveBeenCalled();
+  });
+
+  it("the activity strip lists the real changes with their orders, and says so when there are none", async () => {
+    api.activity.mockResolvedValue([{ id: 1, fulfillmentId: "f1", fulfillmentNumber: "FUL-0001", orderId: "o1", orderNumber: "ORD-ACT-1", from: "picking", to: "picked", note: null, at: new Date(Date.now() - 5 * 60_000).toISOString(), actor: { id: "u1", name: "Staff One" } }]);
+    renderPage();
+    expect(await screen.findByText("ORD-ACT-1")).toBeInTheDocument();
+    expect(screen.getByText("5 min ago")).toBeInTheDocument();
+    expect(screen.queryByText("ORD-10288")).not.toBeInTheDocument();
   });
 
   it("runs start and replaces the workspace with the answer", async () => {

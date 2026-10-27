@@ -3,6 +3,7 @@ import { ENDPOINTS } from "./endpoints";
 import type {
   ActionInput,
   ActionResult,
+  ActivityEvent,
   BatchHandoverResponse,
   CarrierOption,
   ExceptionsPage,
@@ -52,6 +53,17 @@ export const fulfillmentApi = {
   /** a 200 with a result per order, even when some of them failed */
   batchHandover: async (carrier: string, orderIds: string[]) =>
     unwrap<BatchHandoverResponse>(await client.post(ENDPOINTS.FULFILLMENT_BATCH_HANDOVER, { carrier, orderIds })),
+
+  /** the latest status changes across the warehouse, with real timestamps */
+  activity: async (limit: number, signal?: AbortSignal) => unwrap<ActivityEvent[]>(await client.get(ENDPOINTS.FULFILLMENT_ACTIVITY, { params: { limit }, signal })),
+
+  /** verifies the code on the server (a wrong item is refused), then records one unit as picked */
+  scanAndPick: async (input: { taskId: string; code: string }) => {
+    await client.post(ENDPOINTS.PICK_TASK_SCAN(input.taskId), { itemBarcode: input.code });
+    return unwrap<unknown>(await client.post(ENDPOINTS.PICK_TASK_PICK(input.taskId), { quantity: 1, itemBarcode: input.code }));
+  },
+
+  assignPicker: async (pickListId: string, userId: string | null) => unwrap<unknown>(await client.post(ENDPOINTS.PICK_LIST_ASSIGN(pickListId), { userId })),
 
   createPickList: async (fulfillmentIds: string[]) => unwrap<PickListResult>(await client.post(ENDPOINTS.PICK_LISTS, { fulfillmentIds })),
 

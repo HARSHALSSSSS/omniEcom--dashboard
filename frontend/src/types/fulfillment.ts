@@ -73,6 +73,24 @@ export interface QueueCounts {
   all: number;
   onHold: number;
   exceptions: number;
+  /** packed and waiting for a carrier (a status inside ready_to_ship) */
+  packed: number;
+  /** handed to a carrier since midnight UTC */
+  dispatchedToday: number;
+}
+
+/** one status change of a fulfillment, as GET /fulfillment/activity lists them */
+export interface ActivityEvent {
+  id: number;
+  fulfillmentId: string;
+  fulfillmentNumber: string;
+  orderId: string;
+  orderNumber: string;
+  from: string | null;
+  to: string;
+  note: string | null;
+  at: string;
+  actor: { id: string; name: string | null } | null;
 }
 
 export interface Paged<T> {
@@ -117,6 +135,8 @@ export interface WorkspaceItem {
   pickState: PickState;
   bin: string | null;
   scanned: boolean | null;
+  /** the pick task of this line (null until picking has started): the target of a scan */
+  pickTaskId: string | null;
 }
 
 export interface WorkspaceException {

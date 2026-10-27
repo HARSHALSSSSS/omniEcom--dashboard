@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { errorMessage } from "@/api/errors";
 import { formatMoney } from "@/components/orders/orderFormat";
-import { useFulfillmentAction, useFulfillmentWorkspace } from "@/hooks/useFulfillment";
+import { useAssignPicker, useFulfillmentAction, useFulfillmentWorkspace, useScanPick } from "@/hooks/useFulfillment";
+import { useMembers } from "@/hooks/useSettings";
 import { toast } from "@/hooks/useToast";
 import { formatDateTime } from "@/utils/format";
 import { cn } from "@/utils/cn";
@@ -155,7 +156,8 @@ export function FulfillmentDrawer({ orderId, canWrite, onClose }: FulfillmentDra
   const [error, setError] = useState<string | null>(null);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scanInput, setScanInput] = useState("");
-  const [simulatedPicks, setSimulatedPicks] = useState<Record<string, number>>({});
+  const [assigning, setAssigning] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
 
   useEffect(() => {
     setFocusId(undefined);
@@ -163,11 +165,15 @@ export function FulfillmentDrawer({ orderId, canWrite, onClose }: FulfillmentDra
     setError(null);
     setScannerOpen(false);
     setScanInput("");
-    setSimulatedPicks({});
+    setAssigning(false);
+    setScanError(null);
   }, [orderId]);
 
   const query = useFulfillmentWorkspace(orderId, focusId);
   const act = useFulfillmentAction();
+  const scan = useScanPick();
+  const assign = useAssignPicker();
+  const members = useMembers("active", assigning && canWrite);
   const ws: Workspace | undefined = query.data;
   const f = ws?.fulfillment ?? null;
 
@@ -190,28 +196,42 @@ export function FulfillmentDrawer({ orderId, canWrite, onClose }: FulfillmentDra
 
   const reasonFor = (v: ActionView) => (!canWrite ? NO_WRITE_REASON : (v.disabledReason ?? undefined));
 
-  // Items from workspace fulfillment, with simulated scans if any
-  // Items from workspace fulfillment, with simulated scans if any
   const items = f?.items ?? [];
   const totalUnits = items.reduce((acc, i) => acc + i.quantity, 0);
-  const totalPicked = items.reduce((acc, i) => acc + (simulatedPicks[i.id] ?? i.pickedQuantity), 0);
+  const totalPicked = items.reduce((acc, i) => acc + i.pickedQuantity, 0);
   const remainingUnits = Math.max(0, totalUnits - totalPicked);
-  const unpickedItem = items.find((i) => (simulatedPicks[i.id] ?? i.pickedQuantity) < i.quantity);
+  const unpickedItem = items.find((i) => i.pickedQuantity + i.shortQuantity < i.quantity);
+  const pickAllView = ws?.actions.find((a) => a.action === "pick_all");
 
-  const handleSimulateScan = (itemId?: string) => {
-    const target = itemId || unpickedItem?.id;
-    if (target) {
-      setSimulatedPicks((prev) => ({
-        ...prev,
-        [target]: (prev[target] ?? items.find((x) => x.id === target)?.pickedQuantity ?? 0) + 1,
-      }));
-      toast({ title: "Barcode scanned", description: "1 unit verified and added to pick count.", variant: "success" });
-      setScannerOpen(false);
-      setScanInput("");
-    } else {
-      toast({ title: "Barcode scanned", description: "Unit verified.", variant: "success" });
-      setScannerOpen(false);
+  /** the scan goes to the server: it checks the code against the item, refuses a wrong item or an over-pick, and records the unit */
+  const handleScan = () => {
+    const code = scanInput.trim();
+    if (!code) return;
+    // the line the code belongs to; a code that matches none is still sent to the next open line so the server says what is wrong
+    const open = items.filter((i) => i.pickedQuantity + i.shortQuantity < i.quantity);
+    const match = open.find((i) => i.barcode?.toLowerCase() === code.toLowerCase() || i.sku.toLowerCase() === code.toLowerCase()) ?? open[0];
+    setScanError(null);
+    if (!match) {
+      setScanError("Every unit of this order is already picked.");
+      return;
     }
+    if (!match.pickTaskId) {
+      setScanError("Start picking first: the pick list is created by the Start action below.");
+      return;
+    }
+    scan.mutate(
+      { taskId: match.pickTaskId, code },
+      {
+        onSuccess: () => {
+          toast({ title: "Unit picked", description: `${match.title || match.sku}: 1 unit verified and recorded.`, variant: "success" });
+          setScanInput("");
+        },
+        onError: (e) => {
+          setScanError(actionErrorMessage(e));
+          toast({ title: "Scan refused", description: actionErrorMessage(e), variant: "destructive" });
+        },
+      },
+    );
   };
 
   return (
@@ -257,14 +277,52 @@ export function FulfillmentDrawer({ orderId, canWrite, onClose }: FulfillmentDra
           <span className="text-muted-foreground">
             Picker: <span className="font-semibold text-foreground">{f?.assignee?.name ?? "Unassigned"}</span>
           </span>
-          <button
-            type="button"
-            onClick={() => toast({ title: "Assign picker", description: "Picker assignment modal." })}
-            className="font-medium text-blue-600 hover:underline dark:text-blue-400"
-          >
-            Assign picker
-          </button>
+          {f?.pickList && canWrite && (
+            <button type="button" onClick={() => setAssigning((v) => !v)} className="font-medium text-blue-600 hover:underline dark:text-blue-400">
+              Assign picker
+            </button>
+          )}
         </div>
+        {assigning && f?.pickList && (
+          <div className="space-y-2 rounded-xl border border-border bg-muted/30 p-3">
+            <label htmlFor="assign-picker" className="block text-xs font-semibold text-foreground">
+              Picker for {f.pickList.number}
+            </label>
+            {members.isError ? (
+              <p role="alert" className="text-[11px] text-rose-700">
+                The team list could not be loaded. {errorMessage(members.error)}
+              </p>
+            ) : (
+              <select
+                id="assign-picker"
+                className={FIELD}
+                disabled={assign.isPending || members.isLoading}
+                defaultValue=""
+                onChange={(e) => {
+                  const userId = e.target.value || null;
+                  assign.mutate(
+                    { pickListId: f.pickList!.id, userId },
+                    {
+                      onSuccess: () => {
+                        toast({ title: userId ? "Picker assigned" : "Picker removed", description: f.pickList!.number, variant: "success" });
+                        setAssigning(false);
+                      },
+                      onError: (err) => toast({ title: "Could not assign the picker", description: actionErrorMessage(err), variant: "destructive" }),
+                    },
+                  );
+                }}
+              >
+                <option value="">Choose a team member</option>
+                {(members.data?.pages.flatMap((p) => p.items) ?? []).map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.fullName}
+                  </option>
+                ))}
+                <option value="">Unassign</option>
+              </select>
+            )}
+          </div>
+        )}
 
         {/* Pick list section */}
         <div className="space-y-3">
@@ -278,7 +336,7 @@ export function FulfillmentDrawer({ orderId, canWrite, onClose }: FulfillmentDra
           <div className="divide-y divide-border rounded-xl border border-border bg-card">
             {items.length > 0 ? (
               items.map((i) => {
-                const picked = simulatedPicks[i.id] ?? i.pickedQuantity;
+                const picked = i.pickedQuantity;
                 const isComplete = picked >= i.quantity;
                 return (
                   <div key={i.id} className="p-3.5 space-y-1.5">
@@ -300,7 +358,8 @@ export function FulfillmentDrawer({ orderId, canWrite, onClose }: FulfillmentDra
                       <span className={cn("font-semibold", picked > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600")}>
                         Picked {picked}
                       </span>
-                      <span>Location · Bin {i.bin || "B-14"} · Qty {i.quantity}</span>
+                      <span>{i.bin ? `Location · Bin ${i.bin}` : "No bin assigned"}</span>
+                      {i.shortQuantity > 0 && <span className="font-semibold text-rose-600">Short {i.shortQuantity}</span>}
                     </div>
                   </div>
                 );
@@ -361,14 +420,19 @@ export function FulfillmentDrawer({ orderId, canWrite, onClose }: FulfillmentDra
                 value={scanInput}
                 onChange={(e) => setScanInput(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") handleSimulateScan();
+                  if (e.key === "Enter") handleScan();
                 }}
                 className={FIELD}
               />
-              <Button size="sm" onClick={() => handleSimulateScan()} className="text-xs">
-                Scan
+              <Button size="sm" onClick={handleScan} disabled={!canWrite || scan.isPending || !scanInput.trim()} title={canWrite ? undefined : NO_WRITE_REASON} className="text-xs">
+                {scan.isPending ? "Checking..." : "Scan"}
               </Button>
             </div>
+            {scanError && (
+              <p role="alert" className="text-[11px] text-rose-700">
+                {scanError}
+              </p>
+            )}
           </div>
         )}
 
@@ -377,6 +441,8 @@ export function FulfillmentDrawer({ orderId, canWrite, onClose }: FulfillmentDra
           <Button
             size="lg"
             onClick={() => setScannerOpen(!scannerOpen)}
+            disabled={!canWrite}
+            title={canWrite ? undefined : NO_WRITE_REASON}
             className="w-full h-10 gap-2 bg-neutral-900 text-xs font-semibold text-white hover:bg-neutral-800 dark:bg-white dark:text-neutral-900"
           >
             <QrCode className="h-4 w-4" />
@@ -386,11 +452,13 @@ export function FulfillmentDrawer({ orderId, canWrite, onClose }: FulfillmentDra
           <Button
             size="lg"
             variant="outline"
-            disabled={remainingUnits > 0}
+            disabled={!canWrite || !pickAllView?.enabled || act.isPending}
+            title={pickAllView ? reasonFor(pickAllView) : undefined}
             onClick={() => {
-              const pickAllAction = ws?.actions.find((a) => a.action === "pick_all");
-              if (pickAllAction) run(pickAllAction);
-              else toast({ title: "Picking complete", description: "All items marked as picked.", variant: "success" });
+              if (!pickAllView) return;
+              setError(null);
+              if (needsForm(pickAllView)) setForm(pickAllView.action);
+              else run(pickAllView);
             }}
             className="w-full h-10 gap-2 text-xs font-semibold disabled:opacity-50"
           >
@@ -399,7 +467,7 @@ export function FulfillmentDrawer({ orderId, canWrite, onClose }: FulfillmentDra
           </Button>
 
           <p className="text-center text-[11px] text-muted-foreground pt-1">
-            Pick all {totalUnits} units to enable completion.
+            {remainingUnits > 0 ? `Scan the remaining ${remainingUnits} unit${remainingUnits === 1 ? "" : "s"}, or complete picking by hand (it is recorded as a manual pick).` : "Every unit is picked."}
           </p>
         </div>
 

@@ -13,7 +13,7 @@ interface OrderFlowStepperProps {
 export function OrderFlowStepper({
   activeTab,
   counts,
-  warehouseName = "Mumbai warehouse",
+  warehouseName,
   onSelectTab,
 }: OrderFlowStepperProps) {
   // Real backend counts from /fulfillment/queue
@@ -21,8 +21,9 @@ export function OrderFlowStepper({
   const pickingCount = counts?.picking ?? 0;
   const toPackCount = counts?.packing ?? 0;
   const readyToDispatchCount = counts?.ready_to_ship ?? 0;
-  const packedCount = counts?.ready_to_ship ?? 0;
-  const dispatchedCount = counts ? Math.max(0, counts.all - (counts.awaiting_pick + counts.picking + counts.packing + counts.ready_to_ship)) : 0;
+  // real statuses: packed (waiting for a carrier) and handed to a carrier since midnight UTC
+  const packedCount = counts?.packed ?? 0;
+  const dispatchedCount = counts?.dispatchedToday ?? 0;
 
   const steps = [
     {
@@ -79,7 +80,7 @@ export function OrderFlowStepper({
     <div className="rounded-xl border border-border bg-card p-4 shadow-2xs">
       <div className="flex items-center justify-between pb-3 text-xs">
         <span className="font-semibold text-foreground">Order flow</span>
-        <span className="text-muted-foreground">{warehouseName} · Today</span>
+        <span className="text-muted-foreground">{warehouseName ? `${warehouseName} · ` : ""}Dispatched = today (UTC)</span>
       </div>
 
       <div className="flex items-center justify-between gap-1 overflow-x-auto pt-1">

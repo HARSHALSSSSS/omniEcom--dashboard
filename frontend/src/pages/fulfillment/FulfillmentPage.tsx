@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { MoreHorizontal, Printer, RefreshCw } from "lucide-react";
+import { Printer, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Button } from "@/components/ui/button";
 import { ExceptionsTable, ResolveExceptionDialog } from "@/components/fulfillment/ExceptionsPanel";
@@ -29,6 +29,7 @@ import {
   useCreatePickList,
   useFulfillmentAction,
   useFulfillmentCarriers,
+  useFulfillmentActivity,
   useFulfillmentExceptions,
   useFulfillmentQueue,
   useFulfillmentWarehouses,
@@ -52,6 +53,7 @@ export default function FulfillmentPage() {
   // the queue always loads: its counts feed every tab, including the exceptions tab
   const queue = useFulfillmentQueue(queueQueryOf(onExceptions ? { ...url, tab: "all", page: 1 } : url));
   const exceptions = useFulfillmentExceptions(exceptionsQueryOf(url), onExceptions);
+  const activity = useFulfillmentActivity(5);
   const warehouses = useFulfillmentWarehouses();
   const carriers = useFulfillmentCarriers(canReadShipping);
 
@@ -73,7 +75,7 @@ export default function FulfillmentPage() {
 
   // Derive real priority breach orders from backend queue items
   const priorityOrders = useMemo(() => {
-    if (!queue.data?.items || queue.data.items.length === 0) return undefined;
+    if (!queue.data?.items) return undefined;
     const candidates = queue.data.items
       .filter((r) => r.priority === "urgent" || r.priority === "high" || (r.sla?.band === "at_risk" || r.sla?.band === "breached"))
       .map((r) => {
@@ -81,7 +83,7 @@ export default function FulfillmentPage() {
         return {
           orderNumber: r.orderNumber,
           marketplace: r.channel.name.replace(/ India| US| UK/i, ""),
-          minutesRemaining: r.sla?.minutesRemaining ?? 45,
+          minutesRemaining: r.sla?.minutesRemaining ?? null,
           subtext: `${r.stageLabel || "Picking in progress"}${leftUnits > 0 ? ` · ${leftUnits} item${leftUnits > 1 ? "s" : ""} left` : ""}`,
           orderId: r.orderId,
         };
@@ -123,28 +125,6 @@ export default function FulfillmentPage() {
       { id: "all", count: totalExceptions, label: "Fulfillment exceptions" },
     ];
   }, [exceptions.data?.items, queue.data?.counts]);
-
-  // Derive real recent activities from queue data
-  const activityEvents = useMemo(() => {
-    if (!queue.data?.items || queue.data.items.length === 0) return undefined;
-    return queue.data.items.slice(0, 5).map((r, idx) => {
-      const isPicking = r.stage === "picking" || r.status === "picking";
-      const isPacked = r.stage === "ready_to_ship" || r.status === "ready_to_ship";
-      return {
-        time: idx === 0 ? "Just now" : `${idx * 4 + 2}m ago`,
-        orderNumber: r.orderNumber,
-        orderId: r.orderId,
-        action: isPicking
-          ? "picking started"
-          : isPacked
-          ? "packed and ready"
-          : r.stage === "packing"
-          ? "packing in progress"
-          : `${r.stageLabel ?? r.status}`,
-        color: isPicking ? ("blue" as const) : ("green" as const),
-      };
-    });
-  }, [queue.data?.items]);
 
   const listKey = JSON.stringify([tab, url.q, url.warehouse, url.carrier, url.priority, url.hasException, page, pageSize]);
   // a selection belongs to the page it was made on
@@ -261,9 +241,6 @@ export default function FulfillmentPage() {
               <Printer className="h-3.5 w-3.5 text-muted-foreground" />
               Print pick list
             </Button>
-            <Button size="sm" variant="ghost" className="h-8 w-8 p-0" title="More options">
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
           </div>
         }
       />
@@ -275,7 +252,7 @@ export default function FulfillmentPage() {
       <OrderFlowStepper
         activeTab={tab}
         counts={counts}
-        warehouseName={warehouses.data?.[0]?.name ?? "Mumbai warehouse"}
+        warehouseName={warehouses.data?.length === 1 ? warehouses.data[0].name : undefined}
         onSelectTab={(t) => update({ tab: t })}
       />
 
@@ -407,8 +384,11 @@ export default function FulfillmentPage() {
       {/* 7. Fulfillment Activity Timeline matching Figma Screen 1 */}
       {!onExceptions && (
         <FulfillmentActivityTimeline
-          events={activityEvents}
-          onOpenOrder={(orderNumber) => update({ drawer: `order:${orderNumber}` }, { keepPage: true })}
+          events={activity.data}
+          loading={activity.isLoading}
+          error={activity.isError ? errorMessage(activity.error) : null}
+          onRetry={() => void activity.refetch()}
+          onOpenOrder={(orderId) => update({ drawer: `order:${orderId}` }, { keepPage: true })}
         />
       )}
 
