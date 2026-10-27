@@ -90,13 +90,13 @@ beforeEach(() => {
 describe("queue", () => {
   it("shows rows with SLA label, items, bins, warehouse, pick list, assignee and exceptions, and the tab counts", async () => {
     renderPage();
-    const r1 = (await screen.findByRole("button", { name: "ORD-1001" })).closest("tr") as HTMLElement;
+    const r1 = (await screen.findAllByRole("button", { name: "ORD-1001" })).map((b) => b.closest("tr")).find(Boolean) as HTMLElement;
     expect(within(r1).getByText("Due in 2h 15m")).toHaveAttribute("data-sla", "approaching");
     expect(within(r1).getByText("TRV-1042")).toBeInTheDocument();
     expect(within(r1).getByText(/Bin A-04-02/)).toBeInTheDocument();
     expect(within(r1).getByText("Main warehouse")).toBeInTheDocument();
     expect(within(r1).getByRole("button", { name: "Start picking" })).toBeInTheDocument();
-    const r2 = screen.getByRole("button", { name: "ORD-1002" }).closest("tr") as HTMLElement;
+    const r2 = screen.getAllByRole("button", { name: "ORD-1002" }).map((b) => b.closest("tr")).find(Boolean) as HTMLElement;
     expect(within(r2).getByText("Overdue by 40m")).toHaveAttribute("data-sla", "breached");
     expect(within(r2).getByText(/PL-0007 · Staff One/)).toBeInTheDocument();
     expect(within(r2).getByText("1 open")).toBeInTheDocument();
@@ -108,7 +108,7 @@ describe("queue", () => {
 
   it("a stage tab, the filters, the search and the page go to the URL and to the query", async () => {
     renderPage();
-    await screen.findByText("ORD-1001");
+    await screen.findAllByText("ORD-1001");
     await userEvent.click(screen.getByRole("tab", { name: /Picking/ }));
     expect(loc()).toContain("tab=picking");
     await waitFor(() => expect(lastQueue()).toMatchObject({ stage: "picking" }));
@@ -127,7 +127,7 @@ describe("queue", () => {
 
   it("reads tab, filters and page from the URL", async () => {
     renderPage("/fulfillment?tab=ready_to_ship&priority=high&exception=false&page=2&size=50&carrier=sandbox");
-    await screen.findByText("ORD-1001");
+    await screen.findAllByText("ORD-1001");
     expect(lastQueue()).toEqual({ stage: "ready_to_ship", priority: "high", hasException: false, carrier: "sandbox", page: 2, pageSize: 50 });
     expect(screen.getByRole("tab", { name: /Ready to ship/ })).toHaveAttribute("aria-selected", "true");
   });
@@ -138,7 +138,7 @@ describe("queue", () => {
     expect(screen.getByRole("status", { name: "Loading queue" })).toBeInTheDocument();
     expect(await screen.findByRole("alert")).toHaveTextContent("Queue exploded");
     await userEvent.click(screen.getByRole("button", { name: "Retry" }));
-    expect(await screen.findByText("ORD-1001")).toBeInTheDocument();
+    expect((await screen.findAllByText("ORD-1001")).length).toBeGreaterThan(0);
   });
 
   it("explains an empty queue and an empty filter result", async () => {

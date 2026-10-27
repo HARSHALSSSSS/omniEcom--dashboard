@@ -22,7 +22,7 @@ import { cn } from "@/utils/cn";
 import { formatDateTime, formatNumber } from "@/utils/format";
 import { ReportsOverviewView } from "@/components/reports/ReportsOverviewView";
 import { Calendar, Download, MoreHorizontal } from "lucide-react";
-import type { CatalogEntry, FeaturedReport, ReportFormat, ReportRun, ReportSchedule, ReportsTab } from "@/types/reports";
+import type { CatalogEntry, FeaturedReport, ReportFormat, ReportType, ReportRun, ReportSchedule, ReportsTab } from "@/types/reports";
 import { useSubmitLock } from "@/hooks/useSubmitGuard";
 
 const TAB_LABEL: Record<ReportsTab, string> = { overview: "Overview", reports: "All reports", history: "History", schedules: "Schedules" };

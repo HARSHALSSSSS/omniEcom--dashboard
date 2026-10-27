@@ -35,7 +35,7 @@ export const profitabilityApi = {
     unwrap<Waterfall>(await client.get(ENDPOINTS.PROFIT_WATERFALL, { params: waterfallParams(query), signal })),
 
   profitability: async (query?: { groupBy?: "product" | "marketplace" | "order"; from?: string; to?: string; compare?: "previous" }, signal?: AbortSignal) =>
-    unwrap<any>(await client.get(ENDPOINTS.PROFITABILITY, { params: query, signal })),
+    unwrap<unknown>(await client.get(ENDPOINTS.PROFITABILITY, { params: query, signal })),
 
   spend: async (query: SpendQuery, signal?: AbortSignal) =>
     unwrap<SpendPage>(await client.get(ENDPOINTS.MARKETING_SPEND, { params: spendParams(query), signal })),

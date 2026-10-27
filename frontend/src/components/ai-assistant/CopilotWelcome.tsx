@@ -14,11 +14,9 @@ import {
   Plus,
   Search,
   SlidersHorizontal,
-  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/utils/cn";
 import type { AssistantConversation } from "@/types/assistant";
 
 export interface PromptOption {

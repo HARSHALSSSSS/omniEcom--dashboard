@@ -38,6 +38,7 @@ interface SupplierOption {
   id: string;
   name: string;
   city: string | null;
+  email?: string | null;
   paymentTerms: string | null;
 }
 interface FormState {
@@ -197,7 +198,7 @@ function PoForm({ order, presetSupplierId, refetch, onDirty, onCancel, onSaved }
   const attempt = useRef<{ body: string; key: string } | null>(null);
 
   const supplierList = useMemo<SupplierOption[]>(() => {
-    const list: SupplierOption[] = (suppliers.data ?? []).map((s) => ({ id: s.id, name: s.name, city: s.city, paymentTerms: s.paymentTerms }));
+    const list: SupplierOption[] = (suppliers.data ?? []).map((s) => ({ id: s.id, name: s.name, city: s.city, email: s.email, paymentTerms: s.paymentTerms }));
     // the supplier of an order being edited stays pickable even when it has been made inactive since
     return order && !list.some((s) => s.id === order.supplierId) ? [...list, { id: order.supplierId, name: order.supplierName, city: order.supplier.city, paymentTerms: order.paymentTerms }] : list;
   }, [suppliers.data, order]);
@@ -396,7 +397,7 @@ function PoForm({ order, presetSupplierId, refetch, onDirty, onCancel, onSaved }
             {selectedSupplierObj && (
               <span className="text-[11px] text-muted-foreground">
                 {selectedSupplierObj.city ? `${selectedSupplierObj.city} · ` : ""}
-                {selectedSupplierObj.email ?? "orders@supplier.example"}
+                {selectedSupplierObj.email ?? ""}
               </span>
             )}
             {suppliers.isError && <p className="text-[11px] text-red-700">Suppliers could not be loaded. {errorMessage(suppliers.error)}</p>}

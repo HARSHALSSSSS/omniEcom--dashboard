@@ -75,7 +75,7 @@ export default function FulfillmentPage() {
   const priorityOrders = useMemo(() => {
     if (!queue.data?.items || queue.data.items.length === 0) return undefined;
     const candidates = queue.data.items
-      .filter((r) => r.priority === "urgent" || r.priority === "high" || (r.sla?.state && r.sla.state !== "healthy"))
+      .filter((r) => r.priority === "urgent" || r.priority === "high" || (r.sla?.band === "at_risk" || r.sla?.band === "breached"))
       .map((r) => {
         const leftUnits = r.items.reduce((acc, i) => acc + Math.max(0, i.quantity - i.pickedQuantity), 0);
         return {

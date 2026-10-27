@@ -1,6 +1,5 @@
 import React from "react";
 import { AlertCircle } from "lucide-react";
-import { FIGMA_WATERFALL_STEPS } from "./figmaProfitData";
 import type { Waterfall } from "@/types/profitability";
 
 interface RevenueWaterfallSectionProps {

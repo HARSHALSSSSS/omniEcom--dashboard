@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { AlertCircle, CheckCircle2, Circle, Lock, QrCode, ScanLine } from "lucide-react";
+import { AlertCircle, CheckCircle2, Circle, Lock, QrCode } from "lucide-react";
 import { ContextDrawer } from "@/components/common/ContextDrawer";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";

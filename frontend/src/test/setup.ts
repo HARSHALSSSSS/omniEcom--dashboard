@@ -2,14 +2,15 @@
 const OriginalRequest = globalThis.Request;
 if (OriginalRequest) {
   globalThis.Request = class Request extends OriginalRequest {
-    constructor(input: any, init?: any) {
+    constructor(input: RequestInfo | URL, init?: RequestInit) {
       if (init && init.signal) {
         try {
           super(input, init);
           return;
-        } catch (e: any) {
-          if (e?.message?.includes("AbortSignal")) {
-            const { signal: _, ...rest } = init;
+        } catch (e: unknown) {
+          if (e instanceof Error && e.message.includes("AbortSignal")) {
+            const rest = { ...init };
+            delete rest.signal;
             super(input, rest);
             return;
           }
@@ -18,7 +19,7 @@ if (OriginalRequest) {
       }
       super(input, init);
     }
-  } as any;
+  } as typeof Request;
 }
 
 import "@testing-library/jest-dom";

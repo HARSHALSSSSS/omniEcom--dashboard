@@ -80,7 +80,7 @@ const INITIAL_TIERS: PricingTierConfig[] = [
 export interface PricingMarginsTabProps {
   canWrite?: boolean;
   s?: SettingsOverview | null;
-  v?: SettingsValues;
+  v?: SettingsValues | null;
   ctl?: SettingsController;
 }
 
@@ -126,7 +126,6 @@ export function PricingMarginsTab({ canWrite = true, s, v, ctl }: PricingMargins
     const reverseGst = simMrp - baseSellingPrice;
     const commission = (simMrp * simCommissionRate) / 100;
     const tcsTds = settings.withholdTcsTdsBuffer ? (simMrp * 1.1) / 100 : 0; // 1% TCS + 0.1% TDS
-    const totalDeductions = reverseGst + commission + tcsTds + simCogs;
     const netGrossMargin = ((baseSellingPrice - simCogs) / baseSellingPrice) * 100;
 
     return {
@@ -230,7 +229,7 @@ export function PricingMarginsTab({ canWrite = true, s, v, ctl }: PricingMargins
                 id="pricing-psych-rounding"
                 value={settings.psychologicalEnding}
                 onChange={(e) => {
-                  const val = e.target.value as any;
+                  const val = e.target.value as PricingMarginSettings["psychologicalEnding"];
                   setSettings({ ...settings, psychologicalEnding: val });
                   if (ctl) {
                     ctl.setField("roundPriceToNine", val === "9");

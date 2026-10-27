@@ -262,7 +262,7 @@ export function ProcurementOverviewTab({
                   else if (po.isLate || (po.expectedAt && new Date(po.expectedAt) < new Date("2026-10-08T00:00:00Z"))) nextAction = "Follow up >";
                   else if (po.status === "partially_received") nextAction = "Record receipt >";
 
-                  const isLateRow = po.isLate || (po.expectedAt && new Date(po.expectedAt) < new Date("2026-10-08T00:00:00Z"));
+                  const isLateRow = Boolean(po.isLate || (po.expectedAt && new Date(po.expectedAt) < new Date("2026-10-08T00:00:00Z")));
 
                   return (
                     <tr key={po.id} onClick={() => onOpenOrder(po.id)} className="cursor-pointer hover:bg-muted/30">

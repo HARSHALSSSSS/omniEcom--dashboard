@@ -15,7 +15,7 @@ const STORAGE_KEY = "omni_general_prefs";
 interface GeneralTabProps {
   canWrite?: boolean;
   s?: SettingsOverview | null;
-  v?: SettingsValues;
+  v?: SettingsValues | null;
   ctl?: SettingsController;
 }
 
@@ -62,7 +62,7 @@ export function GeneralTab({ canWrite = true, s, v, ctl }: GeneralTabProps) {
   }, [v?.displayName, s?.business.displayName]);
 
   // Persist operational preferences
-  const updatePref = (key: string, val: any) => {
+  const updatePref = (key: string, val: unknown) => {
     try {
       const current = (() => {
         const item = localStorage.getItem(STORAGE_KEY);

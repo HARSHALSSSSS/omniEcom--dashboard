@@ -32,7 +32,7 @@ export function FulfillmentActivityTimeline({
       </div>
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5 pt-1 text-xs">
-        {DEFAULT_ACTIVITIES.map((item) => (
+        {displayActivities.map((item) => (
           <div key={item.orderNumber + item.time} className="flex flex-col">
             <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
               <span

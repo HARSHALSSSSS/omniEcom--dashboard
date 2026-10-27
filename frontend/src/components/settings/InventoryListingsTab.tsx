@@ -56,7 +56,7 @@ const DEFAULT_HUBS = [
 export interface InventoryListingsTabProps {
   canWrite?: boolean;
   s?: SettingsOverview | null;
-  v?: SettingsValues;
+  v?: SettingsValues | null;
   ctl?: SettingsController;
 }
 
@@ -110,9 +110,9 @@ export function InventoryListingsTab({ canWrite = true, s, v, ctl }: InventoryLi
       ? s.warehouses.map((wh, idx) => ({
           id: wh.id,
           name: wh.name,
-          city: `${wh.city}, ${wh.state}`,
+          city: wh.city ?? "",
           priority: idx + 1,
-          active: wh.active ?? true,
+          active: wh.status === "active",
         }))
       : DEFAULT_HUBS;
 
@@ -155,9 +155,9 @@ export function InventoryListingsTab({ canWrite = true, s, v, ctl }: InventoryLi
         hubPriorities: s.warehouses.map((wh, idx) => ({
           id: wh.id,
           name: wh.name,
-          city: `${wh.city}, ${wh.state}`,
+          city: wh.city ?? "",
           priority: idx + 1,
-          active: wh.active ?? true,
+          active: wh.status === "active",
         })),
       }));
     }

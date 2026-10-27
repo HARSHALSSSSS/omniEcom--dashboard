@@ -36,13 +36,14 @@ import { ROUTES } from "@/constants/routes";
 import { errorMessage } from "@/api/errors";
 import { useCan } from "@/hooks/useCan";
 import { useSettingsController } from "@/hooks/useSettings";
+import type { LucideIcon } from "lucide-react";
 import type { SettingsModule } from "@/types/settings";
 
 interface TabDef {
   id: SettingsModule;
   label: string;
   subtitle: string;
-  icon: any;
+  icon: LucideIcon;
   form: boolean;
   badge?: string;
   hasDot?: boolean;

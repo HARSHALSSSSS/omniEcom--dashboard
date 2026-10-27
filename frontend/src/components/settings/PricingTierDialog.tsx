@@ -15,7 +15,10 @@ interface PricingTierDialogProps {
 
 export function PricingTierDialog({ tier, open, onClose, onSave }: PricingTierDialogProps) {
   if (!open || !tier) return null;
+  return <PricingTierDialogBody tier={tier} onClose={onClose} onSave={onSave} />;
+}
 
+function PricingTierDialogBody({ tier, onClose, onSave }: { tier: PricingTierConfig; onClose: () => void; onSave: (updated: PricingTierConfig) => void }) {
   const [form, setForm] = useState<PricingTierConfig>({ ...tier });
 
   const handleSave = () => {
