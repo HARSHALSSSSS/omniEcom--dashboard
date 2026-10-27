@@ -28,6 +28,7 @@ import { PricingMarginsTab } from "@/components/settings/PricingMarginsTab";
 import { ProfileTab } from "@/components/settings/ProfileTab";
 import { IntegrationsTab, isConnected } from "@/components/settings/IntegrationsTab";
 import { useHubAccounts } from "@/hooks/useHub";
+import { formatRelativeTime } from "@/utils/format";
 import { RegionalTab } from "@/components/settings/RegionalTab";
 import { SecurityTab } from "@/components/settings/SecurityTab";
 import { SettingsConflictDialog } from "@/components/settings/SettingsConflictDialog";
@@ -392,9 +393,6 @@ export default function SettingsPage() {
           </button>
         </div>
 
-        <span className="font-mono text-[11px] text-muted-foreground font-medium">
-          OmniEcom Admin v4.12.9
-        </span>
       </div>
 
       {/* =========================================================================
@@ -417,10 +415,6 @@ export default function SettingsPage() {
             <span className="text-muted-foreground">Administration</span>
             <span>/</span>
             <span className="text-muted-foreground">Settings</span>
-            <span>/</span>
-            <span className="rounded bg-muted px-1.5 py-0.2 font-mono text-[10px] font-bold text-foreground">
-              V4.12.9-IN
-            </span>
           </nav>
 
           {/* Title Header Row with Sync Status & Actions Bar */}
@@ -450,9 +444,6 @@ export default function SettingsPage() {
                   {ctl.dirty
                     ? `Unsaved changes in ${dirtyNames.join(", ") || "settings"}`
                     : "All changes saved"}
-                </span>
-                <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 font-mono">
-                  Synced (4/4)
                 </span>
               </div>
 
@@ -517,7 +508,7 @@ export default function SettingsPage() {
                     SETTINGS MODULES
                   </span>
                   <span className="rounded-full bg-muted px-2 py-0.5 font-mono text-[9px] font-bold text-muted-foreground uppercase">
-                    8 TOPICS
+                    {adminTopics.length} TOPICS
                   </span>
                 </div>
 
@@ -596,27 +587,23 @@ export default function SettingsPage() {
                   })}
                 </div>
 
-                {/* Bottom Health & Metric Strip inside Sidebar Card */}
+                {/* Bottom strip: what is true right now */}
                 <div className="border-t border-border/80 bg-muted/20 p-4 space-y-2 text-xs">
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
-                      WORKSPACE HEALTH
+                      CONNECTIONS
                     </span>
-                    <span className="font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                      99.98% OK
+                    <span className="font-mono text-xs font-bold text-foreground">
+                      {hubAccounts.data ? `${connectedCount} of ${hubAccounts.data.items.length} connected` : "—"}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] text-muted-foreground">
-                      Active SKU sync rate
+                      Settings last saved
                     </span>
                     <span className="font-mono text-xs font-semibold text-foreground">
-                      32,481 SKUs
+                      {s ? formatRelativeTime(s.updatedAt) : "—"}
                     </span>
-                  </div>
-                  <div className="flex items-center justify-between pt-1 border-t border-border/50 text-[10px] font-mono text-muted-foreground">
-                    <span>Cron cycle: 5m</span>
-                    <span>Buffer: 18ms</span>
                   </div>
                 </div>
               </div>
