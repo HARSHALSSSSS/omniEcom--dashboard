@@ -17,6 +17,7 @@ import { BrandField } from "@/components/products/create/BrandField";
 import { DescriptionEditor } from "@/components/products/create/DescriptionEditor";
 import { DraftsStrip } from "@/components/products/create/DraftsStrip";
 import { LeaveDialog } from "@/components/products/create/LeaveDialog";
+import { CategoryAdd } from "@/components/products/CategoryAdd";
 import { MoreInfoSection } from "@/components/products/create/MoreInfoSection";
 import { PrimaryImageSection } from "@/components/products/create/PrimaryImageSection";
 import { ReadinessPanel } from "@/components/products/create/ReadinessPanel";
@@ -57,6 +58,8 @@ export default function CreateProductPage() {
   });
 
   const categoryOptions = useMemo(() => flattenTree(categories.data ?? []), [categories.data]);
+  // the dropdown is grouped by top-level category, sub-categories indented under it
+  const categoryGroups = categories.data ?? [];
   const skuState = readiness?.required.find((i) => i.key === "master_sku")?.state;
   const skuWarning = c.warnings.find((w) => w.field === "productCode")?.message ?? null;
   const otherWarnings = c.warnings.filter((w) => w.field !== "productCode");
@@ -253,22 +256,30 @@ export default function CreateProductPage() {
                 </SelectField>
 
                 <div className="flex flex-row items-start gap-5 w-full">
+                  <div className="flex-1 flex flex-col gap-2 min-w-0">
                   <SelectField
                     id="cp-categoryId"
                     label="Category"
-                    className="flex-1"
+                    className="w-full"
                     empty={!values.categoryId}
                     error={errors.categoryId ?? (categories.isError ? "Could not load categories." : null)}
                     hint={!categories.isLoading && !categories.isError && categoryOptions.length === 0 ? "No categories yet. Create a category first." : undefined}
                     {...register("categoryId")}
                   >
                     <option value="">{categories.isLoading ? "Loading categories..." : "Select category"}</option>
-                    {categoryOptions.map((o) => (
-                      <option key={o.id} value={o.id}>
-                        {o.label}
-                      </option>
+                    {categoryGroups.map((root) => (
+                      <optgroup key={root.id} label={root.name}>
+                        <option value={root.id}>{root.name}</option>
+                        {flattenTree(root.children ?? [], 1).map((o) => (
+                          <option key={o.id} value={o.id}>
+                            {o.label}
+                          </option>
+                        ))}
+                      </optgroup>
                     ))}
                   </SelectField>
+                  <CategoryAdd choices={categoryOptions.map((o) => ({ id: o.id, label: o.label }))} disabled={readOnly} onCreated={(id) => setValue("categoryId", id, { shouldDirty: true })} />
+                  </div>
 
                   <BrandField
                     value={values.brand}

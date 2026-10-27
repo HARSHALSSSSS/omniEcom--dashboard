@@ -1,4 +1,5 @@
 import type { UseFormReturn } from "react-hook-form";
+import { countryOptions } from "@/constants/countries";
 import { useStandardCategories } from "@/hooks/useProductCreation";
 import type { FormOptions } from "@/types/productCreation";
 import type { CreateFormValues, FieldErrorsMap } from "./formModel";
@@ -63,7 +64,7 @@ export function MoreInfoSection({ form, values, options, errors, disabled }: Pro
 
         <SelectField id="cp-countryOfOrigin" label="Country of origin" className="flex-1" disabled={disabled} empty={!values.countryOfOrigin} error={errors.countryOfOrigin} {...register("countryOfOrigin")}>
           <option value="">Select country</option>
-          {(options?.countries ?? []).map((c) => (
+          {countryOptions(values.countryOfOrigin).map((c) => (
             <option key={c.code} value={c.code}>
               {c.name}
             </option>

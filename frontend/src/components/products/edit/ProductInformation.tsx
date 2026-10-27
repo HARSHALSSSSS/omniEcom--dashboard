@@ -9,6 +9,8 @@ import { ProductImage } from "@/components/products/detail/ProductImage";
 import { cn } from "@/utils/cn";
 import { PRODUCT_TYPE_OPTIONS } from "../productTypes";
 import { AttributeStatus, CategoryAttributeFields } from "./CategoryAttributes";
+import { CategoryAdd } from "@/components/products/CategoryAdd";
+import { countryCodeFor, countryOptions } from "@/constants/countries";
 import { DesignCombo, DesignSelect } from "./DesignSelect";
 import { FieldShell } from "./FieldShell";
 import { INPUT_CLASS, boxClass } from "./fieldStyles";
@@ -78,12 +80,19 @@ export function ProductInformation({ ctl, onImproveWithAi, aiPanel, aiOpen }: Pr
       opts.hint,
     );
 
-  const categories = ctl.categories ?? [];
+  // in tree order (by path), sub-categories indented, so the hierarchy reads at a glance; the dropdown is searchable
+  const categories = [...(ctl.categories ?? [])].sort((a, b) => a.path.localeCompare(b.path));
   const hasCurrent = !values.categoryId || categories.some((c) => c.id === values.categoryId);
+  const depthOf = (path: string) => path.split("/").length - 1;
   const categoryOptions = [
     { value: "", label: product.status === "draft" ? "No category" : "Select a category" },
     ...(hasCurrent ? [] : [{ value: values.categoryId, label: categoryName(values.categoryId) }]),
-    ...categories.map((c) => ({ value: c.id, label: c.name, ...(c.parentId ? { hint: c.path } : {}) })),
+    ...categories.map((c) => ({ value: c.id, label: `${String.fromCharCode(160, 160).repeat(depthOf(c.path))}${c.name}`, ...(c.parentId ? { hint: c.path } : {}) })),
+  ];
+  const storedCountry = values.countryOfOrigin;
+  const countrySelectOptions = [
+    { value: "", label: "Not supplied" },
+    ...countryOptions(storedCountry).map((c) => ({ value: c.code, label: c.name, hint: c.code })),
   ];
   const addTag = () => {
     const t = tagDraft.trim();
@@ -215,7 +224,9 @@ export function ProductInformation({ ctl, onImproveWithAi, aiPanel, aiOpen }: Pr
                   error={!!fieldErrors.categoryId}
                   onChange={(v) => edit("categoryId", v, "categoryId")}
                 />,
-                ctl.categoriesError ? "The category list could not be loaded." : undefined,
+                ctl.categoriesError ? "The category list could not be loaded." : (
+                  <CategoryAdd choices={categories.map((c) => ({ id: c.id, label: `${String.fromCharCode(160, 160).repeat(depthOf(c.path))}${c.name}` }))} disabled={ro} onCreated={(id) => edit("categoryId", id, "categoryId")} />
+                ),
               )}
             </div>
             <div className="flex-1 min-w-0">
@@ -310,7 +321,22 @@ export function ProductInformation({ ctl, onImproveWithAi, aiPanel, aiOpen }: Pr
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 w-full">
               {text("material", "material", "field-material", "Material", { maxLength: 500 })}
-              {text("countryOfOrigin", "countryOfOrigin", "field-country", "Country of origin", { maxLength: 32, hint: "Country name or ISO code, for example IN" })}
+              {shell(
+                "countryOfOrigin",
+                "field-country",
+                "Country of origin",
+                <DesignSelect
+                  id="field-country"
+                  value={countryCodeFor(storedCountry) ?? storedCountry}
+                  options={countrySelectOptions}
+                  disabled={ro}
+                  searchable
+                  modified={mod("countryOfOrigin")}
+                  error={!!fieldErrors.countryOfOrigin}
+                  onChange={(v) => edit("countryOfOrigin", v, "countryOfOrigin")}
+                />,
+                "Saved as the two-letter country code, for example IN",
+              )}
               {text("hsnCode", "hsnCode", "field-hsn", "HSN code", { maxLength: 32, mono: true })}
               {text("gstPercent", "gstPercent", "field-gst", "Tax information (GST %)", { inputMode: "decimal", hint: "For example 18" })}
               {text("manufacturer", "manufacturer", "field-manufacturer", "Manufacturer", { maxLength: 500 })}

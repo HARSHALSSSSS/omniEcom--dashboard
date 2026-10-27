@@ -51,6 +51,10 @@ export const productCreationApi = {
     return unwrap(await client.get(ENDPOINTS.CATEGORIES_TREE, { signal }));
   },
 
+  /** the seller's own category (optionally under a parent), the same way brands are added from the form */
+  createCategory: async (input: { name: string; parentId?: string | null }): Promise<{ id: string; name: string; parentId: string | null; path: string }> =>
+    unwrap(await client.post(ENDPOINTS.CATEGORIES, { name: input.name, ...(input.parentId ? { parentId: input.parentId } : {}) })),
+
   // ---------------------------------------------------------------------------------------- brands
   brands: async (signalOrCtx?: AbortSignal | { signal?: AbortSignal }): Promise<Brand[]> => {
     const signal = signalOrCtx instanceof AbortSignal ? signalOrCtx : signalOrCtx?.signal;

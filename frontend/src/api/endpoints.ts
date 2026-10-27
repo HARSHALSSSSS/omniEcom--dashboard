@@ -77,6 +77,7 @@ export const ENDPOINTS = {
   DATA_JOB_DOWNLOAD: (id: string) => `${BASE}/data-jobs/${id}/download`,
   VIEWS: `${BASE}/views`,
   VIEW: (id: string) => `${BASE}/views/${id}`,
+  CATEGORIES: `${BASE}/categories`,
   CATEGORIES_TREE: `${BASE}/categories/tree`,
   MARKETPLACES: `${BASE}/marketplaces`,
   MARKETPLACE_ACCOUNTS: `${BASE}/marketplace-accounts`,

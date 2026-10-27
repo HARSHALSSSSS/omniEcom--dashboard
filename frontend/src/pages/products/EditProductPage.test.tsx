@@ -331,7 +331,8 @@ describe("EditProductPage", () => {
 
     await user.click(screen.getByRole("button", { name: /Additional attributes/ }));
     expect(screen.getByText(/Attribute values were not supplied in the existing product record/)).toBeInTheDocument();
-    expect(screen.getAllByPlaceholderText("Not supplied")).toHaveLength(7);
+    // the country of origin is now a searchable country list (not a free text box): six free-text attributes remain
+    expect(screen.getAllByPlaceholderText("Not supplied")).toHaveLength(6);
     expect(api.getEditor).toHaveBeenCalledWith(ID);
   });
 
@@ -835,5 +836,36 @@ describe("EditProductPage", () => {
     expect(await screen.findByRole("heading", { name: "Could not load this product" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Try again" }));
     expect(await screen.findByLabelText("Product name")).toBeInTheDocument();
+  });
+});
+
+describe("EditProductPage country of origin and categories", () => {
+  it("shows a stored country name as the country, offers the full list with India first, and keeps an unknown stored value", async () => {
+    const user = userEvent.setup();
+    api.getEditor.mockResolvedValue(editor({}, { countryOfOrigin: "India" }));
+    renderPage();
+    await screen.findByLabelText("Product name");
+    await user.click(screen.getByRole("button", { name: /Additional attributes/ }));
+    const country = document.getElementById("field-country") as HTMLElement;
+    expect(country).toHaveTextContent("India");
+    await user.click(country);
+    expect(await screen.findByText("Japan")).toBeInTheDocument();
+    expect(screen.getAllByRole("option")[1]).toHaveTextContent("India");
+  });
+
+  it("an unknown stored country is still shown, never dropped", async () => {
+    const user = userEvent.setup();
+    api.getEditor.mockResolvedValue(editor({}, { countryOfOrigin: "Narnia" }));
+    renderPage();
+    await screen.findByLabelText("Product name");
+    await user.click(screen.getByRole("button", { name: /Additional attributes/ }));
+    expect(document.getElementById("field-country")).toHaveTextContent("Narnia");
+  });
+
+  it("offers Add category next to the category list when the user may write categories", async () => {
+    signIn(["products:read", "products:write", "categories:write"]);
+    renderPage();
+    await screen.findByLabelText("Product name");
+    expect(await screen.findByRole("button", { name: "Add category" })).toBeInTheDocument();
   });
 });

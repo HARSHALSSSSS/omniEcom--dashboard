@@ -38,5 +38,8 @@ describe("channel refresh", () => {
     const spy = vi.spyOn(qc, "invalidateQueries");
     refreshHubListingCounts(qc);
     expect(spy).toHaveBeenCalledWith({ queryKey: ["hub"] });
+    // a listing going live makes its draft product active: the Products screens re-read
+    expect(spy).toHaveBeenCalledWith({ queryKey: ["products"] });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ["productDetail"] });
   });
 });

@@ -31,4 +31,6 @@ export function refreshAfterPromotionChange(qc: QueryClient): void {
 /** A listing was created, edited or published: the listing counts on the Hub cards and in Connection health change with it. */
 export function refreshHubListingCounts(qc: QueryClient): void {
   void qc.invalidateQueries({ queryKey: ["hub"] });
+  // a listing going live also makes its draft product active: the Products screens (cards, list, tab counts, detail) re-read
+  for (const queryKey of [["products"], ["productDetail"], ["product-edit"]] as const) void qc.invalidateQueries({ queryKey });
 }
