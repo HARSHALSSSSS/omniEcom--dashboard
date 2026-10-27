@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Link, useNavigate, useInRouterContext, isRouteErrorResponse } from "react-router-dom";
+import { Link, useInRouterContext, isRouteErrorResponse } from "react-router-dom";
 import {
   Compass,
   AlertTriangle,
@@ -56,8 +56,6 @@ export function ErrorPage({
   onRetry,
   notFound: forcedNotFound,
 }: ErrorPageProps = {}) {
-  const inRouter = useInRouterContext();
-  const navigate = inRouter ? useNavigate() : null;
   const [copied, setCopied] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
 
@@ -97,8 +95,9 @@ export function ErrorPage({
           ? activeError
           : null;
 
+  // a stack trace is a developer aid: it never reaches the screen of a production build
   const stackTrace =
-    activeError instanceof Error ? activeError.stack : null;
+    import.meta.env.DEV && activeError instanceof Error ? activeError.stack : null;
 
   const handleCopyDiagnostics = () => {
     const diagnosticPayload = {
@@ -126,9 +125,8 @@ export function ErrorPage({
   };
 
   const handleGoBack = () => {
-    if (navigate) {
-      navigate(-1);
-    } else if (typeof window !== "undefined") {
+    // the browser history is the router history, so this is the same as navigate(-1) and also works outside a router
+    if (typeof window !== "undefined") {
       if (window.history.length > 1) {
         window.history.back();
       } else {

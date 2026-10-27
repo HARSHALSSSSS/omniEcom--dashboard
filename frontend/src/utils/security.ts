@@ -68,8 +68,9 @@ export function isSafeInternalRedirect(path: string | null | undefined): boolean
     return false;
   }
   // Disallow CRLF / control characters
-  if (/[\r\n\x00-\x1F]/.test(trimmed)) {
-    return false;
+  for (let i = 0; i < trimmed.length; i++) {
+    const code = trimmed.charCodeAt(i);
+    if (code <= 0x1f || code === 0x7f) return false;
   }
   return true;
 }

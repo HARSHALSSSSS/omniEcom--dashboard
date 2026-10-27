@@ -94,7 +94,6 @@ const AutomationPage = lazy(() => import("@/pages/automation/AutomationPage"));
 const SettingsPage = lazy(() => import("@/pages/settings/SettingsPage"));
 // Error & Fallback pages
 const NotFoundPage = lazy(() => import("@/pages/error/NotFoundPage"));
-const ErrorPage = lazy(() => import("@/pages/error/ErrorPage"));
 
 function OnboardingIndex() {
   const step = useWorkspaceStore((s) => s.onboardingResumeStep);
@@ -278,9 +277,8 @@ export const router = createBrowserRouter([
       { path: ROUTES.SETTINGS, element: withSuspense(SettingsPage) },
     ],
   },
-  // Error and Not Found routes
+  // explicit not-found address (the catch-all below covers every other unknown URL)
   { path: ROUTES.NOT_FOUND, element: withSuspense(NotFoundPage) },
-  { path: ROUTES.ERROR, element: withSuspense(ErrorPage) },
   { path: "*", element: <RouteError notFound /> },
     ],
   },

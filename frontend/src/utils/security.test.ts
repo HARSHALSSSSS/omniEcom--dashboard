@@ -80,6 +80,16 @@ describe("security utils", () => {
 
     it("blocks paths with control characters", () => {
       expect(isSafeInternalRedirect("/path\r\nSet-Cookie: evil")).toBe(false);
+      expect(isSafeInternalRedirect("/\t/evil.com")).toBe(false);
+      expect(isSafeInternalRedirect("/a\u0000b")).toBe(false);
+    });
+
+    it("rejects scripts, absolute URLs and anything that is not a path", () => {
+      expect(isSafeInternalRedirect("javascript:alert(1)")).toBe(false);
+      expect(isSafeInternalRedirect("  //evil.com")).toBe(false);
+      expect(isSafeInternalRedirect("")).toBe(false);
+      expect(isSafeInternalRedirect(null)).toBe(false);
+      expect(isSafeInternalRedirect("dashboard")).toBe(false);
     });
   });
 });

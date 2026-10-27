@@ -101,3 +101,14 @@ describe("ErrorPage", () => {
     expect(screen.getByRole("link", { name: "Go to the dashboard" })).toHaveAttribute("href", "/");
   });
 });
+
+describe("ErrorPage go-back", () => {
+  it("goes back through the browser history without needing a router", () => {
+    const back = vi.spyOn(window.history, "back").mockImplementation(() => undefined);
+    Object.defineProperty(window.history, "length", { value: 3, configurable: true });
+    render(<ErrorPage notFound status={404} />);
+    fireEvent.click(screen.getByRole("button", { name: "Go back" }));
+    expect(back).toHaveBeenCalledTimes(1);
+    back.mockRestore();
+  });
+});

@@ -53,7 +53,6 @@ export const ROUTES = {
 
   // Errors & Fallbacks
   NOT_FOUND: "/404",
-  ERROR: "/error",
 } as const;
 
 export type AppRoute = (typeof ROUTES)[keyof typeof ROUTES];
