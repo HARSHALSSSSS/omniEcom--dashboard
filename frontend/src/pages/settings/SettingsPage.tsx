@@ -20,6 +20,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { LeaveDialog } from "@/components/products/edit/Dialogs";
 import { BusinessTab } from "@/components/settings/BusinessTab";
 import { GeneralTab } from "@/components/settings/GeneralTab";
+import { useLegacySettingsMigration } from "@/components/settings/legacyMigration";
 import { GstinTab } from "@/components/settings/GstinTab";
 import { InventoryListingsTab } from "@/components/settings/InventoryListingsTab";
 import { NotificationsTab } from "@/components/settings/NotificationsTab";
@@ -58,7 +59,7 @@ const TABS: TabDef[] = [
     label: "General",
     subtitle: "Workspace defaults & display",
     icon: Sliders,
-    form: false,
+    form: true,
   },
   {
     id: "business",
@@ -79,7 +80,7 @@ const TABS: TabDef[] = [
     label: "Products & Listings",
     subtitle: "SKU taxonomy, HSN gates",
     icon: Package,
-    form: false,
+    form: true,
   },
   {
     id: "operations",
@@ -93,7 +94,7 @@ const TABS: TabDef[] = [
     label: "Pricing & Margins",
     subtitle: "Guardrails & floor bounds",
     icon: Tag,
-    form: false,
+    form: true,
   },
   {
     id: "integrations",
@@ -227,6 +228,8 @@ export default function SettingsPage() {
   const canReadTeam = useCan("users:read");
   const ctl = useSettingsController();
   const { settings: s, values: v, query, blocker } = ctl;
+  // values these tabs used to keep only in this browser move to the server once
+  useLegacySettingsMigration(s);
 
   // the Integrations badge is the real number of connected marketplace accounts (nothing until the first one connects)
   const hubAccounts = useHubAccounts();

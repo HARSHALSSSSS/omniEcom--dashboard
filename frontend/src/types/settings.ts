@@ -100,6 +100,11 @@ export interface SettingsOverview {
   gstins: Gstin[];
   operations: OperationsInfo;
   alerts: AlertsInfo;
+  preferences: WorkspacePreferences;
+  catalog: CatalogSettings;
+  inventory: InventorySettings;
+  pricing: PricingSettings;
+  channels: SettingsChannel[];
   alertMatrix: AlertRow[];
   ai: { enabled: boolean; mode: string; manageUrl: string };
   warehouses: WarehouseChoice[];
@@ -135,6 +140,10 @@ export interface SettingsPatch {
     syncFailures?: boolean;
     returns?: boolean;
   };
+  preferences?: Partial<Omit<WorkspacePreferences, "guardrails">> & { guardrails?: Partial<WorkspacePreferences["guardrails"]> };
+  catalog?: Partial<Omit<CatalogSettings, "gates" | "requireHsn" | "skuPrefix">> & { gates?: Partial<CatalogSettings["gates"]> };
+  inventory?: Partial<Pick<InventorySettings, "minSafetyStockUnits" | "spikeProtectionUnitsPerHour" | "negativeStockTwoStepApproval">>;
+  pricing?: Partial<Omit<PricingSettings, "channelTiers">> & { channelTiers?: Record<string, Partial<ChannelTier>> };
   version?: number;
 }
 
@@ -261,60 +270,77 @@ export type SettingsModule =
   | "security"
   | "profile";
 
-// ---- General Settings ---------------------------------------------------------------------------------
+// ---- Workspace preferences, catalog, inventory and pricing settings --------------------------------------
 
-export interface GeneralSettings {
-  workspaceDisplayName: string;
-  defaultLandingRoute: string;
-  interfaceLanguage: string;
-  defaultPageSize: number;
-  defaultCatalogView: "grid" | "table";
-  defaultReportingPeriod: "7d" | "30d" | "qtd" | "fytd";
-  telemetryPollingIntervalSeconds: number;
-  showMediaThumbnails: boolean;
-  guardrails: {
-    confirmBulkStatus: boolean;
-    confirmStockAllocation: boolean;
-    warnZeroStockDelist: boolean;
-  };
+export type ReportingPeriod = "7d" | "30d" | "qtd" | "fytd";
+export type CatalogView = "all_active" | "low_stock" | "primary_warehouse";
+
+export interface WorkspacePreferences {
+  defaultRoute: string;
+  language: string;
+  pageSize: number;
+  catalogView: CatalogView;
+  reportingPeriod: ReportingPeriod;
+  telemetrySeconds: number;
+  showThumbnails: boolean;
+  guardrails: { bulkConfirm: boolean; stockAllocationConfirm: boolean; zeroStockDelistWarning: boolean };
 }
 
-// ---- Inventory & Listings Settings --------------------------------------------------------------------
-
-export interface CatalogListingSettings {
-  skuSyntaxTemplate: string;
+export interface CatalogSettings {
+  requireHsn: boolean;
+  skuPrefix: string;
+  skuTemplate: string;
   skuSeparator: "-" | "_" | "/";
   skuCasing: "uppercase" | "lowercase" | "as_is";
-  strictEanValidation: boolean;
-  mandatoryGates: {
-    hsnCode: boolean;
-    countryOfOrigin: boolean;
-    gstRateSlab: boolean;
-  };
+  strictEan: boolean;
+  gates: { hsnCode: boolean; countryOfOrigin: boolean; gstRateSlab: boolean };
   syncSovereignty: "master_catalog" | "channel_autonomous";
 }
 
-export interface ChannelReserveAllocation {
-  channelId: string;
-  channelName: string;
-  channelIcon: string;
-  reservePercent: number;
-  safetyBufferUnits: number;
-  status: "active" | "paused";
-}
-
-export interface InventoryBufferSettings {
-  globalBufferPercent: number;
+export interface InventorySettings {
+  mode: "simple" | "warehouse";
+  startingMethod: "manual" | "marketplace" | "file" | null;
+  defaultLeadTimeDays: number;
   minSafetyStockUnits: number;
-  criticalLowStockUnits: number;
-  channelAllocations: ChannelReserveAllocation[];
-  hubPriorities: Array<{ id: string; name: string; city: string; priority: number; active: boolean }>;
-  negativeStockTwoStepApproval: boolean;
   spikeProtectionUnitsPerHour: number;
+  negativeStockTwoStepApproval: boolean;
 }
 
-// ---- Pricing & Margins Settings -----------------------------------------------------------------------
+/** one channel's pricing tier as the server stores it (money in minor units, rates in basis points) */
+export interface ChannelTier {
+  baseMarkupBps: number;
+  fixedFeeBufferMinor: number;
+  hardFloorMinor: number | null;
+  maxDiscountBps: number;
+  repriceIntervalMinutes: number;
+  minNetMarginBps: number | null;
+  autoDelistOnBreach: boolean;
+  dealFloorMinor: number | null;
+  mandate2faForMarkdown: boolean;
+  status: "active" | "draft" | "paused";
+}
 
+export type PriceEnding = "nine" | "zero" | "exact";
+
+export interface PricingSettings {
+  marginFloorBps: number | null;
+  maxVelocityShiftBps: number;
+  priceEnding: PriceEnding;
+  legalMetrologyMrpGate: boolean;
+  withholdBufferBps: number;
+  autoDelistOnBreach: boolean;
+  mandate2faBulkMarkdown: boolean;
+  channelTiers: Record<string, ChannelTier>;
+}
+
+export interface SettingsChannel {
+  id: string;
+  name: string;
+  marketplace: string;
+  status: string;
+}
+
+/** what the Pricing tier dialog edits: one real channel with its tier in the units the seller types (percent, rupees) */
 export interface PricingTierConfig {
   id: string;
   channelName: string;
@@ -331,11 +357,28 @@ export interface PricingTierConfig {
   status: "active" | "draft" | "paused";
 }
 
-export interface PricingMarginSettings {
-  grossMarginFloorPercent: number;
-  psychologicalEnding: "9" | "0" | "exact";
-  legalMetrologyMrpGate: boolean;
-  withholdTcsTdsBuffer: boolean;
-  maxVelocityShiftPercent: number;
-  tiers: PricingTierConfig[];
+/** POST /pricing/simulate: the unit economics of one price on a real variant and channel */
+export interface PriceSimulation {
+  variant: { id: string; sku: string; title: string; costMinor: number | null; mrpMinor: number | null; sellingPriceMinor: number | null; gstRateBps: number | null };
+  account: { id: string; name: string; marketplace: string; feesConfigured: boolean; feeBps: number | null; fixedFeeMinor: number | null } | null;
+  rules: { workspaceFloorBps: number | null; effectiveTargetBps: number | null; withholdBufferBps: number; legalMetrologyMrpGate: boolean };
+  priceMinor: number;
+  breakdown: { gstMinor: number | null; feeMinor: number | null; withholdMinor: number; costMinor: number | null; netRealizationMinor: number | null; contributionMinor: number | null };
+  marginBps: number | null;
+  belowTarget: boolean | null;
+  floorPriceMinor: number | null;
+  exceedsMrp: boolean;
+}
+
+/** the channel inventory policy of one marketplace account (reserve share and unit buffer) */
+export interface ChannelInventoryPolicy {
+  marketplaceAccountId: string;
+  mode: "sync" | "paused";
+  safetyBuffer: number;
+  allocationPercent: number;
+  maxQuantity: number | null;
+  warehouseIds: string[];
+  isDefault: boolean;
+  version: number;
+  updatedAt: string | null;
 }

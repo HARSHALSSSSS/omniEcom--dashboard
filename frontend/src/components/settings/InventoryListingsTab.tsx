@@ -1,57 +1,19 @@
-import { useState, useEffect } from "react";
-import {
-  Boxes,
-  Check,
-  Barcode,
-} from "lucide-react";
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import { Boxes, Barcode } from "lucide-react";
+import { errorMessage } from "@/api/errors";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { SectionCard, Field } from "./fields";
-import type { CatalogListingSettings, InventoryBufferSettings, ChannelReserveAllocation, SettingsOverview } from "@/types/settings";
+import { ROUTES } from "@/constants/routes";
+import { useCan } from "@/hooks/useCan";
+import { useChannelPolicies, useSaveChannelPolicy } from "@/hooks/useSettings";
+import { toast } from "@/hooks/useToast";
+import { useWorkspaceStore } from "@/store/workspace.store";
+import type { ChannelInventoryPolicy, SettingsOverview } from "@/types/settings";
+import { SectionCard, Field, selectClass } from "./fields";
 import type { SettingsController, SettingsValues } from "./tabProps";
-
-const DEFAULT_CHANNELS: ChannelReserveAllocation[] = [
-  {
-    channelId: "shopify-direct",
-    channelName: "Shopify D2C Storefront",
-    channelIcon: "🛍️",
-    reservePercent: 40,
-    safetyBufferUnits: 15,
-    status: "active",
-  },
-  {
-    channelId: "amazon-in",
-    channelName: "Amazon India (FBA / MFN)",
-    channelIcon: "📦",
-    reservePercent: 35,
-    safetyBufferUnits: 20,
-    status: "active",
-  },
-  {
-    channelId: "flipkart",
-    channelName: "Flipkart Retail & Assured",
-    channelIcon: "⚡",
-    reservePercent: 15,
-    safetyBufferUnits: 10,
-    status: "active",
-  },
-  {
-    channelId: "blinkit-zepto",
-    channelName: "Quick Commerce (Blinkit & Zepto)",
-    channelIcon: "🛵",
-    reservePercent: 10,
-    safetyBufferUnits: 5,
-    status: "active",
-  },
-];
-
-const DEFAULT_HUBS = [
-  { id: "wh-01", name: "Bhiwandi Master Fulfillment Center", city: "Mumbai / Thane, MH", priority: 1, active: true },
-  { id: "wh-02", name: "Bengaluru South Hub (Quick Delivery)", city: "Bengaluru, KA", priority: 2, active: true },
-  { id: "wh-03", name: "NCR Gurgaon Regional DC", city: "Gurgaon, HR", priority: 3, active: true },
-];
 
 export interface InventoryListingsTabProps {
   canWrite?: boolean;
@@ -60,154 +22,64 @@ export interface InventoryListingsTabProps {
   ctl?: SettingsController;
 }
 
+/** an example SKU made from the saved formula: [BRAND] from the business name, [CAT3] a category, [SEQ6] the next number */
+export function skuPreview(template: string, separator: string, casing: "uppercase" | "lowercase" | "as_is", brandName: string): string {
+  const brand = brandName.replace(/[^A-Za-z0-9]/g, "").slice(0, 4) || "BRND";
+  const out = template
+    .replace(/\[BRAND\]/g, brand)
+    .replace(/\[CAT3\]/g, "CAT")
+    .replace(/\[SEQ6\]/g, "000001")
+    .replace(/-/g, separator);
+  return casing === "uppercase" ? out.toUpperCase() : casing === "lowercase" ? out.toLowerCase() : out;
+}
+
+const STORED_NOTE = "Saved with your workspace. Product creation and publishing do not enforce this yet.";
+
 export function InventoryListingsTab({ canWrite = true, s, v, ctl }: InventoryListingsTabProps) {
-  // Load saved local preferences if present
-  const savedGates = (() => {
-    try {
-      const item = localStorage.getItem("omni_listing_gates");
-      return item ? JSON.parse(item) : null;
-    } catch {
-      return null;
-    }
-  })();
+  const shell = useWorkspaceStore((st) => st.shell);
+  const canPolicy = useCan("marketplace_accounts:write");
+  const canReadPolicy = useCan("listings:read");
+  const saveChannel = useSaveChannelPolicy();
 
-  const savedBuffers = (() => {
-    try {
-      const item = localStorage.getItem("omni_channel_buffers");
-      return item ? JSON.parse(item) : null;
-    } catch {
-      return null;
-    }
-  })();
+  const catalog = v?.ext.catalog;
+  const inv = v?.ext.inventory;
+  const edit = canWrite && Boolean(ctl && v);
+  const channels = s?.channels ?? [];
+  const { policies, loading: policiesLoading, failed: policiesFailed } = useChannelPolicies(channels.map((c) => c.id), canReadPolicy);
 
-  // Section 01 state: Catalog & Listing Gates
-  const [catalogSettings, setCatalogSettings] = useState<CatalogListingSettings>(() => ({
-    skuSyntaxTemplate: savedGates?.skuSyntaxTemplate || "[BRAND]-[CAT3]-[SEQ6]",
-    skuSeparator: savedGates?.skuSeparator || "-",
-    skuCasing: savedGates?.skuCasing || "uppercase",
-    strictEanValidation: savedGates?.strictEanValidation ?? true,
-    mandatoryGates: {
-      hsnCode: savedGates?.mandatoryGates?.hsnCode ?? true,
-      countryOfOrigin: savedGates?.mandatoryGates?.countryOfOrigin ?? true,
-      gstRateSlab: savedGates?.mandatoryGates?.gstRateSlab ?? true,
-    },
-    syncSovereignty: savedGates?.syncSovereignty || "master_catalog",
-  }));
+  // the seller's unsaved edits of each channel row (reserve share and unit buffer); saved per row through the channel policy
+  const [drafts, setDrafts] = useState<Record<string, { allocationPercent: number; safetyBuffer: number }>>({});
+  const [rowError, setRowError] = useState<Record<string, string>>({});
 
-  // Initial buffer values synced from backend operations
-  const initialBufferPercent =
-    v?.bufferPercent !== undefined && v.bufferPercent !== ""
-      ? Number(v.bufferPercent)
-      : (s?.operations.defaultInventoryBufferPercent ?? savedBuffers?.globalBufferPercent ?? 10);
+  if (!s || !v || !catalog || !inv) return null;
+  const err = ctl?.fieldErrors;
 
-  const initialLowStock =
-    v?.lowStockThreshold !== undefined && v.lowStockThreshold !== ""
-      ? Number(v.lowStockThreshold)
-      : (s?.operations.lowStockThreshold ?? savedBuffers?.criticalLowStockUnits ?? 5);
+  const setCatalog = (patch: Partial<typeof catalog>) => ctl?.setExt("catalog", { ...catalog, ...patch });
+  const setGates = (patch: Partial<typeof catalog.gates>) => setCatalog({ gates: { ...catalog.gates, ...patch } });
+  const setInv = (patch: Partial<typeof inv>) => ctl?.setExt("inventory", { ...inv, ...patch });
 
-  const realHubs =
-    s?.warehouses && s.warehouses.length > 0
-      ? s.warehouses.map((wh, idx) => ({
-          id: wh.id,
-          name: wh.name,
-          city: wh.city ?? "",
-          priority: idx + 1,
-          active: wh.status === "active",
-        }))
-      : DEFAULT_HUBS;
+  const rowOf = (id: string, p: ChannelInventoryPolicy | undefined) => drafts[id] ?? { allocationPercent: p?.allocationPercent ?? 100, safetyBuffer: p?.safetyBuffer ?? 0 };
+  const totalAllocation = channels.reduce((acc, c) => acc + rowOf(c.id, policies.get(c.id)).allocationPercent, 0);
 
-  // Section 02 & 03 state: Buffers & Reserves
-  const [bufferSettings, setBufferSettings] = useState<InventoryBufferSettings>(() => ({
-    globalBufferPercent: initialBufferPercent,
-    minSafetyStockUnits: savedBuffers?.minSafetyStockUnits ?? 15,
-    criticalLowStockUnits: initialLowStock,
-    channelAllocations: savedBuffers?.channelAllocations || DEFAULT_CHANNELS,
-    hubPriorities: realHubs,
-    negativeStockTwoStepApproval: savedBuffers?.negativeStockTwoStepApproval ?? true,
-    spikeProtectionUnitsPerHour: savedBuffers?.spikeProtectionUnitsPerHour ?? 200,
-  }));
-
-  // Keep buffer percent in sync if controller changes
-  useEffect(() => {
-    if (v?.bufferPercent !== undefined && v.bufferPercent !== "") {
-      const num = Number(v.bufferPercent);
-      if (!Number.isNaN(num)) {
-        setBufferSettings((prev) => (prev.globalBufferPercent !== num ? { ...prev, globalBufferPercent: num } : prev));
-      }
-    }
-  }, [v?.bufferPercent]);
-
-  // Keep low stock threshold in sync if controller changes
-  useEffect(() => {
-    if (v?.lowStockThreshold !== undefined && v.lowStockThreshold !== "") {
-      const num = Number(v.lowStockThreshold);
-      if (!Number.isNaN(num)) {
-        setBufferSettings((prev) => (prev.criticalLowStockUnits !== num ? { ...prev, criticalLowStockUnits: num } : prev));
-      }
-    }
-  }, [v?.lowStockThreshold]);
-
-  // Keep warehouses in sync if server query updates
-  useEffect(() => {
-    if (s?.warehouses && s.warehouses.length > 0) {
-      setBufferSettings((prev) => ({
-        ...prev,
-        hubPriorities: s.warehouses.map((wh, idx) => ({
-          id: wh.id,
-          name: wh.name,
-          city: wh.city ?? "",
-          priority: idx + 1,
-          active: wh.status === "active",
-        })),
-      }));
-    }
-  }, [s?.warehouses]);
-
-  const [saved, setSaved] = useState(false);
-
-  // Computed SKU preview
-  const skuPreview = "AURA-CLO-000402";
-
-  const handleAllocationChange = (index: number, newPercent: number) => {
-    const updated = [...bufferSettings.channelAllocations];
-    updated[index] = { ...updated[index], reservePercent: newPercent };
-    setBufferSettings({ ...bufferSettings, channelAllocations: updated });
+  const saveRow = (accountId: string) => {
+    const d = drafts[accountId];
+    if (!d) return;
+    setRowError((e) => ({ ...e, [accountId]: "" }));
+    saveChannel.mutate(
+      { accountId, body: { allocationPercent: d.allocationPercent, safetyBuffer: d.safetyBuffer } },
+      {
+        onSuccess: () => toast({ title: "Channel stock rule saved", description: "Every live listing of this channel is being re-computed.", variant: "success" }),
+        onError: (e) => setRowError((x) => ({ ...x, [accountId]: errorMessage(e, "Could not save this channel.") })),
+      },
+    );
   };
 
-  const handleGlobalBufferChange = (val: number) => {
-    setBufferSettings((prev) => ({ ...prev, globalBufferPercent: val }));
-    if (ctl) {
-      ctl.setField("bufferPercent", String(val));
-    }
-  };
-
-  const handleCriticalAlertChange = (val: number) => {
-    setBufferSettings((prev) => ({ ...prev, criticalLowStockUnits: val }));
-    if (ctl) {
-      ctl.setField("lowStockThreshold", String(val));
-    }
-  };
-
-  const totalAllocation = bufferSettings.channelAllocations.reduce((acc, c) => acc + c.reservePercent, 0);
-
-  const handleSave = async () => {
-    try {
-      localStorage.setItem("omni_listing_gates", JSON.stringify(catalogSettings));
-      localStorage.setItem("omni_channel_buffers", JSON.stringify(bufferSettings));
-      if (ctl) {
-        await ctl.save();
-      }
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2500);
-    } catch {
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2500);
-    }
-  };
+  const separator = catalog.skuSeparator;
+  const preview = skuPreview(catalog.skuTemplate, separator, catalog.skuCasing, shell?.business?.name ?? s.business.displayName);
+  const hubs = [...s.warehouses];
 
   return (
     <div className="space-y-6">
-      {/* Header bar */}
       <div className="flex items-center justify-between rounded-xl border border-border bg-card p-4 text-xs">
         <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -215,316 +87,249 @@ export function InventoryListingsTab({ canWrite = true, s, v, ctl }: InventoryLi
           </div>
           <div>
             <p className="font-semibold text-foreground">Catalog Sovereignty & Multi-Channel Inventory Buffers</p>
-            <p className="text-muted-foreground">
-              Define automated SKU generation syntax, Indian statutory listing gates, safety reserve quotas, and hub routing.
-            </p>
+            <p className="text-muted-foreground">SKU syntax, statutory listing gates, stock cushions and channel reserves. Save with the bar at the top; channel reserves save per row.</p>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {saved && (
-            <span className="flex items-center gap-1 text-emerald-600 font-medium text-xs">
-              <Check className="h-3.5 w-3.5" /> Settings Saved
-            </span>
-          )}
-          <Button size="sm" onClick={handleSave} disabled={!canWrite}>
-            Save Inventory Rules
-          </Button>
         </div>
       </div>
 
-      {/* Section 01: Catalog & Listing Gates */}
-      <SectionCard
-        title="Section 01: Catalog & Listing Gates"
-        description="Enforce standardized SKU taxonomy and statutory Indian commerce attributes before sync."
-      >
+      {[err?.["ext:catalog"], err?.["ext:inventory"]].filter(Boolean).map((m) => (
+        <p key={m} role="alert" className="rounded-md border border-destructive/40 bg-red-50 p-3 text-xs text-red-900">
+          {m}
+        </p>
+      ))}
+
+      <SectionCard title="Section 01: Catalog & Listing Gates" description="Standardised SKU taxonomy and statutory attributes before sync.">
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-          {/* SKU syntax builder */}
           <div className="space-y-2">
-            <label className="text-xs font-medium text-foreground">Auto-SKU Syntax Formula</label>
-            <Input
-              value={catalogSettings.skuSyntaxTemplate}
-              onChange={(e) => setCatalogSettings({ ...catalogSettings, skuSyntaxTemplate: e.target.value })}
-              disabled={!canWrite}
-              className="font-mono text-xs"
-            />
+            <label htmlFor="sku-formula" className="text-xs font-medium text-foreground">
+              Auto-SKU Syntax Formula
+            </label>
+            <Input id="sku-formula" value={catalog.skuTemplate} onChange={(e) => setCatalog({ skuTemplate: e.target.value })} disabled={!edit} maxLength={60} className="font-mono text-xs" />
             <div className="flex flex-wrap items-center gap-1.5 pt-1">
               <span className="text-[11px] text-muted-foreground">Tokens:</span>
-              <button
-                type="button"
-                className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground hover:bg-muted/80"
-                onClick={() => setCatalogSettings({ ...catalogSettings, skuSyntaxTemplate: catalogSettings.skuSyntaxTemplate + "-[BRAND]" })}
-              >
-                + [BRAND]
-              </button>
-              <button
-                type="button"
-                className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground hover:bg-muted/80"
-                onClick={() => setCatalogSettings({ ...catalogSettings, skuSyntaxTemplate: catalogSettings.skuSyntaxTemplate + "-[CAT3]" })}
-              >
-                + [CAT3]
-              </button>
-              <button
-                type="button"
-                className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground hover:bg-muted/80"
-                onClick={() => setCatalogSettings({ ...catalogSettings, skuSyntaxTemplate: catalogSettings.skuSyntaxTemplate + "-[SEQ6]" })}
-              >
-                + [SEQ6]
-              </button>
+              {["[BRAND]", "[CAT3]", "[SEQ6]"].map((t) => (
+                <button key={t} type="button" disabled={!edit} className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground hover:bg-muted/80 disabled:opacity-50" onClick={() => setCatalog({ skuTemplate: `${catalog.skuTemplate}-${t}` })}>
+                  + {t}
+                </button>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 gap-3 pt-1">
+              <Field id="sku-separator" label="Separator">
+                <select id="sku-separator" className={selectClass} value={catalog.skuSeparator} disabled={!edit} onChange={(e) => setCatalog({ skuSeparator: e.target.value as "-" | "_" | "/" })}>
+                  <option value="-">Hyphen (-)</option>
+                  <option value="_">Underscore (_)</option>
+                  <option value="/">Slash (/)</option>
+                </select>
+              </Field>
+              <Field id="sku-casing" label="Letter case">
+                <select id="sku-casing" className={selectClass} value={catalog.skuCasing} disabled={!edit} onChange={(e) => setCatalog({ skuCasing: e.target.value as "uppercase" | "lowercase" | "as_is" })}>
+                  <option value="uppercase">UPPERCASE</option>
+                  <option value="lowercase">lowercase</option>
+                  <option value="as_is">As typed</option>
+                </select>
+              </Field>
             </div>
             <p className="text-[11px] text-muted-foreground">
-              Live syntax preview: <span className="font-mono font-bold text-primary">{skuPreview}</span>
+              Example from this formula: <span className="font-mono font-bold text-primary">{preview}</span>
             </p>
           </div>
 
-          <Field id="settings-barcode-gate" label="Barcode & EAN Strictness" hint="Rejects product creation without GS1-verified GTIN/EAN.">
-            <div className="flex items-center justify-between rounded-lg border border-border/70 p-3">
-              <div className="flex items-center gap-2">
-                <Barcode className="h-4 w-4 text-muted-foreground" />
-                <span className="text-xs font-medium">Require Valid 13-Digit EAN / UPC</span>
+          <div className="space-y-4">
+            <Field id="settings-barcode-gate" label="Barcode & EAN Strictness" hint="Reject a product without a valid GTIN/EAN. Saved for later enforcement.">
+              <div className="flex items-center justify-between rounded-lg border border-border/70 p-3">
+                <div className="flex items-center gap-2">
+                  <Barcode className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-xs font-medium">Require a valid 13-digit EAN / UPC</span>
+                </div>
+                <Switch aria-label="Require a valid EAN" checked={catalog.strictEan} onCheckedChange={(c) => setCatalog({ strictEan: c })} disabled={!edit} />
               </div>
-              <Switch
-                checked={catalogSettings.strictEanValidation}
-                onCheckedChange={(c) => setCatalogSettings({ ...catalogSettings, strictEanValidation: c })}
-                disabled={!canWrite}
-              />
-            </div>
-          </Field>
-        </div>
-
-        {/* Indian Statutory Listing Gates */}
-        <div className="mt-5 rounded-lg border border-border/80 bg-muted/20 p-4">
-          <p className="text-xs font-semibold text-foreground">Mandatory Indian Listing Compliance Gates</p>
-          <p className="text-[11px] text-muted-foreground mb-3">
-            Products missing these statutory attributes will be blocked from publishing to Amazon, Flipkart, and Quick-Commerce.
-          </p>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-            <div className="flex items-center justify-between rounded-md border border-border/70 bg-card p-3">
-              <div>
-                <p className="text-xs font-medium text-foreground">HSN Code (6-8 Digits)</p>
-                <p className="text-[10px] text-muted-foreground">Statutory GST tariff classification</p>
-              </div>
-              <Switch
-                checked={catalogSettings.mandatoryGates.hsnCode}
-                onCheckedChange={(c) =>
-                  setCatalogSettings({
-                    ...catalogSettings,
-                    mandatoryGates: { ...catalogSettings.mandatoryGates, hsnCode: c },
-                  })
-                }
-                disabled={!canWrite}
-              />
-            </div>
-
-            <div className="flex items-center justify-between rounded-md border border-border/70 bg-card p-3">
-              <div>
-                <p className="text-xs font-medium text-foreground">Country of Origin (COO)</p>
-                <p className="text-[10px] text-muted-foreground">Mandatory Legal Metrology gate</p>
-              </div>
-              <Switch
-                checked={catalogSettings.mandatoryGates.countryOfOrigin}
-                onCheckedChange={(c) =>
-                  setCatalogSettings({
-                    ...catalogSettings,
-                    mandatoryGates: { ...catalogSettings.mandatoryGates, countryOfOrigin: c },
-                  })
-                }
-                disabled={!canWrite}
-              />
-            </div>
-
-            <div className="flex items-center justify-between rounded-md border border-border/70 bg-card p-3">
-              <div>
-                <p className="text-xs font-medium text-foreground">GST Rate Slab (0/5/12/18/28%)</p>
-                <p className="text-[10px] text-muted-foreground">Live tax calculation engine</p>
-              </div>
-              <Switch
-                checked={catalogSettings.mandatoryGates.gstRateSlab}
-                onCheckedChange={(c) =>
-                  setCatalogSettings({
-                    ...catalogSettings,
-                    mandatoryGates: { ...catalogSettings.mandatoryGates, gstRateSlab: c },
-                  })
-                }
-                disabled={!canWrite}
-              />
-            </div>
+            </Field>
+            <Field id="sync-sovereignty" label="Catalog sync sovereignty" hint="Which side wins when the master catalog and a marketplace disagree. Saved for later enforcement.">
+              <select id="sync-sovereignty" className={selectClass} value={catalog.syncSovereignty} disabled={!edit} onChange={(e) => setCatalog({ syncSovereignty: e.target.value as "master_catalog" | "channel_autonomous" })}>
+                <option value="master_catalog">Master catalog wins</option>
+                <option value="channel_autonomous">Each channel keeps its own values</option>
+              </select>
+            </Field>
           </div>
         </div>
-      </SectionCard>
 
-      {/* Section 02: Multi-Channel Inventory Buffers & Safety Stock */}
-      <SectionCard
-        title="Section 02: Multi-Channel Inventory Buffers & Safety Stock"
-        description="Prevent overselling by allocating percentage reserves across connected marketplace accounts."
-        aside={
-          <Badge
-            variant={totalAllocation === 100 ? "default" : "destructive"}
-            className={totalAllocation === 100 ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : ""}
-          >
-            Total Allocated: {totalAllocation}%
-          </Badge>
-        }
-      >
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-3 mb-5">
-          <Field
-            id="buf-global-percent"
-            label="Global Safety Buffer (%)"
-            hint="Deducted before calculating available sellable inventory."
-          >
-            <Input
-              type="number"
-              value={bufferSettings.globalBufferPercent}
-              onChange={(e) => handleGlobalBufferChange(Number(e.target.value))}
-              disabled={!canWrite}
-            />
-          </Field>
-
-          <Field
-            id="buf-min-safety"
-            label="Minimum Safety Threshold (Units)"
-            hint="Floor stock reserved for unexpected return or damage replacements."
-          >
-            <Input
-              type="number"
-              value={bufferSettings.minSafetyStockUnits}
-              onChange={(e) => setBufferSettings({ ...bufferSettings, minSafetyStockUnits: Number(e.target.value) })}
-              disabled={!canWrite}
-            />
-          </Field>
-
-          <Field
-            id="buf-critical-alert"
-            label="Critical Low Stock Alert (Units)"
-            hint="Triggers high-priority alerts and webhook notifications."
-          >
-            <Input
-              type="number"
-              value={bufferSettings.criticalLowStockUnits}
-              onChange={(e) => handleCriticalAlertChange(Number(e.target.value))}
-              disabled={!canWrite}
-            />
-          </Field>
-        </div>
-
-        {/* Active Channel Reserve Allocation Table */}
-        <div className="overflow-x-auto rounded-lg border border-border">
-          <table className="w-full text-left text-xs">
-            <thead className="border-b border-border bg-muted/50 font-medium text-muted-foreground">
-              <tr>
-                <th className="px-4 py-2.5">Sales Channel</th>
-                <th className="px-4 py-2.5">Reserve Share (%)</th>
-                <th className="px-4 py-2.5">Channel Buffer (Units)</th>
-                <th className="px-4 py-2.5 text-center">Sync Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {bufferSettings.channelAllocations.map((ch, idx) => (
-                <tr key={ch.channelId} className="hover:bg-muted/30">
-                  <td className="px-4 py-3 font-medium text-foreground">
-                    <span className="mr-2 text-base">{ch.channelIcon}</span>
-                    {ch.channelName}
-                  </td>
-                  <td className="px-4 py-3 w-48">
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="range"
-                        min={0}
-                        max={100}
-                        value={ch.reservePercent}
-                        onChange={(e) => handleAllocationChange(idx, Number(e.target.value))}
-                        disabled={!canWrite}
-                        className="w-24 accent-primary"
-                      />
-                      <span className="w-10 font-mono font-semibold">{ch.reservePercent}%</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 font-mono text-muted-foreground">
-                    {ch.safetyBufferUnits} units floor
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                      SYNC ACTIVE
-                    </Badge>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </SectionCard>
-
-      {/* Section 03 & 04: Fulfillment Routing & Operational Guardrails */}
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        <SectionCard
-          title="Fulfillment Hub Priority Hierarchy"
-          description="Orders are routed through warehouses in order of priority before attempting split fulfillment."
-        >
-          <div className="space-y-2.5">
-            {bufferSettings.hubPriorities.map((hub) => (
-              <div
-                key={hub.id}
-                className="flex items-center justify-between rounded-lg border border-border/80 bg-muted/20 p-3"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
-                    {hub.priority}
-                  </span>
-                  <div>
-                    <p className="text-xs font-semibold text-foreground">{hub.name}</p>
-                    <p className="text-[11px] text-muted-foreground">{hub.city}</p>
-                  </div>
+        <div className="mt-5 rounded-lg border border-border/80 bg-muted/20 p-4">
+          <p className="text-xs font-semibold text-foreground">Mandatory Listing Compliance Gates</p>
+          <p className="mb-3 text-[11px] text-muted-foreground">Attributes a product must have before it is published. {STORED_NOTE}</p>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            {[
+              { key: "hsnCode" as const, title: "HSN Code (6-8 Digits)", text: "Statutory GST tariff classification" },
+              { key: "countryOfOrigin" as const, title: "Country of Origin (COO)", text: "Mandatory Legal Metrology gate" },
+              { key: "gstRateSlab" as const, title: "GST Rate Slab (0/5/12/18/28%)", text: "Tax rate on the product" },
+            ].map((g) => (
+              <div key={g.key} className="flex items-center justify-between rounded-md border border-border/70 bg-card p-3">
+                <div>
+                  <p className="text-xs font-medium text-foreground">{g.title}</p>
+                  <p className="text-[10px] text-muted-foreground">{g.text}</p>
                 </div>
-                <Badge variant="secondary" className="text-[10px]">
-                  Priority {hub.priority}
-                </Badge>
+                <Switch aria-label={g.title} checked={catalog.gates[g.key]} onCheckedChange={(c) => setGates({ [g.key]: c })} disabled={!edit} />
               </div>
             ))}
           </div>
+        </div>
+      </SectionCard>
+
+      <SectionCard
+        title="Section 02: Multi-Channel Inventory Buffers & Safety Stock"
+        description="Stock kept back before channels share what is left, and how much each connected marketplace account may sell."
+        aside={
+          channels.length > 0 ? (
+            <Badge variant={totalAllocation <= 100 ? "default" : "destructive"} className={totalAllocation <= 100 ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : ""} title={totalAllocation > 100 ? "Together the channels may sell more than you hold" : undefined}>
+              Total allocated: {totalAllocation}%
+            </Badge>
+          ) : undefined
+        }
+      >
+        <div className="mb-5 grid grid-cols-1 gap-5 md:grid-cols-3">
+          <Field id="settings-bufferPercent" label="Global Safety Buffer (%)" error={err?.bufferPercent} hint="Held back from the stock before any channel sells. Applied to every channel quantity.">
+            <Input id="settings-bufferPercent" type="number" min={0} max={100} value={v.bufferPercent} onChange={(e) => ctl?.setField("bufferPercent", e.target.value)} disabled={!edit} error={!!err?.bufferPercent} />
+          </Field>
+          <Field id="buf-min-safety" label="Minimum Safety Stock (Units)" hint="Units always held back from every channel, for returns or damage replacements.">
+            <Input id="buf-min-safety" type="number" min={0} value={inv.minSafetyStockUnits} onChange={(e) => setInv({ minSafetyStockUnits: Math.max(0, Math.round(Number(e.target.value) || 0)) })} disabled={!edit} />
+          </Field>
+          <Field id="settings-lowStockThreshold" label="Critical Low Stock Alert (Units)" error={err?.lowStockThreshold} hint="A SKU at or under this raises a low-stock alert.">
+            <Input id="settings-lowStockThreshold" type="number" min={0} value={v.lowStockThreshold} onChange={(e) => ctl?.setField("lowStockThreshold", e.target.value)} disabled={!edit} error={!!err?.lowStockThreshold} />
+          </Field>
+        </div>
+
+        {channels.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-border p-6 text-center text-xs text-muted-foreground">
+            <p className="font-semibold text-foreground">No marketplace account is connected yet.</p>
+            <p className="mt-1">Channel stock reserves appear here once you connect a marketplace.</p>
+            <Link to={ROUTES.MARKETPLACE_HUB} className="mt-2 inline-block font-semibold text-foreground underline">
+              Connect a marketplace
+            </Link>
+          </div>
+        ) : (
+          <div className="overflow-x-auto rounded-lg border border-border">
+            <table className="w-full text-left text-xs">
+              <thead className="border-b border-border bg-muted/50 font-medium text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-2.5">Sales Channel</th>
+                  <th className="px-4 py-2.5">Share of stock it may sell (%)</th>
+                  <th className="px-4 py-2.5">Channel buffer (units)</th>
+                  <th className="px-4 py-2.5 text-center">Sync</th>
+                  <th className="px-4 py-2.5 text-right">Save</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {channels.map((ch) => {
+                  const p = policies.get(ch.id);
+                  const row = rowOf(ch.id, p);
+                  const dirty = Boolean(drafts[ch.id]) && Boolean(p) && (row.allocationPercent !== p?.allocationPercent || row.safetyBuffer !== p?.safetyBuffer);
+                  const editable = canPolicy && Boolean(p);
+                  return (
+                    <tr key={ch.id} className="hover:bg-muted/30">
+                      <td className="px-4 py-3 font-medium text-foreground">
+                        {ch.name}
+                        <div className="font-mono text-[10px] font-normal text-muted-foreground">{ch.marketplace}</div>
+                      </td>
+                      <td className="w-56 px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="range"
+                            aria-label={`Share of stock for ${ch.name}`}
+                            min={0}
+                            max={100}
+                            value={row.allocationPercent}
+                            onChange={(e) => setDrafts((d) => ({ ...d, [ch.id]: { ...row, allocationPercent: Number(e.target.value) } }))}
+                            disabled={!editable}
+                            className="w-24 accent-primary"
+                          />
+                          <span className="w-10 font-mono font-semibold">{row.allocationPercent}%</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Input
+                          type="number"
+                          aria-label={`Channel buffer for ${ch.name}`}
+                          min={0}
+                          className="h-8 w-24 font-mono text-xs"
+                          value={row.safetyBuffer}
+                          onChange={(e) => setDrafts((d) => ({ ...d, [ch.id]: { ...row, safetyBuffer: Math.max(0, Math.round(Number(e.target.value) || 0)) } }))}
+                          disabled={!editable}
+                        />
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <Badge variant="outline" className={p?.mode === "paused" ? "text-amber-700" : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"}>
+                          {!p ? (policiesLoading ? "..." : "-") : p.mode === "paused" ? "PAUSED" : "SYNC ON"}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <Button size="sm" variant="outline" disabled={!editable || !dirty || saveChannel.isPending} onClick={() => saveRow(ch.id)}>
+                          Save
+                        </Button>
+                        {rowError[ch.id] && (
+                          <p role="alert" className="mt-1 text-[11px] text-destructive">
+                            {rowError[ch.id]}
+                          </p>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {policiesFailed && <p role="alert" className="mt-2 text-[11px] text-destructive">Some channel stock rules could not be loaded.</p>}
+        {channels.length > 0 && !canPolicy && <p className="mt-2 text-[11px] text-muted-foreground">Only an administrator can change a channel's stock rule.</p>}
+      </SectionCard>
+
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        <SectionCard title="Fulfillment Hub Priority Hierarchy" description="Warehouses in the order orders are routed through them.">
+          {hubs.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-border p-5 text-center text-xs text-muted-foreground">
+              <p className="font-semibold text-foreground">No warehouse yet.</p>
+              <p className="mt-1">Stock is held in warehouses; add stock from Inventory to create the first one.</p>
+              <Link to={ROUTES.INVENTORY} className="mt-2 inline-block font-semibold text-foreground underline">
+                Open Inventory
+              </Link>
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              {hubs.map((hub, i) => (
+                <div key={hub.id} className="flex items-center justify-between rounded-lg border border-border/80 bg-muted/20 p-3">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">{i + 1}</span>
+                    <div>
+                      <p className="text-xs font-semibold text-foreground">{hub.name}</p>
+                      <p className="text-[11px] text-muted-foreground">{[hub.code, hub.city].filter(Boolean).join(" · ")}</p>
+                    </div>
+                  </div>
+                  <Badge variant="secondary" className="text-[10px]">
+                    {hub.status === "active" ? (hub.isDefault ? "Default" : `Priority ${i + 1}`) : "Inactive"}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          )}
         </SectionCard>
 
-        <SectionCard
-          title="Operational Guardrails & Anomaly Locks"
-          description="Protect inventory integrity against rogue bulk updates and sudden order spikes."
-        >
+        <SectionCard title="Operational Guardrails & Anomaly Locks" description={`Protect stock against rogue bulk updates and sudden order spikes. ${STORED_NOTE}`}>
           <div className="space-y-4">
             <div className="flex items-center justify-between rounded-lg border border-border/70 p-3">
               <div>
                 <p className="text-xs font-semibold text-foreground">Two-step approval for negative stock overrides</p>
-                <p className="text-[11px] text-muted-foreground">
-                  Requires admin 2FA verification when adjusting stock levels below 0.
-                </p>
+                <p className="text-[11px] text-muted-foreground">Ask for a second approval when stock is adjusted below 0.</p>
               </div>
-              <Switch
-                checked={bufferSettings.negativeStockTwoStepApproval}
-                onCheckedChange={(c) => setBufferSettings({ ...bufferSettings, negativeStockTwoStepApproval: c })}
-                disabled={!canWrite}
-              />
+              <Switch aria-label="Two-step approval for negative stock" checked={inv.negativeStockTwoStepApproval} onCheckedChange={(c) => setInv({ negativeStockTwoStepApproval: c })} disabled={!edit} />
             </div>
 
-            <div className="rounded-lg border border-border/70 p-3 space-y-2">
+            <div className="space-y-2 rounded-lg border border-border/70 p-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-semibold text-foreground">Velocity Spike Anomaly Protection</p>
-                  <p className="text-[11px] text-muted-foreground">
-                    Freezes listings if velocity exceeds safety limits to prevent pricing glitches.
-                  </p>
+                  <p className="text-xs font-semibold text-foreground">Velocity spike protection</p>
+                  <p className="text-[11px] text-muted-foreground">Pause listings when units sold per hour exceed this limit.</p>
                 </div>
-                <span className="font-mono text-xs font-bold text-foreground">
-                  {bufferSettings.spikeProtectionUnitsPerHour} units/hr
-                </span>
+                <span className="font-mono text-xs font-bold text-foreground">{inv.spikeProtectionUnitsPerHour} units/hr</span>
               </div>
-              <input
-                type="range"
-                min={50}
-                max={1000}
-                step={25}
-                value={bufferSettings.spikeProtectionUnitsPerHour}
-                onChange={(e) =>
-                  setBufferSettings({ ...bufferSettings, spikeProtectionUnitsPerHour: Number(e.target.value) })
-                }
-                disabled={!canWrite}
-                className="w-full accent-primary"
-              />
+              <input type="range" aria-label="Spike limit" min={50} max={1000} step={25} value={Math.min(1000, Math.max(50, inv.spikeProtectionUnitsPerHour))} onChange={(e) => setInv({ spikeProtectionUnitsPerHour: Number(e.target.value) })} disabled={!edit} className="w-full accent-primary" />
             </div>
           </div>
         </SectionCard>

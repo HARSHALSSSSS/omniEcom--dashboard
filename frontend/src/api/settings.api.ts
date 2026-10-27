@@ -3,6 +3,7 @@ import { ENDPOINTS } from "./endpoints";
 import type {
   AccountSession,
   AiSettings,
+  ChannelInventoryPolicy,
   CursorPage,
   Gstin,
   GstinCheck,
@@ -11,6 +12,7 @@ import type {
   GstState,
   Invitation,
   MyProfile,
+  PriceSimulation,
   Member,
   MemberStatus,
   Role,
@@ -68,6 +70,14 @@ export const settingsApi = {
   resendInvitation: async (id: string): Promise<Invitation> => unwrap(await client.post(ENDPOINTS.INVITATION_RESEND(id), {})),
   revokeInvitation: async (id: string): Promise<Invitation> => unwrap(await client.delete(ENDPOINTS.INVITATION(id))),
   roles: async (): Promise<Role[]> => unwrap(await client.get(ENDPOINTS.ROLES)),
+
+  // channel stock reserve (the existing channel inventory policy of a marketplace account)
+  channelPolicy: async (accountId: string, signal?: AbortSignal): Promise<ChannelInventoryPolicy> => unwrap(await client.get(ENDPOINTS.MARKETPLACE_ACCOUNT_INVENTORY_POLICY(accountId), { signal })),
+  saveChannelPolicy: async (accountId: string, body: { allocationPercent?: number; safetyBuffer?: number; mode?: "sync" | "paused" }): Promise<ChannelInventoryPolicy> =>
+    unwrap(await client.put(ENDPOINTS.MARKETPLACE_ACCOUNT_INVENTORY_POLICY(accountId), body)),
+
+  // the pricing simulator: real variant, real channel fees, the saved rules
+  simulate: async (body: { variantId: string; accountId?: string; priceMinor?: number }, signal?: AbortSignal): Promise<PriceSimulation> => unwrap(await client.post(ENDPOINTS.PRICING_SIMULATE, body, { signal })),
 
   // account security (the signed-in person)
   changePassword: async (body: { currentPassword: string; newPassword: string }): Promise<{ message: string }> => unwrap(await client.post(ENDPOINTS.ME_CHANGE_PASSWORD, body)),

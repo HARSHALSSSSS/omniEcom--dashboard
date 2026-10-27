@@ -318,6 +318,8 @@ export const ENDPOINTS = {
 
   // Pricing
   PRICING_OVERVIEW: `${BASE}/pricing/overview`,
+  PRICING_SIMULATE: `${BASE}/pricing/simulate`,
+  MARKETPLACE_ACCOUNT_INVENTORY_POLICY: (id: string) => `${BASE}/marketplace-accounts/${id}/inventory-policy`,
   PRICING_MARGIN_OVERVIEW: `${BASE}/pricing/margin-overview`,
   PRICING_PRICE_TABLE: `${BASE}/pricing/price-table`,
   FEE_PROFILE: (accountId: string) => `${BASE}/analytics/fee-profiles/${accountId}`,

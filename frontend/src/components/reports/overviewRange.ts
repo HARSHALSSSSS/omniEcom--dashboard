@@ -9,6 +9,8 @@ export const RANGE_PRESETS = [
   { id: "last_90", label: "Last 90 days" },
   { id: "this_month", label: "This month" },
   { id: "last_month", label: "Last month" },
+  { id: "quarter_to_date", label: "Quarter to date" },
+  { id: "fy_to_date", label: "Financial year to date" },
   { id: "custom", label: "Custom range" },
 ] as const;
 export type RangePreset = (typeof RANGE_PRESETS)[number]["id"];
@@ -58,6 +60,11 @@ export function presetRange(id: Exclude<RangePreset, "custom">, today: string): 
       return { from: addDays(today, -89), to: today };
     case "this_month":
       return { from: `${today.slice(0, 7)}-01`, to: today };
+    case "quarter_to_date":
+      return { from: `${today.slice(0, 4)}-${String(Math.floor(d.getUTCMonth() / 3) * 3 + 1).padStart(2, "0")}-01`, to: today };
+    case "fy_to_date":
+      // the financial year starts on 1 April
+      return { from: `${d.getUTCMonth() >= 3 ? d.getUTCFullYear() : d.getUTCFullYear() - 1}-04-01`, to: today };
     case "last_month": {
       const first = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1));
       const last = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 0));
@@ -78,12 +85,17 @@ export interface OverviewUrlState {
 }
 
 /** the Overview's date range, comparison and trend buckets live in the URL, so a link shows the same numbers */
-export function useOverviewUrlState(today: string) {
+/** the preset the workspace opens date ranges with (Settings > General) */
+export function defaultOverviewPreset(period: "7d" | "30d" | "qtd" | "fytd"): RangePreset {
+  return period === "7d" ? "last_7" : period === "qtd" ? "quarter_to_date" : period === "fytd" ? "fy_to_date" : "last_30";
+}
+
+export function useOverviewUrlState(today: string, fallback: RangePreset = "last_30") {
   const [params, setParams] = useSearchParams();
 
   const state = useMemo<OverviewUrlState>(() => {
     const presetParam = params.get("range");
-    const preset = RANGE_PRESETS.find((p) => p.id === presetParam)?.id ?? "last_30";
+    const preset = RANGE_PRESETS.find((p) => p.id === presetParam)?.id ?? fallback;
     const compare = OVERVIEW_COMPARES.find((c) => c === params.get("compare")) ?? "previous";
     const period = PERIODS.find((p) => p.id === params.get("trend"))?.id;
     if (preset !== "custom") return { preset, ...presetRange(preset, today), compare, period, problem: null };
@@ -94,7 +106,7 @@ export function useOverviewUrlState(today: string) {
     else if (from > to) problem = "The start date must not be after the end date.";
     else if (daysBetween(from, to) > MAX_DAYS) problem = "A range is at most 366 days.";
     return { preset, from, to, compare, period, problem };
-  }, [params, today]);
+  }, [params, today, fallback]);
 
   const set = useCallback(
     (patch: Record<string, string | null>) => {
@@ -119,9 +131,9 @@ export function useOverviewUrlState(today: string) {
       if (id === "custom") {
         const r = presetRange("last_30", today);
         set({ range: "custom", from: r.from, to: r.to });
-      } else set({ range: id === "last_30" ? null : id, from: null, to: null });
+      } else set({ range: id === fallback ? null : id, from: null, to: null });
     },
-    [set, today],
+    [set, today, fallback],
   );
 
   return { state, setPreset, setCustom: (from: string, to: string) => set({ range: "custom", from, to }), setCompare: (c: OverviewCompare) => set({ compare: c === "previous" ? null : c }), setPeriod: (p: TrendPeriod | undefined) => set({ trend: p ?? null }) };

@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { MARGIN_STATUSES, PRODUCT_SORTS, RANGE_PRESETS, type DateRange, type ProductQuery, type ProductSort, type ProfitView, type RangePreset, type SpendQuery, type StatusFilter, type WaterfallQuery } from "@/types/profitability";
+import { preferredPageSize } from "@/lib/preferences";
 import { isRealDay, isoDay, presetRange, rangeProblem } from "./profitFormat";
 
 export const PAGE_SIZES = [25, 50, 100] as const;
@@ -59,7 +60,7 @@ export function readUrlState(params: URLSearchParams, today: string = isoDay(new
     account: account === NO_ACCOUNT || (account && UUID.test(account)) ? (account as string) : undefined,
     q: params.get("q")?.trim() || undefined,
     page: Number.isInteger(page) && page > 1 ? page : 1,
-    pageSize: (PAGE_SIZES as readonly number[]).includes(size) ? size : DEFAULT_PAGE_SIZE,
+    pageSize: (PAGE_SIZES as readonly number[]).includes(size) ? size : preferredPageSize(PAGE_SIZES, DEFAULT_PAGE_SIZE),
     productQ: params.get("pq")?.trim() || undefined,
     productMarketplace: params.get("mk")?.trim() || undefined,
     productStatus: ([...MARGIN_STATUSES, "unknown"] as readonly string[]).includes(params.get("ms") ?? "") ? (params.get("ms") as StatusFilter) : undefined,

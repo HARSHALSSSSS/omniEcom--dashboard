@@ -1,4 +1,35 @@
-import type { AlertKey, FulfillmentMethod, NumberFormat, SettingsOverview, SettingsPatch, SettingsModule } from "@/types/settings";
+import type {
+  AlertKey,
+  CatalogSettings,
+  FulfillmentMethod,
+  InventorySettings,
+  NumberFormat,
+  PricingSettings,
+  SettingsOverview,
+  SettingsPatch,
+  SettingsModule,
+  WorkspacePreferences,
+} from "@/types/settings";
+
+/** the parts of the catalog and inventory groups the Products & Listings tab edits (the rest is owned by other screens) */
+export type EditableCatalog = Pick<CatalogSettings, "skuTemplate" | "skuSeparator" | "skuCasing" | "strictEan" | "gates" | "syncSovereignty">;
+export type EditableInventory = Pick<InventorySettings, "minSafetyStockUnits" | "spikeProtectionUnitsPerHour" | "negativeStockTwoStepApproval">;
+
+/** the nested groups of the General, Products & Listings and Pricing & Margins tabs, edited as whole objects */
+export interface SettingsExt {
+  preferences: WorkspacePreferences;
+  catalog: EditableCatalog;
+  inventory: EditableInventory;
+  pricing: PricingSettings;
+}
+export type ExtGroup = keyof SettingsExt;
+export const EXT_GROUPS: ExtGroup[] = ["preferences", "catalog", "inventory", "pricing"];
+export const extKey = (g: ExtGroup): FormKey => `ext:${g}`;
+
+/** the server's defaults of the General tab (what "Reset defaults" goes back to) */
+export const PREFERENCE_DEFAULTS: Omit<WorkspacePreferences, "guardrails"> = { defaultRoute: "/", language: "en-IN", pageSize: 25, catalogView: "all_active", reportingPeriod: "30d", telemetrySeconds: 30, showThumbnails: true };
+
+const copy = <T,>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 
 /** CIN: listed company L / unlisted U, 5 digits, 2 letters (state), 4 digits (year), 3 letters (type), 6 digits */
 export const CIN_PATTERN = /^[LU][0-9]{5}[A-Z]{2}[0-9]{4}[A-Z]{3}[0-9]{6}$/;
@@ -40,6 +71,7 @@ export interface SettingsForm {
   aiEnabled: boolean;
   slaMinutes: string;
   alerts: Record<AlertKey, boolean>;
+  ext: SettingsExt;
 }
 
 export type TextKey =
@@ -62,7 +94,7 @@ export type TextKey =
   | "slaMinutes"
   | "warehouseId";
 /** a field of the form: used for dirty marks, error placement and focus */
-export type FormKey = TextKey | "numberFormat" | "autoAcknowledgeOrders" | "roundPriceToNine" | "fulfillmentMethod" | "aiEnabled" | `alert:${AlertKey}`;
+export type FormKey = TextKey | `ext:${ExtGroup}` | "numberFormat" | "autoAcknowledgeOrders" | "roundPriceToNine" | "fulfillmentMethod" | "aiEnabled" | `alert:${AlertKey}`;
 export type FieldProblems = Partial<Record<FormKey, string>>;
 
 const BUSINESS_KEYS: FormKey[] = ["legalName", "displayName", "cin", "pan", "supportEmail", "supportPhone", "line1", "line2", "city", "state", "pincode", "operatingLocation"];
@@ -71,6 +103,9 @@ const ALERT_FORM_KEYS: FormKey[] = ["slaMinutes", ...ALERT_KEYS.map((k) => `aler
 
 /** which tab a field lives on (dirty dots, "this tab has a problem") */
 export function tabOf(key: FormKey): SettingsModule {
+  if (key === "ext:preferences") return "general";
+  if (key === "ext:catalog" || key === "ext:inventory") return "listings";
+  if (key === "ext:pricing") return "pricing";
   if (BUSINESS_KEYS.includes(key)) return "business";
   if (REGIONAL_KEYS.includes(key)) return "regional";
   if (ALERT_FORM_KEYS.includes(key)) return "notifications";
@@ -111,6 +146,12 @@ export function toForm(s: SettingsOverview): SettingsForm {
       syncFailures: s.alerts.syncFailures,
       returns: s.alerts.returns,
     },
+    ext: {
+      preferences: copy(s.preferences),
+      catalog: copy({ skuTemplate: s.catalog.skuTemplate, skuSeparator: s.catalog.skuSeparator, skuCasing: s.catalog.skuCasing, strictEan: s.catalog.strictEan, gates: s.catalog.gates, syncSovereignty: s.catalog.syncSovereignty }),
+      inventory: copy({ minSafetyStockUnits: s.inventory.minSafetyStockUnits, spikeProtectionUnitsPerHour: s.inventory.spikeProtectionUnitsPerHour, negativeStockTwoStepApproval: s.inventory.negativeStockTwoStepApproval }),
+      pricing: copy(s.pricing),
+    },
   };
 }
 
@@ -133,6 +174,7 @@ export function modifiedKeys(base: SettingsForm, cur: SettingsForm): FormKey[] {
   if (base.fulfillmentMethod !== cur.fulfillmentMethod) out.push("fulfillmentMethod");
   if (base.aiEnabled !== cur.aiEnabled) out.push("aiEnabled");
   for (const k of ALERT_KEYS) if (base.alerts[k] !== cur.alerts[k]) out.push(`alert:${k}`);
+  for (const g of EXT_GROUPS) if (JSON.stringify(base.ext[g]) !== JSON.stringify(cur.ext[g])) out.push(extKey(g));
   return out;
 }
 
@@ -194,6 +236,39 @@ export function validateField(key: FormKey, v: SettingsForm): string | null {
   }
 }
 
+const inRange = (n: number, min: number, max: number) => Number.isFinite(n) && n >= min && n <= max;
+const optBps = (n: number | null) => n === null || inRange(n, 0, 10_000);
+const optMinor = (n: number | null) => n === null || inRange(n, 0, 100_000_000_000);
+
+/** the same limits as the API for the nested groups; the first problem of a group becomes its message */
+export function validateExt(group: ExtGroup, ext: SettingsExt): string | null {
+  switch (group) {
+    case "catalog":
+      return ext.catalog.skuTemplate.trim().length < 1 || ext.catalog.skuTemplate.trim().length > 60 ? "The SKU formula must be 1 to 60 characters." : null;
+    case "inventory": {
+      const i = ext.inventory;
+      if (!Number.isInteger(i.minSafetyStockUnits) || !inRange(i.minSafetyStockUnits, 0, 1_000_000)) return "The minimum safety stock must be a whole number of units, 0 or more.";
+      if (!Number.isInteger(i.spikeProtectionUnitsPerHour) || !inRange(i.spikeProtectionUnitsPerHour, 1, 1_000_000)) return "The spike limit must be at least 1 unit per hour.";
+      return null;
+    }
+    case "pricing": {
+      const p = ext.pricing;
+      if (!optBps(p.marginFloorBps)) return "The margin floor must be between 0% and 100%.";
+      if (!inRange(p.maxVelocityShiftBps, 0, 10_000)) return "The maximum shift must be between 0% and 100%.";
+      for (const t of Object.values(p.channelTiers)) {
+        if (!inRange(t.baseMarkupBps, 0, 100_000)) return "A channel markup must be between 0% and 1,000%.";
+        if (!inRange(t.maxDiscountBps, 0, 10_000)) return "A maximum discount must be between 0% and 100%.";
+        if (!inRange(t.repriceIntervalMinutes, 5, 1440)) return "A re-price interval must be between 5 and 1,440 minutes.";
+        if (!optBps(t.minNetMarginBps)) return "A minimum net margin must be between 0% and 100%.";
+        if (!optMinor(t.hardFloorMinor) || !optMinor(t.dealFloorMinor) || !inRange(t.fixedFeeBufferMinor, 0, 100_000_000_000)) return "Prices and fee buffers cannot be negative.";
+      }
+      return null;
+    }
+    default:
+      return null;
+  }
+}
+
 export interface BuiltPatch {
   /** the body of PATCH /settings (without `version`) */
   patch: SettingsPatch;
@@ -211,7 +286,7 @@ export function buildPatch(s: SettingsOverview, base: SettingsForm, cur: Setting
   const modified = modifiedKeys(base, cur);
   const problems: FieldProblems = {};
   for (const k of modified) {
-    const p = validateField(k, cur);
+    const p = k.startsWith("ext:") ? validateExt(k.slice(4) as ExtGroup, cur.ext) : validateField(k, cur);
     if (p) problems[k] = p;
   }
   const has = (k: FormKey) => modified.includes(k);
@@ -264,6 +339,16 @@ export function buildPatch(s: SettingsOverview, base: SettingsForm, cur: Setting
   if (has("alert:returns")) alerts.returns = cur.alerts.returns;
   if (Object.keys(alerts).length) patch.alerts = alerts;
 
+  if (has("ext:preferences") && !problems["ext:preferences"]) patch.preferences = cur.ext.preferences;
+  if (has("ext:catalog") && !problems["ext:catalog"]) patch.catalog = { ...cur.ext.catalog, skuTemplate: cur.ext.catalog.skuTemplate.trim() };
+  if (has("ext:inventory") && !problems["ext:inventory"]) patch.inventory = cur.ext.inventory;
+  if (has("ext:pricing") && !problems["ext:pricing"]) {
+    const { channelTiers, ...rest } = cur.ext.pricing;
+    // only the channels whose tier changed travel; the others stay as the server has them
+    const tiers = Object.fromEntries(Object.entries(channelTiers).filter(([id, t]) => JSON.stringify(t) !== JSON.stringify(base.ext.pricing.channelTiers[id])));
+    patch.pricing = { ...rest, ...(Object.keys(tiers).length ? { channelTiers: tiers } : {}) };
+  }
+
   return { patch, ai: has("aiEnabled") ? cur.aiEnabled : null, problems, modified };
 }
 
@@ -303,6 +388,11 @@ export function mapServerErrors(fields: Record<string, string>): { byKey: FieldP
   const byKey: FieldProblems = {};
   const other: string[] = [];
   for (const [path, message] of Object.entries(fields)) {
+    const group = /^(preferences|catalog|inventory|pricing)\./.exec(path)?.[1] as ExtGroup | undefined;
+    if (group) {
+      byKey[extKey(group)] ??= message;
+      continue;
+    }
     const bare = path.replace(/^(business|regional|operations|alerts)\./, "");
     const key = PATH_TO_KEY[bare];
     if (key) byKey[key] ??= message;

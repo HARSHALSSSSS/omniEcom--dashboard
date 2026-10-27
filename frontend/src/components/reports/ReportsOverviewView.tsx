@@ -13,7 +13,8 @@ import { ReportsOverviewKpiStrip } from "./ReportsOverviewKpiStrip";
 import { ReportsSalesTrendSection } from "./ReportsSalesTrendSection";
 import { ReportsChannelBreakdown, type ChannelInfo } from "./ReportsChannelBreakdown";
 import { ReportsCatalogSection } from "./ReportsCatalogSection";
-import { COMPARE_LABELS, RANGE_PRESETS, dateKeyInZone, useOverviewUrlState } from "./overviewRange";
+import { preferredPeriod } from "@/lib/preferences";
+import { COMPARE_LABELS, RANGE_PRESETS, dateKeyInZone, defaultOverviewPreset, useOverviewUrlState } from "./overviewRange";
 import { overviewCsv } from "./overviewCsv";
 
 const FIELD = "rounded-lg border border-border bg-background px-3 py-1.5 font-medium text-foreground";
@@ -38,7 +39,7 @@ export function ReportsOverviewView({ catalog, catalogLoading, catalogError, onR
   const timezone = shell?.business.timezone ?? "Asia/Kolkata";
   const currency = shell?.business.currency ?? "INR";
   const today = dateKeyInZone(new Date(), timezone);
-  const { state, setPreset, setCustom, setCompare, setPeriod } = useOverviewUrlState(today);
+  const { state, setPreset, setCustom, setCompare, setPeriod } = useOverviewUrlState(today, defaultOverviewPreset(preferredPeriod()));
 
   // the query is only sent for a usable range
   const kpis = useReportsOverviewKpis({ from: state.from, to: state.to, compare: state.compare, period: state.period }, state.problem === null);

@@ -18,7 +18,7 @@ export interface WorkspaceUser {
 /** GET /workspace/shell: what the sidebar and top bar need */
 export interface ShellData {
   user: { id: string; name: string; initials: string; roleLabel: string; email?: string; role?: string };
-  business: { id: string; name: string; plan: string; tier: string; timezone?: string; currency?: string; numberFormat?: string };
+  business: { id: string; name: string; plan: string; tier: string; timezone?: string; currency?: string; numberFormat?: string; preferences?: { defaultRoute: string; pageSize: number; reportingPeriod: "7d" | "30d" | "qtd" | "fytd"; catalogView: string; language: string; telemetrySeconds: number; showThumbnails: boolean } };
   badges: { needsAttention: number; orders: number; returns: number; notifications: number };
   features: Record<string, boolean>;
   inventoryMode?: string;

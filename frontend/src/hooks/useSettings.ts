@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useBlocker } from "react-router-dom";
-import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useGuardedMutation } from "@/hooks/useSubmitGuard";
 import { settingsApi } from "@/api/settings.api";
 import { errorMessage, isApiError } from "@/api/errors";
@@ -15,8 +15,10 @@ import {
   modifiedKeys,
   tabOf,
   toForm,
+  type ExtGroup,
   type FieldProblems,
   type FormKey,
+  type SettingsExt,
   type SettingsForm,
 } from "@/components/settings/form";
 import type { AlertKey, GstinCreateBody, GstinPatchBody, MemberStatus, SettingsModule, SettingsOverview, VendorRoleKey } from "@/types/settings";
@@ -41,9 +43,42 @@ export const useSettingsQuery = () =>
     refetchOnWindowFocus: false,
   });
 
+// ---------------------------------------------------------------- channel stock reserve and the pricing simulator
+
+const policyKey = (id: string) => ["settings", "channel-policy", id] as const;
+
+/** the channel inventory policy (reserve share, unit buffer) of each marketplace account */
+export function useChannelPolicies(accountIds: string[], enabled: boolean) {
+  const results = useQueries({ queries: accountIds.map((id) => ({ queryKey: policyKey(id), queryFn: ({ signal }: { signal: AbortSignal }) => settingsApi.channelPolicy(id, signal), enabled, staleTime: 15_000 })) });
+  return { policies: new Map(accountIds.map((id, i) => [id, results[i]?.data])), loading: results.some((r) => r.isLoading), failed: results.some((r) => r.isError) };
+}
+
+export function useSaveChannelPolicy() {
+  const qc = useQueryClient();
+  return useGuardedMutation({
+    mutationFn: (a: { accountId: string; body: { allocationPercent?: number; safetyBuffer?: number; mode?: "sync" | "paused" } }) => settingsApi.saveChannelPolicy(a.accountId, a.body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["settings", "channel-policy"] });
+      // every live listing of the channel is re-computed: the listing, inventory and product screens re-read
+      void qc.invalidateQueries({ predicate: (q) => ["listings", "inventory", "products", "hub"].includes(String(q.queryKey[0])) });
+    },
+  });
+}
+
+/** the simulator reads the server: the margin maths is the proposal engine's, not a copy in the screen */
+export function usePriceSimulation(input: { variantId: string | undefined; accountId: string | undefined; priceMinor: number | undefined }, enabled: boolean) {
+  return useQuery({
+    queryKey: ["settings", "price-simulation", input.variantId, input.accountId, input.priceMinor],
+    queryFn: ({ signal }) => settingsApi.simulate({ variantId: input.variantId as string, ...(input.accountId ? { accountId: input.accountId } : {}), ...(input.priceMinor ? { priceMinor: input.priceMinor } : {}) }, signal),
+    enabled: enabled && Boolean(input.variantId),
+    staleTime: 5_000,
+    retry: false,
+  });
+}
+
 export type SaveOutcome = "saved" | "nochange" | "conflict" | "error";
 
-const clone = (v: SettingsForm): SettingsForm => ({ ...v, alerts: { ...v.alerts } });
+const clone = (v: SettingsForm): SettingsForm => ({ ...v, alerts: { ...v.alerts }, ext: JSON.parse(JSON.stringify(v.ext)) as SettingsExt });
 
 /** a save changed what the rest of the app formats with: everything on screen must re-read and re-format */
 const SHELL_FIELDS: FormKey[] = ["displayName", "legalName", "timezone", "currency", "numberFormat", "lowStockThreshold"];
@@ -88,9 +123,14 @@ export function useSettingsController() {
   const [saving, setSaving] = useState(false);
   const inflight = useRef(false);
 
-  const setField = useCallback(<K extends Exclude<keyof SettingsForm, "alerts">>(key: K, value: SettingsForm[K]) => {
+  const setField = useCallback(<K extends Exclude<keyof SettingsForm, "alerts" | "ext">>(key: K, value: SettingsForm[K]) => {
     if (valuesRef.current) commit({ ...valuesRef.current, [key]: value });
     setFieldErrors((e) => (e[key as FormKey] ? { ...e, [key]: undefined } : e));
+  }, [commit]);
+  /** replace one nested group (preferences, catalog, inventory, pricing) with an edited copy */
+  const setExt = useCallback(<G extends ExtGroup>(group: G, value: SettingsExt[G]) => {
+    if (valuesRef.current) commit({ ...valuesRef.current, ext: { ...valuesRef.current.ext, [group]: value } });
+    setFieldErrors((e) => (e[`ext:${group}`] ? { ...e, [`ext:${group}`]: undefined } : e));
   }, [commit]);
   const setAlert = useCallback((key: AlertKey, value: boolean) => {
     if (valuesRef.current) commit({ ...valuesRef.current, alerts: { ...valuesRef.current.alerts, [key]: value } });
@@ -170,7 +210,9 @@ export function useSettingsController() {
       qc.setQueryData(SETTINGS_KEYS.overview, next);
       void refreshShell().catch(() => undefined);
       // the business name, currency, number format, time zone and low-stock threshold are read all over the app
-      if (built.modified.some((k) => SHELL_FIELDS.includes(k))) void qc.invalidateQueries({ predicate: (q) => q.queryKey[0] !== "settings" });
+      // the same re-read covers what obeys the pricing, stock and preference settings (pricing, promotions, profitability, inventory, listings, reports)
+      if (built.modified.some((k) => SHELL_FIELDS.includes(k) || k.startsWith("ext:") || k === "bufferPercent" || k === "roundPriceToNine"))
+        void qc.invalidateQueries({ predicate: (q) => q.queryKey[0] !== "settings" });
       toast({ title: "Settings saved", variant: "success" });
       return "saved";
     } catch (e) {
@@ -222,6 +264,7 @@ export function useSettingsController() {
     dirtyTabs,
     setField,
     setAlert,
+    setExt,
     revertAll,
     reset,
     fieldErrors,

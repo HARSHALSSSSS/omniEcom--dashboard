@@ -19,7 +19,8 @@ import { MarginPressureCard } from "@/components/profitability/MarginPressureCar
 import { ProductContributionMap } from "@/components/profitability/ProductContributionMap";
 import { ProductReviewDrawer } from "@/components/profitability/ProductReviewDrawer";
 import { channelsCsv, channelsFileName, csvBlob, money, presetRange, waterfallCsv, waterfallFileName } from "@/components/profitability/profitFormat";
-import { DEFAULT_PAGE_SIZE, isProductFiltered, productQueryOf, useProfitUrlState, waterfallQueryOf } from "@/components/profitability/profitParams";
+import { preferredPageSize } from "@/lib/preferences";
+import { DEFAULT_PAGE_SIZE, PAGE_SIZES, isProductFiltered, productQueryOf, useProfitUrlState, waterfallQueryOf } from "@/components/profitability/profitParams";
 import { saveBlob } from "@/components/products/list/saveBlob";
 import { errorMessage } from "@/api/errors";
 import { useCan } from "@/hooks/useCan";
@@ -441,7 +442,7 @@ export default function ProfitabilityPage() {
               onSearch={(q) => update({ q }, { replace: true })}
               onAccount={(account) => update({ account })}
               onPage={(p) => update({ page: p > 1 ? String(p) : null })}
-              onPageSize={(size) => update({ size: size === DEFAULT_PAGE_SIZE ? null : String(size) })}
+              onPageSize={(size) => update({ size: size === preferredPageSize(PAGE_SIZES, DEFAULT_PAGE_SIZE) ? null : String(size) })}
               onClear={clearFilters}
             />
           )}

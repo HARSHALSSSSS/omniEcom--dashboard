@@ -14,7 +14,9 @@ import { ProductKpiStrip } from "@/components/product-intelligence/ProductKpiStr
 import { PrioritizedOpportunities } from "@/components/product-intelligence/PrioritizedOpportunities";
 import { ProductPortfolioCharts } from "@/components/product-intelligence/ProductPortfolioCharts";
 import { portfolioCsv } from "@/components/product-intelligence/portfolioCsv";
-import { RANGE_PRESETS, dateKeyInZone, useOverviewUrlState } from "@/components/reports/overviewRange";
+import { preferredPeriod, preferredPageSize } from "@/lib/preferences";
+import { PAGE_SIZES } from "@/components/product-intelligence/intelParams";
+import { RANGE_PRESETS, dateKeyInZone, defaultOverviewPreset, useOverviewUrlState } from "@/components/reports/overviewRange";
 import { saveBlob } from "@/components/products/list/saveBlob";
 import { toast } from "@/hooks/useToast";
 import { useWorkspaceStore } from "@/store/workspace.store";
@@ -36,7 +38,7 @@ export default function ProductIntelligencePage() {
   const shell = useWorkspaceStore((st) => st.shell);
   const timezone = shell?.business.timezone ?? "Asia/Kolkata";
   const currency = shell?.business.currency ?? "INR";
-  const range = useOverviewUrlState(dateKeyInZone(new Date(), timezone));
+  const range = useOverviewUrlState(dateKeyInZone(new Date(), timezone), defaultOverviewPreset(preferredPeriod()));
   // the Overview asks for the portfolio of the chosen dates together with the products in priority order (one call)
   const overviewQuery: ProductIntelligenceQuery = { action: undefined, categoryId: undefined, warehouseId: undefined, q: undefined, sort: "priority", page: 1, pageSize: 10, portfolio: { from: range.state.from, to: range.state.to } };
   const overview = useProductIntelligence(overviewQuery, canRead && tab === "overview" && range.state.problem === null);
@@ -98,7 +100,7 @@ export default function ProductIntelligencePage() {
           shown={data.items.length}
           noun="variants"
           onPage={(p) => update({ page: p > 1 ? String(p) : null })}
-          onPageSize={(s) => update({ size: s === 25 ? null : String(s) })}
+          onPageSize={(s) => update({ size: s === preferredPageSize(PAGE_SIZES, 25) ? null : String(s) })}
         />
       </div>
     );

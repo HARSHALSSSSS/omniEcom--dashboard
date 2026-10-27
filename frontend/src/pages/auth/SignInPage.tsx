@@ -8,6 +8,7 @@ import { AuthLayout } from "@/components/layout/AuthLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { preferredLandingRoute } from "@/lib/preferences";
 import { ROUTES } from "@/constants/routes";
 import { useWorkspaceStore } from "@/store/workspace.store";
 import { signIn } from "@/lib/session";
@@ -61,7 +62,7 @@ export default function SignInPage() {
     const from = (location.state as { from?: { pathname: string; search?: string } } | null)?.from;
     const safeDestination = from && isSafeInternalRedirect(from.pathname)
       ? `${from.pathname}${from.search ?? ""}`
-      : ROUTES.DASHBOARD;
+      : (preferredLandingRoute() ?? ROUTES.DASHBOARD);
     if (!onboardingComplete) navigate(`${ROUTES.ONBOARDING}/${onboardingResumeStep}`, { replace: true });
     else navigate(safeDestination, { replace: true });
   };

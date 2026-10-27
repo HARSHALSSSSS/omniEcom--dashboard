@@ -48,6 +48,9 @@ function PricingTierDialogBody({ tier, onClose, onSave }: { tier: PricingTierCon
             <p className="mt-1 text-xs text-muted-foreground">
               Define the algorithmic pricing formula, dynamic Buy Box parameters, margin circuit breakers, and promo deal floors.
             </p>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Saved per marketplace account. The pricing engine does not apply these values yet: they are stored for the channel and shown in the simulator.
+            </p>
           </div>
           <button
             type="button"

@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
+import { preferredPageSize } from "@/lib/preferences";
 import { INTEL_ACTIONS, INTEL_SORTS, type IntelAction, type IntelSort, type ProductIntelligenceQuery } from "@/types/intelligence";
 
 export const PAGE_SIZES = [25, 50, 100] as const;
@@ -30,7 +31,7 @@ export function readUrlState(params: URLSearchParams): IntelUrlState {
     params.get("open") ||
     params.get("sort") ||
     (Number.isInteger(page) && page > 1) ||
-    ((PAGE_SIZES as readonly number[]).includes(size) && size !== DEFAULT_PAGE_SIZE)
+    ((PAGE_SIZES as readonly number[]).includes(size) && size !== preferredPageSize(PAGE_SIZES, DEFAULT_PAGE_SIZE))
   );
   const tab = oneOf<IntelTab>(params.get("tab"), ["overview", "all", "watchlist"]) ?? (hasCatalogParams ? "all" : "overview");
   return {
@@ -42,7 +43,7 @@ export function readUrlState(params: URLSearchParams): IntelUrlState {
       q: params.get("q")?.trim() || undefined,
       sort: oneOf<IntelSort>(params.get("sort"), INTEL_SORTS) ?? DEFAULT_SORT,
       page: Number.isInteger(page) && page > 1 ? page : 1,
-      pageSize: (PAGE_SIZES as readonly number[]).includes(size) ? size : DEFAULT_PAGE_SIZE,
+      pageSize: (PAGE_SIZES as readonly number[]).includes(size) ? size : preferredPageSize(PAGE_SIZES, DEFAULT_PAGE_SIZE),
     },
     open: uuid(params.get("open")),
   };
