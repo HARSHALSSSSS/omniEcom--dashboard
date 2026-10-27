@@ -69,7 +69,8 @@ export function splitWindows(r: Range, days = WINDOW_DAYS): Range[] {
 }
 
 type Input = Parameters<typeof computeProfit>[0][number];
-interface Group { key: string; label: string; inputs: Input[]; orders: Set<string> }
+interface ChannelPart { inputs: Input[]; orders: Set<string>; units: number }
+interface Group { key: string; label: string; inputs: Input[]; orders: Set<string>; units: number; byChannel: Map<string, ChannelPart> }
 export type ProfitGroupBy = 'product' | 'marketplace' | 'order' | 'none';
 
 /** one order (or a share of it) as inputs to computeProfit; `share` allocates order-level costs to a product by revenue share */
@@ -120,32 +121,57 @@ export interface Collected { ordersAnalysed: number; ordersInRange: number; trun
  * `truncated` is true when any window held more than MAX_ORDERS orders: the figures then cover the newest MAX_ORDERS of that
  * window and `ordersInRange` says how many orders there really were.
  */
-export async function collectProfit(tx: Tx, vendorId: string, r: Range, groupBy: ProfitGroupBy): Promise<Collected> {
+export async function collectProfit(tx: Tx, vendorId: string, r: Range, groupBy: ProfitGroupBy, only: { marketplace?: string } = {}): Promise<Collected> {
   const out: Collected = { ordersAnalysed: 0, ordersInRange: 0, truncated: false, windows: 0, inputs: [], groups: new Map() };
-  const put = (key: string, label: string, input: Input, orderId: string) => {
-    const g = out.groups.get(key) ?? { key, label, inputs: [], orders: new Set<string>() };
-    g.inputs.push(input); g.orders.add(orderId); out.groups.set(key, g);
+  const put = (key: string, label: string, input: Input, orderId: string, units = 0, marketplace = '') => {
+    const g = out.groups.get(key) ?? { key, label, inputs: [], orders: new Set<string>(), units: 0, byChannel: new Map<string, ChannelPart>() };
+    g.inputs.push(input); g.orders.add(orderId); g.units += units;
+    const c = g.byChannel.get(marketplace) ?? { inputs: [], orders: new Set<string>(), units: 0 };
+    c.inputs.push(input); c.orders.add(orderId); c.units += units; g.byChannel.set(marketplace, c);
+    out.groups.set(key, g);
   };
   for (const w of splitWindows(r)) {
     const { orders, inRange } = await loadWindow(tx, vendorId, w);
     out.windows++; out.ordersInRange += inRange; out.ordersAnalysed += orders.length;
     if (inRange > orders.length) out.truncated = true;
     for (const o of orders) {
+      if (only.marketplace && o.marketplace !== only.marketplace) continue;
       const orderRevenue = o.lines.reduce((s, l) => s + l.revenue, 0);
       out.inputs.push(toInput(o, o.lines, 1));
       if (groupBy === 'order') put(o.id, o.number, toInput(o, o.lines, 1), o.id);
       else if (groupBy === 'marketplace') put(o.marketplace, o.marketplace, toInput(o, o.lines, 1), o.id);
-      else if (groupBy === 'product') for (const l of o.lines) put(l.variantId ?? `sku:${l.sku}`, l.sku, toInput(o, [l], orderRevenue > 0 ? l.revenue / orderRevenue : 0), o.id);
+      else if (groupBy === 'product') for (const l of o.lines) put(l.variantId ?? `sku:${l.sku}`, l.sku, toInput(o, [l], orderRevenue > 0 ? l.revenue / orderRevenue : 0), o.id, l.qty, o.marketplace);
     }
   }
   return out;
 }
 
-export async function profitability(tx: Tx, vendorId: string, r: Range, groupBy: Exclude<ProfitGroupBy, 'none'>) {
-  const c = await collectProfit(tx, vendorId, r, groupBy);
+export const MARGIN_STATUSES = ['healthy', 'below_target', 'low'] as const;
+export type MarginStatus = (typeof MARGIN_STATUSES)[number];
+
+/**
+ * Where a margin stands: healthy at or above the target, below target from zero up to it, low when the contribution is negative.
+ * Without a target there are two buckets by sign (healthy from zero, low below). An unknown margin (a cost is missing) has no status.
+ */
+export function marginStatus(marginPercent: number | null, targetBps: number | null): MarginStatus | null {
+  if (marginPercent === null) return null;
+  if (marginPercent < 0) return 'low';
+  if (targetBps === null) return 'healthy';
+  return marginPercent * 100 >= targetBps ? 'healthy' : 'below_target';
+}
+
+export async function profitability(tx: Tx, vendorId: string, r: Range, groupBy: Exclude<ProfitGroupBy, 'none'>, only: { marketplace?: string } = {}) {
+  const c = await collectProfit(tx, vendorId, r, groupBy, only);
+  const variantIds = groupBy === 'product' ? [...c.groups.keys()].filter((k) => !k.startsWith('sku:')) : [];
+  const titles = new Map<string, string>();
+  if (variantIds.length) for (const t of await rows(tx, sql`select v.id, p.title from product_variants v join products p on p.id = v.product_id and p.vendor_id = v.vendor_id where v.vendor_id = ${vendorId} and v.id in (${inList(variantIds)})`)) titles.set(String(t.id), String(t.title));
   return {
     range: r, groupBy, ordersAnalysed: c.ordersAnalysed, ordersInRange: c.ordersInRange, windows: c.windows, truncated: c.truncated, total: computeProfit(c.inputs),
     allocation: groupBy === 'product' ? 'order-level costs (shipping, fees, penalties, refunds) are allocated to products by revenue share' : null,
-    groups: [...c.groups.values()].map((g) => ({ key: g.key, label: g.label, orders: g.orders.size, ...computeProfit(g.inputs) })).sort((a, b) => b.revenue.amountMinor! - a.revenue.amountMinor!).slice(0, 200),
+    groups: [...c.groups.values()].map((g) => ({
+      key: g.key, label: g.label, title: titles.get(g.key) ?? null, orders: g.orders.size, unitsSold: g.units, ...computeProfit(g.inputs),
+      /** per marketplace (product grouping only): the same figures for the orders of that marketplace */
+      channels: groupBy === 'product' ? [...g.byChannel.entries()].map(([marketplace, p]) => { const pr = computeProfit(p.inputs); return { marketplace, orders: p.orders.size, units: p.units, revenueMinor: pr.revenue.amountMinor ?? 0, contributionMinor: pr.contributionMinor, marginPercent: pr.marginPercent }; }).sort((a, b) => b.revenueMinor - a.revenueMinor) : [],
+    })).sort((a, b) => b.revenue.amountMinor! - a.revenue.amountMinor!).slice(0, 200),
   };
 }

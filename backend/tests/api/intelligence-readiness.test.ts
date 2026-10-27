@@ -276,6 +276,48 @@ describe('intelligence API', () => {
       expect((await c.get('/api/v1/analytics/profitability/waterfall?compare=next', admin)).status).toBe(400);
     });
 
+    it('product grouping: units, per-channel figures, margin buckets against the policy target, filters, sort and paging', async () => {
+      const p = (qs = '') => c.get(`/api/v1/analytics/profitability?groupBy=product${qs}`, admin);
+      const base = await p();
+      expect(base.status, JSON.stringify(base.body)).toBe(200);
+      const d = base.body.data;
+      expect(d).toMatchObject({ marginTargetBps: null, groupsTotal: d.groups.length, page: 1, pageSize: 25, pages: 1 });
+      const row = d.groups[0];
+      expect(row).toMatchObject({ label: 'TRV-1042', unitsSold: expect.any(Number), orders: 1 }); // the other order is older than 30 days
+      expect(row.unitsSold).toBeGreaterThan(0);
+      expect(row.title).toEqual(expect.any(String));
+      expect(row.channels).toHaveLength(1);
+      expect(row.channels[0]).toMatchObject({ marketplace: 'mock', orders: 1, units: row.unitsSold, revenueMinor: row.revenue.amountMinor });
+      // no target set: two buckets by sign, a known margin is healthy unless negative
+      const known = row.marginPercent;
+      expect(row.marginStatus).toBe(known === null ? null : known < 0 ? 'low' : 'healthy');
+      expect(d.statusCounts.healthy + d.statusCounts.belowTarget + d.statusCounts.low + d.statusCounts.unknown).toBe(d.groups.length);
+      expect(d.statusCounts.belowTarget).toBe(0);
+
+      // filters and sort
+      expect((await p('&marketplace=nowhere')).body.data.groups).toEqual([]);
+      expect((await p('&marketplace=mock')).body.data.groups).toHaveLength(d.groups.length);
+      expect((await p('&q=trv')).body.data.groupsTotal).toBe(1);
+      expect((await p('&q=zzz')).body.data.groupsTotal).toBe(0);
+      expect((await p('&sort=units')).status).toBe(200);
+      expect((await p('&sort=sideways')).status).toBe(400);
+      expect((await p('&page=2&pageSize=1')).body.data).toMatchObject({ page: 2, pageSize: 1, groups: [] });
+
+      // an active policy sets the target the buckets use
+      const pol = await c.post('/api/v1/pricing/policies', { name: 'Profit floor', strategy: 'margin_floor', targetMarginMinBps: 9000, status: 'active' }, admin);
+      expect(pol.status, JSON.stringify(pol.body)).toBe(201);
+      const t = (await p()).body.data;
+      expect(t.marginTargetBps).toBe(9000);
+      if (known !== null && known >= 0) {
+        expect(t.groups[0].marginStatus).toBe('below_target'); // nobody earns a 90% margin here
+        expect(t.statusCounts.belowTarget).toBe(1);
+        expect((await p('&status=below_target')).body.data.groupsTotal).toBe(1);
+        expect((await p('&status=healthy')).body.data.groupsTotal).toBe(0);
+      }
+      expect((await p('&status=unknown')).body.data.groupsTotal).toBe(t.statusCounts.unknown);
+      expect(((await c.get('/api/v1/analytics/profitability?groupBy=product', other)).body.data)).toMatchObject({ groups: [], marginTargetBps: null, statusCounts: { healthy: 0, belowTarget: 0, low: 0, unknown: 0 } });
+    });
+
     it('is read-only for viewers and staff, tenant isolated', async () => {
       expect((await waterfall(viewer)).status).toBe(200);
       expect((await waterfall(staff)).status).toBe(200);
@@ -494,6 +536,30 @@ describe('intelligence API', () => {
       expect(find(r, 'PROMOTE')).toMatchObject({ velocityTrend: 'declining', trendChangePercent: -86.7, recommendedAction: 'promote' });
       expect(find(r, 'PROMOTE').reasons[0].key).toBe('demand_declining');
     });
+
+    it('looks one product up exactly (variant or SKU) and can return the portfolio of a range in the same call', async () => {
+      const exact = await list(`?filter[sku]=pi-reorder`);
+      expect(exact.status, JSON.stringify(exact.body)).toBe(200);
+      expect(exact.body.data.items.map((i: any) => i.sku)).toEqual(['PI-REORDER']);
+      expect(exact.body.data.total).toBe(1);
+      expect(exact.body.data.portfolio).toBeNull();
+      expect((await list(`?filter[variantId]=${ids.REORDER!.variantId}`)).body.data.items[0]).toMatchObject({ sku: 'PI-REORDER', variantId: ids.REORDER!.variantId });
+      expect((await list('?filter[sku]=NOPE-1')).body.data).toMatchObject({ items: [], total: 0 });
+      expect((await list('?filter[variantId]=not-a-uuid')).status).toBe(400);
+
+      const withPortfolio = await list(`?portfolio=true&from=${ago(29)}&to=${ago(0)}&pageSize=1`);
+      expect(withPortfolio.status, JSON.stringify(withPortfolio.body)).toBe(200);
+      const pf = withPortfolio.body.data.portfolio;
+      expect(pf.range).toEqual({ from: ago(29), to: ago(0) });
+      expect(pf).toMatchObject({ totalProducts: withPortfolio.body.data.variantsAnalysed, orders: expect.any(Number), netSalesMinor: expect.any(Number) });
+      expect(pf.prioritizedCount).toBe(withPortfolio.body.data.variantsAnalysed - withPortfolio.body.data.summary.hold);
+      expect(pf.salesShare.length).toBeLessThanOrEqual(6);
+      const share = pf.salesShare.reduce((n: number, x: any) => n + x.shareBps, 0) + pf.otherShareBps;
+      expect(pf.netSalesMinor === 0 ? share : Math.abs(share - 10_000)).toBeLessThanOrEqual(pf.netSalesMinor === 0 ? 0 : 6);
+      expect(pf.grossMarginBps === null || Number.isInteger(pf.grossMarginBps)).toBe(true);
+      expect((await list(`?portfolio=true&from=${ago(0)}&to=${ago(5)}`)).status).toBe(400);
+      expect((await list(`?portfolio=true&from=${ago(400)}&to=${ago(0)}`)).status).toBe(400);
+    });
   });
 
   describe('assistant conversations', () => {
@@ -553,6 +619,20 @@ describe('intelligence API', () => {
       const r = await post(conv.id, 'write me a poem about shoes');
       expect(r.body.data.assistantMessage).toMatchObject({ intent: 'unknown', confidence: 'none', dataVisual: null });
       expect(r.body.data.assistantMessage.suggestedActions.length).toBeGreaterThan(0);
+    });
+
+    it('remembers where a conversation started: product and screen, validated, filterable', async () => {
+      const x = await c.post('/api/v1/ai/conversations', { context: { sku: 'PI-REORDER', source: 'product_intelligence' } }, admin);
+      expect(x.status, JSON.stringify(x.body)).toBe(201);
+      expect(x.body.data.context).toEqual({ sku: 'PI-REORDER', source: 'product_intelligence' });
+      expect((await c.post('/api/v1/ai/conversations', { context: { source: 'the_moon' } }, admin)).status).toBe(400);
+      expect((await c.post('/api/v1/ai/conversations', { context: { sku: '' } }, admin)).status).toBe(400);
+      expect((await c.get('/api/v1/ai/conversations?filter[source]=product_intelligence', admin)).body.data.items.map((i: any) => i.id)).toEqual([x.body.data.id]);
+      expect((await c.get('/api/v1/ai/conversations?filter[source]=reports', admin)).body.data.total).toBe(0);
+      expect((await c.get('/api/v1/ai/conversations?filter[source]=none', admin)).body.data.items.map((i: any) => i.id)).not.toContain(x.body.data.id);
+      expect((await c.get(`/api/v1/ai/conversations/${x.body.data.id}`, admin)).body.data.context).toEqual({ sku: 'PI-REORDER', source: 'product_intelligence' });
+      expect(conv.context).toBeNull(); // a conversation started without one has none
+      expect((await c.call('DELETE', `/api/v1/ai/conversations/${x.body.data.id}`, { as: admin })).status).toBe(200);
     });
 
     it('keeps the history: list, read, rename, archive, restore', async () => {

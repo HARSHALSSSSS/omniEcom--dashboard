@@ -17,7 +17,7 @@ export type ConversationRow = typeof C.$inferSelect;
 export type MessageRow = typeof M.$inferSelect;
 
 export const conversationDto = (c: ConversationRow) => ({
-  id: c.id, title: c.title, status: c.status as 'active' | 'archived', messagesCount: c.messageCount, lastActive: (c.lastMessageAt ?? c.createdAt).toISOString(), createdAt: c.createdAt.toISOString(),
+  id: c.id, title: c.title, status: c.status as 'active' | 'archived', messagesCount: c.messageCount, context: (c.context ?? null) as { sku?: string; source?: (typeof CONTEXT_SOURCES)[number] } | null, lastActive: (c.lastMessageAt ?? c.createdAt).toISOString(), createdAt: c.createdAt.toISOString(),
 });
 
 interface StoredData { dataVisual?: DataVisual | null; context?: TurnContext }
@@ -29,8 +29,12 @@ export const messageDto = (m: MessageRow) => {
   };
 };
 
-export async function createConversation(tx: Tx, vendorId: string, userId: string, title?: string): Promise<ConversationRow> {
-  const [row] = await tx.insert(C).values({ vendorId, userId, title: title?.trim() || DEFAULT_TITLE }).returning();
+export const CONTEXT_SOURCES = ['product_intelligence', 'reports', 'profitability', 'inventory', 'orders', 'procurement', 'other'] as const;
+export interface ConversationContext { sku?: string; source?: (typeof CONTEXT_SOURCES)[number] }
+
+export async function createConversation(tx: Tx, vendorId: string, userId: string, title?: string, context?: ConversationContext): Promise<ConversationRow> {
+  const ctx = context && (context.sku || context.source) ? context : null;
+  const [row] = await tx.insert(C).values({ vendorId, userId, title: title?.trim() || DEFAULT_TITLE, context: ctx }).returning();
   return row!;
 }
 
@@ -42,9 +46,9 @@ export async function getConversation(tx: Tx, vendorId: string, userId: string, 
   return row;
 }
 
-export async function listConversations(tx: Tx, vendorId: string, userId: string, f: { status: 'active' | 'archived' | 'all'; q?: string }, page: { limit: number; offset: number }) {
+export async function listConversations(tx: Tx, vendorId: string, userId: string, f: { status: 'active' | 'archived' | 'all'; q?: string; source?: string }, page: { limit: number; offset: number }) {
   const like = f.q ? `%${f.q.replace(/[%_\\]/g, '\\$&')}%` : null;
-  const where = and(eq(C.vendorId, vendorId), eq(C.userId, userId), f.status === 'all' ? undefined : eq(C.status, f.status), like ? sql`${C.title} ilike ${like}` : undefined);
+  const where = and(eq(C.vendorId, vendorId), eq(C.userId, userId), f.status === 'all' ? undefined : eq(C.status, f.status), like ? sql`${C.title} ilike ${like}` : undefined, f.source ? (f.source === 'none' ? sql`${C.context} is null or ${C.context}->>'source' is null` : sql`${C.context}->>'source' = ${f.source}`) : undefined);
   const [rows, [c]] = await Promise.all([
     tx.select().from(C).where(where).orderBy(desc(sql`coalesce(${C.lastMessageAt}, ${C.createdAt})`), desc(C.id)).limit(page.limit).offset(page.offset),
     tx.select({ n: sql<number>`count(*)::int` }).from(C).where(where),

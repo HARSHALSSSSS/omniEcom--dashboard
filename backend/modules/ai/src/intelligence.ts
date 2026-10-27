@@ -1,4 +1,5 @@
 import { sql, type Tx } from '@oms/database';
+import { portfolioSummary, type DayRange } from './portfolio';
 import { classifyStock, DEFAULT_THRESHOLDS, type InventoryFinding } from '@oms/mod-analytics';
 import { latestCompetitorPrices, type CompetitorPrice } from '@oms/mod-pricing';
 
@@ -104,7 +105,7 @@ export interface IntelItem {
 const num = (v: unknown): number => (v === null || v === undefined ? 0 : Number(v));
 const dateAgo = (n: number): string => new Date(Date.now() - n * DAY).toISOString().slice(0, 10);
 
-export interface IntelQuery { action?: IntelAction; categoryId?: string; warehouseId?: string; q?: string; sort: 'priority' | 'velocity' | 'runway' | 'margin' }
+export interface IntelQuery { action?: IntelAction; categoryId?: string; warehouseId?: string; q?: string; sort: 'priority' | 'velocity' | 'runway' | 'margin'; variantId?: string; sku?: string; portfolio?: DayRange }
 
 /** every active variant of the business with its facts and recommendation (at most 5,000 variants) */
 export async function buildItems(tx: Tx, vendorId: string, q: Pick<IntelQuery, 'categoryId' | 'warehouseId' | 'q'>): Promise<IntelItem[]> {
@@ -173,7 +174,9 @@ export function sortItems(items: IntelItem[], sort: IntelQuery['sort']): IntelIt
 
 export async function productIntelligence(tx: Tx, vendorId: string, q: IntelQuery, page: { limit: number; offset: number }) {
   const all = await buildItems(tx, vendorId, q);
+  const portfolio = q.portfolio ? await portfolioSummary(tx, vendorId, q.portfolio, all) : null;
   const summary = Object.fromEntries(ACTIONS.map((a) => [a, all.filter((i) => i.recommendedAction === a).length])) as Record<IntelAction, number>;
-  const filtered = q.action ? all.filter((i) => i.recommendedAction === q.action) : all;
-  return { items: sortItems(filtered, q.sort).slice(page.offset, page.offset + page.limit), total: filtered.length, summary, variantsAnalysed: all.length };
+  // an exact variant / SKU lookup (the AI Assistant's product rail) narrows the list to that one product
+  const filtered = all.filter((i) => (!q.action || i.recommendedAction === q.action) && (!q.variantId || i.variantId === q.variantId) && (!q.sku || i.sku.toLowerCase() === q.sku.toLowerCase()));
+  return { items: sortItems(filtered, q.sort).slice(page.offset, page.offset + page.limit), total: filtered.length, summary, variantsAnalysed: all.length, portfolio };
 }

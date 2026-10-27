@@ -3,7 +3,8 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { successEnvelope } from '@oms/contracts';
 import { ok, vendorTx } from '@oms/module-kit';
-import { collectProfit, computeProfit, profitability } from './profit';
+import { collectProfit, computeProfit, marginStatus, MARGIN_STATUSES, profitability } from './profit';
+import { marginTargetBps } from './margin-target';
 import { previousRange } from './queries';
 import { D, range } from './range';
 import { advertisingSpend } from './spend';
@@ -32,19 +33,45 @@ export const profitRoutes: FastifyPluginAsync = async (app) => {
     schema: {
       tags: TAGS, summary: 'Profitability by product, marketplace or order, with actual / estimated / missing data kept apart',
       description: 'Revenue and discounts are actual; shipping is the courier cost recorded on the shipment; fees and penalties come from `PUT /orders/{id}/financials` (fees may fall back to a vendor-entered fee profile, labelled estimated); product cost is the variant\'s CURRENT cost price (estimated). `contributionMinor` is null while any component is missing: nothing is guessed, and it is BEFORE advertising (see `advertising` and `/analytics/profitability/waterfall` for the net figure). Ranges up to 366 days are read in 31-day windows; `truncated` says that a window held more than 5,000 orders (`ordersInRange` is the real count). With `compare=previous` the preceding period of the same length is returned with the differences.',
-      querystring: Span.extend({ groupBy: z.enum(['product', 'marketplace', 'order']).default('product') }),
+      querystring: Span.extend({
+        groupBy: z.enum(['product', 'marketplace', 'order']).default('product'),
+        marketplace: z.string().max(40).optional().describe('Only the orders of this marketplace (code)'),
+        q: z.string().trim().max(100).optional().describe('Groups whose label or title contains this text'),
+        status: z.enum([...MARGIN_STATUSES, 'unknown']).optional().describe('Product grouping: only products in this margin bucket (`unknown`: a cost is missing)'),
+        sort: z.enum(['revenue', 'contribution', 'margin', 'units']).default('revenue'),
+        page: z.coerce.number().int().min(1).default(1), pageSize: z.coerce.number().int().min(1).max(200).default(25),
+      }),
       response: { 200: successEnvelope(z.object({
         range: Range, groupBy: z.string(), ordersAnalysed: z.number().int(), ordersInRange: z.number().int(), windows: z.number().int(), truncated: z.boolean().describe('More orders than the analysis limit in at least one window: narrow the range'), allocation: z.string().nullable(),
         total: ProfitBody, advertising: Comp.describe('Marketing spend recorded for the range (missing when none was recorded)'),
-        groups: z.array(ProfitBody.extend({ key: z.string(), label: z.string(), orders: z.number().int(), advertising: Comp.nullable().describe('Marketplace groups only: spend of that marketplace\'s accounts') })),
+        marginTargetBps: z.number().int().nullable().describe('The strictest margin target of the active pricing policies; null = none set'),
+        statusCounts: z.object({ healthy: z.number().int(), belowTarget: z.number().int(), low: z.number().int(), unknown: z.number().int() }).describe('Product grouping: every product of the range by margin bucket (healthy at or above the target, below target from zero up to it, low = negative contribution; without a target two buckets by sign; unknown = a cost is missing)'),
+        groupsTotal: z.number().int(), page: z.number().int(), pageSize: z.number().int(), pages: z.number().int(),
+        groups: z.array(ProfitBody.extend({
+          key: z.string(), label: z.string(), title: z.string().nullable().describe('Product grouping: the product title'), orders: z.number().int(), unitsSold: z.number().int(),
+          marginStatus: z.enum(MARGIN_STATUSES).nullable().describe('Null when the margin is unknown (a cost is missing)'),
+          channels: z.array(z.object({ marketplace: z.string(), orders: z.number().int(), units: z.number().int(), revenueMinor: Money, contributionMinor: Money.nullable(), marginPercent: z.number().nullable() })).describe('Product grouping: the same figures per marketplace'),
+          advertising: Comp.nullable().describe('Marketplace groups only: spend of that marketplace\'s accounts'),
+        })),
         comparison: z.object({ range: Range, ordersAnalysed: z.number().int(), truncated: z.boolean(), total: ProfitBody, advertising: Comp, deltas: z.object({ revenue: Delta, productCost: Delta, shipping: Delta, marketplaceFees: Delta, refunds: Delta, contribution: Delta, marginPoints: z.number().nullable() }) }).nullable(),
       })) },
     },
   }, async (req) => ok(req, await vendorTx(req, async (tx, vendorId) => {
     const rg = range(req.query);
-    const out = await profitability(tx, vendorId, rg, req.query.groupBy);
+    const out = await profitability(tx, vendorId, rg, req.query.groupBy, { marketplace: req.query.marketplace });
     const spend = await advertisingSpend(tx, vendorId, rg);
-    const groups = out.groups.map((g) => ({ ...g, advertising: req.query.groupBy === 'marketplace' ? (spend.rows > 0 ? { amountMinor: spend.byMarketplace.get(g.key) ?? 0, basis: 'actual' as const, coverage: 1 } : { amountMinor: null, basis: 'missing' as const, coverage: 0 }) : null }));
+    const target = await marginTargetBps(tx, vendorId);
+    const withStatus = out.groups.map((g) => ({ ...g, marginStatus: marginStatus(g.marginPercent, target) }));
+    const statusCounts = { healthy: 0, belowTarget: 0, low: 0, unknown: 0 };
+    if (req.query.groupBy === 'product') for (const g of withStatus) { if (g.marginStatus === null) statusCounts.unknown++; else if (g.marginStatus === 'below_target') statusCounts.belowTarget++; else statusCounts[g.marginStatus]++; }
+    const q = req.query.q?.toLowerCase();
+    type Row = (typeof withStatus)[number];
+    const wanted = withStatus.filter((g) => (!q || g.label.toLowerCase().includes(q) || (g.title ?? '').toLowerCase().includes(q)) && (!req.query.status || (req.query.status === 'unknown' ? g.marginStatus === null : g.marginStatus === req.query.status)));
+    const key = { revenue: (g: Row) => g.revenue.amountMinor ?? 0, contribution: (g: Row) => g.contributionMinor ?? Number.NEGATIVE_INFINITY, margin: (g: Row) => g.marginPercent ?? Number.NEGATIVE_INFINITY, units: (g: Row) => g.unitsSold }[req.query.sort];
+    wanted.sort((a, b) => (key(b) === key(a) ? 0 : key(b) > key(a) ? 1 : -1) || a.label.localeCompare(b.label));
+    const pages = Math.max(1, Math.ceil(wanted.length / req.query.pageSize));
+    const paged = wanted.slice((req.query.page - 1) * req.query.pageSize, req.query.page * req.query.pageSize);
+    const groups = paged.map((g) => ({ ...g, advertising: req.query.groupBy === 'marketplace' ? (spend.rows > 0 ? { amountMinor: spend.byMarketplace.get(g.key) ?? 0, basis: 'actual' as const, coverage: 1 } : { amountMinor: null, basis: 'missing' as const, coverage: 0 }) : null }));
     let comparison = null;
     if (req.query.compare === 'previous') {
       const pr = previousRange(rg);
@@ -52,7 +79,7 @@ export const profitRoutes: FastifyPluginAsync = async (app) => {
       const prev = computeProfit(pc.inputs);
       comparison = { range: pr, ordersAnalysed: pc.ordersAnalysed, truncated: pc.truncated, total: prev, advertising: adComponent(await advertisingSpend(tx, vendorId, pr)), deltas: profitDeltas(out.total, prev) };
     }
-    return { ...out, groups, advertising: adComponent(spend), comparison };
+    return { ...out, marginTargetBps: target, statusCounts, groupsTotal: wanted.length, page: req.query.page, pageSize: req.query.pageSize, pages, groups, advertising: adComponent(spend), comparison };
   })));
 
   const Step = z.object({

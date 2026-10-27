@@ -484,6 +484,8 @@ export const aiConversations = pgTable('ai_conversations', {
   status: text('status').notNull().default('active'),
   messageCount: integer('message_count').notNull().default(0),
   lastMessageAt: tz('last_message_at'),
+  /** where the question came from: the product the person was looking at and the screen (validated by the ai module) */
+  context: jsonb('context').$type<{ sku?: string; source?: string }>(),
   ...timestamps(),
 }, (t) => [
   unique('ai_conversations_vendor_id_id_uq').on(t.vendorId, t.id),

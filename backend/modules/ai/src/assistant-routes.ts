@@ -1,19 +1,21 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
+import { AppError } from '@oms/shared';
 import { IdParamSchema, IsoDate, PageQuerySchema, pagedEnvelope, successEnvelope } from '@oms/contracts';
 import { audit, created, ok, pageWindow, paged, strictRateLimit, vendorTx } from '@oms/module-kit';
 import { answerQuestion } from './brain';
-import { appendTurn, conversationDto, createConversation, deleteConversation, getConversation, listConversations, listMessages, MAX_MESSAGES, messageDto, previousContext, updateConversation } from './conversations';
+import { CONTEXT_SOURCES, appendTurn, conversationDto, createConversation, deleteConversation, getConversation, listConversations, listMessages, MAX_MESSAGES, messageDto, previousContext, updateConversation } from './conversations';
 import { resolveTurn } from './followup';
 import { aiGate } from './gate';
 import { buildInsights } from './insights';
 import { ACTIONS, productIntelligence } from './intelligence';
+import { portfolioRange } from './portfolio';
 import { createAiProvider } from './provider';
 import { present } from './visual';
 
 const TAGS = ['AI'];
-const Conversation = z.object({ id: z.string(), title: z.string(), status: z.enum(['active', 'archived']), messagesCount: z.number().int(), lastActive: IsoDate, createdAt: IsoDate }).meta({ id: 'AiConversation' });
+const Conversation = z.object({ id: z.string(), title: z.string(), status: z.enum(['active', 'archived']), messagesCount: z.number().int(), context: z.object({ sku: z.string().optional(), source: z.enum(CONTEXT_SOURCES).optional() }).nullable().describe('Where the conversation started: the product and the screen it was opened from'), lastActive: IsoDate, createdAt: IsoDate }).meta({ id: 'AiConversation' });
 const Visual = z.object({ type: z.enum(['kpi', 'table', 'warning']), title: z.string(), details: z.array(z.object({ label: z.string(), value: z.string() })) });
 const SuggestedAction = z.object({ label: z.string(), actionType: z.enum(['navigate', 'apply_rule', 'draft_po', 'dismiss']), targetUrl: z.string().optional() });
 const Message = z.object({
@@ -49,15 +51,26 @@ export const assistantRoutes: FastifyPluginAsync = async (app) => {
       querystring: PageQuerySchema.extend({
         'filter[action]': z.enum(ACTIONS).optional(), 'filter[categoryId]': z.uuid().optional(), 'filter[warehouseId]': z.uuid().optional(), q: z.string().trim().min(1).max(100).optional(),
         sort: z.enum(['priority', 'velocity', 'runway', 'margin']).default('priority'),
+        'filter[variantId]': z.uuid().optional().describe('Exact lookup: only this variant'), 'filter[sku]': z.string().trim().min(1).max(100).optional().describe('Exact lookup (case-insensitive): only this SKU'),
+        portfolio: z.enum(['true', 'false']).transform((v) => v === 'true').default(false).describe('Also return the `portfolio` block for `from`..`to`'),
+        from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('First day (UTC) of the portfolio range, default 29 days before `to`'), to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('Last day (UTC), default today'),
       }),
       response: { 200: successEnvelope(z.object({
         items: z.array(Item), page: z.number().int(), pageSize: z.number().int(), total: z.number().int(), pages: z.number().int(), summary: z.record(z.enum(ACTIONS), z.number().int()), variantsAnalysed: z.number().int(),
+        portfolio: z.object({
+          range: z.object({ from: z.string(), to: z.string() }), netSalesMinor: z.number().int().describe('Order lines after discounts, before tax and shipping'), orders: z.number().int(), averageOrderValueMinor: z.number().int(),
+          grossProfitMinor: z.number().int().nullable().describe('Net sales less product cost; null until every sold line has a cost'), grossMarginBps: z.number().int().nullable(), costCoverage: z.number().describe('Share of revenue whose product cost is known (0 to 1)'),
+          unitsSold: z.number().int(), prioritizedCount: z.number().int().describe('Products whose recommended action is not hold'), totalProducts: z.number().int(),
+          salesShare: z.array(z.object({ variantId: z.string().nullable(), sku: z.string(), title: z.string().nullable(), category: z.string().nullable(), revenueMinor: z.number().int(), unitsSold: z.number().int(), shareBps: z.number().int(), available: z.number().int().nullable(), runwayDays: z.number().nullable() })).describe('The top products by revenue in the range'),
+          otherShareBps: z.number().int().describe('Revenue share of every product outside the top list'), truncated: z.boolean(),
+        }).nullable().describe('Only when `portfolio=true`'),
       })) },
     },
   }, async (req) => {
     const w = pageWindow(req.query);
-    const out = await vendorTx(req, (tx, vendorId) => productIntelligence(tx, vendorId, { action: req.query['filter[action]'], categoryId: req.query['filter[categoryId]'], warehouseId: req.query['filter[warehouseId]'], q: req.query.q, sort: req.query.sort }, w));
-    return ok(req, { items: out.items, page: req.query.page, pageSize: req.query.pageSize, total: out.total, pages: Math.max(1, Math.ceil(out.total / req.query.pageSize)), summary: out.summary, variantsAnalysed: out.variantsAnalysed });
+    const rg = req.query.portfolio ? (() => { try { return portfolioRange(req.query); } catch { throw new AppError('BAD_REQUEST', 'The range must be real dates (YYYY-MM-DD), `from` not after `to`, at most 366 days'); } })() : undefined;
+    const out = await vendorTx(req, (tx, vendorId) => productIntelligence(tx, vendorId, { action: req.query['filter[action]'], categoryId: req.query['filter[categoryId]'], warehouseId: req.query['filter[warehouseId]'], q: req.query.q, sort: req.query.sort, variantId: req.query['filter[variantId]'], sku: req.query['filter[sku]'], portfolio: rg }, w));
+    return ok(req, { items: out.items, page: req.query.page, pageSize: req.query.pageSize, total: out.total, pages: Math.max(1, Math.ceil(out.total / req.query.pageSize)), summary: out.summary, variantsAnalysed: out.variantsAnalysed, portfolio: out.portfolio });
   });
 
   // ---------------------------------------------------------------- insights
@@ -76,11 +89,11 @@ export const assistantRoutes: FastifyPluginAsync = async (app) => {
   // ---------------------------------------------------------------- conversations
   r.post('/ai/conversations', {
     config: { access: { permission: 'ai:use' } },
-    schema: { tags: TAGS, summary: 'Start a conversation', description: 'Without a title the conversation is named after its first question.', body: z.object({ title: z.string().trim().min(1).max(80).optional() }).default({}), response: { 201: successEnvelope(Conversation) } },
+    schema: { tags: TAGS, summary: 'Start a conversation', description: 'Without a title the conversation is named after its first question.', body: z.object({ title: z.string().trim().min(1).max(80).optional(), context: z.object({ sku: z.string().trim().min(1).max(100).optional(), source: z.enum(CONTEXT_SOURCES).optional() }).optional() }).default({}), response: { 201: successEnvelope(Conversation) } },
   }, async (req, reply) => {
     const row = await vendorTx(req, async (tx, vendorId) => {
       await aiGate(tx, vendorId);
-      const x = await createConversation(tx, vendorId, userOf(req), req.body.title);
+      const x = await createConversation(tx, vendorId, userOf(req), req.body.title, req.body.context);
       await audit(tx, req, { action: 'ai.conversation_created', resourceType: 'ai_conversation', resourceId: x.id });
       return x;
     });
@@ -90,11 +103,11 @@ export const assistantRoutes: FastifyPluginAsync = async (app) => {
   r.get('/ai/conversations', {
     config: { access: { permission: 'ai:use' } },
     schema: {
-      tags: TAGS, summary: 'My conversation history (newest activity first)', querystring: PageQuerySchema.extend({ 'filter[status]': z.enum(['active', 'archived', 'all']).default('active'), q: z.string().trim().min(1).max(100).optional() }),
+      tags: TAGS, summary: 'My conversation history (newest activity first)', querystring: PageQuerySchema.extend({ 'filter[status]': z.enum(['active', 'archived', 'all']).default('active'), 'filter[source]': z.enum([...CONTEXT_SOURCES, 'none']).optional().describe('Only conversations started from this screen (`none`: no recorded source)'), q: z.string().trim().min(1).max(100).optional() }),
       response: { 200: pagedEnvelope(Conversation) },
     },
   }, async (req) => {
-    const out = await vendorTx(req, (tx, vendorId) => listConversations(tx, vendorId, userOf(req), { status: req.query['filter[status]'], q: req.query.q }, pageWindow(req.query)));
+    const out = await vendorTx(req, (tx, vendorId) => listConversations(tx, vendorId, userOf(req), { status: req.query['filter[status]'], q: req.query.q, source: req.query['filter[source]'] }, pageWindow(req.query)));
     return paged(req, out.items, req.query, out.total);
   });
 

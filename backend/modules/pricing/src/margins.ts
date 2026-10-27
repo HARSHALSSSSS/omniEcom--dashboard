@@ -1,4 +1,5 @@
 import { and, eq, inArray, schema, sql, type Tx } from '@oms/database';
+import { policyTargetBps } from '@oms/mod-analytics';
 import { NO_FEES, feeAmount, marginBps, rupees, type FeeTerms } from './proposal-domain';
 
 const V = schema.productVariants;
@@ -15,12 +16,7 @@ export const MARGIN_ROW_LIMIT = 20_000;
 
 const pct = (bps: number): string => `${(bps / 100).toFixed(bps % 100 === 0 ? 0 : 1)}%`;
 
-/** the margin a policy asks for: its floor, or for a custom policy the margin it prices for; null = it sets no margin target */
-export function policyTargetBps(p: { targetMarginMinBps: number; params: Record<string, unknown> }): number | null {
-  if (p.targetMarginMinBps > 0) return p.targetMarginMinBps;
-  const t = p.params.targetMarginBps;
-  return typeof t === 'number' && Number.isFinite(t) && t > 0 ? t : null;
-}
+export { policyTargetBps };
 
 /** human summary of an account's fee terms: '12% commission + Rs 25.00 fixed', or 'fees not configured' without a fee profile */
 export function feeTermsSummary(f: FeeTerms | null): string {
