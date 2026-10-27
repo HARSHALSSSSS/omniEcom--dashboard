@@ -1,311 +1,154 @@
-import { useState } from "react";
-import {
-  Check,
-  Edit,
-  Pause,
-  Shield,
-  TestTube,
-  X,
-} from "lucide-react";
+import { Check, Edit, Pause, Shield, TestTube, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/utils/cn";
-
-export interface InspectorRuleData {
-  id: string;
-  code: string;
-  title: string;
-  description: string;
-  triggerName: string;
-  triggerEvent: string;
-  conditionText: string;
-  actionText: string;
-  safeguardWarning?: string;
-  pendingItem?: {
-    asin: string;
-    productTitle: string;
-    dropLabel: string;
-    competitorPrice: string;
-    originalPrice: string;
-    predictedMargin: string;
-  };
-  auditLogs?: Array<{
-    event: string;
-    timeText: string;
-    detail: string;
-  }>;
-}
-
-const DEFAULT_INSPECTOR_RULE: InspectorRuleData = {
-  id: "rule-price-guard",
-  code: "RUL-8829-AZFK",
-  title: "Automated Price War Margin Guard",
-  description:
-    "Monitors competitor repricing bots across Flipkart and Amazon. Freezes algorithmic price slashing when projected margins cross unsafe boundaries.",
-  triggerName: "Price Event Ingestion",
-  triggerEvent: "Amazon SP-API AnyOfferChangedNotification / Flipkart Price Stream",
-  conditionText: "Realized Margin < 18.0% OR Runway < 10 Days",
-  actionText: "Stage Price Floor Recommendation (Do not push live)",
-  safeguardWarning:
-    "Price modifications carry material GMV risks. Per enterprise governance rules, full automated repricing below ₹699 floor is locked behind merchant authorization.",
-  pendingItem: {
-    asin: "ASIN B08N5WRWNW",
-    productTitle: "Classic Oxford Shirt (Navy, L)",
-    dropLabel: "₹140 DROP",
-    competitorPrice: "₹749",
-    originalPrice: "₹889",
-    predictedMargin: "14.1% (< 18% floor)",
-  },
-  auditLogs: [
-    {
-      event: "Flipkart Price Ingestion Event",
-      timeText: "14:20 UTC",
-      detail: "Staged review assigned to Abhishek D.",
-    },
-    {
-      event: "Manual Override Confirmed",
-      timeText: "Yesterday",
-      detail: "Margin preserved at 19.2% on Amazon",
-    },
-    {
-      event: "Rule Dry-Run Test Payload",
-      timeText: "May 12",
-      detail: "100 simulated SKUs evaluated",
-    },
-  ],
-};
+import { formatCurrency, formatDateTime } from "@/utils/format";
+import { WRITE_REASON, actionLabel, triggerLabel } from "./autoFormat";
+import type { AutomationApproval, AutomationCatalog, AutomationRule, AutomationRun } from "@/types/automation";
 
 interface RuleInspectorDrawerProps {
-  rule?: InspectorRuleData | null;
-  open: boolean;
+  /** the run waiting for a decision */
+  approval: AutomationApproval | null;
+  /** the rule that raised it (when the rules list has it) */
+  rule: AutomationRule | null;
+  catalog: AutomationCatalog | undefined;
+  /** the latest runs of that rule: the audit trail */
+  runs: AutomationRun[];
+  canWrite: boolean;
+  busy: boolean;
   onClose: () => void;
-  onApprove?: () => void;
-  onReject?: () => void;
-  onTestPayload?: () => void;
-  onEditLogic?: () => void;
-  onPauseExecution?: () => void;
+  onApprove: (approval: AutomationApproval) => void;
+  onReject: (approval: AutomationApproval) => void;
+  onTestPayload: (rule: AutomationRule) => void;
+  onEditLogic: (rule: AutomationRule) => void;
+  onPauseExecution: (rule: AutomationRule) => void;
 }
 
-export function RuleInspectorDrawer({
-  rule = DEFAULT_INSPECTOR_RULE,
-  open,
-  onClose,
-  onApprove,
-  onReject,
-  onTestPayload,
-  onEditLogic,
-  onPauseExecution,
-}: RuleInspectorDrawerProps) {
-  const [activeTab, setActiveTab] = useState<"inspector" | "builder">("inspector");
+function conditionText(rule: AutomationRule): string {
+  const list = rule.conditions.conditions;
+  if (list.length === 0) return "No extra conditions: every matching event qualifies";
+  return list.map((c) => `${c.field} ${c.op} ${c.value === undefined ? "" : String(c.value)}`.trim()).join(rule.conditions.combinator === "all" ? " AND " : " OR ");
+}
 
-  if (!open || !rule) return null;
+/** the proposal waiting for a person, the rule behind it and that rule's recent runs; Approve and Reject call the real execution endpoints (through the page's confirm step) */
+export function RuleInspectorDrawer({ approval, rule, catalog, runs, canWrite, busy, onClose, onApprove, onReject, onTestPayload, onEditLogic, onPauseExecution }: RuleInspectorDrawerProps) {
+  if (!approval) return null;
+  const title = rule?.name ?? approval.ruleName;
+  const disabledReason = canWrite ? undefined : WRITE_REASON;
 
   return (
-    <div
-      role="dialog"
-      aria-label="Rule Inspector & Audit"
-      className="fixed inset-y-0 right-0 z-50 flex w-full max-w-[420px] flex-col border-l border-border bg-card shadow-2xl transition-transform"
-    >
-      {/* Header bar */}
+    <div role="dialog" aria-label="Rule Inspector & Audit" className="fixed inset-y-0 right-0 z-50 flex w-full max-w-[420px] flex-col border-l border-border bg-card shadow-2xl">
       <div className="flex items-center justify-between border-b border-border p-4">
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => setActiveTab("inspector")}
-            className={cn(
-              "rounded px-2.5 py-1 text-xs font-semibold transition-colors",
-              activeTab === "inspector" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            Rule Inspector &amp; Audit
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("builder")}
-            className={cn(
-              "rounded px-2.5 py-1 text-xs font-semibold transition-colors",
-              activeTab === "builder" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            + Rule Builder Preview
-          </button>
-        </div>
-
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 w-7 p-0"
-          onClick={onClose}
-          aria-label="Close drawer"
-        >
+        <span className="rounded bg-muted px-2.5 py-1 text-xs font-semibold text-foreground">Rule Inspector &amp; Audit</span>
+        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onClose} aria-label="Close drawer">
           <X className="h-4 w-4" />
         </Button>
       </div>
 
-      {/* Main Drawer Body */}
       <div className="flex-1 space-y-5 overflow-y-auto p-5 text-xs">
-        {/* Title & Metadata */}
         <div className="space-y-2">
           <div className="flex items-center gap-2">
-            <span className="rounded bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
-              APPROVAL REQUIRED
-            </span>
-            <span className="font-mono text-[11px] text-muted-foreground">ID: {rule.code}</span>
+            <span className="rounded bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">APPROVAL REQUIRED</span>
+            <span className="font-mono text-[11px] text-muted-foreground">Run {approval.id.slice(0, 8)}</span>
           </div>
-          <h2 className="text-base font-bold text-foreground">{rule.title}</h2>
-          <p className="text-muted-foreground leading-relaxed">{rule.description}</p>
+          <h2 className="text-base font-bold text-foreground">{title}</h2>
+          {rule?.description && <p className="leading-relaxed text-muted-foreground">{rule.description}</p>}
         </div>
 
-        {/* Execution Pipeline */}
         <div className="space-y-3 rounded-xl border border-border bg-muted/20 p-4">
-          <span className="font-bold uppercase tracking-wider text-muted-foreground">
-            EXECUTION PIPELINE
-          </span>
-
+          <span className="font-bold uppercase tracking-wider text-muted-foreground">EXECUTION PIPELINE</span>
           <div className="space-y-3 pt-1">
-            {/* Step 1: Trigger */}
             <div className="flex gap-3">
-              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-foreground text-[10px] font-bold text-background">
-                1
-              </span>
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-foreground text-[10px] font-bold text-background">1</span>
               <div className="space-y-0.5">
-                <span className="font-semibold text-foreground">Trigger: {rule.triggerName}</span>
-                <p className="text-muted-foreground leading-relaxed">{rule.triggerEvent}</p>
+                <span className="font-semibold text-foreground">Trigger: {triggerLabel(approval.triggerEvent, catalog)}</span>
+                <p className="leading-relaxed text-muted-foreground">{approval.triggerEvent}</p>
               </div>
             </div>
-
-            {/* Step 2: Condition Guard */}
             <div className="flex gap-3">
-              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-foreground text-[10px] font-bold text-background">
-                2
-              </span>
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-foreground text-[10px] font-bold text-background">2</span>
               <div className="space-y-1">
                 <span className="font-semibold text-foreground">Condition Guard</span>
-                <div className="inline-block rounded bg-amber-100/80 px-2 py-0.5 font-mono text-[11px] font-medium text-amber-900">
-                  {rule.conditionText}
-                </div>
+                <div className="block rounded bg-amber-100/80 px-2 py-0.5 font-mono text-[11px] font-medium text-amber-900">{rule ? conditionText(rule) : "Not available"}</div>
               </div>
             </div>
-
-            {/* Step 3: Target Action */}
             <div className="flex gap-3">
-              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-foreground text-[10px] font-bold text-background">
-                3
-              </span>
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-foreground text-[10px] font-bold text-background">3</span>
               <div className="space-y-0.5">
                 <span className="font-semibold text-foreground">Target Action</span>
-                <p className="text-muted-foreground leading-relaxed">{rule.actionText}</p>
+                <p className="leading-relaxed text-muted-foreground">{actionLabel(approval.actionType)}</p>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Commercial Safeguard Active banner */}
-        <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-3.5 space-y-1.5 text-amber-900">
+        <div className="space-y-1.5 rounded-xl border border-amber-200 bg-amber-50/70 p-3.5 text-amber-900">
           <div className="flex items-center gap-1.5 font-bold">
             <Shield className="h-4 w-4" />
-            Commercial Safeguard Active
+            Waiting for your decision
           </div>
-          <p className="text-[11px] leading-relaxed">
-            {rule.safeguardWarning ||
-              "Price modifications carry material GMV risks. Per enterprise governance rules, full automated repricing below ₹699 floor is locked behind merchant authorization."}
-          </p>
+          <p className="text-[11px] leading-relaxed">This rule is set to ask first. Nothing runs until you approve; rejecting records your decision and runs nothing.</p>
         </div>
 
-        {/* Awaiting Merchant Sign-Off Card */}
-        {rule.pendingItem && (
-          <div className="rounded-xl border-2 border-amber-300 bg-card p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="font-bold uppercase tracking-wider text-muted-foreground">
-                AWAITING MERCHANT SIGN-OFF
-              </span>
-              <span className="font-bold text-amber-700">1 Execution Pending</span>
-            </div>
-
-            <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="font-mono text-xs font-bold text-foreground">{rule.pendingItem.asin}</span>
-                <span className="rounded bg-amber-100 px-1.5 py-0.2 text-[10px] font-bold text-amber-800">
-                  {rule.pendingItem.dropLabel}
-                </span>
-              </div>
-
-              <h4 className="font-semibold text-foreground">{rule.pendingItem.productTitle}</h4>
-
-              <div className="grid grid-cols-2 gap-2 pt-1">
-                <div>
-                  <span className="text-[10px] text-muted-foreground uppercase">Competitor On FK</span>
-                  <div className="flex items-baseline gap-1.5">
-                    <span className="font-mono font-bold text-foreground">{rule.pendingItem.competitorPrice}</span>
-                    <span className="text-[10px] text-muted-foreground line-through">
-                      {rule.pendingItem.originalPrice}
-                    </span>
-                  </div>
-                </div>
-
-                <div>
-                  <span className="text-[10px] text-muted-foreground uppercase">Predicted Margin</span>
-                  <span className="font-mono font-bold text-red-700">
-                    {rule.pendingItem.predictedMargin}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 pt-1">
-              <Button
-                size="sm"
-                className="flex-1 gap-1.5 bg-black text-xs text-white hover:bg-neutral-800"
-                onClick={onApprove}
-              >
-                <Check className="h-3.5 w-3.5" />
-                Approve Price Match
-              </Button>
-              <Button size="sm" variant="outline" className="text-xs" onClick={onReject}>
-                Reject
-              </Button>
-            </div>
+        <div className="space-y-3 rounded-xl border-2 border-amber-300 bg-card p-4">
+          <div className="flex items-center justify-between">
+            <span className="font-bold uppercase tracking-wider text-muted-foreground">AWAITING MERCHANT SIGN-OFF</span>
+            <span className="font-bold text-amber-700">Raised {formatDateTime(approval.timestamp)}</span>
           </div>
-        )}
+          <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-3">
+            <div className="flex items-center justify-between">
+              <span className="font-mono text-xs font-bold text-foreground">{approval.skuOrOrder}</span>
+              <span className="rounded bg-amber-100 px-1.5 text-[10px] font-bold text-amber-800">{approval.financialImpact === null ? "IMPACT NOT KNOWN" : `${formatCurrency(approval.financialImpact, approval.currency)} AT STAKE`}</span>
+            </div>
+            <h4 className="font-semibold text-foreground">{approval.entityName}</h4>
+            <p className="text-muted-foreground">{approval.recommendedAction}</p>
+          </div>
+          <div className="flex items-center gap-2 pt-1">
+            <Button size="sm" className="flex-1 gap-1.5 bg-black text-xs text-white hover:bg-neutral-800" disabled={!canWrite || busy} title={disabledReason} onClick={() => onApprove(approval)}>
+              <Check className="h-3.5 w-3.5" />
+              Approve
+            </Button>
+            <Button size="sm" variant="outline" className="text-xs" disabled={!canWrite || busy} title={disabledReason} onClick={() => onReject(approval)}>
+              Reject
+            </Button>
+          </div>
+        </div>
 
-        {/* Execution Audit Log */}
-        {rule.auditLogs && rule.auditLogs.length > 0 && (
-          <div className="space-y-3 border-t border-border pt-3">
-            <span className="font-bold uppercase tracking-wider text-muted-foreground">
-              EXECUTION AUDIT LOG
-            </span>
-
+        <div className="space-y-3 border-t border-border pt-3">
+          <span className="font-bold uppercase tracking-wider text-muted-foreground">EXECUTION AUDIT LOG</span>
+          {runs.length === 0 ? (
+            <p className="text-[11px] text-muted-foreground">No earlier runs of this rule.</p>
+          ) : (
             <div className="space-y-2.5">
-              {rule.auditLogs.map((log, idx) => (
-                <div key={idx} className="flex justify-between items-start text-[11px]">
+              {runs.map((run) => (
+                <div key={run.id} className="flex items-start justify-between text-[11px]">
                   <div className="space-y-0.5">
-                    <span className="font-semibold text-foreground">{log.event}</span>
-                    <p className="text-muted-foreground">{log.detail}</p>
+                    <span className="font-semibold text-foreground">{run.summary}</span>
+                    <p className="text-muted-foreground">{run.entityName}</p>
                   </div>
-                  <span className="font-mono text-muted-foreground shrink-0">{log.timeText}</span>
+                  <span className="shrink-0 pl-2 text-right font-mono text-muted-foreground">{formatDateTime(run.timestamp)}</span>
                 </div>
               ))}
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
-      {/* Footer Actions */}
-      <div className="border-t border-border p-4 space-y-3">
+      <div className="space-y-3 border-t border-border p-4">
         <div className="grid grid-cols-2 gap-2">
-          <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={onTestPayload}>
+          <Button size="sm" variant="outline" className="gap-1.5 text-xs" disabled={!rule} onClick={() => rule && onTestPayload(rule)}>
             <TestTube className="h-3.5 w-3.5" />
             Test with Payload
           </Button>
-          <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={onEditLogic}>
+          <Button size="sm" variant="outline" className="gap-1.5 text-xs" disabled={!rule || !canWrite} title={disabledReason} onClick={() => rule && onEditLogic(rule)}>
             <Edit className="h-3.5 w-3.5" />
             Edit Logic
           </Button>
         </div>
-
         <button
           type="button"
-          onClick={onPauseExecution}
-          className="flex w-full items-center justify-center gap-1.5 text-xs font-semibold text-red-600 hover:underline"
+          disabled={!rule || !canWrite || rule.status !== "active"}
+          title={disabledReason}
+          onClick={() => rule && onPauseExecution(rule)}
+          className="flex w-full items-center justify-center gap-1.5 text-xs font-semibold text-red-600 hover:underline disabled:cursor-not-allowed disabled:opacity-50 disabled:no-underline"
         >
           <Pause className="h-3.5 w-3.5" />
           Pause Rule Execution

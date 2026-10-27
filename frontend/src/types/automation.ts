@@ -98,6 +98,12 @@ export interface AutomationOverview {
   totalRules: number;
   pendingApprovals: number;
   runs24h: number;
+  /** distinct events the rules evaluated in the last 24 hours, matched or not */
+  signalsObserved24h: number;
+  /** runs of the last 24 hours that proposed or took an action */
+  recommendedActions24h: number;
+  completedRuns24h: number;
+  failedRuns24h: number;
   /** percent of the attempted runs of the last 24 hours; null while nothing ran */
   successRate: number | null;
   lastRunAt: string | null;

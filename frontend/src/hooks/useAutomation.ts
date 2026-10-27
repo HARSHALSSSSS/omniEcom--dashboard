@@ -2,6 +2,7 @@ import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-quer
 import { useGuardedMutation } from "@/hooks/useSubmitGuard";
 import { automationApi } from "@/api/automation.api";
 import { useWorkspaceStore } from "@/store/workspace.store";
+import { refreshShell } from "@/lib/session";
 import type { ApprovalsQuery, RuleWrite, RulesQuery, RunsQuery } from "@/types/automation";
 
 export const automationKeys = {
@@ -54,11 +55,24 @@ function useAfterRuleWrite() {
   };
 }
 
+/** a decision on a waiting run: the queue, the tiles, the bell and the badges refresh */
+function useAfterDecision() {
+  const qc = useQueryClient();
+  return () => {
+    void qc.invalidateQueries({ queryKey: automationKeys.all });
+    void qc.invalidateQueries({ queryKey: ["notifications"] });
+    refreshShell().catch(() => undefined);
+  };
+}
+
 /** approving or rolling back runs a real action (purchase order, price proposal, fulfillment, reorder level): the screens it touches refresh too */
 function useAfterActionRun() {
   const qc = useQueryClient();
   return () => {
     void qc.invalidateQueries({ queryKey: automationKeys.all });
+    // the bell and the sidebar badges count approvals and attention items
+    void qc.invalidateQueries({ queryKey: ["notifications"] });
+    refreshShell().catch(() => undefined);
     for (const key of ["procurement", "pricing", "inventory", "orders", "fulfillment", "listings", "recommendations", "dashboard", "needs-attention", "attention"]) void qc.invalidateQueries({ queryKey: [key] });
   };
 }
@@ -96,7 +110,7 @@ export function useApproveExecution() {
 }
 
 export function useDismissExecution() {
-  const after = useAfterRuleWrite();
+  const after = useAfterDecision();
   return useGuardedMutation({ mutationFn: (input: { id: string; note?: string }) => automationApi.dismiss(input.id, input.note), onSettled: after });
 }
 

@@ -75,7 +75,7 @@ const catalog = (): AutomationCatalog => ({
   operators: ["eq", "ne", "in", "nin", "gt", "gte", "lt", "lte", "contains", "startsWith", "between", "exists"],
 });
 
-const overview = (): AutomationOverview => ({ activeRules: 1, totalRules: 2, pendingApprovals: 3, runs24h: 12, successRate: 91.7, lastRunAt: "2026-10-20T10:00:00.000Z", lastRunRule: "Draft PO on low stock" });
+const overview = (): AutomationOverview => ({ activeRules: 1, totalRules: 2, pendingApprovals: 3, runs24h: 12, signalsObserved24h: 20, recommendedActions24h: 12, completedRuns24h: 11, failedRuns24h: 1, successRate: 91.7, lastRunAt: "2026-10-20T10:00:00.000Z", lastRunRule: "Draft PO on low stock" });
 
 const approval = (over: Partial<AutomationApproval> = {}): AutomationApproval => ({
   id: E1,
@@ -236,7 +236,7 @@ describe("AutomationPage rules", () => {
     expect(screen.getByText("Awaiting approval")).toBeInTheDocument();
     const auto = screen.getByText("Notify on failed sync").closest("tr") as HTMLElement;
     expect(within(auto).getByText("Disabled")).toBeInTheDocument();
-    expect(within(auto).getByText("Never")).toBeInTheDocument();
+    expect(within(auto).getByText("Never run")).toBeInTheDocument();
   });
 
   it("filters by status, trigger and search through the URL", async () => {
@@ -535,6 +535,55 @@ describe("AutomationPage approvals and runs", () => {
     await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Dismiss" }));
     await waitFor(() => expect(api.dismiss).toHaveBeenCalledWith(E1, undefined));
     await waitFor(() => expect(toastTitles()).toContain("Dismissed"));
+  });
+
+  it("Overview: Review opens the inspector and Approve sends the real approve call", async () => {
+    api.approve.mockResolvedValue(execution({ status: "executed", actionType: "draft_purchase_order" }));
+    const user = userEvent.setup();
+    renderPage("/automation");
+    await user.click(await screen.findByRole("button", { name: "Review" }));
+    const inspector = await screen.findByRole("dialog", { name: "Rule Inspector & Audit" });
+    expect(within(inspector).getAllByText("Premium Travel Bag").length).toBeGreaterThan(0);
+    await user.click(within(inspector).getByRole("button", { name: "Approve" }));
+    expect(api.approve).not.toHaveBeenCalled();
+    await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Approve and run" }));
+    await waitFor(() => expect(api.approve).toHaveBeenCalledWith(E1));
+    await waitFor(() => expect(toastTitles()).toContain("Approved and run"));
+  });
+
+  it("Overview: a failed approve shows an error, never a success toast", async () => {
+    api.approve.mockRejectedValue(new ApiError({ code: "SERVER", message: "Boom", status: 500 }));
+    const user = userEvent.setup();
+    renderPage("/automation");
+    await user.click(await screen.findByRole("button", { name: "Review" }));
+    const inspector = await screen.findByRole("dialog", { name: "Rule Inspector & Audit" });
+    await user.click(within(inspector).getByRole("button", { name: "Approve" }));
+    await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Approve and run" }));
+    await waitFor(() => expect(toastTitles()).toContain("Could not approve the run"));
+    expect(toastTitles()).not.toContain("Approved and run");
+  });
+
+  it("Overview: Reject from the inspector sends the real dismiss call", async () => {
+    api.dismiss.mockResolvedValue(execution({ status: "rejected" }));
+    const user = userEvent.setup();
+    renderPage("/automation");
+    await user.click(await screen.findByRole("button", { name: "Review" }));
+    const inspector = await screen.findByRole("dialog", { name: "Rule Inspector & Audit" });
+    await user.click(within(inspector).getByRole("button", { name: "Reject" }));
+    await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Dismiss" }));
+    await waitFor(() => expect(api.dismiss).toHaveBeenCalledWith(E1, undefined));
+    await waitFor(() => expect(toastTitles()).toContain("Dismissed"));
+  });
+
+  it("Overview: a read-only user cannot approve or reject from the inspector", async () => {
+    useWorkspaceStore.getState().clearWorkspace();
+    signIn(["automation:read"]);
+    const user = userEvent.setup();
+    renderPage("/automation");
+    await user.click(await screen.findByRole("button", { name: "Review" }));
+    const inspector = await screen.findByRole("dialog", { name: "Rule Inspector & Audit" });
+    expect(within(inspector).getByRole("button", { name: "Approve" })).toBeDisabled();
+    expect(within(inspector).getByRole("button", { name: "Reject" })).toBeDisabled();
   });
 
   it("shows the empty approvals state", async () => {

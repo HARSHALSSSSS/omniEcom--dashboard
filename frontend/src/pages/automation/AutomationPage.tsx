@@ -14,9 +14,10 @@ import { RuleFormDialog } from "@/components/automation/RuleFormDialog";
 import { RunsTable } from "@/components/automation/RunsTable";
 import { TestRuleDialog } from "@/components/automation/TestRuleDialog";
 import { AutomationPipelineOverview } from "@/components/automation/AutomationPipelineOverview";
-import { RuleInspectorDrawer, type InspectorRuleData } from "@/components/automation/RuleInspectorDrawer";
-import { AutomationRulesSection } from "@/components/automation/AutomationRulesSection";
-import { MoreHorizontal, Plus, Settings } from "lucide-react";
+import { RuleInspectorDrawer } from "@/components/automation/RuleInspectorDrawer";
+import { AutomationRulesSection, sortRules, type RuleSort } from "@/components/automation/AutomationRulesSection";
+import { MODE_ALL, MODE_APPROVAL, MODE_AUTO } from "@/components/automation/RuleFilterRail";
+import { Plus } from "lucide-react";
 import { FLAG, WRITE_REASON, actionLabel, triggerLabel } from "@/components/automation/autoFormat";
 import { DEFAULT_PAGE_SIZE, filterRules, isFiltered, runsQueryOf, useAutomationUrlState } from "@/components/automation/autoParams";
 import { errorMessage, isApiError } from "@/api/errors";
@@ -34,7 +35,8 @@ import {
   useSetRuleActive,
 } from "@/hooks/useAutomation";
 import { toast } from "@/hooks/useToast";
-import type { AutomationApproval, AutomationExecution, AutomationRule, AutomationTab } from "@/types/automation";
+import { formatNumber } from "@/utils/format";
+import type { AutomationApproval, AutomationExecution, AutomationRule, AutomationTab, RuleStatus } from "@/types/automation";
 
 type Confirm =
   | { kind: "enable"; rule: AutomationRule }
@@ -99,6 +101,10 @@ function AutomationScreen() {
   const rulesQuery = useAutomationRules({});
   const approvals = useAutomationApprovals({ page, pageSize }, tab === "approvals");
   const runs = useAutomationRuns(runsQueryOf(url), tab === "runs");
+  // the Overview tab shows the three oldest-waiting proposals, the latest runs and the latest failures
+  const overviewApprovals = useAutomationApprovals({ page: 1, pageSize: 3 }, tab === "overview");
+  const overviewRuns = useAutomationRuns({ page: 1, pageSize: 5 }, tab === "overview");
+  const overviewFailed = useAutomationRuns({ status: "failed", page: 1, pageSize: 2 }, tab === "overview");
   const setActive = useSetRuleActive();
   const remove = useDeleteRule();
   const approve = useApproveExecution();
@@ -110,9 +116,12 @@ function AutomationScreen() {
   const [testing, setTesting] = useState<AutomationRule | null>(null);
   const [confirm, setConfirm] = useState<Confirm | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [inspectorOpen, setInspectorOpen] = useState(false);
-  const [inspectorRule] = useState<InspectorRuleData | null>(null);
-  const [executionModeFilter, setExecutionModeFilter] = useState("All Modes");
+  const [inspectorId, setInspectorId] = useState<string | null>(null);
+  const [executionModeFilter, setExecutionModeFilter] = useState(MODE_ALL);
+  const [ruleSort, setRuleSort] = useState<RuleSort>("name");
+  const inspectorApproval = inspectorId ? [...(overviewApprovals.data?.items ?? []), ...(approvals.data?.items ?? [])].find((a) => a.id === inspectorId) ?? null : null;
+  const inspectorRule = inspectorApproval ? rulesQuery.data?.find((r) => r.id === inspectorApproval.ruleId) ?? null : null;
+  const inspectorRuns = useAutomationRuns({ ruleId: inspectorApproval?.ruleId, page: 1, pageSize: 5 }, Boolean(inspectorApproval));
 
   const allRules = rulesQuery.data ?? NO_RULES;
   const filtered = isFiltered(url);
@@ -120,13 +129,13 @@ function AutomationScreen() {
   const matching = useMemo(() => {
     if (tab !== "rules") return NO_RULES;
     let base = filterRules(allRules, url, label);
-    if (executionModeFilter === "Automatic") {
+    if (executionModeFilter === MODE_AUTO) {
       base = base.filter((r) => r.mode === "auto");
-    } else if (executionModeFilter === "Approval Required") {
+    } else if (executionModeFilter === MODE_APPROVAL) {
       base = base.filter((r) => r.mode === "approval");
     }
-    return base;
-  }, [tab, allRules, url, catalog.data, executionModeFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+    return sortRules(base, ruleSort);
+  }, [tab, allRules, url, catalog.data, executionModeFilter, ruleSort]); // eslint-disable-line react-hooks/exhaustive-deps
   const rulePages = Math.max(1, Math.ceil(matching.length / pageSize));
   const ruleRows = matching.slice((page - 1) * pageSize, page * pageSize);
 
@@ -297,13 +306,6 @@ function AutomationScreen() {
               <Plus className="h-3.5 w-3.5" />
               Create Rule
             </Button>
-            <Button size="sm" variant="outline" className="gap-1.5 text-xs">
-              <Settings className="h-3.5 w-3.5 text-muted-foreground" />
-              Automation Settings
-            </Button>
-            <Button size="sm" variant="ghost" className="h-8 w-8 p-0" title="More options">
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
             <RefreshButton
               onRefresh={() => {
                 void overview.refetch();
@@ -318,15 +320,12 @@ function AutomationScreen() {
       {/* Top Badges Strip matching Figma Images 1 & 2 */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-3 text-xs">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-semibold text-foreground">8 active rules</span>
+          <span className="font-semibold text-foreground">{overview.data ? formatNumber(overview.data.activeRules) : "—"} active rules</span>
           <span className="text-muted-foreground">·</span>
-          <span className="font-semibold text-amber-700">3 approvals pending</span>
+          <span className="font-semibold text-amber-700">{overview.data ? formatNumber(overview.data.pendingApprovals) : "—"} approvals pending</span>
           <span className="text-muted-foreground">·</span>
-          <span className="font-semibold text-red-700">2 exceptions</span>
+          <span className="font-semibold text-red-700">{overview.data ? formatNumber(overview.data.failedRuns24h) : "—"} failed runs (24h)</span>
         </div>
-        <span className="text-muted-foreground text-[11px]">
-          Illustrative demo data
-        </span>
       </div>
 
       {/* Segmented Tab Bar (Overview | Rules | Runs) */}
@@ -361,12 +360,16 @@ function AutomationScreen() {
 
       {tab === "overview" ? (
         <AutomationPipelineOverview
-          pipeline={{
-            observedSignals: 24,
-            recommendedActions: 8,
-            awaitingApproval: overview.data?.pendingApprovals ?? 3,
-            completedRuns: overview.data?.runs24h ?? 42,
-          }}
+          overview={overview.data}
+          loading={overview.isLoading}
+          error={overview.isError ? errorMessage(overview.error) : null}
+          onRetry={() => void overview.refetch()}
+          approvals={overviewApprovals.data?.items ?? []}
+          runs={overviewRuns.data?.items ?? []}
+          failedRuns={overviewFailed.data?.items ?? []}
+          canWrite={canWrite}
+          onCreateRule={startCreate}
+          onOpenRun={openRun}
           onViewAllApprovals={() => {
             setActiveTab("approvals");
             update({ tab: "approvals" });
@@ -375,8 +378,8 @@ function AutomationScreen() {
             setActiveTab("runs");
             update({ tab: "runs" });
           }}
-          onReviewApproval={() => setInspectorOpen(true)}
-          onDismissApproval={(id) => runDismiss(id)}
+          onReviewApproval={(a) => setInspectorId(a.id)}
+          onDismissApproval={(a) => setConfirm({ kind: "dismiss", id: a.id, label: `${a.ruleName}: ${a.entityName}` })}
         />
       ) : tab === "rules" ? (
         <>
@@ -406,6 +409,9 @@ function AutomationScreen() {
             <>
               <AutomationRulesSection
                 apiRules={ruleRows}
+                allRules={allRules}
+                matchingCount={matching.length}
+                overview={overview.data}
                 catalog={catalog.data}
                 canWrite={canWrite}
                 busyId={busyId}
@@ -419,6 +425,17 @@ function AutomationScreen() {
                 onSearchChange={(q) => update({ q }, { replace: true })}
                 selectedMode={executionModeFilter}
                 onSelectMode={setExecutionModeFilter}
+                selectedStatus={url.tab === "rules" ? (url.status as RuleStatus | undefined) : undefined}
+                selectedTrigger={url.trigger}
+                onSelectStatus={(status) => update({ status })}
+                onSelectTrigger={(trigger) => update({ trigger })}
+                onResetFilters={() => {
+                  setExecutionModeFilter(MODE_ALL);
+                  clearFilters();
+                }}
+                activeFilterCount={[url.q, url.status, url.trigger, executionModeFilter !== MODE_ALL].filter(Boolean).length}
+                sort={ruleSort}
+                onSort={setRuleSort}
               />
               <AutoPagination
                 page={Math.min(page, rulePages)}
@@ -544,28 +561,32 @@ function AutomationScreen() {
       <TestRuleDialog rule={testing} catalog={catalog.data} onClose={() => setTesting(null)} />
 
       <RuleInspectorDrawer
-        open={inspectorOpen}
+        approval={inspectorApproval}
         rule={inspectorRule}
-        onClose={() => setInspectorOpen(false)}
-        onApprove={() => {
-          toast({ title: "Approved Price Match", description: "Floor override applied.", variant: "success" });
-          setInspectorOpen(false);
+        catalog={catalog.data}
+        runs={inspectorRuns.data?.items ?? []}
+        canWrite={canWrite}
+        busy={busyId !== null && busyId === inspectorId}
+        onClose={() => setInspectorId(null)}
+        onApprove={(a) => {
+          setInspectorId(null);
+          setConfirm({ kind: "approve", ...fromApproval(a) });
         }}
-        onReject={() => {
-          toast({ title: "Action dismissed", description: "Price match rejected.", variant: "destructive" });
-          setInspectorOpen(false);
+        onReject={(a) => {
+          setInspectorId(null);
+          setConfirm({ kind: "dismiss", id: a.id, label: `${a.ruleName}: ${a.entityName}` });
         }}
-        onTestPayload={() => {
-          setInspectorOpen(false);
-          if (allRules.length > 0) setTesting(allRules[0]);
+        onTestPayload={(r) => {
+          setInspectorId(null);
+          setTesting(r);
         }}
-        onEditLogic={() => {
-          setInspectorOpen(false);
-          if (allRules.length > 0) startEdit(allRules[0]);
+        onEditLogic={(r) => {
+          setInspectorId(null);
+          startEdit(r);
         }}
-        onPauseExecution={() => {
-          toast({ title: "Rule paused", description: "Rule execution stopped.", variant: "default" });
-          setInspectorOpen(false);
+        onPauseExecution={(r) => {
+          setInspectorId(null);
+          changeStatus(r, false);
         }}
       />
 
