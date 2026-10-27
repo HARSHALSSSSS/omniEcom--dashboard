@@ -2,6 +2,8 @@ import { client, unwrap } from "./client";
 import { ENDPOINTS } from "./endpoints";
 import type {
   ImportUnit,
+  ProductProfitPage,
+  ProductQuery,
   SpendAccount,
   SpendPage,
   SpendQuery,
@@ -34,8 +36,14 @@ export const profitabilityApi = {
   waterfall: async (query: WaterfallQuery, signal?: AbortSignal) =>
     unwrap<Waterfall>(await client.get(ENDPOINTS.PROFIT_WATERFALL, { params: waterfallParams(query), signal })),
 
-  profitability: async (query?: { groupBy?: "product" | "marketplace" | "order"; from?: string; to?: string; compare?: "previous" }, signal?: AbortSignal) =>
-    unwrap<unknown>(await client.get(ENDPOINTS.PROFITABILITY, { params: query, signal })),
+  /** the products of a range with their profit, margin bucket and per-marketplace figures; empty filters are left out */
+  products: async (q: ProductQuery, signal?: AbortSignal) =>
+    unwrap<ProductProfitPage>(
+      await client.get(ENDPOINTS.PROFITABILITY, {
+        params: { groupBy: "product", from: q.from, to: q.to, sort: q.sort, page: q.page, pageSize: q.pageSize, ...(q.marketplace ? { marketplace: q.marketplace } : {}), ...(q.q ? { q: q.q } : {}), ...(q.status ? { status: q.status } : {}) },
+        signal,
+      }),
+    ),
 
   spend: async (query: SpendQuery, signal?: AbortSignal) =>
     unwrap<SpendPage>(await client.get(ENDPOINTS.MARKETING_SPEND, { params: spendParams(query), signal })),

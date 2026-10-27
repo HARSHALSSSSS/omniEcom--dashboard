@@ -1,77 +1,65 @@
 import React from "react";
-import { FIGMA_MARGIN_PRESSURE, FIGMA_MARGIN_PRESSURE_PRODUCTS } from "./figmaProfitData";
+import { money, percent } from "./profitFormat";
+import type { ProductProfit, ProductProfitPage, StatusFilter } from "@/types/profitability";
 
-export const MarginPressureCard: React.FC = () => {
+interface MarginPressureCardProps {
+  page: ProductProfitPage | undefined;
+  /** the products furthest from healthy (low first, then below target), to name a few */
+  worst: ProductProfit[];
+  onFilter: (status: StatusFilter) => void;
+  onSelect: (p: ProductProfit) => void;
+}
+
+/**
+ * How many products sit in each margin bucket. Healthy is at or above the margin target of the active pricing policy (the strictest one),
+ * below target is from zero up to it, low is a negative contribution. Without a target there are just two buckets by sign.
+ */
+export const MarginPressureCard: React.FC<MarginPressureCardProps> = ({ page, worst, onFilter, onSelect }) => {
+  const target = page?.marginTargetBps ?? null;
+  const c = page?.statusCounts;
+  const n = (v: number | undefined) => (v === undefined ? "—" : v.toLocaleString("en-IN"));
+
+  const tile = (label: string, value: number | undefined, status: StatusFilter, tone: string, hint: string) => (
+    <button type="button" onClick={() => onFilter(status)} disabled={!value} title={hint} className="rounded-lg border border-border/70 p-3 text-left transition-colors hover:bg-muted/40 disabled:cursor-default disabled:opacity-70 disabled:hover:bg-transparent">
+      <div className={`text-2xl font-bold tabular-nums ${tone}`}>{n(value)}</div>
+      <div className="mt-0.5 text-[11px] text-muted-foreground">{label}</div>
+    </button>
+  );
+
   return (
-    <div className="rounded-xl border border-border bg-card p-6 shadow-xs space-y-5">
-      {/* Header */}
+    <div className="space-y-4 rounded-xl border border-border bg-card p-6 shadow-xs">
       <div>
         <h2 className="text-base font-semibold text-foreground">Margin pressure</h2>
+        <p className="mt-0.5 text-xs text-muted-foreground">{target === null ? "No margin target set: products are split by whether they earn anything. Set one in Pricing policies." : `Margin target ${percent(target / 100)} (the strictest active pricing policy)`}</p>
       </div>
 
-      {/* KPI Counters */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
-        <div className="flex items-baseline gap-2">
-          <span className="text-2xl font-bold tracking-tight text-foreground">
-            {FIGMA_MARGIN_PRESSURE.healthyCount}
-          </span>
-          <span className="text-xs text-emerald-600 font-bold">▲</span>
-          <span className="text-xs text-muted-foreground">Healthy products</span>
-        </div>
-
-        <div className="flex items-baseline gap-2">
-          <span className="text-2xl font-bold tracking-tight text-foreground">
-            {FIGMA_MARGIN_PRESSURE.belowTargetCount}
-          </span>
-          <span className="text-xs text-amber-600 font-bold">▲</span>
-          <span className="text-xs text-muted-foreground">Below target products</span>
-        </div>
-
-        <div className="flex items-baseline gap-2">
-          <span className="text-2xl font-bold tracking-tight text-foreground">
-            {FIGMA_MARGIN_PRESSURE.lowContributionCount}
-          </span>
-          <span className="text-xs text-orange-600 font-bold">▲</span>
-          <span className="text-xs text-muted-foreground">Low contribution products</span>
-        </div>
+      <div className={`grid gap-3 ${target === null ? "grid-cols-2" : "grid-cols-3"}`}>
+        {tile(target === null ? "Earning (0% or more)" : `Healthy (at or above ${percent(target / 100, 0)})`, c?.healthy, "healthy", "text-emerald-600", "Show the healthy products")}
+        {target !== null && tile("Below target", c?.belowTarget, "below_target", "text-amber-600", "Show the products below the target")}
+        {tile("Low contribution (negative)", c?.low, "low", "text-rose-600", "Show the products that lose money")}
       </div>
+      {c && c.unknown > 0 && (
+        <p className="text-[11px] text-muted-foreground">
+          {c.unknown} {c.unknown === 1 ? "product has" : "products have"} no complete cost picture yet and {c.unknown === 1 ? "is" : "are"} not counted.{" "}
+          <button type="button" className="font-medium text-foreground underline" onClick={() => onFilter("unknown")}>
+            Show them
+          </button>
+        </p>
+      )}
 
-      {/* Mini Table */}
-      <div className="overflow-x-auto pt-2">
-        <table className="w-full text-left text-xs">
-          <thead>
-            <tr className="border-b border-border/80 text-[11px] font-medium text-muted-foreground">
-              <th className="py-2 px-3 font-medium">Product</th>
-              <th className="py-2 px-3 font-medium text-right">Revenue</th>
-              <th className="py-2 px-3 font-medium text-right">Contribution</th>
-              <th className="py-2 px-3 font-medium text-right">Margin</th>
-              <th className="py-2 px-3 font-medium text-center">Status</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border/40">
-            {FIGMA_MARGIN_PRESSURE_PRODUCTS.map((prod) => (
-              <tr key={prod.name} className="hover:bg-muted/30 transition-colors">
-                <td className="py-2.5 px-3 font-medium text-foreground">{prod.name}</td>
-                <td className="py-2.5 px-3 text-right text-muted-foreground tabular-nums">{prod.revenue}</td>
-                <td className="py-2.5 px-3 text-right text-muted-foreground tabular-nums">{prod.contribution}</td>
-                <td className="py-2.5 px-3 text-right font-semibold text-foreground tabular-nums">{prod.margin}</td>
-                <td className="py-2.5 px-3 text-center">
-                  <span
-                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                      prod.status === "Healthy"
-                        ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800"
-                        : "bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800"
-                    }`}
-                  >
-                    <span>{prod.status === "Healthy" ? "✓" : "⚠️"}</span>
-                    <span>{prod.status}</span>
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {worst.length > 0 && (
+        <div className="space-y-2 border-t border-border/60 pt-3">
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Needs a look first</div>
+          {worst.map((p) => (
+            <button key={p.key} type="button" onClick={() => onSelect(p)} className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-xs hover:bg-muted/40">
+              <span className="font-medium text-foreground">{p.title ?? p.label}</span>
+              <span className="tabular-nums text-muted-foreground">
+                {money(p.revenue.amountMinor)} · {percent(p.marginPercent)}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

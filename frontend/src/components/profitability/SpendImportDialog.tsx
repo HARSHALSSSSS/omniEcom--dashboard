@@ -7,7 +7,8 @@ import { useImportSpend } from "@/hooks/useProfitability";
 import type { ImportUnit, SpendImportResult } from "@/types/profitability";
 
 const MAX_FILE_BYTES = 1_000_000;
-const SAMPLE = "date,amount,account,campaign,notes\n2026-10-01,1250.50,,Sponsored products,week 1\n";
+/** the layout of the file, with today as the example date */
+const SAMPLE = `date,amount,account,campaign,notes\n${new Date().toISOString().slice(0, 10)},1250.50,,Sponsored products,week 1\n`;
 
 function Summary({ r }: { r: SpendImportResult }) {
   return (

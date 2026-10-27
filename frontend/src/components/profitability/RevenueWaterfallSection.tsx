@@ -1,148 +1,81 @@
 import React from "react";
 import { AlertCircle } from "lucide-react";
+import { BASIS_LABELS, DASH, coveragePercent, money, missingList } from "./profitFormat";
 import type { Waterfall } from "@/types/profitability";
 
 interface RevenueWaterfallSectionProps {
   data?: Waterfall | null;
 }
 
-export const RevenueWaterfallSection: React.FC<RevenueWaterfallSectionProps> = ({ data: _data }) => {
+/**
+ * Where the revenue goes, step by step from the P&L bridge: gross revenue, then every deduction hanging from where the last one ended, then the
+ * contribution. A step nobody knows yet is drawn as a dashed placeholder with a dash, never as zero. (The earlier "reported contribution" bar is not
+ * shown: no source records a reported figure to compare the calculation with.)
+ */
+export const RevenueWaterfallSection: React.FC<RevenueWaterfallSectionProps> = ({ data }) => {
+  const steps = data?.steps ?? [];
+  const top = Math.max(data?.grossRevenueMinor ?? 0, 1);
+  let running = 0;
+  const bars = steps.map((s) => {
+    const amount = s.amountMinor;
+    let from = 0;
+    let to = 0;
+    if (amount !== null) {
+      if (s.type === "positive") {
+        from = 0;
+        to = amount;
+        running = amount;
+      } else if (s.type === "negative") {
+        from = running + amount;
+        to = running;
+        running += amount;
+      } else {
+        from = 0;
+        to = Math.max(amount, 0);
+      }
+    }
+    return { s, bottom: Math.max(0, (from / top) * 100), height: Math.max(amount === null ? 0 : 1.5, ((to - from) / top) * 100) };
+  });
+
   return (
-    <div className="rounded-xl border border-border bg-card p-6 shadow-xs space-y-6">
-      {/* Header */}
+    <div className="space-y-4 rounded-xl border border-border bg-card p-6 shadow-xs">
       <div className="flex items-start justify-between">
         <div>
           <h2 className="text-base font-semibold text-foreground">Where revenue goes</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Revenue – costs = calculated contribution = reported contribution
-          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">Revenue less returns, product cost, fees, shipping and advertising leaves the contribution.</p>
         </div>
-        <span className="rounded-md border border-border bg-muted/60 px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
-          Last 30 days
-        </span>
+        <span className="text-xs font-medium text-muted-foreground">{data ? `${data.range.from} to ${data.range.to}` : ""}</span>
       </div>
 
-      {/* Waterfall Graphic */}
-      <div className="pt-8 pb-4 overflow-x-auto">
-        <div className="min-w-[700px] h-60 flex items-end justify-between gap-3 relative px-2">
-          {/* Subtle horizontal grid lines */}
-          <div className="absolute inset-x-0 top-0 border-b border-border/40 pointer-events-none" />
-          <div className="absolute inset-x-0 top-1/2 border-b border-border/30 pointer-events-none" />
-          <div className="absolute inset-x-0 bottom-0 border-b border-border pointer-events-none" />
-
-          {/* Bar 1: Revenue */}
-          <div className="flex-1 flex flex-col items-center h-full justify-end relative group">
-            <span className="text-xs font-bold text-foreground mb-1.5">₹18.4L</span>
-            <div className="w-full max-w-[54px] h-[92%] rounded-t bg-[#D4D4D8] dark:bg-[#52525B] transition-all hover:opacity-90" />
-            <span className="text-[11px] font-medium text-muted-foreground mt-2 text-center truncate max-w-[70px]">
-              Revenue
-            </span>
-          </div>
-
-          {/* Bar 2: Product Cost (-6.2L) */}
-          <div className="flex-1 flex flex-col items-center h-full justify-end relative group">
-            <span className="text-xs font-semibold text-foreground mb-1.5">-₹6.2L</span>
-            <div className="w-full max-w-[54px] h-full flex flex-col justify-end">
-              {/* Floating bar hanging down from 92% to 61% */}
-              <div className="w-full h-[31%] rounded bg-[#D4D4D8] dark:bg-[#52525B] mb-[61%] opacity-90 transition-all hover:opacity-100" />
+      <div className="flex h-56 items-end gap-3 overflow-x-auto border-b border-border pb-0">
+        {bars.map(({ s, bottom, height }) => (
+          <div key={s.key} className="flex min-w-[84px] flex-1 flex-col items-center gap-1" title={s.tooltip}>
+            <span className="font-mono text-[11px] font-semibold text-foreground">{s.amountMinor === null ? DASH : s.type === "negative" ? `-${money(Math.abs(s.amountMinor))}` : money(s.amountMinor)}</span>
+            <div className="relative h-40 w-full">
+              {s.amountMinor === null ? (
+                <div className="absolute inset-x-3 bottom-0 h-3 rounded border border-dashed border-muted-foreground/50" />
+              ) : (
+                <div
+                  className={`absolute inset-x-3 rounded-t ${s.type === "positive" ? "bg-foreground" : s.type === "negative" ? "bg-rose-400" : "bg-emerald-600"} ${s.basis === "estimated" ? "opacity-70" : ""}`}
+                  style={{ bottom: `${bottom}%`, height: `${height}%` }}
+                />
+              )}
             </div>
-            <span className="text-[11px] font-medium text-muted-foreground mt-2 text-center truncate max-w-[70px]" title="Product Cost">
-              Product Cost
-            </span>
+            <span className="text-center text-[10px] leading-tight text-muted-foreground">{s.label}</span>
+            <span className="text-[10px] text-muted-foreground/70">{s.amountMinor === null ? "not known" : s.basis === "actual" && s.coverage >= 1 ? BASIS_LABELS.actual : `${BASIS_LABELS[s.basis]} · ${coveragePercent(s.coverage)}`}</span>
           </div>
-
-          {/* Bar 3: Marketplace Fees (-1.6L) */}
-          <div className="flex-1 flex flex-col items-center h-full justify-end relative group">
-            <span className="text-xs font-semibold text-foreground mb-1.5">-₹1.6L</span>
-            <div className="w-full max-w-[54px] h-full flex flex-col justify-end">
-              <div className="w-full h-[8%] rounded bg-[#D4D4D8] dark:bg-[#52525B] mb-[53%] opacity-90 transition-all hover:opacity-100" />
-            </div>
-            <span className="text-[11px] font-medium text-muted-foreground mt-2 text-center truncate max-w-[70px]" title="Marketplace Fees">
-              Marketpce Fees
-            </span>
-          </div>
-
-          {/* Bar 4: Payment Fees (-0.5L) */}
-          <div className="flex-1 flex flex-col items-center h-full justify-end relative group">
-            <span className="text-xs font-semibold text-foreground mb-1.5">-₹0.5L</span>
-            <div className="w-full max-w-[54px] h-full flex flex-col justify-end">
-              <div className="w-full h-[3%] rounded bg-[#D4D4D8] dark:bg-[#52525B] mb-[50%] opacity-90 transition-all hover:opacity-100" />
-            </div>
-            <span className="text-[11px] font-medium text-muted-foreground mt-2 text-center truncate max-w-[70px]" title="Payment Fees">
-              Payment Fees
-            </span>
-          </div>
-
-          {/* Bar 5: Shipping (-1.4L) */}
-          <div className="flex-1 flex flex-col items-center h-full justify-end relative group">
-            <span className="text-xs font-semibold text-foreground mb-1.5">-₹1.4L</span>
-            <div className="w-full max-w-[54px] h-full flex flex-col justify-end">
-              <div className="w-full h-[7%] rounded bg-[#D4D4D8] dark:bg-[#52525B] mb-[43%] opacity-90 transition-all hover:opacity-100" />
-            </div>
-            <span className="text-[11px] font-medium text-muted-foreground mt-2 text-center truncate max-w-[70px]">
-              Shipping
-            </span>
-          </div>
-
-          {/* Bar 6: Discounts / Promotions (-0.4L) */}
-          <div className="flex-1 flex flex-col items-center h-full justify-end relative group">
-            <span className="text-xs font-semibold text-foreground mb-1.5">-₹0.4L</span>
-            <div className="w-full max-w-[54px] h-full flex flex-col justify-end">
-              <div className="w-full h-[2.5%] rounded bg-[#D4D4D8] dark:bg-[#52525B] mb-[40.5%] opacity-90 transition-all hover:opacity-100" />
-            </div>
-            <span className="text-[11px] font-medium text-muted-foreground mt-2 text-center truncate max-w-[70px]" title="Discounts / Promotions">
-              Discounts / Promotns
-            </span>
-          </div>
-
-          {/* Bar 7: Returns / Refunds (-0.8L) */}
-          <div className="flex-1 flex flex-col items-center h-full justify-end relative group">
-            <span className="text-xs font-semibold text-foreground mb-1.5">-₹0.8L</span>
-            <div className="w-full max-w-[54px] h-full flex flex-col justify-end">
-              <div className="w-full h-[4%] rounded bg-[#D4D4D8] dark:bg-[#52525B] mb-[36.5%] opacity-90 transition-all hover:opacity-100" />
-            </div>
-            <span className="text-[11px] font-medium text-muted-foreground mt-2 text-center truncate max-w-[70px]" title="Returns / Refunds">
-              Returns / Refunds
-            </span>
-          </div>
-
-          {/* Bar 8: Calculated contribution (₹7.5L) */}
-          <div className="flex-1 flex flex-col items-center h-full justify-end relative group">
-            <span className="text-xs font-bold text-blue-600 dark:text-blue-400 mb-1.5">₹7.5L</span>
-            <div className="w-full max-w-[54px] h-[37.5%] rounded-t bg-blue-300 dark:bg-blue-600/70 border border-blue-400 dark:border-blue-500 transition-all hover:opacity-90" />
-            <span className="text-[11px] font-medium text-blue-600 dark:text-blue-400 mt-2 text-center leading-tight max-w-[76px]" title="Calculated contribution">
-              Calculated contribution
-            </span>
-          </div>
-
-          {/* Bar 9: Reported contribution (₹7.9L) */}
-          <div className="flex-1 flex flex-col items-center h-full justify-end relative group">
-            {/* Difference badge */}
-            <span className="absolute -top-7 text-[10px] font-semibold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 rounded px-1.5 py-0.5 whitespace-nowrap">
-              +₹0.4L difference
-              <span className="sr-only"> (₹40K difference)</span>
-            </span>
-            <span className="text-xs font-bold text-foreground mb-1.5">₹7.9L</span>
-            <div className="w-full max-w-[54px] h-[39.5%] rounded-t bg-[#52525B] dark:bg-[#71717A] transition-all hover:opacity-90" />
-            <span className="text-[11px] font-medium text-foreground mt-2 text-center leading-tight max-w-[76px]" title="Reported contribution">
-              Reported contribution
-            </span>
-          </div>
-        </div>
+        ))}
       </div>
 
-      {/* Reconciliation Alert Box */}
-      <div className="flex items-start gap-3 rounded-lg border border-amber-300/80 bg-amber-50/70 dark:bg-amber-950/30 dark:border-amber-900/60 p-3.5 text-amber-900 dark:text-amber-200">
-        <AlertCircle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
-        <div className="text-xs leading-relaxed space-y-0.5">
-          <p className="font-semibold text-amber-950 dark:text-amber-100">
-            Reconciliation required · supplied figures retained
-          </p>
-          <p className="text-amber-900/90 dark:text-amber-200/90 text-[11px]">
-            Costs including ₹0.4L discounts leave ₹7.5L net reported ₹7.9L: ₹40K difference. The pulse excludes discounts. Product matrices reflect: Black T-Shirt ₹21K, Running Shoes ₹26K. Business status is separate from data reviews.
-          </p>
+      {data && data.missing.length > 0 && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50/60 p-3 text-xs text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-200">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+          <div>
+            <p className="font-semibold">The contribution is not final yet</p>
+            <p className="mt-0.5">Still missing: {missingList(data.missing)}. Steps drawn dashed have no figure yet; the known part so far is {money(data.knownPartMinor)}.</p>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

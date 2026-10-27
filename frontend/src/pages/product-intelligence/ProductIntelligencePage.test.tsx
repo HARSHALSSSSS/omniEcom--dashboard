@@ -67,7 +67,7 @@ const NO_SUPPLIER = item({
 const summary = (over: Partial<Record<IntelAction, number>> = {}): Record<IntelAction, number> => ({ reorder: 3, raise_price: 2, liquidate: 1, promote: 4, hold: 5, ...over });
 
 function page(items: ProductIntelligenceItem[], over: Partial<Page> = {}): Page {
-  return { items, page: 1, pageSize: 25, total: items.length, pages: 1, summary: summary(), variantsAnalysed: 15, ...over };
+  return { items, page: 1, pageSize: 25, total: items.length, pages: 1, summary: summary(), variantsAnalysed: 15, portfolio: null, ...over };
 }
 
 function Probe() {

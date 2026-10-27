@@ -160,69 +160,66 @@ export interface SpendImportResult {
   errors: Array<{ row: number; field: string | null; message: string }>;
 }
 
-// ---- product profitability & review drawer ----
+// ---- product profitability (GET /analytics/profitability?groupBy=product) ----
 
-export interface ProductCostBreakdown {
-  productCostMinor: number;
-  marketplaceCommissionMinor: number;
-  paymentFeesMinor: number;
-  shippingMinor: number;
-  discountsMinor: number;
-  returnsMinor: number;
-}
+export const MARGIN_STATUSES = ["healthy", "below_target", "low"] as const;
+export type MarginStatus = (typeof MARGIN_STATUSES)[number];
+export type StatusFilter = MarginStatus | "unknown";
+export const PRODUCT_SORTS = ["revenue", "contribution", "margin", "units"] as const;
+export type ProductSort = (typeof PRODUCT_SORTS)[number];
 
-export interface ProductChannelComparison {
+export interface ProductChannelFigures {
   marketplace: string;
-  sellingPriceMinor: number;
-  marginPercent: number;
-  isBest?: boolean;
-}
-
-export interface ProductProfitSignal {
-  summary: string;
-  bullets: string[];
-  recommendation: string;
-}
-
-export interface ProductProfitItem {
-  id: string;
-  name: string;
-  sku: string;
-  revenueMinor: number;
+  orders: number;
   units: number;
-  productCostMinor: number;
-  feesMinor: number;
-  shippingMinor: number;
-  returnsMinor: number;
-  contributionMinor: number;
-  marginPercent: number;
-  status: "Healthy" | "Review" | "Below target";
-  calculatedContributionMinor?: number;
-  differenceMinor?: number;
-  reconciles?: boolean;
-  costBreakdown: ProductCostBreakdown;
-  channelComparison: ProductChannelComparison[];
-  signal: ProductProfitSignal;
-  quadrant: {
-    demand: "low" | "high";
-    margin: "low" | "high";
-    category: "marketing" | "scale" | "review" | "optimize";
-    x: number; // percentage (0 - 100)
-    y: number; // percentage (0 - 100)
-  };
-}
-
-export interface ChannelContributionItem {
-  marketplace: string;
   revenueMinor: number;
-  contributionMinor: number;
-  marginPercent: number;
-  isBest?: boolean;
+  contributionMinor: number | null;
+  marginPercent: number | null;
 }
 
-export interface MarginPressureMetrics {
-  healthyCount: number;
-  belowTargetCount: number;
-  lowContributionCount: number;
+/** one product of the range: what it earned and what is known about its costs */
+export interface ProductProfit {
+  key: string;
+  label: string;
+  title: string | null;
+  orders: number;
+  unitsSold: number;
+  revenue: Component;
+  productCost: Component;
+  shipping: Component;
+  marketplaceFees: Component;
+  penalties: Component;
+  refunds: Component;
+  /** null while any cost is missing: never a guess */
+  contributionMinor: number | null;
+  knownPartMinor: number;
+  marginPercent: number | null;
+  marginStatus: MarginStatus | null;
+  missing: string[];
+  completeness: Completeness;
+  channels: ProductChannelFigures[];
 }
 
+export interface ProductProfitPage {
+  range: DateRange;
+  ordersAnalysed: number;
+  ordersInRange: number;
+  truncated: boolean;
+  /** the strictest margin target of the active pricing policies (basis points); null = none set */
+  marginTargetBps: number | null;
+  statusCounts: { healthy: number; belowTarget: number; low: number; unknown: number };
+  groupsTotal: number;
+  page: number;
+  pageSize: number;
+  pages: number;
+  groups: ProductProfit[];
+}
+
+export interface ProductQuery extends DateRange {
+  marketplace?: string;
+  q?: string;
+  status?: StatusFilter;
+  sort: ProductSort;
+  page: number;
+  pageSize: number;
+}

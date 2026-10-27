@@ -27,6 +27,20 @@ export function useProductIntelligence(query: ProductIntelligenceQuery, enabled 
   });
 }
 
+/** one product by id, for a drawer opened by a link to a variant that is not on the page */
+export function useIntelItem(variantId: string | undefined, enabled: boolean) {
+  const businessId = useBusinessId();
+  const query: ProductIntelligenceQuery = { action: undefined, categoryId: undefined, warehouseId: undefined, q: undefined, sort: "priority", page: 1, pageSize: 1, variantId };
+  return useQuery({ queryKey: ["product-intelligence", "item", businessId, variantId], queryFn: ({ signal }) => productIntelligenceApi.list(query, signal), enabled: enabled && Boolean(variantId), staleTime: 30_000 });
+}
+
+/** one product by exact SKU (the AI Assistant rail) */
+export function useIntelBySku(sku: string | undefined, enabled: boolean) {
+  const businessId = useBusinessId();
+  const query: ProductIntelligenceQuery = { action: undefined, categoryId: undefined, warehouseId: undefined, q: undefined, sort: "priority", page: 1, pageSize: 1, sku };
+  return useQuery({ queryKey: ["product-intelligence", "sku", businessId, sku], queryFn: ({ signal }) => productIntelligenceApi.list(query, signal), enabled: enabled && Boolean(sku), staleTime: 30_000 });
+}
+
 export function useIntelCategories(enabled = true) {
   const businessId = useBusinessId();
   return useQuery({ queryKey: intelligenceKeys.categories(businessId), queryFn: productIntelligenceApi.categories, staleTime: 5 * 60_000, retry: false, enabled });

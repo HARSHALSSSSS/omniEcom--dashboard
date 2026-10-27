@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
-import { RANGE_PRESETS, type DateRange, type ProfitView, type RangePreset, type SpendQuery, type WaterfallQuery } from "@/types/profitability";
+import { MARGIN_STATUSES, PRODUCT_SORTS, RANGE_PRESETS, type DateRange, type ProductQuery, type ProductSort, type ProfitView, type RangePreset, type SpendQuery, type StatusFilter, type WaterfallQuery } from "@/types/profitability";
 import { isRealDay, isoDay, presetRange, rangeProblem } from "./profitFormat";
 
 export const PAGE_SIZES = [25, 50, 100] as const;
@@ -24,6 +24,12 @@ export interface ProfitUrlState {
   q?: string;
   page: number;
   pageSize: number;
+  /** the product table: search, marketplace, margin bucket, sort and page (their own parameters, so the spend filters stay apart) */
+  productQ?: string;
+  productMarketplace?: string;
+  productStatus?: StatusFilter;
+  productSort: ProductSort;
+  productPage: number;
 }
 
 export function readUrlState(params: URLSearchParams, today: string = isoDay(new Date())): ProfitUrlState {
@@ -54,17 +60,29 @@ export function readUrlState(params: URLSearchParams, today: string = isoDay(new
     q: params.get("q")?.trim() || undefined,
     page: Number.isInteger(page) && page > 1 ? page : 1,
     pageSize: (PAGE_SIZES as readonly number[]).includes(size) ? size : DEFAULT_PAGE_SIZE,
+    productQ: params.get("pq")?.trim() || undefined,
+    productMarketplace: params.get("mk")?.trim() || undefined,
+    productStatus: ([...MARGIN_STATUSES, "unknown"] as readonly string[]).includes(params.get("ms") ?? "") ? (params.get("ms") as StatusFilter) : undefined,
+    productSort: (PRODUCT_SORTS as readonly string[]).includes(params.get("ps") ?? "") ? (params.get("ps") as ProductSort) : "revenue",
+    productPage: Number.isInteger(Number(params.get("pg"))) && Number(params.get("pg")) > 1 ? Number(params.get("pg")) : 1,
   };
 }
 
 export const waterfallQueryOf = (s: ProfitUrlState): WaterfallQuery | null => (s.range ? { ...s.range, compare: s.compare } : null);
+
+export const PRODUCT_PAGE_SIZE = 10;
+
+export const productQueryOf = (s: ProfitUrlState): ProductQuery | null =>
+  s.range ? { ...s.range, marketplace: s.productMarketplace, q: s.productQ, status: s.productStatus, sort: s.productSort, page: s.productPage, pageSize: PRODUCT_PAGE_SIZE } : null;
+
+export const isProductFiltered = (s: ProfitUrlState): boolean => Boolean(s.productQ || s.productMarketplace || s.productStatus);
 
 export const spendQueryOf = (s: ProfitUrlState): SpendQuery | null =>
   s.range ? { from: s.range.from, to: s.range.to, account: s.account, q: s.q, page: s.page, pageSize: s.pageSize } : null;
 
 export const isSpendFiltered = (s: ProfitUrlState): boolean => Boolean(s.q || s.account);
 
-type Key = "view" | "range" | "from" | "to" | "compare" | "account" | "q" | "page" | "size";
+type Key = "view" | "range" | "from" | "to" | "compare" | "account" | "q" | "page" | "size" | "pq" | "mk" | "ms" | "ps" | "pg";
 type Patch = Partial<Record<Key, string | null>>;
 
 /** The screen keeps the date range, comparison, tab, spend filters and page in the URL, so reload, back and shared links work. */
@@ -79,6 +97,8 @@ export function useProfitUrlState() {
         (prev) => {
           const next = new URLSearchParams(prev);
           if (!("page" in patch)) next.delete("page");
+          // a new filter, sort or range starts the product table on its first page again
+          if (!("pg" in patch)) next.delete("pg");
           for (const [key, value] of Object.entries(patch)) {
             next.delete(key);
             if (value !== null && value !== undefined && value !== "") next.set(key, value);
@@ -99,6 +119,7 @@ export function useProfitUrlState() {
   );
 
   const clearFilters = useCallback(() => update({ q: null, account: null }), [update]);
+  const clearProductFilters = useCallback(() => update({ pq: null, mk: null, ms: null }), [update]);
 
-  return { ...state, update, clearFilters };
+  return { ...state, update, clearFilters, clearProductFilters };
 }

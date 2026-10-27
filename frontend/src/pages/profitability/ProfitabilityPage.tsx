@@ -18,15 +18,16 @@ import { ChannelContributionCard } from "@/components/profitability/ChannelContr
 import { MarginPressureCard } from "@/components/profitability/MarginPressureCard";
 import { ProductContributionMap } from "@/components/profitability/ProductContributionMap";
 import { ProductReviewDrawer } from "@/components/profitability/ProductReviewDrawer";
-import { FIGMA_PRODUCTS } from "@/components/profitability/figmaProfitData";
 import { channelsCsv, channelsFileName, csvBlob, money, presetRange, waterfallCsv, waterfallFileName } from "@/components/profitability/profitFormat";
-import { DEFAULT_PAGE_SIZE, useProfitUrlState, waterfallQueryOf } from "@/components/profitability/profitParams";
+import { DEFAULT_PAGE_SIZE, isProductFiltered, productQueryOf, useProfitUrlState, waterfallQueryOf } from "@/components/profitability/profitParams";
 import { saveBlob } from "@/components/products/list/saveBlob";
 import { errorMessage } from "@/api/errors";
 import { useCan } from "@/hooks/useCan";
-import { useDeleteSpend, useSpendAccounts, useWaterfall } from "@/hooks/useProfitability";
+import { useWorkspaceStore } from "@/store/workspace.store";
+import { useDeleteSpend, useProductProfit, useSpendAccounts, useWaterfall } from "@/hooks/useProfitability";
 import { toast } from "@/hooks/useToast";
-import type { RangePreset, SpendRow, ProductProfitItem } from "@/types/profitability";
+import { rangeLabel } from "@/components/profitability/profitFormat";
+import type { ProductProfit, RangePreset, SpendRow } from "@/types/profitability";
 
 type MainTab = "overview" | "products" | "missing_fees" | "spend";
 
@@ -49,13 +50,25 @@ export default function ProfitabilityPage() {
   const { view, preset, range, rangeError, compare, update, clearFilters } = url;
   const canRead = useCan("analytics:read");
   const canWrite = useCan("pricing:write");
+  const currency = useWorkspaceStore((st) => st.shell?.business.currency) ?? "INR";
 
   const waterfall = useWaterfall(canRead ? waterfallQueryOf(url) : null);
   const accounts = useSpendAccounts();
+  const [activeTab, setActiveTab] = useState<MainTab>("overview");
+  const productQuery = productQueryOf(url);
+  const showProducts = canRead && view === "waterfall" && (activeTab === "overview" || activeTab === "products");
+  const products = useProductProfit(productQuery, showProducts);
+  // the map looks at the best sellers of the period, not only the table page
+  const mapProducts = useProductProfit(productQuery ? { ...productQuery, marketplace: undefined, q: undefined, status: undefined, sort: "units", page: 1, pageSize: 50 } : null, showProducts && activeTab === "overview");
+  const counts = products.data?.statusCounts;
+  const lowList = useProductProfit(productQuery ? { ...productQuery, marketplace: undefined, q: undefined, status: "low", sort: "margin", page: 1, pageSize: 3 } : null, showProducts && activeTab === "overview" && (counts?.low ?? 0) > 0);
+  const belowList = useProductProfit(productQuery ? { ...productQuery, marketplace: undefined, q: undefined, status: "below_target", sort: "margin", page: 1, pageSize: 3 } : null, showProducts && activeTab === "overview" && (counts?.belowTarget ?? 0) > 0);
+  const worst = [...(lowList.data?.groups ?? []), ...(belowList.data?.groups ?? [])].slice(0, 3);
+  const marketplaces = (waterfall.data?.channels ?? []).map((c) => ({ code: c.channel, label: c.label }));
+  const channelName = (code: string) => marketplaces.find((m) => m.code === code)?.label ?? code;
   const remove = useDeleteSpend();
 
-  const [activeTab, setActiveTab] = useState<MainTab>("overview");
-  const [selectedProduct, setSelectedProduct] = useState<ProductProfitItem | null>(FIGMA_PRODUCTS[0]);
+  const [selectedProduct, setSelectedProduct] = useState<ProductProfit | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [rangeDropdownOpen, setRangeDropdownOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
@@ -99,7 +112,7 @@ export default function ProfitabilityPage() {
     if (data) saveBlob(csvBlob(channelsCsv(data)), channelsFileName(data));
   };
 
-  const handleProductSelect = (product: ProductProfitItem) => {
+  const handleProductSelect = (product: ProductProfit) => {
     setSelectedProduct(product);
     setDrawerOpen(true);
   };
@@ -143,7 +156,7 @@ export default function ProfitabilityPage() {
                 onClick={() => setRangeDropdownOpen(!rangeDropdownOpen)}
                 className="h-8 gap-1.5 text-xs font-medium border-border"
               >
-                <span>Date range - {preset === "30d" ? "Last 30 days" : preset === "90d" ? "Last 90 days" : preset === "mtd" ? "This month" : "Custom"}</span>
+                <span>Date range - {preset === "30d" ? "Last 30 days" : preset === "90d" ? "Last 90 days" : preset === "mtd" ? "This month" : preset === "last_month" ? "Last month" : preset === "ytd" ? "This year" : "Custom"}</span>
                 <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
               </Button>
 
@@ -283,7 +296,7 @@ export default function ProfitabilityPage() {
         {/* Right Info & Period Selector */}
         <div className="flex flex-col items-end text-right">
           <div className="flex items-center gap-3 text-xs">
-            <span className="text-muted-foreground">Last 30 days · INR · Metric preview</span>
+            <span className="text-muted-foreground">{range ? `${rangeLabel(range)} · ${currency}` : "No dates chosen"}</span>
             <span className="text-border">|</span>
             <div className="flex items-center gap-2 font-medium">
               <span className="text-muted-foreground">Period options:</span>
@@ -322,9 +335,6 @@ export default function ProfitabilityPage() {
               </button>
             </div>
           </div>
-          <span className="text-[10px] text-muted-foreground/75 mt-0.5">
-            Controls do not update dates or item
-          </span>
         </div>
       </div>
 
@@ -339,6 +349,18 @@ export default function ProfitabilityPage() {
               <Notice title="Profitability could not be loaded." description={errorMessage(waterfall.error)} onRetry={() => void waterfall.refetch()} />
             ) : (
               <div className={refreshing ? "space-y-6 opacity-60 transition-opacity" : "space-y-6"} aria-busy={refreshing}>
+                {data && data.ordersAnalysed === 0 && (
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed border-border bg-card p-4">
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">No sales in this period</p>
+                      <p className="text-xs text-muted-foreground">There are no orders between {data.range.from} and {data.range.to}. Pick a longer range to see profitability.</p>
+                    </div>
+                    <Button size="sm" variant="outline" className="text-xs" onClick={() => pickPreset("90d")}>
+                      Show the last 90 days
+                    </Button>
+                  </div>
+                )}
+
                 {/* 1. FINANCIAL PULSE KPI BAR */}
                 <FinancialPulseBar waterfall={data} loading={waterfall.isLoading} />
 
@@ -348,26 +370,32 @@ export default function ProfitabilityPage() {
                 {/* 3. PRODUCT PROFITABILITY TABLE */}
                 {(activeTab === "overview" || activeTab === "products") && (
                   <ProductProfitabilityTable
-                    selectedProduct={selectedProduct}
-                    onSelectProduct={handleProductSelect}
+                    page={products.data}
+                    loading={products.isLoading}
+                    error={products.isError ? errorMessage(products.error) : null}
+                    onRetry={() => void products.refetch()}
+                    rangeLabel={range ? rangeLabel(range) : ""}
+                    marketplaces={marketplaces}
+                    query={{ q: url.productQ, marketplace: url.productMarketplace, status: url.productStatus, sort: url.productSort }}
+                    filtered={isProductFiltered(url)}
+                    selectedKey={selectedProduct?.key ?? null}
+                    onSelect={handleProductSelect}
+                    onQuery={(patch) => update(patch)}
+                    onPage={(p) => update({ pg: p > 1 ? String(p) : null }, { replace: true })}
+                    onClear={url.clearProductFilters}
                   />
                 )}
 
                 {/* 4. CHANNELS CONTRIBUTION & MARGIN PRESSURE (2-COLUMN GRID) */}
                 {activeTab === "overview" && (
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <ChannelContributionCard />
-                    <MarginPressureCard />
+                    <ChannelContributionCard data={data} />
+                    <MarginPressureCard page={products.data} worst={worst} onFilter={(status) => update({ ms: status })} onSelect={handleProductSelect} />
                   </div>
                 )}
 
                 {/* 5. PRODUCT CONTRIBUTION MAP (2x2 MATRIX) */}
-                {(activeTab === "overview" || activeTab === "products") && (
-                  <ProductContributionMap
-                    selectedProduct={selectedProduct}
-                    onSelectProduct={handleProductSelect}
-                  />
-                )}
+                {activeTab === "overview" && <ProductContributionMap products={mapProducts.data?.groups ?? []} marginTargetBps={products.data?.marginTargetBps ?? null} onSelect={handleProductSelect} />}
 
                 {/* Visually hidden audit components for accessibility & test backward compatibility */}
                 <div className="sr-only" aria-hidden="false">
@@ -424,6 +452,9 @@ export default function ProfitabilityPage() {
       <ProductReviewDrawer
         product={selectedProduct}
         open={drawerOpen}
+        rangeLabel={range ? rangeLabel(range) : ""}
+        marginTargetBps={products.data?.marginTargetBps ?? null}
+        channelName={channelName}
         onClose={() => setDrawerOpen(false)}
       />
 

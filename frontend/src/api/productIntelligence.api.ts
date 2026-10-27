@@ -14,6 +14,13 @@ export function intelligenceParams(query: ProductIntelligenceQuery): Record<stri
   if (query.categoryId) params["filter[categoryId]"] = query.categoryId;
   if (query.warehouseId) params["filter[warehouseId]"] = query.warehouseId;
   if (query.q) params.q = query.q;
+  if (query.variantId) params["filter[variantId]"] = query.variantId;
+  if (query.sku) params["filter[sku]"] = query.sku;
+  if (query.portfolio) {
+    params.portfolio = "true";
+    params.from = query.portfolio.from;
+    params.to = query.portfolio.to;
+  }
   if (query.page > 1) params.page = query.page;
   return params;
 }

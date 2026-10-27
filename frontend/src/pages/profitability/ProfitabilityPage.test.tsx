@@ -10,6 +10,7 @@ import type { ChannelRow, Component, SpendPage, SpendRow, SpendSummary, Waterfal
 
 const api = vi.hoisted(() => ({
   waterfall: vi.fn(),
+  products: vi.fn(),
   spend: vi.fn(),
   spendSummary: vi.fn(),
   createSpend: vi.fn(),
@@ -146,6 +147,7 @@ beforeEach(() => {
   useToastStore.setState({ toasts: [] });
   grant("analytics:read", "pricing:write");
   api.waterfall.mockResolvedValue(incomplete());
+  api.products.mockResolvedValue({ range: { from: "2026-09-22", to: "2026-10-21" }, ordersAnalysed: 0, ordersInRange: 0, truncated: false, marginTargetBps: null, statusCounts: { healthy: 0, belowTarget: 0, low: 0, unknown: 0 }, groupsTotal: 0, page: 1, pageSize: 10, pages: 1, groups: [] });
   api.spend.mockResolvedValue(spendPage([spendRow()]));
   api.spendSummary.mockResolvedValue(summary());
   api.accounts.mockResolvedValue([{ id: ACCOUNT, marketplace: "amazon_in", displayName: "Main store", status: "active" }]);
@@ -212,7 +214,7 @@ describe("ProfitabilityPage waterfall", () => {
 
   it("lists the channels with dashes for unknown costs", async () => {
     renderPage();
-    const row = (await screen.findByText("Amazon")).closest("tr") as HTMLElement;
+    const row = (await screen.findAllByText("Amazon")).map((e) => e.closest("tr") as HTMLElement).find((r) => r && within(r).queryByText("est.")) as HTMLElement;
     expect(within(row).getByText("₹2,00,000")).toBeInTheDocument();
     expect(within(row).getByText("est.")).toBeInTheDocument();
     expect(within(row).getAllByText("—").length).toBeGreaterThanOrEqual(4);

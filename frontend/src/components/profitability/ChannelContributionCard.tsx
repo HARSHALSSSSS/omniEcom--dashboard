@@ -1,101 +1,72 @@
 import React from "react";
-import { FIGMA_CHANNELS } from "./figmaProfitData";
-import type { ChannelContributionItem } from "@/types/profitability";
+import { DASH, money, percent } from "./profitFormat";
+import type { Waterfall } from "@/types/profitability";
 
 interface ChannelContributionCardProps {
-  channels?: ChannelContributionItem[];
+  data?: Waterfall | null;
 }
 
-export const ChannelContributionCard: React.FC<ChannelContributionCardProps> = ({
-  channels = FIGMA_CHANNELS,
-}) => {
-  const formatShortLakh = (minor: number) => {
-    const rupees = minor / 100;
-    if (rupees >= 100_000) return `₹${(rupees / 100_000).toFixed(1)}L`;
-    if (rupees >= 1_000) return `₹${Math.round(rupees / 1_000)}K`;
-    return `₹${rupees.toLocaleString("en-IN")}`;
-  };
-
-  // Maximum contribution minor to scale progress bars (e.g. 3.4L is ~100% of the bar width)
-  const maxContrib = Math.max(...channels.map((c) => c.contributionMinor), 1);
+/** which marketplace earns most: the channel rows of the P&L bridge; contribution and margin are dashes until every cost of that channel is known */
+export const ChannelContributionCard: React.FC<ChannelContributionCardProps> = ({ data }) => {
+  const channels = data?.channels ?? [];
+  const known = channels.filter((c) => c.netProfitMinor !== null && c.netMarginPercent !== null);
+  const best = known.length > 1 ? [...known].sort((a, b) => (b.netMarginPercent ?? 0) - (a.netMarginPercent ?? 0))[0] : undefined;
+  const maxContribution = Math.max(...channels.map((c) => Math.max(c.netProfitMinor ?? 0, 0)), 1);
 
   return (
-    <div className="rounded-xl border border-border bg-card p-6 shadow-xs space-y-4">
-      {/* Header */}
+    <div className="space-y-4 rounded-xl border border-border bg-card p-6 shadow-xs">
       <div className="flex items-start justify-between">
         <div>
           <h2 className="text-base font-semibold text-foreground">Which channel contributes best?</h2>
-          <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mt-0.5">
-            + Highest contribution margin: Shopify 53%
-          </p>
+          <p className="mt-0.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">{best ? `Highest contribution margin: ${best.label} ${percent(best.netMarginPercent)}` : "Compare channels once more than one has all its costs known"}</p>
         </div>
-        <span className="rounded-md border border-border bg-muted/60 px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
-          Last 30 days
-        </span>
+        <span className="rounded-md border border-border bg-muted/60 px-2.5 py-1 text-[11px] font-medium text-muted-foreground">{data ? `${data.range.from} to ${data.range.to}` : ""}</span>
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-xs">
-          <thead>
-            <tr className="border-b border-border/80 text-[11px] font-medium text-muted-foreground">
-              <th className="py-2.5 px-3 font-medium">Marketplace</th>
-              <th className="py-2.5 px-3 font-medium text-right">Revenue</th>
-              <th className="py-2.5 px-3 font-medium">Contribution</th>
-              <th className="py-2.5 px-3 font-medium text-right">Margin</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border/50">
-            {channels.map((ch) => {
-              const barWidth = Math.round((ch.contributionMinor / maxContrib) * 100);
-              const isHigh = ch.marginPercent >= 50;
-              const isLow = ch.marginPercent < 30;
-
-              return (
-                <tr key={ch.marketplace} className="hover:bg-muted/30 transition-colors">
-                  <td className="py-3 px-3 font-medium text-foreground">
-                    {ch.marketplace}
-                  </td>
-                  <td className="py-3 px-3 text-right text-muted-foreground font-medium tabular-nums">
-                    {formatShortLakh(ch.revenueMinor)}
-                  </td>
-                  <td className="py-3 px-3 min-w-[200px]">
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1 h-3 rounded-full bg-muted overflow-hidden max-w-[160px]">
-                        <div
-                          className="h-full bg-neutral-700 dark:bg-neutral-300 rounded-full transition-all duration-500"
-                          style={{ width: `${barWidth}%` }}
-                        />
+      {channels.length === 0 ? (
+        <p className="py-6 text-center text-xs text-muted-foreground">No channel has sales in this period.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="border-b border-border/80 text-[11px] font-medium text-muted-foreground">
+                <th className="px-3 py-2.5 font-medium">Marketplace</th>
+                <th className="px-3 py-2.5 text-right font-medium">Revenue</th>
+                <th className="px-3 py-2.5 font-medium">Contribution</th>
+                <th className="px-3 py-2.5 text-right font-medium">Margin</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/50">
+              {channels.map((ch) => {
+                const contribution = ch.netProfitMinor;
+                const width = contribution === null ? 0 : Math.round((Math.max(contribution, 0) / maxContribution) * 100);
+                const margin = ch.netMarginPercent;
+                return (
+                  <tr key={ch.channel} className="transition-colors hover:bg-muted/30">
+                    <td className="px-3 py-3 font-medium text-foreground">{ch.label}</td>
+                    <td className="px-3 py-3 text-right font-medium tabular-nums text-muted-foreground">{money(ch.grossRevenue.amountMinor)}</td>
+                    <td className="min-w-[200px] px-3 py-3">
+                      <div className="flex items-center gap-3">
+                        <div className="h-3 max-w-[160px] flex-1 overflow-hidden rounded-full bg-muted">
+                          <div className="h-full rounded-full bg-neutral-700 transition-all duration-500 dark:bg-neutral-300" style={{ width: `${width}%` }} />
+                        </div>
+                        <span className="text-xs font-semibold tabular-nums text-foreground" title={contribution === null ? `Known part so far: ${money(ch.knownPartMinor)}` : undefined}>
+                          {contribution === null ? DASH : money(contribution)}
+                        </span>
                       </div>
-                      <span className="text-xs font-semibold text-foreground tabular-nums">
-                        {formatShortLakh(ch.contributionMinor)}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="py-3 px-3 text-right font-semibold tabular-nums">
-                    <span
-                      className={
-                        isHigh
-                          ? "text-emerald-600 dark:text-emerald-400"
-                          : isLow
-                          ? "text-amber-600 dark:text-amber-400"
-                          : "text-foreground"
-                      }
-                    >
-                      {ch.marginPercent}%
-                    </span>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                    </td>
+                    <td className="px-3 py-3 text-right font-semibold tabular-nums">
+                      <span className={margin === null ? "text-muted-foreground" : margin < 0 ? "text-rose-600" : "text-foreground"}>{percent(margin)}</span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-      {/* Caption */}
-      <p className="text-[11px] text-muted-foreground pt-1">
-        Bars compare reported contribution, not revenue. Percentages show contribution margin.
-      </p>
+      <p className="pt-1 text-[11px] text-muted-foreground">Bars compare contribution, not revenue. A dash means a cost of that channel (shipping, fees or product cost) is not recorded yet.</p>
     </div>
   );
 };

@@ -2,7 +2,7 @@ import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-quer
 import { useGuardedMutation } from "@/hooks/useSubmitGuard";
 import { profitabilityApi } from "@/api/profitability.api";
 import { useWorkspaceStore } from "@/store/workspace.store";
-import type { DateRange, ImportUnit, SpendQuery, SpendWrite, WaterfallQuery } from "@/types/profitability";
+import type { DateRange, ImportUnit, ProductQuery, SpendQuery, SpendWrite, WaterfallQuery } from "@/types/profitability";
 
 export const profitKeys = {
   all: ["profitability"] as const,
@@ -26,12 +26,13 @@ export function useWaterfall(query: WaterfallQuery | null) {
   });
 }
 
-export function useProfitabilityQuery(params: { groupBy?: "product" | "marketplace" | "order"; from?: string; to?: string; compare?: "previous" } | null) {
+/** the product table: filters, sort and page go to the server; `query` is null while the range is not valid */
+export function useProductProfit(query: ProductQuery | null, enabled = true) {
   const b = useBusinessId();
   return useQuery({
-    queryKey: ["profitability", "report", b, params],
-    queryFn: ({ signal }) => profitabilityApi.profitability(params ?? undefined, signal),
-    enabled: params !== null,
+    queryKey: ["profitability", "products", b, query],
+    queryFn: ({ signal }) => profitabilityApi.products(query as ProductQuery, signal),
+    enabled: enabled && query !== null,
     staleTime: 30_000,
     placeholderData: keepPreviousData,
   });
