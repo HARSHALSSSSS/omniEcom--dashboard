@@ -363,6 +363,7 @@ export const ENDPOINTS = {
   // Intelligence
   REPORTS_OVERVIEW: `${BASE}/reports/overview`,
   REPORTS_CATALOG: `${BASE}/reports/catalog`,
+  REPORTS_OVERVIEW_KPIS: `${BASE}/reports/overview-kpis`,
   REPORTS_SALES: `${BASE}/reports/sales`,
   REPORTS_ORDERS: `${BASE}/reports/orders`,
   REPORTS_MARKETPLACES: `${BASE}/reports/marketplaces`,

@@ -10,6 +10,8 @@ import type {
   DownloadedFile,
   ExportRequest,
   MarketplacesReportResponse,
+  OverviewKpis,
+  OverviewKpisQuery,
   Paged,
   ReportRun,
   ReportSchedule,
@@ -82,6 +84,10 @@ export const reportsApi = {
   overview: async (signal?: AbortSignal) => unwrap<ReportsOverview>(await client.get(ENDPOINTS.REPORTS_OVERVIEW, { signal })),
 
   catalog: async (signal?: AbortSignal) => unwrap<Catalog>(await client.get(ENDPOINTS.REPORTS_CATALOG, { signal })),
+
+  /** the whole Overview in one read: totals, the comparison range, refunds, margin, the trend and the channels */
+  overviewKpis: async (query: OverviewKpisQuery, signal?: AbortSignal) =>
+    unwrap<OverviewKpis>(await client.get(ENDPOINTS.REPORTS_OVERVIEW_KPIS, { params: query, signal })),
 
   sales: async (params?: { from?: string; to?: string; period?: "day" | "week" | "month"; marketplace?: string }, signal?: AbortSignal) =>
     unwrap<SalesReportResponse>(await client.get(ENDPOINTS.REPORTS_SALES, { params, signal })),

@@ -1,161 +1,100 @@
 import { ArrowRight } from "lucide-react";
+import { formatINR, formatNumber } from "@/utils/format";
+import type { OverviewKpis } from "@/types/reports";
 
-export interface ChannelRow {
-  channel: string;
-  type: string;
-  netSales: string;
-  orders: string;
-  aov: string;
-  sharePercent: number;
-  shareLabel: string;
-  vsPrevMonth: string;
-  grossMargin: string;
+export interface ChannelInfo {
+  /** what the channel is called (the marketplace's own name) */
+  name: string;
+  /** Marketplaces, Storefronts, Logistics...: from the connector of the connected account */
+  type: string | null;
 }
 
-const DEFAULT_CHANNELS: ChannelRow[] = [
-  {
-    channel: "Amazon",
-    type: "Marketplace",
-    netSales: "₹9,45,000",
-    orders: "630",
-    aov: "₹1,500",
-    sharePercent: 45,
-    shareLabel: "45%",
-    vsPrevMonth: "+ 12.5%",
-    grossMargin: "30.0%",
-  },
-  {
-    channel: "Flipkart",
-    type: "Marketplace",
-    netSales: "₹6,30,000",
-    orders: "420",
-    aov: "₹1,500",
-    sharePercent: 30,
-    shareLabel: "30%",
-    vsPrevMonth: "+ 5.0%",
-    grossMargin: "30.0%",
-  },
-  {
-    channel: "Shopify",
-    type: "Direct-to-consumer",
-    netSales: "₹4,20,000",
-    orders: "280",
-    aov: "₹1,500",
-    sharePercent: 20,
-    shareLabel: "20%",
-    vsPrevMonth: "+ 27.3%",
-    grossMargin: "37.0%",
-  },
-  {
-    channel: "Offline",
-    type: "Retail",
-    netSales: "₹1,05,000",
-    orders: "70",
-    aov: "₹1,500",
-    sharePercent: 5,
-    shareLabel: "5%",
-    vsPrevMonth: "+ 0.0%",
-    grossMargin: "42.0%",
-  },
-];
-
 interface ReportsChannelBreakdownProps {
-  channels?: ChannelRow[];
-  summaryRow?: {
-    channel: string;
-    netSales: string;
-    orders: string;
-    aov: string;
-    shareLabel: string;
-    vsPrevMonth: string;
-    grossMargin: string;
-  };
-  periodLabel?: string;
+  data: OverviewKpis;
+  /** by marketplace code: the real connected accounts' names and categories */
+  info: Map<string, ChannelInfo>;
   onViewChannelReport?: () => void;
 }
 
-export function ReportsChannelBreakdown({
-  channels = DEFAULT_CHANNELS,
-  summaryRow = {
-    channel: "All channels",
-    netSales: "₹21,00,000",
-    orders: "1,400",
-    aov: "₹1,500",
-    shareLabel: "100%",
-    vsPrevMonth: "+ 12.0%",
-    grossMargin: "32.0%",
-  },
-  periodLabel = "01–30 Sep 2026",
-  onViewChannelReport,
-}: ReportsChannelBreakdownProps) {
+const pct = (bps: number | null) => (bps === null ? "—" : `${(bps / 100).toFixed(1)}%`);
+const change = (bps: number | null): string => (bps === null ? "—" : `${bps > 0 ? "+" : ""}${(bps / 100).toFixed(1)}%`);
+
+/** one row per marketplace with sales: total of orders, orders, average order value, share, change against the comparison range and margin when costs are known */
+export function ReportsChannelBreakdown({ data, info, onViewChannelReport }: ReportsChannelBreakdownProps) {
+  const { channels, totals, margin } = data;
+  const compared = data.compare !== "none";
+
   return (
-    <div className="rounded-xl border border-border bg-card p-5 space-y-4">
-      <div className="flex flex-wrap items-center justify-between border-b border-border pb-3">
-        <h3 className="text-sm font-bold text-foreground">Channel breakdown</h3>
-        <span className="text-xs text-muted-foreground">{channels.length} channels · {periodLabel}</span>
+    <div className="space-y-3 rounded-xl border border-border bg-card p-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold text-foreground">Channel breakdown</h3>
+        <span className="text-xs text-muted-foreground">
+          {channels.length} {channels.length === 1 ? "channel" : "channels"} with sales · {data.range.from} to {data.range.to}
+        </span>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-xs">
-          <thead>
-            <tr className="border-b border-border text-muted-foreground">
-              <th className="pb-2.5 font-semibold">Channel</th>
-              <th className="pb-2.5 font-semibold">Net sales</th>
-              <th className="pb-2.5 font-semibold">Orders</th>
-              <th className="pb-2.5 font-semibold">Average order value</th>
-              <th className="pb-2.5 font-semibold">Sales share</th>
-              <th className="pb-2.5 font-semibold">vs previous month</th>
-              <th className="pb-2.5 font-semibold text-right">Gross margin</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {channels.map((row) => (
-              <tr key={row.channel} className="hover:bg-muted/20">
-                <td className="py-3">
-                  <span className="font-semibold text-foreground">{row.channel}</span>
-                  <p className="text-[11px] text-muted-foreground">{row.type}</p>
-                </td>
-                <td className="py-3 font-mono font-medium text-foreground">{row.netSales}</td>
-                <td className="py-3 font-mono text-muted-foreground">{row.orders}</td>
-                <td className="py-3 font-mono text-muted-foreground">{row.aov}</td>
-                <td className="py-3">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs font-semibold w-8">{row.shareLabel}</span>
-                    <div className="h-1.5 w-24 rounded-full bg-muted overflow-hidden">
-                      <div
-                        className="h-full bg-foreground rounded-full"
-                        style={{ width: `${row.sharePercent}%` }}
-                      />
-                    </div>
-                  </div>
-                </td>
-                <td className="py-3 font-mono font-medium text-emerald-600">{row.vsPrevMonth}</td>
-                <td className="py-3 font-mono text-right font-medium text-foreground">{row.grossMargin}</td>
+      {channels.length === 0 ? (
+        <div className="space-y-1 py-8 text-center">
+          <p className="text-sm font-semibold text-foreground">{data.totalAccounts === 0 ? "No channel is connected yet" : "No sales in this period"}</p>
+          <p className="text-xs text-muted-foreground">{data.totalAccounts === 0 ? "Connect a marketplace or storefront to see sales by channel." : "Pick a longer date range to see sales by channel."}</p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[720px] border-collapse text-left text-xs">
+            <thead>
+              <tr className="border-b border-border text-[11px] font-medium text-muted-foreground">
+                <th className="py-2 pr-3">Channel</th>
+                <th className="px-3 py-2 text-right">Sales</th>
+                <th className="px-3 py-2 text-right">Orders</th>
+                <th className="px-3 py-2 text-right">Average order value</th>
+                <th className="px-3 py-2">Sales share</th>
+                <th className="px-3 py-2 text-right">{compared ? (data.compare === "previous_year" ? "vs last year" : "vs previous period") : "Change"}</th>
+                <th className="py-2 pl-3 text-right">Gross margin</th>
               </tr>
-            ))}
+            </thead>
+            <tbody className="divide-y divide-border">
+              {channels.map((c) => {
+                const meta = info.get(c.marketplace);
+                return (
+                  <tr key={c.marketplace}>
+                    <td className="py-3 pr-3">
+                      <span className="font-semibold text-foreground">{meta?.name ?? c.marketplace}</span>
+                      {meta?.type && <p className="text-[11px] text-muted-foreground">{meta.type}</p>}
+                    </td>
+                    <td className="px-3 py-3 text-right font-mono font-semibold text-foreground">{formatINR(c.grossMinor)}</td>
+                    <td className="px-3 py-3 text-right font-mono text-foreground">{formatNumber(c.orders)}</td>
+                    <td className="px-3 py-3 text-right font-mono text-foreground">{formatINR(c.averageOrderValueMinor)}</td>
+                    <td className="px-3 py-3">
+                      <div className="flex items-center gap-2">
+                        <span className="w-12 font-mono text-foreground">{pct(c.shareBps)}</span>
+                        <div className="h-1.5 w-24 overflow-hidden rounded-full bg-muted">
+                          <div className="h-full rounded-full bg-foreground" style={{ width: `${Math.min(100, c.shareBps / 100)}%` }} />
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-3 py-3 text-right font-mono text-foreground">{compared ? change(c.changeBps) : "—"}</td>
+                    <td className="py-3 pl-3 text-right font-mono text-foreground">{pct(c.marginBps)}</td>
+                  </tr>
+                );
+              })}
+              <tr className="font-semibold text-foreground">
+                <td className="py-3 pr-3">All channels</td>
+                <td className="px-3 py-3 text-right font-mono">{formatINR(totals.grossMinor)}</td>
+                <td className="px-3 py-3 text-right font-mono">{formatNumber(totals.orders)}</td>
+                <td className="px-3 py-3 text-right font-mono">{formatINR(totals.averageOrderValueMinor)}</td>
+                <td className="px-3 py-3 font-mono">100%</td>
+                <td className="px-3 py-3 text-right font-mono">{compared && data.previous ? change(data.previous.grossMinor > 0 ? Math.round(((totals.grossMinor - data.previous.grossMinor) / data.previous.grossMinor) * 10_000) : null) : "—"}</td>
+                <td className="py-3 pl-3 text-right font-mono">{pct(margin.marginBps)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
 
-            {/* Summary Row */}
-            <tr className="bg-muted/10 font-bold text-foreground border-t-2 border-border">
-              <td className="py-3.5">{summaryRow.channel}</td>
-              <td className="py-3.5 font-mono">{summaryRow.netSales}</td>
-              <td className="py-3.5 font-mono">{summaryRow.orders}</td>
-              <td className="py-3.5 font-mono">{summaryRow.aov}</td>
-              <td className="py-3.5 font-mono">{summaryRow.shareLabel}</td>
-              <td className="py-3.5 font-mono text-emerald-600">{summaryRow.vsPrevMonth}</td>
-              <td className="py-3.5 font-mono text-right">{summaryRow.grossMargin}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div className="flex flex-wrap items-center justify-between border-t border-border pt-3 text-xs text-muted-foreground">
-        <span>Net sales after discounts and refunds · Gross margin weighted by net sales</span>
-        <button
-          type="button"
-          onClick={onViewChannelReport}
-          className="inline-flex items-center gap-1 font-semibold text-foreground hover:underline"
-        >
-          View channel report <ArrowRight className="h-3.5 w-3.5" />
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3 text-[11px] text-muted-foreground">
+        <span>Sales are the total of orders, tax and shipping included. Margin shows a dash until product costs are known.</span>
+        <button type="button" onClick={onViewChannelReport} className="inline-flex items-center gap-1 font-medium text-foreground hover:underline">
+          View channel report <ArrowRight className="h-3.5 w-3.5" aria-hidden />
         </button>
       </div>
     </div>

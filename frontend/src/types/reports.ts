@@ -266,3 +266,78 @@ export interface DownloadedFile {
   blob: Blob;
   fileName: string;
 }
+
+// ---------------------------------------------------------------- GET /reports/overview-kpis
+export const OVERVIEW_COMPARES = ["previous", "previous_year", "none"] as const;
+export type OverviewCompare = (typeof OVERVIEW_COMPARES)[number];
+
+export interface OverviewTotals {
+  orders: number;
+  units: number;
+  grossMinor: number;
+  taxMinor: number;
+  shippingMinor: number;
+  discountMinor: number;
+  /** order subtotal less discounts, before tax and shipping */
+  netSalesMinor: number;
+  averageOrderValueMinor: number;
+}
+
+export interface OverviewRefunds {
+  amountMinor: number;
+  /** refunds over gross sales in basis points; null without sales */
+  rateBps: number | null;
+  returns: number;
+}
+
+export interface OverviewMargin {
+  /** null while a product cost is missing */
+  marginBps: number | null;
+  contributionMinor: number | null;
+  /** the share of revenue whose product cost is known (0 to 1) */
+  coverage: number;
+  completeness: "complete" | "estimated" | "incomplete";
+  missing: string[];
+}
+
+export interface OverviewSeriesPoint {
+  bucket: string;
+  orders: number;
+  grossMinor: number;
+}
+
+export interface OverviewChannel {
+  marketplace: string;
+  orders: number;
+  grossMinor: number;
+  shareBps: number;
+  averageOrderValueMinor: number;
+  marginBps: number | null;
+  previousGrossMinor: number | null;
+  changeBps: number | null;
+}
+
+export interface OverviewKpis {
+  range: { from: string; to: string };
+  previousRange: { from: string; to: string } | null;
+  compare: OverviewCompare;
+  period: "day" | "week" | "month";
+  totals: OverviewTotals;
+  previous: OverviewTotals | null;
+  refunds: OverviewRefunds;
+  previousRefunds: OverviewRefunds | null;
+  margin: OverviewMargin;
+  previousMargin: OverviewMargin | null;
+  series: OverviewSeriesPoint[];
+  previousSeries: OverviewSeriesPoint[] | null;
+  channels: OverviewChannel[];
+  connectedAccounts: number;
+  totalAccounts: number;
+}
+
+export interface OverviewKpisQuery {
+  from: string;
+  to: string;
+  compare: OverviewCompare;
+  period?: "day" | "week" | "month";
+}

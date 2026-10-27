@@ -2,7 +2,7 @@ import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-quer
 import { useGuardedMutation } from "@/hooks/useSubmitGuard";
 import { reportsApi } from "@/api/reports.api";
 import { useWorkspaceStore } from "@/store/workspace.store";
-import type { ExportRequest, ReportRun, ReportSchedule, RunQuery, SchedulePatch, ScheduleQuery, ScheduleWrite } from "@/types/reports";
+import type { ExportRequest, OverviewKpisQuery, ReportRun, ReportSchedule, RunQuery, SchedulePatch, ScheduleQuery, ScheduleWrite } from "@/types/reports";
 
 export const reportKeys = {
   all: ["reports"] as const,
@@ -35,6 +35,12 @@ export function useReportsOverview() {
 export function useReportCatalog() {
   const b = useBusinessId();
   return useQuery({ queryKey: reportKeys.catalog(b), queryFn: ({ signal }) => reportsApi.catalog(signal), staleTime: 10 * 60_000 });
+}
+
+/** the Overview of the Reports screen: one call for a date range and its comparison */
+export function useReportsOverviewKpis(query: OverviewKpisQuery, enabled = true) {
+  const b = useBusinessId();
+  return useQuery({ queryKey: ["reports", "overview-kpis", b, query], queryFn: ({ signal }) => reportsApi.overviewKpis(query, signal), staleTime: 30_000, placeholderData: keepPreviousData, enabled });
 }
 
 export function useReportsSales(params?: { from?: string; to?: string; period?: "day" | "week" | "month"; marketplace?: string }, enabled = true) {
