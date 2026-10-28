@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.7
+
 # One Dockerfile for every deployable:  docker build -f infrastructure/docker/Dockerfile --build-arg APP=api -t oms-api .
 #   APP = api | worker | scheduler | webhook-worker
 # Targets: runtime (default, tiny prod image) | migrate (runs db:migrate + db:seed with the full workspace)
