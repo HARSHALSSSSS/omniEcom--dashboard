@@ -3,7 +3,7 @@
 #   APP = api | worker | scheduler | webhook-worker
 # Targets: runtime (default, tiny prod image) | migrate (runs db:migrate + db:seed with the full workspace)
 
-FROM node:22-alpine AS base
+FROM node:26-alpine AS base
 # pin the pnpm that package.json "packageManager" names (corepack would otherwise fetch whatever is newest)
 ARG PNPM_VERSION=10.30.3
 RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
@@ -30,7 +30,7 @@ FROM build AS migrate
 CMD ["sh", "-c", "pnpm --filter @oms/database db:migrate && pnpm --filter @oms/database db:seed"]
 
 # ---- runtime: only the bundle + exact production dependencies ----------------
-FROM node:22-alpine AS runtime
+FROM node:26-alpine AS runtime
 ARG APP=api
 ENV NODE_ENV=production
 WORKDIR /app
