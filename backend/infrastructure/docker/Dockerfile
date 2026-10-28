@@ -12,6 +12,8 @@ FROM base AS build
 ARG APP=api
 COPY . .
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store pnpm install --frozen-lockfile
+# Fail early with a readable message (and the real bin list in the log) if the bundler did not get installed.
+RUN test -x apps/${APP}/node_modules/.bin/tsup || (echo "tsup is missing for @oms/${APP}: devDependencies were not installed" && ls -la apps/${APP}/node_modules/.bin node_modules/.bin 2>&1 | head -40 && exit 1)
 RUN pnpm --filter @oms/${APP} build
 
 # ---- migrate: owner-role schema migration + reference data seed --------------

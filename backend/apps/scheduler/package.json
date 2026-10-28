@@ -21,5 +21,8 @@
     "@oms/connectors": "workspace:*",
     "@oms/module-kit": "workspace:*",
     "@oms/runtime": "workspace:*"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.1"
   }
 }
