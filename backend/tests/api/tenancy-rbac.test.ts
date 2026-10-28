@@ -49,11 +49,18 @@ describe('tenant isolation: vendor B cannot see or touch vendor A', () => {
   });
 
   it('lists: B sees only its own (empty) data; A sees its data', async () => {
-    for (const url of ['/api/v1/products', '/api/v1/variants', '/api/v1/categories', '/api/v1/attributes', '/api/v1/marketplace-accounts', '/api/v1/invitations', '/api/v1/data-jobs']) {
+    for (const url of ['/api/v1/products', '/api/v1/variants', '/api/v1/attributes', '/api/v1/marketplace-accounts', '/api/v1/invitations', '/api/v1/data-jobs']) {
       const rb = await c.get(url, b);
       expect(rb.status, url).toBe(200);
       expect(rb.body.data, url).toEqual([]);
     }
+    // every new business gets the default category tree, so B's list is not empty: it must hold none of A's own categories
+    const cats = await c.get('/api/v1/categories', b);
+    expect(cats.status).toBe(200);
+    const catIds = (cats.body.data as Array<{ id: string; name: string }>).map((x) => x.id);
+    expect(catIds.length).toBeGreaterThan(0);
+    expect(catIds).not.toContain(ids.categoryId);
+    expect((cats.body.data as Array<{ name: string }>).map((x) => x.name)).not.toContain('Shirts');
     expect((await c.get('/api/v1/products', a)).body.data).toHaveLength(1);
     const users = await c.get('/api/v1/users', b);
     expect(users.body.data.map((u: any) => u.id)).toEqual([b.userId]);

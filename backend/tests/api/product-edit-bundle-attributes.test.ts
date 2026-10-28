@@ -36,8 +36,9 @@ beforeAll(async () => {
   c = clientFor(t);
   admin = await c.registerVendor({ businessName: 'Bundle Attr Co' });
   viewer = await c.addMember(admin, 'vendor_viewer');
-  bags = await makeCategory(w(), admin, 'Bags & Luggage');
-  apparel = await makeCategory(w(), admin, 'Apparel & Fashion');
+  // names that are not in the default category tree every new business gets
+  bags = await makeCategory(w(), admin, 'Bundle Test Bags');
+  apparel = await makeCategory(w(), admin, 'Bundle Test Apparel');
   capacity = await attribute({ code: 'capacity_l', name: 'Capacity (Volume)', dataType: 'number', unit: 'L' });
   fabric = await attribute({ code: 'fabric_composition', name: 'Fabric composition', dataType: 'text' });
   careInstructions = await attribute({ code: 'care', name: 'Care instructions', dataType: 'enum', values: [{ value: 'machine_wash', label: 'Machine wash' }, { value: 'dry_clean', label: 'Dry clean only' }] });
