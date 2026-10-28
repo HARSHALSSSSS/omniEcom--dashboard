@@ -4,13 +4,22 @@
 # Targets: runtime (default, tiny prod image) | migrate (runs db:migrate + db:seed with the full workspace)
 
 FROM node:22-alpine AS base
-RUN corepack enable
+# pin the pnpm that package.json "packageManager" names (corepack would otherwise fetch whatever is newest)
+ARG PNPM_VERSION=10.30.3
+RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
 WORKDIR /repo
 
 # ---- build: install the workspace once, bundle the app -----------------------
 FROM base AS build
 ARG APP=api
-COPY . .
+# The build context is either backend/ (docker build -f infrastructure/docker/Dockerfile .  run from backend/) or the whole
+# repository (hosts that always build from the repo root and point at backend/infrastructure/docker/Dockerfile): in that case
+# the pnpm workspace lives in <context>/backend. Either way it ends up in /repo.
+COPY . /ctx
+RUN if [ -f /ctx/pnpm-workspace.yaml ]; then cp -a /ctx/. /repo/; \
+    elif [ -f /ctx/backend/pnpm-workspace.yaml ]; then cp -a /ctx/backend/. /repo/; \
+    else echo "pnpm-workspace.yaml not found in the build context (looked in / and /backend)" >&2; exit 1; fi \
+    && rm -rf /ctx
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store pnpm install --frozen-lockfile
 # Fail early with a readable message (and the real bin list in the log) if the bundler did not get installed.
 RUN test -x apps/${APP}/node_modules/.bin/tsup || (echo "tsup is missing for @oms/${APP}: devDependencies were not installed" && ls -la apps/${APP}/node_modules/.bin node_modules/.bin 2>&1 | head -40 && exit 1)

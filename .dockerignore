@@ -1,0 +1,12 @@
+# Used when an image is built with the whole repository as the build context
+# (e.g. a host that builds from the repo root and points at backend/infrastructure/docker/Dockerfile).
+# When the context is backend/ or frontend/, the .dockerignore inside that folder is used instead.
+**/node_modules
+**/dist
+.git
+.github
+**/.env
+**/.env.*
+!**/.env.example
+**/coverage
+**/*.log
