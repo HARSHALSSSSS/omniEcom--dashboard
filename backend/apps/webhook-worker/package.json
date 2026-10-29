@@ -24,6 +24,6 @@
     "@oms/runtime": "workspace:*"
   },
   "devDependencies": {
-    "tsup": "^8.5.1"
+    "tsup": "^9.0.0"
   }
 }
