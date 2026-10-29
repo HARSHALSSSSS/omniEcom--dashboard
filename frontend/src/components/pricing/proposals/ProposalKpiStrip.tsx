@@ -22,8 +22,8 @@ export function ProposalKpiStrip({ pendingCount, belowTargetCount, belowTargetCa
       <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-3 gap-3">
         {/* Metric 1: Pending review */}
         <div className="rounded-xl border border-neutral-200 bg-white p-4 shadow-sm space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="h-1.5 w-1.5 rounded-full bg-black shrink-0" />
+          <div className="flex flex-wrap items-baseline gap-2">
+            <span className="h-1.5 w-1.5 rounded-full bg-black shrink-0 self-center" />
             <span className="text-2xl font-bold tracking-tight text-foreground">
               {num(pendingCount)}
             </span>
@@ -36,8 +36,8 @@ export function ProposalKpiStrip({ pendingCount, belowTargetCount, belowTargetCa
 
         {/* Metric 2: Below margin target */}
         <div className="rounded-xl border border-neutral-200 bg-white p-4 shadow-sm space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" />
+          <div className="flex flex-wrap items-baseline gap-2">
+            <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0 self-center" />
             <span className="text-2xl font-bold tracking-tight text-amber-600">
               {belowTargetCount === undefined ? "—" : `${formatNumber(belowTargetCount)}${belowTargetCapped ? "+" : ""}`}
             </span>
@@ -50,8 +50,8 @@ export function ProposalKpiStrip({ pendingCount, belowTargetCount, belowTargetCa
 
         {/* Metric 3: Proposals applied */}
         <div className="rounded-xl border border-neutral-200 bg-white p-4 shadow-sm space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="h-1.5 w-1.5 rounded-full bg-black shrink-0" />
+          <div className="flex flex-wrap items-baseline gap-2">
+            <span className="h-1.5 w-1.5 rounded-full bg-black shrink-0 self-center" />
             <span className="text-2xl font-bold tracking-tight text-foreground">
               {num(appliedCount)}
             </span>

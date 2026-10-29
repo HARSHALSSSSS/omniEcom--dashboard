@@ -132,8 +132,8 @@ export function ProductInformation({ ctl, onImproveWithAi, aiPanel, aiOpen }: Pr
         )}
       </div>
 
-      <div className="flex flex-row items-start gap-5 w-full">
-        <div className="flex flex-col gap-2 w-[148px] shrink-0" role="group" aria-label="Product media">
+      <div className="flex flex-col sm:flex-row items-start gap-5 w-full">
+        <div className="flex flex-col gap-2 w-full sm:w-[148px] shrink-0" role="group" aria-label="Product media">
           <ProductImage url={editor.media.primaryImageUrl} alt="Primary product" className="w-[148px] h-[148px] rounded-[4px] overflow-hidden border border-[#EAEAEA]" />
           <span className="text-[11px] font-normal text-[#666666] leading-[145%]">Primary image</span>
 
@@ -153,11 +153,11 @@ export function ProductInformation({ ctl, onImproveWithAi, aiPanel, aiOpen }: Pr
           </Link>
         </div>
 
-        <div className="flex flex-col gap-3 flex-1 min-w-0">
+        <div className="flex flex-col gap-3 flex-1 min-w-0 w-full">
           {text("title", "title", "field-title", "Product name", { maxLength: 200, required: true })}
 
-          <div className="flex flex-row items-start gap-5 w-full">
-            <div className="flex-1 min-w-0">
+          <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-5 w-full">
+            <div className="flex-1 min-w-0 w-full sm:w-auto">
               {shell(
                 "productType",
                 "field-type",
@@ -174,7 +174,7 @@ export function ProductInformation({ ctl, onImproveWithAi, aiPanel, aiOpen }: Pr
               )}
             </div>
 
-            <div className="flex-1 min-w-0">
+            <div className="flex-1 min-w-0 w-full sm:w-auto">
               {locked ? (
                 <div className="flex flex-col gap-1.5 w-full" data-field="field-code">
                   <div className="flex flex-row items-center justify-between w-full">
@@ -209,8 +209,8 @@ export function ProductInformation({ ctl, onImproveWithAi, aiPanel, aiOpen }: Pr
             {locked ? `Locked. ${editor.locks.productCode.reason ?? "Used as the primary internal product identifier."}` : "Used as the primary internal product identifier."}
           </span>
 
-          <div className="flex flex-row items-start gap-5 w-full">
-            <div className="flex-1 min-w-0">
+          <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-5 w-full">
+            <div className="flex-1 min-w-0 w-full sm:w-auto">
               {shell(
                 "categoryId",
                 "field-category",
@@ -229,7 +229,7 @@ export function ProductInformation({ ctl, onImproveWithAi, aiPanel, aiOpen }: Pr
                 ),
               )}
             </div>
-            <div className="flex-1 min-w-0">
+            <div className="flex-1 min-w-0 w-full sm:w-auto">
               {shell(
                 "brand",
                 "field-brand",
@@ -345,7 +345,7 @@ export function ProductInformation({ ctl, onImproveWithAi, aiPanel, aiOpen }: Pr
                 "dimensions",
                 "field-dim-length",
                 "Dimensions (cm)",
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
                   {(
                     [
                       ["dimLength", "Length"],
@@ -353,7 +353,7 @@ export function ProductInformation({ ctl, onImproveWithAi, aiPanel, aiOpen }: Pr
                       ["dimHeight", "Height"],
                     ] as const
                   ).map(([k, l], i) => (
-                    <div key={k} className={cn(boxClass({ modified: mod("dimensions"), error: !!fieldErrors.dimensions, disabled: ro }), "flex-1 min-w-0")}>
+                    <div key={k} className={cn(boxClass({ modified: mod("dimensions"), error: !!fieldErrors.dimensions, disabled: ro }), "flex-1 min-w-[70px]")}>
                       <input
                         id={i === 0 ? "field-dim-length" : undefined}
                         aria-label={`${l} in cm`}
@@ -405,22 +405,24 @@ export function ProductInformation({ ctl, onImproveWithAi, aiPanel, aiOpen }: Pr
               "Custom attributes",
               <div id="field-custom-attributes" className="flex flex-col gap-2">
                 {values.customAttributes.map((a, i) => (
-                  <div key={i} className="flex items-center gap-2">
+                  <div key={i} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                     <div className={cn(boxClass({ modified: mod("customAttributes"), disabled: ro }), "flex-1 min-w-0")}>
                       <input aria-label={`Attribute ${i + 1} name`} placeholder="Name" disabled={ro} value={a.name} onChange={(e) => setAttr(i, { name: e.target.value })} className={INPUT_CLASS} />
                     </div>
                     <div className={cn(boxClass({ modified: mod("customAttributes"), disabled: ro }), "flex-1 min-w-0")}>
                       <input aria-label={`Attribute ${i + 1} value`} placeholder="Value" disabled={ro} value={a.value} onChange={(e) => setAttr(i, { value: e.target.value })} className={INPUT_CLASS} />
                     </div>
-                    <label className="flex shrink-0 items-center gap-1 text-[11px] text-[#666666]">
-                      <input type="checkbox" disabled={ro} checked={a.confirmed} onChange={(e) => setAttr(i, { confirmed: e.target.checked })} className="accent-black" />
-                      Confirmed
-                    </label>
-                    {!ro && (
-                      <button type="button" aria-label={`Remove attribute ${i + 1}`} onClick={() => edit("customAttributes", values.customAttributes.filter((_, j) => j !== i), "customAttributes")} className="cursor-pointer">
-                        <X className="h-4 w-4 text-[#666666]" aria-hidden="true" />
-                      </button>
-                    )}
+                    <div className="flex items-center justify-between sm:justify-start gap-3">
+                      <label className="flex shrink-0 items-center gap-1 text-[11px] text-[#666666]">
+                        <input type="checkbox" disabled={ro} checked={a.confirmed} onChange={(e) => setAttr(i, { confirmed: e.target.checked })} className="accent-black" />
+                        Confirmed
+                      </label>
+                      {!ro && (
+                        <button type="button" aria-label={`Remove attribute ${i + 1}`} onClick={() => edit("customAttributes", values.customAttributes.filter((_, j) => j !== i), "customAttributes")} className="cursor-pointer">
+                          <X className="h-4 w-4 text-[#666666]" aria-hidden="true" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))}
                 {!ro && (

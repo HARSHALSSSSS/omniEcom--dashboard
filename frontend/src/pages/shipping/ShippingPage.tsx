@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { AddProviderDrawer, ConfigureMethodDrawer } from "@/components/shipping/MethodDrawers";
 import { ChooseShippingDrawer } from "@/components/shipping/ChooseShippingDrawer";
+import { LabelPreviewDialog } from "@/components/shipping/LabelPreviewDialog";
 import { ManifestsDialog } from "@/components/shipping/ManifestsDialog";
 import { MethodsSection } from "@/components/shipping/MethodsSection";
 import { OrdersSection } from "@/components/shipping/OrdersSection";
@@ -19,9 +20,8 @@ import { decisionQueryOf, isFiltered, isOrdersFiltered, isTrackingFiltered, ship
 import { saveBlob } from "@/components/products/list/saveBlob";
 import { shippingApi } from "@/api/shipping.api";
 import { errorMessage } from "@/api/errors";
-import { ROUTES } from "@/constants/routes";
 import { useCan } from "@/hooks/useCan";
-import { SHIPPING_KEYS, useShipmentLabel, useShippingExceptions, useShippingMethods, useShippingOverview, useShippingRules, useShippingSync, useShippingWarehouses, useSyncTracking } from "@/hooks/useShipping";
+import { SHIPPING_KEYS, useShippingExceptions, useShippingMethods, useShippingOverview, useShippingRules, useShippingSync, useShippingWarehouses, useSyncTracking } from "@/hooks/useShipping";
 import { toast } from "@/hooks/useToast";
 import type { DecisionItem, ExceptionCategory, ShippingMethod, ShippingRule } from "@/types/shipping";
 
@@ -42,11 +42,11 @@ export default function ShippingPage() {
   const rules = useShippingRules(ruleDrawer !== null && canReadRules);
   const sync = useShippingSync();
   const syncTracking = useSyncTracking();
-  const singleLabel = useShipmentLabel();
   const [exporting, setExporting] = useState(false);
 
   const [chooseId, setChooseId] = useState<string | null>(null);
   const [bulkIds, setBulkIds] = useState<string[] | null>(null);
+  const [previewLabelId, setPreviewLabelId] = useState<string | null>(null);
   const [configuring, setConfiguring] = useState<ShippingMethod | null>(null);
   /** the Book slot drawer: open, with what the row it came from already says */
   const [slotDrawer, setSlotDrawer] = useState<{ warehouseId: string; methodId: string | null } | "open" | null>(null);
@@ -62,12 +62,10 @@ export default function ShippingPage() {
   const hasMethods = (methods.data?.items.length ?? 0) > 0;
   const noMethodsYet = methods.data !== undefined && !hasMethods;
 
-  const printOne = (id: string) =>
-    singleLabel.mutate(id, {
-      onSuccess: (file) => saveBlob(file.blob, file.fileName),
-      onError: (e) => toast({ title: "The label could not be downloaded", description: errorMessage(e), variant: "destructive" }),
-    });
-  const labelBusyId = singleLabel.isPending ? (singleLabel.variables ?? null) : null;
+  const printOne = (id: string) => {
+    setPreviewLabelId(id);
+  };
+  const labelBusyId = null;
 
   /** the drawer loads the shipment by its id (the second argument is kept for the callers: it is not needed any more) */
   const openShipment = (id: string, _hint?: string | null) => update({ drawer: `shipment:${id}` }, { keepPage: true });
@@ -155,7 +153,7 @@ export default function ShippingPage() {
   };
 
   return (
-    <div className="w-full space-y-8 pb-32 font-['Inter',sans-serif] text-[#0A0A0A]">
+    <div className="w-full space-y-6 pb-24 text-foreground">
       <ShippingHeader
         view={view}
         onView={(v) => update({ view: v }, { keepPage: true })}
@@ -177,19 +175,13 @@ export default function ShippingPage() {
       {noMethodsYet && view !== "shipments" ? (
         <ShippingWelcome canConfigure={canConfigure} onConfigure={openAddProvider} onMarketplaces={() => navigate(ROUTES.MARKETPLACE_HUB)} />
       ) : view === "overview" ? (
-        <>
-          <section className="space-y-7" aria-label="Shipping overview">
-            <PulseRail overview={overview} />
-            <DecisionField overview={overview} onReview={() => update({ view: "rules" }, { keepPage: true })} />
-            <AvailabilityComparison overview={overview} />
-            <AttentionBand overview={overview} open={url.exceptions} onToggle={() => update({ exceptions: url.exceptions ? null : "1" }, { keepPage: true })} />
-            {url.exceptions && <ExceptionMatrix attentionTotal={overview.data?.attention.total ?? 0} report={exceptions} exporting={exporting} onExport={() => void exportExceptions()} onAction={onExceptionAction} />}
-          </section>
-          <OrdersSection {...ordersProps} embedded />
-          <MethodsSection {...methodsProps} embedded />
-          <RulesSection {...rulesProps} embedded />
-          <TrackingSection {...trackingProps} embedded />
-        </>
+        <section className="space-y-7" aria-label="Shipping overview">
+          <PulseRail overview={overview} />
+          <DecisionField overview={overview} onReview={() => update({ view: "rules" }, { keepPage: true })} />
+          <AvailabilityComparison overview={overview} />
+          <AttentionBand overview={overview} open={url.exceptions} onToggle={() => update({ exceptions: url.exceptions ? null : "1" }, { keepPage: true })} />
+          {url.exceptions && <ExceptionMatrix attentionTotal={overview.data?.attention.total ?? 0} report={exceptions} exporting={exporting} onExport={() => void exportExceptions()} onAction={onExceptionAction} />}
+        </section>
       ) : view === "orders" ? (
         <OrdersSection {...ordersProps} embedded={false} />
       ) : view === "methods" ? (
@@ -235,12 +227,13 @@ export default function ShippingPage() {
       <ShipmentDrawer
         shipmentId={drawerId}
         canWrite={canWrite}
-        labelBusy={singleLabel.isPending}
+        labelBusy={false}
         onClose={() => update({ drawer: null }, { keepPage: true, replace: true })}
         onLabel={printOne}
       />
       <PickupSlotDrawer open={slotDrawer !== null} canWrite={canWrite} preset={slotDrawer === "open" ? null : slotDrawer} methods={methods.data?.items ?? []} warehouses={warehouses.data ?? []} onClose={() => setSlotDrawer(null)} />
       <ManifestsDialog open={panel === "manifests"} onClose={closePanel} />
+      <LabelPreviewDialog shipmentId={previewLabelId} onClose={() => setPreviewLabelId(null)} />
     </div>
   );
 }

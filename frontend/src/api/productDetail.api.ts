@@ -21,9 +21,13 @@ const product = (id: string) => ENDPOINTS.PRODUCT(id);
 const documentUrl = (id: string) => `${API_BASE}/documents/${id}`;
 
 /** an API content route needs the bearer token; an absolute URL (pre-signed storage link) must NOT receive it */
-const isApiPath = (url: string) => url.startsWith("/");
+const isApiPath = (url: string) => url.startsWith("/") || url.includes("/api/v1/");
 /** the API writes its own paths with the `/api/v1` prefix; the client base may be another origin in staging / production */
-const toClientUrl = (url: string) => (isApiPath(url) ? url.replace(/^\/api\/v1(?=\/)/, API_BASE) : url);
+const toClientUrl = (url: string) => {
+  if (url.startsWith("/")) return url.replace(/^\/api\/v1(?=\/)/, API_BASE);
+  const match = url.match(/\/api\/v1(\/.*)$/);
+  return match ? `${API_BASE}${match[1]}` : url;
+};
 
 export interface UploadProgress {
   /** 0..100 */
@@ -55,6 +59,10 @@ export const productDetailApi = {
   /** make an image primary / move it in the order */
   updateDocument: async (documentId: string, patch: { isPrimary?: boolean; sortOrder?: number }) =>
     unwrap<ProductDocument>(await client.patch(documentUrl(documentId), patch)),
+
+  /** delete a product document / image */
+  deleteDocument: async (documentId: string) =>
+    unwrap<{ message: string }>(await client.delete(documentUrl(documentId))),
 
   /**
    * Two steps like the creation screen: register the file, then send the bytes (through the API, or straight to storage

@@ -58,11 +58,11 @@ export function ProposalFilters({ query, counts, channels, filtered, onTab, onSe
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative w-full max-w-xs flex-1">
+        <div className="relative w-full sm:w-64 md:max-w-xs flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
           <Input type="search" aria-label="Search proposals" placeholder="Search by SKU or product title..." value={text} onChange={(e) => setText(e.target.value)} className="pl-9 text-xs" />
         </div>
-        <select aria-label="Channel" className={SELECT_CLASS} value={query.accountId ?? ""} onChange={(e) => onAccount(e.target.value || null)}>
+        <select aria-label="Channel" className={cn(SELECT_CLASS, "w-full sm:w-auto")} value={query.accountId ?? ""} onChange={(e) => onAccount(e.target.value || null)}>
           <option value="">All channels</option>
           {channels.map((c) => (
             <option key={c.accountId} value={c.accountId}>
@@ -70,7 +70,7 @@ export function ProposalFilters({ query, counts, channels, filtered, onTab, onSe
             </option>
           ))}
         </select>
-        <select aria-label="Strategy" className={SELECT_CLASS} value={query.strategy ?? ""} onChange={(e) => onStrategy((e.target.value || null) as PriceStrategy | null)}>
+        <select aria-label="Strategy" className={cn(SELECT_CLASS, "w-full sm:w-auto")} value={query.strategy ?? ""} onChange={(e) => onStrategy((e.target.value || null) as PriceStrategy | null)}>
           <option value="">All strategies</option>
           {PRICING_STRATEGIES.map((s) => (
             <option key={s} value={s}>
@@ -78,7 +78,7 @@ export function ProposalFilters({ query, counts, channels, filtered, onTab, onSe
             </option>
           ))}
         </select>
-        <select aria-label="Sort proposals" className={SELECT_CLASS} value={query.sort} onChange={(e) => onSort(e.target.value as ProposalSort)}>
+        <select aria-label="Sort proposals" className={cn(SELECT_CLASS, "w-full sm:w-auto")} value={query.sort} onChange={(e) => onSort(e.target.value as ProposalSort)}>
           {PROPOSAL_SORTS.map((s) => (
             <option key={s} value={s}>
               {SORT_LABELS[s]}

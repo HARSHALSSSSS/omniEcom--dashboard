@@ -44,11 +44,11 @@ export const CommerceNetworkDiagram: React.FC<CommerceNetworkDiagramProps> = ({
           </div>
         </div>
 
-        {/* Connecting horizontal line track (visible on md screens) */}
-        <div className="hidden md:block absolute left-[215px] right-6 top-1/2 -translate-y-1/2 h-[1px] bg-[#E5E5E5] -z-0" />
+        {/* Connecting horizontal line track (visible on lg screens where nodes are in 1 row) */}
+        <div className="hidden lg:block absolute left-[215px] right-6 top-1/2 -translate-y-1/2 h-[1px] bg-[#E5E5E5] -z-0" />
 
         {/* Channel Nodes Grid / Flex */}
-        <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 z-10">
+        <div className="flex-1 min-w-0 grid grid-cols-1 min-[420px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 z-10">
           {channels.map((ch) => {
             const isSelected = selectedChannelId === ch.id;
             const isWarning = needsAttention(ch.status);

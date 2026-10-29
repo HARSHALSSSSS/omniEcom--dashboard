@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-export const SELECT = "h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm";
+export const SELECT = "h-10 sm:h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm";
 
 export function Field({ label, error, hint, children, htmlFor }: { label: string; error?: string; hint?: string; children: ReactNode; htmlFor?: string }) {
   return (

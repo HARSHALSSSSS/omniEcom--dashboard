@@ -43,7 +43,7 @@ interface DateDialogProps extends BaseProps {
 export function DateActionDialog({ order, mode, onClose }: DateDialogProps) {
   return (
     <Dialog open={order !== null} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-md">{order && <DateActionForm key={`${order.id}-${mode}`} order={order} mode={mode} onClose={onClose} />}</DialogContent>
+      <DialogContent className="w-[95vw] sm:max-w-md">{order && <DateActionForm key={`${order.id}-${mode}`} order={order} mode={mode} onClose={onClose} />}</DialogContent>
     </Dialog>
   );
 }
@@ -116,7 +116,7 @@ function DateActionForm({ order, mode, onClose }: { order: PurchaseOrder; mode: 
 export function CancelOrderDialog({ order, onClose }: BaseProps) {
   return (
     <Dialog open={order !== null} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-md">{order && <CancelForm key={order.id} order={order} onClose={onClose} />}</DialogContent>
+      <DialogContent className="w-[95vw] sm:max-w-md">{order && <CancelForm key={order.id} order={order} onClose={onClose} />}</DialogContent>
     </Dialog>
   );
 }
@@ -181,7 +181,7 @@ function CancelForm({ order, onClose }: { order: PurchaseOrder; onClose: () => v
 export function ReceiveDialog({ order, onClose }: BaseProps) {
   return (
     <Dialog open={order !== null} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[92vh] max-w-2xl overflow-y-auto">{order && <ReceiveForm key={order.id} order={order} onClose={onClose} />}</DialogContent>
+      <DialogContent className="max-h-[92vh] w-[95vw] sm:max-w-2xl overflow-y-auto">{order && <ReceiveForm key={order.id} order={order} onClose={onClose} />}</DialogContent>
     </Dialog>
   );
 }

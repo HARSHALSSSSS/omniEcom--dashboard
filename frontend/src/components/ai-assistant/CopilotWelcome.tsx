@@ -108,7 +108,7 @@ export function CopilotWelcome({
   const canSubmit = draft.trim().length >= 3 && !sending;
 
   return (
-    <div className="grid min-h-[750px] flex-1 grid-cols-1 overflow-hidden rounded-xl border border-border bg-card lg:grid-cols-[240px_minmax(0,1fr)_auto]">
+    <div className="grid min-h-[500px] sm:min-h-[600px] lg:min-h-[750px] flex-1 grid-cols-1 overflow-hidden rounded-xl border border-border bg-card lg:grid-cols-[240px_minmax(0,1fr)_auto]">
       {/* 1. Left Mini Sidebar: Conversation list & shortcuts */}
       <div className="hidden flex-col border-r border-border bg-muted/20 p-4 lg:flex">
         <div className="space-y-1">
@@ -225,8 +225,8 @@ export function CopilotWelcome({
       </div>
 
       {/* 2. Center Hero: Scoped Query Input and Structured Prompt Quadrants */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6 lg:p-8">
-        <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center space-y-8">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4 sm:p-6 lg:p-8">
+        <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center space-y-6 sm:space-y-8">
           {/* Header Title */}
           <div>
             <div className="flex items-center gap-2">
@@ -237,20 +237,20 @@ export function CopilotWelcome({
                 DEMO WORKSPACE
               </span>
             </div>
-            <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl">
+            <h1 className="mt-2 text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-foreground">
               Ask your business anything.
             </h1>
-            <p className="mt-2 text-sm text-muted-foreground sm:text-base">
+            <p className="mt-2 text-xs sm:text-sm text-muted-foreground">
               Understand what&apos;s selling, uncover risks, and decide what to do next using your connected commerce data.
             </p>
-            <div className="mt-3 flex items-center gap-2 text-xs">
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
               <span className="font-semibold uppercase tracking-wider text-blue-600">DEMO CONTEXT</span>
               <span className="text-muted-foreground">Products · Orders · Inventory · Profitability</span>
             </div>
           </div>
 
           {/* Prominent Scoped Query Box */}
-          <div className="rounded-xl border border-border bg-card p-4 shadow-xs focus-within:border-foreground focus-within:ring-1 focus-within:ring-foreground">
+          <div className="rounded-xl border border-border bg-card p-3 sm:p-4 shadow-xs focus-within:border-foreground focus-within:ring-1 focus-within:ring-foreground">
             <textarea
               aria-label="Ask the assistant"
               value={draft}
@@ -266,7 +266,7 @@ export function CopilotWelcome({
                 {/* Data Scope dropdown */}
                 <button
                   type="button"
-                  className="flex items-center gap-1 rounded-md border border-border bg-muted/40 px-2.5 py-1 text-xs text-foreground hover:bg-muted"
+                  className="flex items-center gap-1 rounded-md border border-border bg-muted/40 px-2.5 py-1 min-h-[32px] sm:min-h-0 text-xs text-foreground hover:bg-muted"
                   onClick={() => setScope(scope === "All Business Data" ? "Inventory" : "All Business Data")}
                 >
                   {scope}
@@ -276,7 +276,7 @@ export function CopilotWelcome({
                 {/* Marketplace dropdown */}
                 <button
                   type="button"
-                  className="flex items-center gap-1 rounded-md border border-border bg-muted/40 px-2.5 py-1 text-xs text-foreground hover:bg-muted"
+                  className="flex items-center gap-1 rounded-md border border-border bg-muted/40 px-2.5 py-1 min-h-[32px] sm:min-h-0 text-xs text-foreground hover:bg-muted"
                   onClick={() => setMarketplace(marketplace === "Marketplace" ? "Amazon" : "Marketplace")}
                 >
                   {marketplace}
@@ -286,7 +286,7 @@ export function CopilotWelcome({
                 {/* Date range dropdown */}
                 <button
                   type="button"
-                  className="flex items-center gap-1 rounded-md border border-border bg-muted/40 px-2.5 py-1 text-xs text-foreground hover:bg-muted"
+                  className="flex items-center gap-1 rounded-md border border-border bg-muted/40 px-2.5 py-1 min-h-[32px] sm:min-h-0 text-xs text-foreground hover:bg-muted"
                   onClick={() => setDateRange(dateRange === "Date Range" ? "Last 30 Days" : "Date Range")}
                 >
                   {dateRange}
@@ -297,7 +297,7 @@ export function CopilotWelcome({
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  className="min-h-[36px] min-w-[36px] sm:min-h-0 sm:min-w-0 rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground flex items-center justify-center"
                   title="Attach reference"
                 >
                   <Paperclip className="h-4 w-4" />
@@ -308,7 +308,7 @@ export function CopilotWelcome({
                   disabled={!canSubmit}
                   loading={sending}
                   onClick={handleSend}
-                  className="h-8 w-8 rounded-lg bg-black p-0 text-white hover:bg-neutral-800 disabled:opacity-40"
+                  className="h-9 w-9 sm:h-8 sm:w-8 rounded-lg bg-black p-0 text-white hover:bg-neutral-800 disabled:opacity-40 shrink-0"
                 >
                   <ArrowUp className="h-4 w-4" />
                 </Button>
@@ -316,7 +316,7 @@ export function CopilotWelcome({
             </div>
           </div>
 
-          <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1 text-[11px] text-muted-foreground">
             <span>Add a question. Choose the scope. You&apos;re in control.</span>
             <span>Shift + Enter for a new line</span>
           </div>
@@ -334,7 +334,7 @@ export function CopilotWelcome({
               {STARTER_PROMPTS.map((group) => {
                 const Icon = group.icon;
                 return (
-                  <div key={group.category} className="grid grid-cols-1 p-3.5 sm:grid-cols-[140px_minmax(0,1fr)] gap-2">
+                  <div key={group.category} className="grid grid-cols-1 p-3 sm:p-3.5 sm:grid-cols-[140px_minmax(0,1fr)] gap-2">
                     <div className="flex items-center gap-2 font-semibold text-xs text-foreground">
                       <Icon className="h-3.5 w-3.5 text-muted-foreground" />
                       {group.category}
@@ -344,10 +344,10 @@ export function CopilotWelcome({
                         <button
                           key={item}
                           type="button"
-                          className="flex w-full items-center justify-between rounded px-2 py-1 text-left text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+                          className="flex w-full items-center justify-between rounded px-2 py-1.5 sm:py-1 text-left text-xs text-muted-foreground hover:bg-muted hover:text-foreground min-h-[32px] sm:min-h-0 gap-2"
                           onClick={() => onAsk(item)}
                         >
-                          <span>{item}</span>
+                          <span className="break-words">{item}</span>
                           <ArrowRight className="h-3 w-3 -rotate-45 shrink-0 opacity-60" />
                         </button>
                       ))}

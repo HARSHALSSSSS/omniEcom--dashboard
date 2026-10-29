@@ -18,7 +18,7 @@ interface Props {
   onClose: () => void;
 }
 
-const SECONDARY = "w-full h-10 rounded-[8px] bg-[#FFFFFF] border border-[#666666] text-[12px] font-semibold text-[#000000] hover:bg-neutral-50 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed";
+const SECONDARY = "w-full h-10 min-h-[44px] sm:min-h-0 rounded-[8px] bg-[#FFFFFF] border border-[#666666] text-[12px] font-semibold text-[#000000] hover:bg-neutral-50 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed";
 
 function DrawerShell({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   useEffect(() => {
@@ -34,7 +34,7 @@ function DrawerShell({ children, onClose }: { children: React.ReactNode; onClose
         role="dialog"
         aria-label="Issue details"
         style={{ width: "420px", maxWidth: "100vw", boxShadow: "-8px 0px 30px rgba(36, 45, 72, 0.12)" }}
-        className="relative z-10 h-full bg-white border-l border-[#E4E7EF] flex flex-col justify-between p-6 overflow-y-auto animate-in slide-in-from-right duration-200"
+        className="relative z-10 h-full w-full sm:w-[420px] max-w-full bg-white border-l border-[#E4E7EF] flex flex-col justify-between p-4 sm:p-6 overflow-y-auto animate-in slide-in-from-right duration-200"
       >
         {children}
       </div>
@@ -44,7 +44,7 @@ function DrawerShell({ children, onClose }: { children: React.ReactNode; onClose
 
 function CloseButton({ onClose }: { onClose: () => void }) {
   return (
-    <button type="button" onClick={onClose} aria-label="Close" className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-neutral-100 transition-colors">
+    <button type="button" onClick={onClose} aria-label="Close" className="w-8 h-8 sm:w-7 sm:h-7 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center rounded-md hover:bg-neutral-100 transition-colors">
       <X className="w-4 h-4 text-[#666666]" />
     </button>
   );
@@ -210,7 +210,7 @@ function DrawerBody({ issue, canWrite, members, actions, onGo, onClose }: Omit<P
           <button
             type="button"
             onClick={() => onGo(act.href)}
-            className="w-full h-10 rounded-[8px] bg-[#000000] text-[12px] font-semibold text-[#FFFFFF] hover:bg-neutral-800 transition-colors flex items-center justify-center"
+            className="w-full h-10 min-h-[44px] sm:min-h-0 rounded-[8px] bg-[#000000] text-[12px] font-semibold text-[#FFFFFF] hover:bg-neutral-800 transition-colors flex items-center justify-center"
           >
             {act.label}
           </button>
@@ -231,7 +231,7 @@ function DrawerBody({ issue, canWrite, members, actions, onGo, onClose }: Omit<P
                 {actions.unsnooze.isPending ? "Unsnoozing..." : "Unsnooze"}
               </button>
             ) : (
-              <div className="grid grid-cols-2 gap-2 w-full">
+              <div className="grid grid-cols-1 min-[380px]:grid-cols-2 gap-2 w-full">
                 <button type="button" disabled={!canWrite || busy} title={reason} onClick={() => actions.resolve.mutate({ id: issue.id, mode: "manual" })} className={SECONDARY}>
                   {actions.resolve.isPending && actions.resolve.variables?.mode === "manual" ? "Resolving..." : "Mark resolved"}
                 </button>

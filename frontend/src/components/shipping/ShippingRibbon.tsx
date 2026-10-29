@@ -34,7 +34,7 @@ function CarrierCard({ carrier }: { carrier: CarrierSummary }) {
           {percent(carrier.onTimePercent)} on time
         </span>
       </div>
-      <dl className="grid grid-cols-5 gap-1 text-[11px]">
+      <dl className="grid grid-cols-3 min-[400px]:grid-cols-5 sm:grid-cols-5 gap-2 min-[400px]:gap-1 text-[11px]">
         {(
           [
             ["In transit", formatNumber(carrier.inTransit)],
@@ -64,7 +64,7 @@ export function ShippingRibbon({ summary, loading, error, days, onDays, onRetry,
           aria-label="Performance window"
           value={days}
           onChange={(e) => onDays(Number(e.target.value))}
-          className="h-8 rounded-lg border border-border bg-card px-2 text-xs font-medium"
+          className="h-9 sm:h-8 min-h-[36px] sm:min-h-0 rounded-lg border border-border bg-card px-2 text-xs font-medium"
         >
           {SUMMARY_DAYS.map((d) => (
             <option key={d} value={d}>

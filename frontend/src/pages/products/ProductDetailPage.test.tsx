@@ -32,6 +32,7 @@ vi.mock("@/api/productDetail.api", () => ({
     variantCounts: vi.fn(),
     images: vi.fn(),
     updateDocument: vi.fn(),
+    deleteDocument: vi.fn(),
     uploadImage: vi.fn(),
     imageBlob: vi.fn(),
     duplicate: vi.fn(),
@@ -440,6 +441,17 @@ describe("ProductDetailPage: media gallery", () => {
     expect(await screen.findByText("No images yet")).toBeInTheDocument();
   });
 
+  it("deletes an image and shows a success toast", async () => {
+    const user = userEvent.setup();
+    api.deleteDocument.mockResolvedValue({ message: "Document deleted" });
+    renderAt(`${detail}?tab=media`);
+    expect(await screen.findByRole("list", { name: "Product images" })).toBeInTheDocument();
+    const second = must(screen.getByText("photo-2.jpg").closest("li"));
+    await user.click(within(second).getByRole("button", { name: "Delete photo-2.jpg" }));
+    await waitFor(() => expect(api.deleteDocument).toHaveBeenCalledWith("doc2"));
+    expect(useToastStore.getState().toasts[0]?.title).toBe("Image deleted");
+  });
+
   it("loads API-served images through the authenticated client", async () => {
     const created = vi.fn(() => "blob:fake");
     vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: created, revokeObjectURL: vi.fn() }));
@@ -448,6 +460,17 @@ describe("ProductDetailPage: media gallery", () => {
     renderAt(`${detail}?tab=media`);
     await waitFor(() => expect(screen.getAllByRole("img").some((i) => i.getAttribute("src") === "blob:fake")).toBe(true));
     expect(api.imageBlob).toHaveBeenCalledWith("/api/v1/documents/doc1/content", expect.anything());
+    vi.unstubAllGlobals();
+  });
+
+  it("loads absolute API-served download URLs through the authenticated client", async () => {
+    const created = vi.fn(() => "blob:fake-absolute");
+    vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: created, revokeObjectURL: vi.fn() }));
+    api.imageBlob.mockResolvedValue(new Blob(["x"], { type: "image/jpeg" }));
+    api.images.mockResolvedValue([imageDoc(1, { downloadUrl: "http://localhost:3000/api/v1/documents/doc1/content" })]);
+    renderAt(`${detail}?tab=media`);
+    await waitFor(() => expect(screen.getAllByRole("img").some((i) => i.getAttribute("src") === "blob:fake-absolute")).toBe(true));
+    expect(api.imageBlob).toHaveBeenCalledWith("http://localhost:3000/api/v1/documents/doc1/content", expect.anything());
     vi.unstubAllGlobals();
   });
 });

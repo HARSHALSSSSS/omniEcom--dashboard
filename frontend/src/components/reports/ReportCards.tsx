@@ -7,7 +7,7 @@ import { FIELD_SELECT } from "@/components/procurement/procurementUi";
 import { formatDateTime } from "@/utils/format";
 import type { Catalog, CatalogEntry, FeaturedReport, ReportFormat } from "@/types/reports";
 
-const CARD = "flex flex-col justify-between gap-4 rounded-xl border border-border bg-card p-5";
+const CARD = "flex flex-col justify-between gap-4 rounded-xl border border-border bg-card p-4 sm:p-5 overflow-hidden";
 
 interface FeaturedProps {
   report: FeaturedReport;
@@ -46,19 +46,40 @@ export function FeaturedCard({ report, entry, canWrite, noWrite, busyKey, onGene
           </p>
         )}
         <div className="flex items-center gap-2">
-          <select aria-label={`${report.title} file format`} className={`${FIELD_SELECT} w-24 shrink-0`} value={format} disabled={busy} onChange={(e) => setFormat(e.target.value as ReportFormat)}>
+          <select
+            aria-label={`${report.title} file format`}
+            className="h-10 sm:h-9 w-20 shrink-0 rounded-md border border-input bg-background px-2.5 text-xs font-medium cursor-pointer focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
+            value={format}
+            disabled={busy}
+            onChange={(e) => setFormat(e.target.value as ReportFormat)}
+          >
             {report.formats.map((f) => (
               <option key={f} value={f}>
                 {FORMAT_SHORT[f]}
               </option>
             ))}
           </select>
-          <Button size="sm" className="flex-1 gap-2 text-xs" loading={busy} disabled={!canWrite || (busyKey !== null && !busy)} title={noWrite} onClick={() => onGenerate(report, format)}>
-            {!busy && <Download className="h-4 w-4" aria-hidden />}
-            {report.buttonLabel}
+          <Button
+            size="sm"
+            className="min-w-0 flex-1 h-10 sm:h-9 gap-1.5 text-xs"
+            loading={busy}
+            disabled={!canWrite || (busyKey !== null && !busy)}
+            title={noWrite ?? report.buttonLabel}
+            onClick={() => onGenerate(report, format)}
+          >
+            {!busy && <Download className="h-3.5 w-3.5 shrink-0" aria-hidden />}
+            <span className="truncate">{report.buttonLabel}</span>
           </Button>
-          <Button variant="outline" size="icon" className="shrink-0" aria-label={`Choose the period and options for ${report.title}`} title={noWrite ?? "Choose the period and options"} disabled={!canWrite} onClick={() => onCustomise(report, format)}>
-            <SlidersHorizontal className="h-4 w-4" aria-hidden />
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-10 sm:h-9 w-10 sm:w-9 shrink-0"
+            aria-label={`Choose the period and options for ${report.title}`}
+            title={noWrite ?? "Choose the period and options"}
+            disabled={!canWrite}
+            onClick={() => onCustomise(report, format)}
+          >
+            <SlidersHorizontal className="h-4 w-4 shrink-0" aria-hidden />
           </Button>
         </div>
       </div>
@@ -92,11 +113,11 @@ export function CatalogGrid({ catalog, canWrite, noWrite, onGenerate, onSchedule
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Button size="sm" className="flex-1 text-xs" disabled={!canWrite} title={noWrite} onClick={() => onGenerate(t)}>
+            <Button size="sm" className="flex-1 h-10 sm:h-9 text-xs" disabled={!canWrite} title={noWrite} onClick={() => onGenerate(t)}>
               Generate
             </Button>
             {t.schedulable && (
-              <Button size="sm" variant="outline" className="text-xs" disabled={!canWrite} title={noWrite} onClick={() => onSchedule(t)}>
+              <Button size="sm" variant="outline" className="h-10 sm:h-9 text-xs" disabled={!canWrite} title={noWrite} onClick={() => onSchedule(t)}>
                 Schedule
               </Button>
             )}

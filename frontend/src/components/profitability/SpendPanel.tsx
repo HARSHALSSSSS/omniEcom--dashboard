@@ -10,8 +10,8 @@ import type { DateRange, SpendAccount, SpendRow } from "@/types/profitability";
 import { WRITE_REASON, money, rangeLabel, spendAccountLabel } from "./profitFormat";
 import { NO_ACCOUNT, PAGE_SIZES, spendQueryOf, type ProfitUrlState } from "./profitParams";
 
-const SELECT = "h-9 rounded-lg border border-border bg-card px-2.5 text-xs font-medium text-foreground disabled:opacity-50";
-const NAV = "h-8 rounded-lg border border-border bg-card px-3 text-xs font-semibold hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50";
+const SELECT = "h-9 w-full sm:w-auto rounded-lg border border-border bg-card px-2.5 text-xs font-medium text-foreground disabled:opacity-50";
+const NAV = "h-9 sm:h-8 rounded-lg border border-border bg-card px-3 text-xs font-semibold hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50";
 
 interface Props {
   state: ProfitUrlState;
@@ -59,18 +59,18 @@ export function SpendPanel({ state, range, accounts, canWrite, onAdd, onImport, 
 
   return (
     <section aria-labelledby="spend-title" className="space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
         <div>
           <h2 id="spend-title" className="text-base font-semibold text-foreground">
             Advertising spend
           </h2>
           <p className="text-xs text-muted-foreground">Recorded spend for {rangeLabel(range)} feeds the advertising step of the waterfall. Until at least one row exists the step is missing, and a recorded 0 counts as known.</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="text-xs" disabled={!canWrite} title={canWrite ? undefined : WRITE_REASON} onClick={onImport}>
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <Button variant="outline" size="sm" className="flex-1 sm:flex-initial h-9 sm:h-8 text-xs" disabled={!canWrite} title={canWrite ? undefined : WRITE_REASON} onClick={onImport}>
             Import CSV
           </Button>
-          <Button size="sm" className="text-xs" disabled={!canWrite} title={canWrite ? undefined : WRITE_REASON} onClick={onAdd}>
+          <Button size="sm" className="flex-1 sm:flex-initial h-9 sm:h-8 text-xs" disabled={!canWrite} title={canWrite ? undefined : WRITE_REASON} onClick={onAdd}>
             Record spend
           </Button>
         </div>
@@ -137,10 +137,10 @@ export function SpendPanel({ state, range, accounts, canWrite, onAdd, onImport, 
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative w-full max-w-xs">
+      <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2.5 sm:gap-3">
+        <div className="relative w-full sm:max-w-xs">
           <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" aria-hidden />
-          <Input aria-label="Search campaign or notes" placeholder="Search campaign or notes" value={text} onChange={(e) => setText(e.target.value)} className="h-9 pl-8 text-xs" />
+          <Input aria-label="Search campaign or notes" placeholder="Search campaign or notes" value={text} onChange={(e) => setText(e.target.value)} className="h-9 pl-8 text-xs w-full" />
         </div>
         <select aria-label="Account" className={SELECT} value={state.account ?? ""} onChange={(e) => onAccount(e.target.value || null)}>
           <option value="">All accounts</option>
@@ -152,7 +152,7 @@ export function SpendPanel({ state, range, accounts, canWrite, onAdd, onImport, 
           ))}
         </select>
         {filtered && (
-          <Button variant="ghost" size="sm" className="text-xs" onClick={onClear}>
+          <Button variant="ghost" size="sm" className="h-9 sm:h-8 text-xs text-left sm:text-center" onClick={onClear}>
             Clear filters
           </Button>
         )}
@@ -192,8 +192,8 @@ export function SpendPanel({ state, range, accounts, canWrite, onAdd, onImport, 
         </div>
       ) : (
         <>
-          <div className={`overflow-x-auto rounded-xl border border-border bg-card shadow-sm ${list.isFetching && list.isPlaceholderData ? "opacity-60" : ""}`}>
-            <table className="w-full border-collapse text-left text-xs">
+          <div className={`overflow-x-auto [-webkit-overflow-scrolling:touch] rounded-xl border border-border bg-card shadow-sm ${list.isFetching && list.isPlaceholderData ? "opacity-60" : ""}`}>
+            <table className="w-full min-w-[640px] border-collapse text-left text-xs">
               <thead>
                 <tr className="border-b border-border bg-muted/50 text-[11px] font-medium text-muted-foreground">
                   <th scope="col" className="px-4 py-3">Date</th>
@@ -230,11 +230,11 @@ export function SpendPanel({ state, range, accounts, canWrite, onAdd, onImport, 
               </tbody>
             </table>
           </div>
-          <nav aria-label="Pagination" className="flex flex-wrap items-center justify-between gap-2">
+          <nav aria-label="Pagination" className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <span className="text-xs text-muted-foreground" aria-live="polite">
               Showing {formatNumber(first)}-{formatNumber(first + rows.length - 1)} of {formatNumber(total)} rows
             </span>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-between sm:justify-start">
               <button type="button" className={NAV} disabled={page <= 1} onClick={() => onPage(page - 1)}>
                 Previous
               </button>

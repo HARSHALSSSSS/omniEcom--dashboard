@@ -49,11 +49,11 @@ const MATRIX_ROWS = 5;
 const MATRIX_STEP = 10;
 const MATRIX_MAX = 50;
 
-const GHOST_BUTTON = "flex h-9 cursor-pointer items-center justify-center gap-1 rounded-lg border border-[#BDBDBD] px-3 text-[12px] font-medium text-[#000000] transition-colors hover:bg-neutral-50";
+const GHOST_BUTTON = "flex h-9 min-h-[44px] sm:min-h-[36px] cursor-pointer items-center justify-center gap-1 rounded-lg border border-[#BDBDBD] px-3 text-[12px] font-medium text-[#000000] transition-colors hover:bg-neutral-50";
 
 function Header({ children }: { children?: React.ReactNode }) {
   return (
-    <header className="flex w-full flex-row items-center justify-between py-1">
+    <header className="flex w-full flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-2 py-1">
       <div className="flex flex-col items-start gap-1.5">
         <span className="text-[10px] font-medium uppercase leading-[12px] tracking-wider text-[#707070]">COMMERCE</span>
         <h1 className="text-[26px] font-semibold leading-[31px] tracking-tight text-[#000000]">Listings</h1>
@@ -194,11 +194,11 @@ export default function ListingsPage() {
   return (
     <div className="flex w-full flex-col items-start gap-3 pb-24 font-['Inter',sans-serif] text-[#000000]">
       <Header>
-        <div className="flex flex-row items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
           <button
             type="button"
             onClick={() => setCreateOpen(true)}
-            className="flex h-9 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-[#666666] bg-white px-4 text-[12px] font-semibold text-[#000000] shadow-none transition-colors hover:bg-neutral-50"
+            className="flex h-9 min-h-[44px] sm:min-h-[36px] cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-[#666666] bg-white px-3 sm:px-4 text-[12px] font-semibold text-[#000000] shadow-none transition-colors hover:bg-neutral-50 flex-1 sm:flex-initial"
           >
             <Plus className="h-3.5 w-3.5 stroke-[2.2]" aria-hidden />
             Create listing
@@ -208,7 +208,7 @@ export default function ListingsPage() {
             type="button"
             disabled={bulk.isPending}
             onClick={() => (selected.size > 0 && !notListedTab ? runBulk("publish", [...selected]) : navigate(ROUTES.LISTINGS_PUBLISH))}
-            className="flex h-9 cursor-pointer items-center justify-center gap-2 rounded-lg bg-[#000000] px-4 text-[12px] font-semibold text-[#FFFFFF] transition-colors hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex h-9 min-h-[44px] sm:min-h-[36px] cursor-pointer items-center justify-center gap-2 rounded-lg bg-[#000000] px-3 sm:px-4 text-[12px] font-semibold text-[#FFFFFF] transition-colors hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50 flex-1 sm:flex-initial"
           >
             {running === "publish" ? "Publishing…" : "Publish products"}
           </button>
@@ -226,11 +226,11 @@ export default function ListingsPage() {
       </Header>
 
       {productMode && (
-        <div className="flex w-full flex-wrap items-center justify-between gap-2 rounded-lg border border-[#EAEAEA] bg-[#F5F5F5] px-4 py-2.5 text-[12px]">
+        <div className="flex w-full flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-lg border border-[#EAEAEA] bg-[#F5F5F5] px-4 py-2.5 text-[12px]">
           <span>
             Showing the listings of <strong className="font-semibold">{productTitle ?? "one product"}</strong> only.
           </span>
-          <button type="button" onClick={() => update({ productId: null })} className="h-7 cursor-pointer rounded-lg border border-[#BDBDBD] bg-white px-3 text-[12px] font-medium hover:bg-neutral-50">
+          <button type="button" onClick={() => update({ productId: null })} className="h-7 min-h-[44px] sm:min-h-[28px] cursor-pointer rounded-lg border border-[#BDBDBD] bg-white px-3 text-[12px] font-medium hover:bg-neutral-50 self-start sm:self-auto inline-flex items-center">
             Show all listings
           </button>
         </div>
@@ -280,7 +280,7 @@ export default function ListingsPage() {
       )}
 
       <section className="w-full space-y-0 pt-1">
-        <div className="flex w-full flex-row items-center justify-between pb-2">
+        <div className="flex w-full flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-0 pb-2">
           <h2 className="text-[18px] font-semibold leading-[22px] text-[#000000]">{notListedTab ? "Products to list" : "Listings"}</h2>
           <span className="text-[12px] font-normal leading-[15px] text-[#666666]">
             Showing {formatNumber(first)}–{formatNumber(last)} of {formatNumber(total)}
@@ -354,11 +354,11 @@ export default function ListingsPage() {
         )}
 
         {selected.size > 0 && !notListedTab && (
-          <div className="mt-3 flex w-full items-center justify-between rounded-lg border border-[#EAEAEA] bg-[#F5F5F5] p-3.5 text-[12px] font-normal text-[#666666]">
+          <div className="mt-3 flex w-full flex-col sm:flex-row items-start sm:items-center justify-between gap-2 rounded-lg border border-[#EAEAEA] bg-[#F5F5F5] p-3.5 text-[12px] font-normal text-[#666666]">
             <span>
               {formatNumber(selected.size)} of {formatNumber(total)} listings selected. Review listing readiness before publishing.
             </span>
-            <button type="button" onClick={() => setSelected(new Set())} className="cursor-pointer text-xs font-medium text-black hover:underline">
+            <button type="button" onClick={() => setSelected(new Set())} className="min-h-[44px] sm:min-h-0 cursor-pointer text-xs font-medium text-black hover:underline inline-flex items-center">
               Clear selection
             </button>
           </div>

@@ -20,9 +20,9 @@ interface ProductContextRailProps {
 }
 
 const Row = ({ label, value }: { label: string; value: string }) => (
-  <div className="flex items-center justify-between text-xs">
-    <span className="text-muted-foreground">{label}</span>
-    <span className="font-medium text-foreground">{value}</span>
+  <div className="flex items-center justify-between gap-2 text-xs">
+    <span className="text-muted-foreground shrink-0">{label}</span>
+    <span className="font-medium text-foreground text-right truncate">{value}</span>
   </div>
 );
 
@@ -135,7 +135,7 @@ export function ProductContextRail({ sku, item, loading, error, onRetry, classNa
   };
 
   return (
-    <aside className={cn("flex h-full w-[340px] shrink-0 flex-col overflow-y-auto border-l border-border bg-card p-5 text-sm", className)}>
+    <aside className={cn("flex h-full w-full lg:w-[340px] shrink-0 flex-col overflow-y-auto border-l-0 lg:border-l border-border bg-card p-4 sm:p-5 text-sm", className)}>
       <div className="mb-4 flex items-center justify-between">
         <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Product context</span>
         <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="Collapse Panel" onClick={() => setCollapsed(true)}>

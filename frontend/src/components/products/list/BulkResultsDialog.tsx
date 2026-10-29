@@ -79,7 +79,7 @@ export function BulkResultsDialog({ response, titles, onClose }: BulkResultsDial
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 h-[32px] bg-[#000000] text-[12px] font-semibold text-[#FFFFFF] hover:bg-[#1A1A1A] rounded-[8px]"
+                className="px-4 h-[32px] min-h-[44px] sm:min-h-[32px] bg-[#000000] text-[12px] font-semibold text-[#FFFFFF] hover:bg-[#1A1A1A] rounded-[8px]"
               >
                 Done
               </button>

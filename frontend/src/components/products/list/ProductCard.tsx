@@ -49,7 +49,7 @@ export function ProductCard({ product: p, selected, canWrite, canDelete, onToggl
     <div
       data-testid="product-card"
       onClick={() => navigate(`${ROUTES.PRODUCTS}/${p.id}`)}
-      className={`group relative box-border flex flex-col justify-between p-4 h-[262px] bg-[#FFFFFF] rounded-[12px] transition-all cursor-pointer ${
+      className={`group relative box-border flex flex-col justify-between p-4 h-auto min-h-[262px] md:h-[262px] bg-[#FFFFFF] rounded-[12px] transition-all cursor-pointer ${
         selected ? "border-2 border-[#000000] shadow-[0px_2px_8px_rgba(0,0,0,0.06)]" : "border border-[#EAEAEA] hover:border-[#BDBDBD]"
       }`}
     >
@@ -62,8 +62,8 @@ export function ProductCard({ product: p, selected, canWrite, canDelete, onToggl
           e.stopPropagation();
           onToggle(p.id);
         }}
-        className={`absolute top-3 left-3 z-10 w-4 h-4 rounded-[4px] border flex items-center justify-center transition-all cursor-pointer focus-visible:opacity-100 ${
-          selected ? "bg-[#000000] border-[#000000] text-[#FFFFFF]" : "border-[#BDBDBD] bg-[#FFFFFF] opacity-0 group-hover:opacity-100 hover:border-[#000000]"
+        className={`absolute top-3 left-3 z-10 w-5 h-5 sm:w-4 sm:h-4 rounded-[4px] border flex items-center justify-center transition-all cursor-pointer focus-visible:opacity-100 ${
+          selected ? "bg-[#000000] border-[#000000] text-[#FFFFFF]" : "border-[#BDBDBD] bg-[#FFFFFF] opacity-80 sm:opacity-0 group-hover:opacity-100 hover:border-[#000000]"
         }`}
       >
         {selected && <Check className="h-3 w-3 stroke-[3]" aria-hidden />}
@@ -115,7 +115,7 @@ export function ProductCard({ product: p, selected, canWrite, canDelete, onToggl
           e.stopPropagation();
           navigate(primaryPath);
         }}
-        className="w-full h-[32px] flex flex-row justify-center items-center gap-2 bg-[#000000] text-[#FFFFFF] rounded-[8px] text-[12px] font-semibold hover:bg-[#1A1A1A] transition-colors"
+        className="w-full h-[32px] min-h-[44px] sm:min-h-[32px] flex flex-row justify-center items-center gap-2 bg-[#000000] text-[#FFFFFF] rounded-[8px] text-[12px] font-semibold hover:bg-[#1A1A1A] transition-colors"
       >
         <span>{ACTION_LABEL[primaryKey]}</span>
         <span className="text-[13px]" aria-hidden>→</span>
@@ -156,7 +156,7 @@ function RowMenu({ product, canWrite, canDelete, onAction }: { product: CatalogP
         setOpen(false);
         run();
       }}
-      className={`w-full px-2 py-1.5 rounded-[4px] text-left text-[12px] hover:bg-[#F5F5F5] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent ${opts.danger ? "text-[#B42318]" : "text-[#000000]"}`}
+      className={`w-full min-h-[36px] sm:min-h-0 px-2 py-1.5 rounded-[4px] text-left text-[12px] hover:bg-[#F5F5F5] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent ${opts.danger ? "text-[#B42318]" : "text-[#000000]"}`}
     >
       {label}
     </button>
@@ -171,7 +171,7 @@ function RowMenu({ product, canWrite, canDelete, onAction }: { product: CatalogP
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        className="h-[26px] w-[26px] flex items-center justify-center rounded-[4px] text-[#666666] hover:bg-[#F5F5F5] hover:text-[#000000]"
+        className="h-[26px] w-[26px] min-h-[36px] min-w-[36px] sm:min-h-[26px] sm:min-w-[26px] flex items-center justify-center rounded-[4px] text-[#666666] hover:bg-[#F5F5F5] hover:text-[#000000]"
       >
         <MoreHorizontal className="h-4 w-4" aria-hidden />
       </button>

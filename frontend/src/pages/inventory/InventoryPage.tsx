@@ -138,6 +138,11 @@ export default function InventoryPage() {
     setTransferTarget(target);
     setTransferOpen(true);
   };
+  const scrollToLedger = () => {
+    requestAnimationFrame(() => {
+      document.getElementById("inventory-ledger")?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+    });
+  };
 
   const data = overview.data;
   // one location (simple mode): the whole stock sits in it, so the distribution shows that single location at 100%
@@ -218,15 +223,28 @@ export default function InventoryPage() {
 
               <div className="flex w-full flex-col items-start gap-10 lg:flex-row">
                 <StockHorizon items={data?.horizon.items} scaleMax={data?.horizon.scaleMaxDays ?? 20} onOpen={openDrawer} />
-                <SignalsRail signals={data?.signals} active={filters.signal} onSelect={(signal) => update({ signal, status: null })} />
+                <SignalsRail
+                  signals={data?.signals}
+                  active={filters.signal}
+                  onSelect={(signal) => {
+                    update({ signal, status: null });
+                    if (signal) scrollToLedger();
+                  }}
+                />
               </div>
 
               <AdvisoryBanner
                 advisory={data?.advisory}
                 reorder={kpis.data?.reorder}
                 onOpen={openDrawer}
-                onReviewRisk={() => update({ signal: "stockout_risk", status: null })}
-                onReviewLowStock={() => update({ status: "low_stock", signal: null })}
+                onReviewRisk={() => {
+                  update({ signal: "stockout_risk", status: null });
+                  scrollToLedger();
+                }}
+                onReviewLowStock={() => {
+                  update({ status: "low_stock", signal: null });
+                  scrollToLedger();
+                }}
               />
             </>
           )}
@@ -235,7 +253,7 @@ export default function InventoryPage() {
 
           <StockDistribution distribution={distribution} loading={overview.isPending} />
 
-          <section aria-label="Inventory ledger" className="flex w-full flex-col items-start gap-3">
+          <section id="inventory-ledger" aria-label="Inventory ledger" className="flex w-full scroll-mt-6 flex-col items-start gap-3">
             <div className="flex w-full flex-row flex-wrap items-center justify-between gap-2">
               <h2 className="m-0 text-[20px] font-semibold tracking-tight text-[#111111]">Inventory ledger</h2>
               <div className="flex items-center gap-2">

@@ -125,28 +125,45 @@ export default function ReturnsPage() {
   const pickView = (next: ViewKey) => update({ view: next === "overview" ? null : next });
 
   return (
-    <div className="w-full space-y-9 pb-32 font-['Inter',sans-serif] text-[#0A0A0A]">
+    <div className="w-full space-y-6 pb-24 text-foreground">
       <div className="flex flex-col gap-2">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-[#707070]">RETURNS OPERATIONS</span>
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">RETURNS OPERATIONS</p>
 
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-          <h1 className="text-[30px] font-semibold leading-[44px] text-[#000000]">Returns</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Returns</h1>
 
           <div className="flex flex-wrap items-center gap-2">
             {create && (
-              <button type="button" onClick={() => setCreating(true)} disabled={createReason !== undefined} title={createReason} className={cn(BTN_LIGHT, "cursor-pointer")}>
-                <Plus className="h-4 w-4 stroke-[2] text-[#000000]" />
+              <button
+                type="button"
+                onClick={() => setCreating(true)}
+                disabled={createReason !== undefined}
+                title={createReason}
+                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60 shadow-2xs cursor-pointer"
+              >
+                <Plus className="h-3.5 w-3.5 text-muted-foreground" />
                 <span>Create Return</span>
               </button>
             )}
 
-            <button type="button" onClick={onSync} disabled={sync.isPending || !canWrite} title={canWrite ? undefined : NO_WRITE_REASON} className={BTN_DARK}>
-              <RefreshCw className={cn("h-3.5 w-3.5 stroke-[2] text-white", sync.isPending && "animate-spin")} />
+            <button
+              type="button"
+              onClick={onSync}
+              disabled={sync.isPending || !canWrite}
+              title={canWrite ? undefined : NO_WRITE_REASON}
+              className="inline-flex h-8 items-center gap-1.5 rounded-md bg-neutral-900 dark:bg-neutral-100 px-3 text-xs font-medium text-white dark:text-neutral-900 shadow-2xs transition-colors hover:bg-neutral-800 dark:hover:bg-neutral-200 disabled:opacity-60 cursor-pointer disabled:cursor-not-allowed"
+            >
+              <RefreshCw className={cn("h-3.5 w-3.5", sync.isPending && "animate-spin")} />
               <span>{sync.isPending ? "Syncing..." : "Sync Returns"}</span>
             </button>
 
-            <button type="button" onClick={onExport} disabled={exporter.isPending} className={BTN_LIGHT}>
-              <Download className="h-3.5 w-3.5 stroke-[2] text-[#000000]" />
+            <button
+              type="button"
+              onClick={onExport}
+              disabled={exporter.isPending}
+              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60 shadow-2xs"
+            >
+              <Download className="h-3.5 w-3.5 text-muted-foreground" />
               <span>{exporter.isPending ? "Exporting..." : "Export"}</span>
             </button>
 
@@ -154,7 +171,7 @@ export default function ReturnsPage() {
               aria-label="Summary window"
               value={days}
               onChange={(e) => update({ days: Number(e.target.value) === DEFAULT_DAYS ? null : e.target.value }, { keepPage: true })}
-              className={cn(SELECT_MD, "cursor-pointer")}
+              className="inline-flex h-8 items-center rounded-md border border-border bg-background px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-muted shadow-2xs focus:outline-none cursor-pointer"
             >
               {SUMMARY_WINDOWS.map((d) => (
                 <option key={d} value={d}>
@@ -167,18 +184,18 @@ export default function ReturnsPage() {
           </div>
         </div>
 
-        <p className="text-[13px] leading-[19px] text-[#666666]">Centralize returns, inspect returned products, process refunds and decide the next inventory disposition.</p>
+        <p className="text-xs text-muted-foreground sm:text-sm">Centralize returns, inspect returned products, process refunds and decide the next inventory disposition.</p>
 
-        <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5 text-[12px] text-[#666666]">
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5 text-xs text-muted-foreground">
           <span>
             {statusLine ? `${statusLine.open} open returns · ${statusLine.awaitingInspection} awaiting inspection · ${statusLine.refundsPending} refunds pending` : overview.isError ? "The status line could not be loaded." : "Loading returns..."}
           </span>
-          <span className="text-[11px] text-[#666666]">{create && !create.available ? (createReason ?? "") : createChannels.length > 0 ? `Create Return: ${createChannels.join(", ")} connection only` : ""}</span>
+          <span className="text-xs text-muted-foreground">{create && !create.available ? (createReason ?? "") : createChannels.length > 0 ? `Create Return: ${createChannels.join(", ")} connection only` : ""}</span>
         </div>
 
         {report && <SyncReportPanel report={report} running={sync.isPending} canRetry={canWrite} onRetry={onSync} onDismiss={() => setReport(null)} />}
 
-        <div role="tablist" aria-label="Returns workspace" className="mt-3 flex items-center gap-7 border-b border-[#EAEAEA]">
+        <div role="tablist" aria-label="Returns workspace" className="mt-3 flex items-center gap-7 border-b border-border">
           {VIEWS.map((v) => (
             <button
               key={v}
@@ -187,8 +204,8 @@ export default function ReturnsPage() {
               aria-selected={view === v}
               onClick={() => pickView(v)}
               className={cn(
-                "relative cursor-pointer pb-2.5 text-[12px] transition-colors",
-                view === v ? "font-semibold text-black after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-black" : "font-normal text-[#666666] hover:text-black",
+                "relative cursor-pointer pb-2.5 text-xs transition-colors",
+                view === v ? "font-semibold text-foreground after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-foreground" : "font-normal text-muted-foreground hover:text-foreground",
               )}
             >
               {VIEW_LABELS[v]}

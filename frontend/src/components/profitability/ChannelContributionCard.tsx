@@ -14,20 +14,20 @@ export const ChannelContributionCard: React.FC<ChannelContributionCardProps> = (
   const maxContribution = Math.max(...channels.map((c) => Math.max(c.netProfitMinor ?? 0, 0)), 1);
 
   return (
-    <div className="space-y-4 rounded-xl border border-border bg-card p-6 shadow-xs">
-      <div className="flex items-start justify-between">
+    <div className="space-y-4 rounded-xl border border-border bg-card p-4 sm:p-6 shadow-xs">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-1 sm:gap-4">
         <div>
           <h2 className="text-base font-semibold text-foreground">Which channel contributes best?</h2>
           <p className="mt-0.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">{best ? `Highest contribution margin: ${best.label} ${percent(best.netMarginPercent)}` : "Compare channels once more than one has all its costs known"}</p>
         </div>
-        <span className="rounded-md border border-border bg-muted/60 px-2.5 py-1 text-[11px] font-medium text-muted-foreground">{data ? `${data.range.from} to ${data.range.to}` : ""}</span>
+        <span className="shrink-0 w-fit rounded-md border border-border bg-muted/60 px-2.5 py-1 text-[11px] font-medium text-muted-foreground">{data ? `${data.range.from} to ${data.range.to}` : ""}</span>
       </div>
 
       {channels.length === 0 ? (
         <p className="py-6 text-center text-xs text-muted-foreground">No channel has sales in this period.</p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+        <div className="overflow-x-auto [-webkit-overflow-scrolling:touch]">
+          <table className="w-full min-w-[480px] text-left text-xs">
             <thead>
               <tr className="border-b border-border/80 text-[11px] font-medium text-muted-foreground">
                 <th className="px-3 py-2.5 font-medium">Marketplace</th>

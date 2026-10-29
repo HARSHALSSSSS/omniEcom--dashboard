@@ -294,14 +294,14 @@ function AutomationScreen() {
         title="Automation"
         description="Reduce repetitive work while keeping important business decisions under your control."
         actions={
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
             <Button
               size="sm"
               aria-label="New rule"
               disabled={!canWrite || catalog.isError}
               title={canWrite ? undefined : WRITE_REASON}
               onClick={startCreate}
-              className="gap-1.5 text-xs font-semibold bg-neutral-900 text-white hover:bg-neutral-800 dark:bg-white dark:text-neutral-900"
+              className="h-10 sm:h-8 flex-1 sm:flex-initial gap-1.5 text-xs font-semibold bg-neutral-900 text-white hover:bg-neutral-800 dark:bg-white dark:text-neutral-900 cursor-pointer"
             >
               <Plus className="h-3.5 w-3.5" />
               Create Rule
@@ -318,8 +318,8 @@ function AutomationScreen() {
       />
 
       {/* Top Badges Strip matching Figma Images 1 & 2 */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-3 text-xs">
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-4 border-b border-border pb-3 text-xs">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <span className="font-semibold text-foreground">{overview.data ? formatNumber(overview.data.activeRules) : "—"} active rules</span>
           <span className="text-muted-foreground">·</span>
           <span className="font-semibold text-amber-700">{overview.data ? formatNumber(overview.data.pendingApprovals) : "—"} approvals pending</span>
@@ -329,8 +329,8 @@ function AutomationScreen() {
       </div>
 
       {/* Segmented Tab Bar (Overview | Rules | Runs) */}
-      <div className="flex items-center justify-between border-b border-border pb-3">
-        <div role="tablist" aria-label="Automation view" className="inline-flex items-center rounded-lg border border-border bg-muted p-1">
+      <div className="flex items-center justify-between border-b border-border pb-3 overflow-x-auto no-scrollbar">
+        <div role="tablist" aria-label="Automation view" className="inline-flex min-w-max items-center rounded-lg border border-border bg-muted p-1">
           {tabsList.map((t) => (
             <button
               key={t.id}
@@ -341,7 +341,7 @@ function AutomationScreen() {
                 setActiveTab(t.id);
                 update({ tab: t.id, status: null, q: null, trigger: null, ruleId: null });
               }}
-              className={`rounded-md px-3.5 py-1.5 text-xs font-medium transition-all ${
+              className={`rounded-md px-3 sm:px-3.5 py-2 sm:py-1.5 text-xs font-medium transition-all cursor-pointer ${
                 tab === t.id
                   ? "bg-background font-semibold text-foreground shadow-xs"
                   : "text-muted-foreground hover:text-foreground"

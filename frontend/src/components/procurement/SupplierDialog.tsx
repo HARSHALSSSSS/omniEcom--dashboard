@@ -84,7 +84,7 @@ export function SupplierDialog({ target, onClose, onSaved }: Props) {
   return (
     <>
       <Dialog open={target !== null} onOpenChange={(o) => !o && requestClose()}>
-        <DialogContent className="max-h-[92vh] max-w-xl overflow-y-auto" onInteractOutside={(e) => dirty && e.preventDefault()}>
+        <DialogContent className="max-h-[92vh] w-[95vw] sm:max-w-xl overflow-y-auto" onInteractOutside={(e) => dirty && e.preventDefault()}>
           {target && (
             <SupplierForm
               key={target.kind === "edit" ? target.supplier.id : "new"}
@@ -267,7 +267,7 @@ function SupplierForm({ supplier, onDirty, onCancel, onSaved }: { supplier: Supp
         <Textarea id="sup-notes" rows={2} maxLength={2000} value={form.notes} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => set("notes", e.target.value)} className="text-xs" />
       </Field>
 
-      <DialogFooter className="gap-2 sm:gap-0">
+      <DialogFooter className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-2">
         <Button type="button" variant="outline" size="sm" disabled={busy} onClick={onCancel}>
           Cancel
         </Button>

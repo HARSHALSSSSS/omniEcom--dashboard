@@ -102,11 +102,11 @@ export function RuleInspectorDrawer({ approval, rule, catalog, runs, canWrite, b
             <p className="text-muted-foreground">{approval.recommendedAction}</p>
           </div>
           <div className="flex items-center gap-2 pt-1">
-            <Button size="sm" className="flex-1 gap-1.5 bg-black text-xs text-white hover:bg-neutral-800" disabled={!canWrite || busy} title={disabledReason} onClick={() => onApprove(approval)}>
+            <Button size="sm" className="h-10 sm:h-9 flex-1 gap-1.5 bg-black text-xs text-white hover:bg-neutral-800 cursor-pointer" disabled={!canWrite || busy} title={disabledReason} onClick={() => onApprove(approval)}>
               <Check className="h-3.5 w-3.5" />
               Approve
             </Button>
-            <Button size="sm" variant="outline" className="text-xs" disabled={!canWrite || busy} title={disabledReason} onClick={() => onReject(approval)}>
+            <Button size="sm" variant="outline" className="h-10 sm:h-9 text-xs cursor-pointer" disabled={!canWrite || busy} title={disabledReason} onClick={() => onReject(approval)}>
               Reject
             </Button>
           </div>
@@ -133,12 +133,12 @@ export function RuleInspectorDrawer({ approval, rule, catalog, runs, canWrite, b
       </div>
 
       <div className="space-y-3 border-t border-border p-4">
-        <div className="grid grid-cols-2 gap-2">
-          <Button size="sm" variant="outline" className="gap-1.5 text-xs" disabled={!rule} onClick={() => rule && onTestPayload(rule)}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <Button size="sm" variant="outline" className="h-10 sm:h-9 gap-1.5 text-xs cursor-pointer" disabled={!rule} onClick={() => rule && onTestPayload(rule)}>
             <TestTube className="h-3.5 w-3.5" />
             Test with Payload
           </Button>
-          <Button size="sm" variant="outline" className="gap-1.5 text-xs" disabled={!rule || !canWrite} title={disabledReason} onClick={() => rule && onEditLogic(rule)}>
+          <Button size="sm" variant="outline" className="h-10 sm:h-9 gap-1.5 text-xs cursor-pointer" disabled={!rule || !canWrite} title={disabledReason} onClick={() => rule && onEditLogic(rule)}>
             <Edit className="h-3.5 w-3.5" />
             Edit Logic
           </Button>
@@ -148,7 +148,7 @@ export function RuleInspectorDrawer({ approval, rule, catalog, runs, canWrite, b
           disabled={!rule || !canWrite || rule.status !== "active"}
           title={disabledReason}
           onClick={() => rule && onPauseExecution(rule)}
-          className="flex w-full items-center justify-center gap-1.5 text-xs font-semibold text-red-600 hover:underline disabled:cursor-not-allowed disabled:opacity-50 disabled:no-underline"
+          className="min-h-[36px] flex w-full items-center justify-center gap-1.5 text-xs font-semibold text-red-600 hover:underline disabled:cursor-not-allowed disabled:opacity-50 disabled:no-underline cursor-pointer"
         >
           <Pause className="h-3.5 w-3.5" />
           Pause Rule Execution

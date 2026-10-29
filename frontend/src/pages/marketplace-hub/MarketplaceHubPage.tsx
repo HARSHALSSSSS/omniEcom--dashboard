@@ -36,7 +36,7 @@ function AttentionAdvisory({ connection, onReview }: { connection: ChannelConnec
       <p className="text-[11px] text-[#8C8C8C]">
         Last successful sync: {connection.lastSyncAt && connection.lastSyncAt !== "Never" ? ago(connection.lastSyncAt) : "never"}
       </p>
-      <div className="flex items-center gap-4 pt-2 text-[12px]">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-2 text-[12px]">
         <button
           type="button"
           disabled={needsReconnect ? !a.canWrite : Boolean(a.syncReason) || a.syncing}
@@ -167,7 +167,7 @@ export default function MarketplaceHubPage() {
   if (connectionsQuery.isPending) {
     return (
       <div className="w-full font-['Inter',sans-serif] pb-24 space-y-6">
-        <header className="w-full flex justify-between items-start pt-1">
+        <header className="w-full flex flex-col sm:flex-row justify-between items-start gap-4 sm:gap-0 pt-1">
           <div className="space-y-1">
             <span className="text-[10px] font-medium leading-[12px] tracking-wider text-[#707070] uppercase">
               CHANNELS
@@ -201,7 +201,7 @@ export default function MarketplaceHubPage() {
   if (connections.length === 0) {
     return (
       <div className="w-full font-['Inter',sans-serif] pb-24 space-y-6">
-        <header className="w-full flex justify-between items-start pt-1 pb-4 border-b border-[#EAEAEA]">
+        <header className="w-full flex flex-col sm:flex-row justify-between items-start gap-4 sm:gap-0 pt-1 pb-4 border-b border-[#EAEAEA]">
           <div className="space-y-1">
             <span className="text-[10px] font-medium leading-[12px] tracking-wider text-[#707070] uppercase">
               CHANNELS
@@ -213,18 +213,18 @@ export default function MarketplaceHubPage() {
               Connect, monitor and manage every sales channel from one workspace.
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
             <button
               type="button"
               onClick={() => navigate(ROUTES.MARKETPLACE_HUB_HEALTH)}
-              className="h-9 px-4 flex items-center justify-center border border-[#BDBDBD] rounded-lg text-[12px] font-semibold text-[#000000] hover:bg-neutral-50 transition-colors cursor-pointer"
+              className="h-10 sm:h-9 px-4 flex items-center justify-center border border-[#BDBDBD] rounded-lg text-[12px] font-semibold text-[#000000] hover:bg-neutral-50 transition-colors cursor-pointer"
             >
               Connection health
             </button>
             <button
               type="button"
               onClick={() => navigate(ROUTES.MARKETPLACE_HUB_CONNECTORS)}
-              className="h-9 px-4 flex items-center justify-center border border-[#BDBDBD] rounded-lg text-[12px] font-semibold text-[#000000] hover:bg-neutral-50 transition-colors cursor-pointer"
+              className="h-10 sm:h-9 px-4 flex items-center justify-center border border-[#BDBDBD] rounded-lg text-[12px] font-semibold text-[#000000] hover:bg-neutral-50 transition-colors cursor-pointer"
             >
               Connector marketplace
             </button>
@@ -272,7 +272,7 @@ export default function MarketplaceHubPage() {
   return (
     <div className="w-full font-['Inter',sans-serif] text-[#121212] pb-24 space-y-6">
       {/* PAGE HEADER */}
-      <header className="w-full flex flex-row justify-between items-start pt-1">
+      <header className="w-full flex flex-col sm:flex-row justify-between items-start gap-4 sm:gap-0 pt-1">
         <div className="space-y-1">
           <span className="text-[10px] font-medium leading-[12px] tracking-wider text-[#707070] uppercase">
             CHANNELS
@@ -287,25 +287,25 @@ export default function MarketplaceHubPage() {
 
         {/* Top actions */}
         {!isDrawerOpen && (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
             <button
               type="button"
               onClick={() => navigate(ROUTES.MARKETPLACE_HUB_HEALTH)}
-              className="h-9 px-4 flex items-center justify-center border border-[#BDBDBD] rounded-lg text-[12px] font-semibold text-[#000000] hover:bg-neutral-50 transition-colors cursor-pointer"
+              className="h-10 sm:h-9 px-4 flex items-center justify-center border border-[#BDBDBD] rounded-lg text-[12px] font-semibold text-[#000000] hover:bg-neutral-50 transition-colors cursor-pointer"
             >
               Connection health
             </button>
             <button
               type="button"
               onClick={() => navigate(ROUTES.MARKETPLACE_HUB_CONNECTORS)}
-              className="h-9 px-4 flex items-center justify-center border border-[#BDBDBD] rounded-lg text-[12px] font-semibold text-[#000000] hover:bg-neutral-50 transition-colors cursor-pointer"
+              className="h-10 sm:h-9 px-4 flex items-center justify-center border border-[#BDBDBD] rounded-lg text-[12px] font-semibold text-[#000000] hover:bg-neutral-50 transition-colors cursor-pointer"
             >
               Connector marketplace
             </button>
             <button
               type="button"
               onClick={() => setIsAddModalOpen(true)}
-              className="h-9 px-4 flex items-center justify-center gap-1.5 bg-[#000000] rounded-lg text-[12px] font-semibold text-[#FFFFFF] hover:bg-neutral-800 transition-colors cursor-pointer shadow-none"
+              className="h-10 sm:h-9 px-4 flex items-center justify-center gap-1.5 bg-[#000000] rounded-lg text-[12px] font-semibold text-[#FFFFFF] hover:bg-neutral-800 transition-colors cursor-pointer shadow-none"
             >
               <Plus className="w-3.5 h-3.5 stroke-[2.2]" />
               Add channel
@@ -330,7 +330,7 @@ export default function MarketplaceHubPage() {
       )}
 
       {/* SUBHEADER / KPI METRIC LINE */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between text-[12px] text-[#737373] pt-1">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between text-[12px] text-[#737373] pt-1 gap-1.5 sm:gap-0">
         {isSyncingAny ? (
           <div className="flex items-center gap-2 text-blue-600 font-medium">
             <span className="inline-block w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
@@ -341,7 +341,7 @@ export default function MarketplaceHubPage() {
             {connectedCount} connected · {notConnectedCount} available · {selectedConnection?.name} selected
           </div>
         ) : activeTab === "attention" ? (
-          <div className="flex items-center justify-between w-full">
+          <div className="flex flex-wrap items-center justify-between w-full gap-2">
             <span className="font-medium text-[#121212]">
               {attentionCount === 0
                 ? "All channels healthy · No attention needed"
@@ -350,7 +350,7 @@ export default function MarketplaceHubPage() {
             <span className="text-[#737373]">Live telemetry</span>
           </div>
         ) : (
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
             <span className="font-semibold text-[#121212]">{allChannelRows.length} channels</span>
             <span className="text-emerald-700 font-medium">{healthyCount} healthy</span>
             {attentionCount > 0 && (
@@ -361,7 +361,7 @@ export default function MarketplaceHubPage() {
         )}
 
         {!isDrawerOpen && activeTab !== "attention" && !isSyncingAny && (
-          <div className="text-[11px] text-[#737373] mt-1 sm:mt-0">
+          <div className="text-[11px] text-[#737373] mt-0.5 sm:mt-0">
             {latestSync ? `Last sync ${ago(latestSync)}` : "No sync yet"}
           </div>
         )}
@@ -369,7 +369,7 @@ export default function MarketplaceHubPage() {
 
       {/* FILTER TABS */}
       {!isDrawerOpen && (
-        <div className="flex items-center gap-1 border-b border-[#E5E5E5] pb-2">
+        <div className="flex items-center gap-1 border-b border-[#E5E5E5] pb-2 overflow-x-auto max-w-full [-webkit-overflow-scrolling:touch]">
           {(
             [
               { id: "all", label: "All" },
@@ -386,7 +386,7 @@ export default function MarketplaceHubPage() {
                 setActiveTab(tab.id);
                 setSelectedChannelId(null);
               }}
-              className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors cursor-pointer ${
+              className={`shrink-0 min-h-[36px] sm:min-h-0 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors cursor-pointer ${
                 activeTab === tab.id
                   ? "bg-[#121212] text-white"
                   : "text-[#737373] hover:text-[#121212] hover:bg-[#F5F5F5]"
@@ -411,7 +411,7 @@ export default function MarketplaceHubPage() {
       {/* MAIN CONTENT AREA */}
       <div className="w-full flex flex-col lg:flex-row items-start gap-6">
         {/* Table Area */}
-        <div className="flex-1 w-full space-y-6">
+        <div className="flex-1 w-full min-w-0 space-y-6">
           {activeTab === "attention" ? (
             <AttentionTableView
               connections={connections}

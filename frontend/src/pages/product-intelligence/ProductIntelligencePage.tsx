@@ -125,7 +125,7 @@ export default function ProductIntelligencePage() {
         }
       />
 
-      {/* Top Tab Bar matching Figma (Overview | All products | Watchlist) */}
+      {/* Top Tab Bar (Overview | All products) */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-3">
         <div role="tablist" aria-label="Product Intelligence View Modes" className="inline-flex items-center gap-1 rounded-lg border border-border bg-muted p-1">
           <button
@@ -156,22 +156,7 @@ export default function ProductIntelligencePage() {
           >
             All products
           </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === "watchlist"}
-            onClick={() => update({ tab: "watchlist" })}
-            className={cn(
-              "rounded-md px-3.5 py-1.5 text-xs font-medium transition-all",
-              tab === "watchlist"
-                ? "bg-background font-semibold text-foreground shadow-xs"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            Watchlist
-          </button>
         </div>
-
       </div>
 
       {tab === "overview" ? (

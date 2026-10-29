@@ -86,7 +86,7 @@ export function OrderFlowStepper({
       <div className="flex items-center justify-between gap-1 overflow-x-auto pt-1">
         {steps.map((step, idx) => {
           const Icon = step.icon;
-          const isBlueActive = step.id === "picking" || step.isActive;
+          const isBlueActive = step.isActive;
           const isDone = step.status === "done" || step.status === "ready";
 
           return (

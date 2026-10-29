@@ -9,7 +9,7 @@ import type { PickupSlot, ShippingMethod } from "@/types/shipping";
 import { BTN_PRIMARY, BTN_SECONDARY, ShippingDrawer } from "./ShippingDrawer";
 import { NO_WRITE_REASON } from "./shippingFormat";
 
-const FIELD = "h-8 w-full rounded-lg border border-[#EAEAEA] bg-white px-3 text-[11px] text-black focus:border-black focus:outline-none";
+const FIELD = "h-9 sm:h-8 min-h-[36px] sm:min-h-0 w-full rounded-lg border border-[#EAEAEA] bg-white px-3 text-[11px] text-black focus:border-black focus:outline-none";
 
 const dayText = (iso: string): string => new Date(`${iso}T00:00:00`).toLocaleDateString("en-IN", { weekday: "short", day: "2-digit", month: "short" });
 
@@ -119,7 +119,7 @@ function Body({ canWrite, preset, methods, warehouses, onClose }: PickupSlotDraw
           <span>Pickup date</span>
           <input aria-label="Pickup date" type="date" value={date} min={new Date().toISOString().slice(0, 10)} onChange={(e) => setDate(e.target.value)} className={FIELD} />
         </label>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <label className="block space-y-1 text-[11px] text-[#666666]">
             <span>Window from</span>
             <input aria-label="Window from" type="time" value={from} onChange={(e) => setFrom(e.target.value)} className={FIELD} />

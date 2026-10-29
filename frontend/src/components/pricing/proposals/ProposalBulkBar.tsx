@@ -14,7 +14,7 @@ interface ProposalBulkBarProps {
 /** the toolbar over the table while proposals are selected; each action is one POST with a result per proposal */
 export function ProposalBulkBar({ count, max, busy, onAction, onClear }: ProposalBulkBarProps) {
   return (
-    <div role="toolbar" aria-label="Bulk actions" className="flex min-h-[44px] flex-wrap items-center gap-2 rounded-lg bg-muted/60 px-3">
+    <div role="toolbar" aria-label="Bulk actions" className="flex min-h-[44px] flex-wrap items-center gap-2 rounded-lg bg-muted/60 px-3 py-2">
       <span className="min-w-[150px] text-xs font-semibold" aria-live="polite">
         {count} {count === 1 ? "proposal" : "proposals"} selected
       </span>

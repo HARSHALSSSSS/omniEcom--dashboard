@@ -24,18 +24,25 @@ export default function AppShell() {
   }, []);
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-white">
+    <div className="flex flex-col md:flex-row h-screen w-full overflow-hidden bg-white">
+      {/* Mobile Topbar */}
+      <div className="md:hidden shrink-0">
+        <Topbar />
+      </div>
+
       {/* Sidebar */}
       <Sidebar />
 
       {/* Main app column */}
       <div className="flex flex-1 flex-col overflow-hidden min-w-0">
-        <Topbar />
+        <div className="hidden md:block shrink-0">
+          <Topbar />
+        </div>
         <EmailVerificationBanner />
 
         {/* Scrollable page outlet */}
         <main className="flex-1 overflow-y-auto bg-[#FAFAFA]">
-          <div className="w-full px-12 py-8">
+          <div className="w-full px-4 py-4 sm:px-6 sm:py-6 lg:px-12 lg:py-8">
             <Outlet />
           </div>
         </main>

@@ -39,7 +39,7 @@ export function MarginContextTable({ items, targetMarginBps, onReviewCosts, onRe
         <p className="py-6 text-center text-xs text-muted-foreground">No channels to show.</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-xs text-left">
+          <table className="w-full min-w-[620px] text-xs text-left">
             <thead>
               <tr className="border-b border-neutral-200 text-muted-foreground">
                 <th className="pb-2.5 font-medium">Channel</th>

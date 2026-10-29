@@ -39,16 +39,16 @@ export function HistoryView({ status, page, data, loading, fetching, error, canW
   return (
     <div className="flex flex-col gap-4 w-full">
       <div className="flex flex-col gap-4 w-full">
-        <div className="flex flex-row justify-between items-center w-full h-[26px]">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-0 w-full min-h-[26px]">
           <h2 className="text-[18px] font-semibold text-[#000000] leading-[145%]">Resolved & snoozed</h2>
-          <div className="flex flex-row items-center gap-[18px] text-[12px] leading-[145%]">
+          <div className="flex flex-row items-center gap-3 sm:gap-[18px] text-[12px] leading-[145%] flex-wrap">
             {chips.map((c) => (
               <button
                 key={c.value}
                 type="button"
                 aria-pressed={status === c.value}
                 onClick={() => onStatus(c.value)}
-                className={`cursor-pointer ${status === c.value ? "font-semibold text-[#000000]" : "font-normal text-[#666666] hover:text-[#000000]"}`}
+                className={`cursor-pointer min-h-[44px] sm:min-h-0 inline-flex items-center ${status === c.value ? "font-semibold text-[#000000]" : "font-normal text-[#666666] hover:text-[#000000]"}`}
               >
                 {c.label}
                 {data ? ` · ${data.counts[c.value]}` : ""}
@@ -70,7 +70,7 @@ export function HistoryView({ status, page, data, loading, fetching, error, canW
       ) : (
         data && (
           <div className="flex flex-col gap-2 w-full">
-            <div className="flex flex-row items-center px-4 h-10 gap-6 text-[11px] font-medium leading-[145%] text-[#666666]">
+            <div className="hidden lg:flex flex-row items-center px-4 h-10 gap-6 text-[11px] font-medium leading-[145%] text-[#666666]">
               <span className="flex-1 min-w-[280px]">Issue</span>
               <span className="w-[100px] shrink-0">Area</span>
               <span className="w-[112px] shrink-0">Status</span>
@@ -87,24 +87,31 @@ export function HistoryView({ status, page, data, loading, fetching, error, canW
                     key={i.id}
                     data-testid="history-row"
                     style={{ boxShadow: "0px 3px 10px rgba(36, 50, 75, 0.055)", borderColor: color }}
-                    className="flex flex-row items-center p-4 gap-6 w-full bg-white border rounded-[12px] min-h-[102px]"
+                    className="grid grid-cols-[auto_auto_1fr] lg:flex lg:flex-row items-center lg:items-center p-4 gap-x-2.5 sm:gap-x-3 gap-y-2 lg:gap-6 w-full bg-white border rounded-[12px] min-h-[102px]"
                   >
-                    <div className="flex flex-col gap-1 flex-1 min-w-[280px]">
-                      <span className="text-[13px] font-semibold text-[#000000] leading-[145%]">{i.title}</span>
-                      <span className="text-[12px] font-normal text-[#666666] leading-[145%]">{outcome(i)}</span>
-                    </div>
-                    <span className="w-[100px] shrink-0 text-[12px] font-normal text-[#666666] leading-[145%]">{AREA_LABEL[i.area] ?? i.area}</span>
-                    <div className="flex flex-row items-center gap-1.5 w-[112px] shrink-0">
+                    <div className="flex flex-row items-center gap-1.5 order-1 lg:order-none w-auto lg:w-[112px] shrink-0">
                       {resolved ? <Check className="w-3.5 h-3.5 stroke-[2]" style={{ color }} /> : <Clock className="w-3.5 h-3.5 stroke-[2]" style={{ color }} />}
                       <span className="text-[12px] font-medium leading-[145%]" style={{ color }}>
                         {resolved ? "Resolved" : "Snoozed"}
                       </span>
                     </div>
-                    <span className="w-[140px] shrink-0 text-[12px] font-normal text-[#666666] leading-[145%]">
+
+                    <span className="order-2 lg:order-none w-auto lg:w-[100px] shrink-0 text-[12px] font-normal text-[#666666] leading-[145%]">
+                      <span className="lg:hidden text-[#BDBDBD] mr-1.5">·</span>
+                      {AREA_LABEL[i.area] ?? i.area}
+                    </span>
+
+                    <span className="order-3 lg:order-none justify-self-end text-right lg:text-left w-auto lg:w-[140px] shrink-0 text-[12px] font-normal text-[#666666] leading-[145%]">
                       {resolved ? ago(i.updatedAt) : i.returnsLabel ? `Returns ${i.returnsLabel}` : "Returns later"}
                     </span>
-                    <div className="w-[184px] shrink-0 flex flex-col items-end gap-2">
-                      <button type="button" onClick={() => onOpen(i.id)} className="text-[12px] font-medium text-[#000000] hover:underline cursor-pointer">
+
+                    <div className="order-4 lg:order-none col-span-full lg:col-span-1 flex flex-col gap-1 w-full lg:flex-1 lg:min-w-[280px]">
+                      <span className="text-[13px] font-semibold text-[#000000] leading-[145%]">{i.title}</span>
+                      <span className="text-[12px] font-normal text-[#666666] leading-[145%]">{outcome(i)}</span>
+                    </div>
+
+                    <div className="order-5 lg:order-none col-span-full lg:col-span-1 w-full lg:w-[184px] shrink-0 flex flex-row lg:flex-col items-center justify-between lg:items-end gap-2 pt-2 lg:pt-0 border-t border-[#EAEAEA] lg:border-t-0">
+                      <button type="button" onClick={() => onOpen(i.id)} className="text-[12px] font-medium text-[#000000] hover:underline cursor-pointer min-h-[44px] sm:min-h-0 inline-flex items-center">
                         {i.recommendedAction.label ?? "View details"} →
                       </button>
                       {!resolved && (
@@ -113,7 +120,7 @@ export function HistoryView({ status, page, data, loading, fetching, error, canW
                           disabled={!canWrite || unsnoozingId === i.id}
                           title={canWrite ? undefined : READ_ONLY_REASON}
                           onClick={() => onUnsnooze(i.id)}
-                          className="h-[30px] w-[90px] rounded-[8px] bg-white border border-[#666666] text-[12px] font-semibold text-[#000000] hover:bg-neutral-50 transition-colors flex items-center justify-center cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="h-[30px] min-h-[44px] sm:min-h-0 w-[90px] rounded-[8px] bg-white border border-[#666666] text-[12px] font-semibold text-[#000000] hover:bg-neutral-50 transition-colors flex items-center justify-center cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           Unsnooze
                         </button>

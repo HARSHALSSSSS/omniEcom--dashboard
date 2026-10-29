@@ -27,7 +27,7 @@ const InventoryCard: React.FC<{ inventory: NonNullable<Dashboard["inventoryHealt
   return (
     <section
       aria-labelledby="inventory-title"
-      className="flex-1 min-w-0 bg-white border border-[#EAEAEA] rounded-[12px] p-6 flex flex-col justify-between"
+      className="flex-1 min-w-0 bg-white border border-[#EAEAEA] rounded-[12px] p-4 sm:p-6 flex flex-col justify-between"
     >
       <div className="flex flex-col gap-1">
         <h2 id="inventory-title" className="text-[18px] font-semibold text-[#000000] leading-[145%]">
@@ -74,39 +74,41 @@ const InventoryCard: React.FC<{ inventory: NonNullable<Dashboard["inventoryHealt
             {total === 0 ? "No active products yet." : "No products are low or out of stock."}
           </p>
         ) : (
-          <div className="border border-[#EAEAEA] rounded-[8px] overflow-hidden">
-            <div className="grid grid-cols-4 items-center bg-[#F5F5F5] px-3 h-9 text-[10px] text-[#666666] font-normal leading-[145%]">
-              <span>Product</span>
-              <span>SKU</span>
-              <span>Available</span>
-              <span>Status</span>
-            </div>
-            <ul className="divide-y divide-[#EAEAEA] bg-white">
-              {inventory.mostAffected.map((prod) => (
-                <li key={`${prod.productId}-${prod.sku}`} className="grid grid-cols-4 items-center px-3 h-[55px] text-[12px]">
-                  <span className="font-semibold text-[#333333] leading-[145%] truncate pr-2" title={prod.title}>
-                    {prod.title}
-                  </span>
-                  <span className="text-[11px] font-normal text-[#333333] leading-[145%] truncate font-mono pr-2">
-                    {prod.sku}
-                  </span>
-                  <span className="text-[12px] font-normal text-[#333333] leading-[145%]">
-                    {formatNumber(prod.available)}
-                  </span>
-                  <div className="flex items-center">
-                    <span className="inline-flex items-center justify-center px-2 h-[26px] text-[11px] font-normal leading-[145%] text-[#333333] border border-[#EAEAEA] rounded-[4px] bg-white">
-                      {STATUS_LABEL[prod.status]}
+          <div className="border border-[#EAEAEA] rounded-[8px] overflow-x-auto">
+            <div className="min-w-[420px]">
+              <div className="grid grid-cols-4 items-center bg-[#F5F5F5] px-3 h-9 text-[10px] text-[#666666] font-normal leading-[145%]">
+                <span>Product</span>
+                <span>SKU</span>
+                <span>Available</span>
+                <span>Status</span>
+              </div>
+              <ul className="divide-y divide-[#EAEAEA] bg-white">
+                {inventory.mostAffected.map((prod) => (
+                  <li key={`${prod.productId}-${prod.sku}`} className="grid grid-cols-4 items-center px-3 h-[55px] text-[12px]">
+                    <span className="font-semibold text-[#333333] leading-[145%] truncate pr-2" title={prod.title}>
+                      {prod.title}
                     </span>
-                  </div>
-                </li>
-              ))}
-            </ul>
+                    <span className="text-[11px] font-normal text-[#333333] leading-[145%] truncate font-mono pr-2">
+                      {prod.sku}
+                    </span>
+                    <span className="text-[12px] font-normal text-[#333333] leading-[145%]">
+                      {formatNumber(prod.available)}
+                    </span>
+                    <div className="flex items-center">
+                      <span className="inline-flex items-center justify-center px-2 h-[26px] text-[11px] font-normal leading-[145%] text-[#333333] border border-[#EAEAEA] rounded-[4px] bg-white">
+                        {STATUS_LABEL[prod.status]}
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
         )}
       </div>
 
       <div className="pt-2">
-        <Link to={ROUTES.INVENTORY} className="text-[12px] font-medium text-[#000000] hover:underline leading-[145%]">
+        <Link to={ROUTES.INVENTORY} className="text-[12px] font-medium text-[#000000] hover:underline leading-[145%] min-h-[44px] sm:min-h-0 inline-flex items-center">
           View inventory →
         </Link>
       </div>
@@ -120,7 +122,7 @@ const ChannelCard: React.FC<{ channels: NonNullable<Dashboard["channelHealth"]>;
 }) => (
   <section
     aria-labelledby="channels-title"
-    className={`w-full ${alone ? "" : "lg:w-[476px]"} bg-white border border-[#EAEAEA] rounded-[12px] p-6 flex flex-col justify-between shrink-0`}
+    className={`w-full ${alone ? "" : "lg:w-[476px]"} bg-white border border-[#EAEAEA] rounded-[12px] p-4 sm:p-6 flex flex-col justify-between shrink-0`}
   >
     <div className="flex flex-col gap-1">
       <h2 id="channels-title" className="text-[18px] font-semibold text-[#000000] leading-[145%]">
@@ -141,11 +143,11 @@ const ChannelCard: React.FC<{ channels: NonNullable<Dashboard["channelHealth"]>;
           return (
             <li
               key={chan.channel.accountId ?? chan.channel.code}
-              className="flex items-center justify-between h-[66px] border-b border-[#EAEAEA] gap-3"
+              className="flex flex-col sm:flex-row sm:items-center justify-between min-h-[66px] lg:h-[66px] border-b border-[#EAEAEA] gap-2 sm:gap-4 py-3 sm:py-0"
             >
-              <div className="flex flex-col w-[96px] shrink-0 gap-[3px]">
+              <div className="flex flex-col min-w-0 sm:w-[135px] shrink-0 gap-[3px]">
                 <span
-                  className="text-[12px] font-semibold text-[#000000] leading-[145%] truncate"
+                  className="text-[12px] font-semibold text-[#000000] leading-[145%] truncate block max-w-full"
                   title={chan.channel.name}
                 >
                   {chan.channel.name}
@@ -159,7 +161,7 @@ const ChannelCard: React.FC<{ channels: NonNullable<Dashboard["channelHealth"]>;
 
               <div className="flex flex-col items-start gap-1 flex-1 min-w-0">
                 <span
-                  className={`inline-flex items-center gap-1.5 rounded-[4px] px-2 h-[26px] text-[11px] font-normal leading-[145%] text-[#333333] border ${
+                  className={`inline-flex items-center gap-1.5 rounded-[4px] px-2 h-[26px] text-[11px] font-normal leading-[145%] text-[#333333] border shrink-0 ${
                     connected ? "bg-[#ECFDF5] border-[#A7F3D0]" : "bg-[#FEF3C7] border-[#FDE68A]"
                   }`}
                 >
@@ -170,12 +172,12 @@ const ChannelCard: React.FC<{ channels: NonNullable<Dashboard["channelHealth"]>;
                   )}
                   {connected ? "Connected" : "Needs attention"}
                 </span>
-                <span className="text-[10px] font-normal text-[#666666] leading-[145%]">
+                <span className="text-[10px] font-normal text-[#666666] leading-[145%] truncate max-w-full">
                   {chan.lastSyncAt ? `Last sync: ${relativeTime(chan.lastSyncAt)}` : "Not synced yet"}
                 </span>
               </div>
 
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto min-h-[44px] sm:min-h-0">
                 {chan.openIssues > 0 ? (
                   <div className="flex items-center gap-3">
                     <span className="text-[11px] font-medium text-[#D97706] leading-[145%]">
@@ -204,7 +206,7 @@ const ChannelCard: React.FC<{ channels: NonNullable<Dashboard["channelHealth"]>;
     )}
 
     <div className="flex flex-col gap-1 pt-3">
-      <Link to={ROUTES.MARKETPLACE_HUB} className="text-[12px] font-medium text-[#000000] hover:underline leading-[145%]">
+      <Link to={ROUTES.MARKETPLACE_HUB} className="text-[12px] font-medium text-[#000000] hover:underline leading-[145%] min-h-[44px] sm:min-h-0 inline-flex items-center">
         Manage channels →
       </Link>
       <p className="text-[10px] font-normal text-[#666666] leading-[145%]">

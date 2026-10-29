@@ -16,6 +16,7 @@ import { ReportsCatalogSection } from "./ReportsCatalogSection";
 import { preferredPeriod } from "@/lib/preferences";
 import { COMPARE_LABELS, RANGE_PRESETS, dateKeyInZone, defaultOverviewPreset, useOverviewUrlState } from "./overviewRange";
 import { overviewCsv } from "./overviewCsv";
+import { cn } from "@/utils/cn";
 
 const FIELD = "rounded-lg border border-border bg-background px-3 py-1.5 font-medium text-foreground";
 
@@ -63,11 +64,11 @@ export function ReportsOverviewView({ catalog, catalogLoading, catalogError, onR
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-3 text-xs shadow-2xs">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 rounded-xl border border-border bg-card p-3 text-xs shadow-2xs">
         <div className="flex flex-wrap items-center gap-2">
-          <div className="inline-flex items-center gap-2">
-            <Calendar className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
-            <select aria-label="Date range" value={state.preset} onChange={(e) => setPreset(e.target.value as (typeof RANGE_PRESETS)[number]["id"])} className={FIELD}>
+          <div className="inline-flex items-center gap-2 w-full sm:w-auto">
+            <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" aria-hidden />
+            <select aria-label="Date range" value={state.preset} onChange={(e) => setPreset(e.target.value as (typeof RANGE_PRESETS)[number]["id"])} className={cn(FIELD, "w-full sm:w-auto min-h-[38px] sm:min-h-0")}>
               {RANGE_PRESETS.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.label}
@@ -77,14 +78,14 @@ export function ReportsOverviewView({ catalog, catalogLoading, catalogError, onR
           </div>
 
           {state.preset === "custom" && (
-            <div className="inline-flex items-center gap-1.5">
-              <input type="date" aria-label="From date" value={state.from} max={today} onChange={(e) => setCustom(e.target.value, state.to)} className={FIELD} />
+            <div className="flex flex-wrap items-center gap-1.5 w-full sm:w-auto">
+              <input type="date" aria-label="From date" value={state.from} max={today} onChange={(e) => setCustom(e.target.value, state.to)} className={cn(FIELD, "flex-1 sm:flex-initial min-w-0 min-h-[38px] sm:min-h-0")} />
               <span className="text-muted-foreground">to</span>
-              <input type="date" aria-label="To date" value={state.to} max={today} onChange={(e) => setCustom(state.from, e.target.value)} className={FIELD} />
+              <input type="date" aria-label="To date" value={state.to} max={today} onChange={(e) => setCustom(state.from, e.target.value)} className={cn(FIELD, "flex-1 sm:flex-initial min-w-0 min-h-[38px] sm:min-h-0")} />
             </div>
           )}
 
-          <select aria-label="Compare period" value={state.compare} onChange={(e) => setCompare(e.target.value as (typeof OVERVIEW_COMPARES)[number])} className={FIELD}>
+          <select aria-label="Compare period" value={state.compare} onChange={(e) => setCompare(e.target.value as (typeof OVERVIEW_COMPARES)[number])} className={cn(FIELD, "w-full sm:w-auto min-h-[38px] sm:min-h-0")}>
             {OVERVIEW_COMPARES.map((c) => (
               <option key={c} value={c}>
                 {COMPARE_LABELS[c]}
@@ -93,11 +94,11 @@ export function ReportsOverviewView({ catalog, catalogLoading, catalogError, onR
           </select>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center justify-between md:justify-end gap-3 pt-2 md:pt-0 border-t md:border-t-0 border-border">
           <span className="font-mono text-[11px] text-muted-foreground">
             {state.problem ? "No dates chosen" : `${state.from} to ${state.to}`} · {currency} · {timezone}
           </span>
-          <Button variant="outline" size="sm" className="gap-1.5 text-xs font-semibold" disabled={!data} onClick={exportCsv}>
+          <Button variant="outline" size="sm" className="w-full sm:w-auto h-10 sm:h-8 gap-1.5 text-xs font-semibold" disabled={!data} onClick={exportCsv}>
             <Download className="h-3.5 w-3.5" aria-hidden />
             Export overview
           </Button>
@@ -110,7 +111,7 @@ export function ReportsOverviewView({ catalog, catalogLoading, catalogError, onR
         </div>
       ) : kpis.isLoading ? (
         <div role="status" aria-label="Loading the overview" className="space-y-4">
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
             {[0, 1, 2, 3, 4].map((i) => (
               <div key={i} className="h-28 animate-pulse rounded-xl bg-muted" />
             ))}

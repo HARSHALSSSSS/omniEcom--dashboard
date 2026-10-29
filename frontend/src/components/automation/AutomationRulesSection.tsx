@@ -99,8 +99,8 @@ export function AutomationRulesSection({
           <p className="text-xs text-muted-foreground">Define how your commerce operations respond to business events across connected channels.</p>
         </div>
 
-        <div className="flex shrink-0 flex-wrap items-center gap-2.5">
-          <div className="relative">
+        <div className="flex w-full sm:w-auto shrink-0 flex-wrap items-center gap-2 sm:gap-2.5">
+          <div className="relative w-full sm:w-auto flex-1 sm:flex-initial">
             <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <input
               type="text"
@@ -108,11 +108,11 @@ export function AutomationRulesSection({
               placeholder="Search rules by name, event, action..."
               value={searchQuery}
               onChange={(e) => onSearchChange?.(e.target.value)}
-              className="h-8 w-60 rounded-md border border-border bg-background pl-8 pr-3 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+              className="h-10 sm:h-8 w-full sm:w-48 md:w-60 rounded-md border border-border bg-background pl-8 pr-3 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
 
-          <Button size="sm" variant={filterRailOpen ? "secondary" : "outline"} onClick={() => setFilterRailOpen((v) => !v)} className="gap-1.5 text-xs font-medium">
+          <Button size="sm" variant={filterRailOpen ? "secondary" : "outline"} onClick={() => setFilterRailOpen((v) => !v)} className="h-10 sm:h-8 gap-1.5 text-xs font-medium flex-1 sm:flex-initial cursor-pointer">
             <SlidersHorizontal className="h-3.5 w-3.5" />
             <span>Filters</span>
             {activeFilterCount > 0 && <span className="py-0.2 rounded-full bg-muted-foreground/15 px-1.5 text-[10px] font-bold">{activeFilterCount}</span>}
@@ -123,7 +123,7 @@ export function AutomationRulesSection({
             onClick={onCreateRule}
             disabled={!canWrite}
             title={canWrite ? undefined : WRITE_REASON}
-            className="gap-1.5 bg-neutral-900 text-xs font-semibold text-white hover:bg-neutral-800 dark:bg-white dark:text-neutral-900"
+            className="h-10 sm:h-8 gap-1.5 bg-neutral-900 text-xs font-semibold text-white hover:bg-neutral-800 dark:bg-white dark:text-neutral-900 flex-1 sm:flex-initial cursor-pointer"
           >
             <Plus className="h-3.5 w-3.5" />
             Create Rule
@@ -176,7 +176,7 @@ export function AutomationRulesSection({
           </div>
         </div>
 
-        <div className="rounded-xl border border-border bg-card p-3.5 shadow-2xs">
+        <div className="col-span-2 sm:col-span-1 rounded-xl border border-border bg-card p-3.5 shadow-2xs">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">DRAFT / PAUSED</span>
             <Pause className="h-3.5 w-3.5 text-muted-foreground" />
@@ -206,19 +206,19 @@ export function AutomationRulesSection({
         )}
 
         <div className="w-full min-w-0 flex-1 space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-muted-foreground">
             <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
               VIEWING {formatNumber(apiRules.length)} OF {formatNumber(matchingCount)} RULES
             </span>
 
-            <div className="flex items-center gap-3">
-              <select aria-label="Sort rules" value={sort} onChange={(e) => onSort(e.target.value as RuleSort)} className="rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <select aria-label="Sort rules" value={sort} onChange={(e) => onSort(e.target.value as RuleSort)} className="h-9 sm:h-8 rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground">
                 <option value="name">Sorted by Name</option>
                 <option value="lastRun">Sorted by Last run</option>
                 <option value="runs">Sorted by Runs</option>
               </select>
 
-              <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={() => downloadJson("automation-rules.json", allRules)}>
+              <Button size="sm" variant="outline" className="h-9 sm:h-8 gap-1.5 text-xs cursor-pointer" onClick={() => downloadJson("automation-rules.json", allRules)}>
                 <Download className="h-3.5 w-3.5" />
                 Export Config
               </Button>

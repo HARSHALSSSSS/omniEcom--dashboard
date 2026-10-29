@@ -33,15 +33,15 @@ export const FinancialPulseBar: React.FC<FinancialPulseBarProps> = ({ waterfall:
 
   return (
     <div className="pt-1 pb-2">
-      <div className="flex items-center justify-between pb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 pb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
         <span>FINANCIAL PULSE</span>
         <span className="font-normal normal-case text-muted-foreground/80">{w ? `${w.range.from} to ${w.range.to} · ${w.ordersAnalysed} orders` : "Loading..."}</span>
       </div>
 
-      <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4 md:grid-cols-8">
+      <div className="grid grid-cols-2 gap-x-4 sm:gap-x-6 gap-y-4 sm:grid-cols-4 lg:grid-cols-8">
         {kpis.map((kpi) => (
-          <div key={kpi.label} className="space-y-0.5">
-            <div className={`text-xl font-bold tracking-tight ${kpi.highlight ? "text-foreground" : "text-foreground"}`}>{kpi.value}</div>
+          <div key={kpi.label} className="space-y-0.5 min-w-0">
+            <div className={`text-lg sm:text-xl font-bold tracking-tight break-words sm:break-normal ${kpi.highlight ? "text-foreground" : "text-foreground"}`}>{kpi.value}</div>
             <div className="text-[11px] leading-tight text-muted-foreground">{kpi.label}</div>
             {kpi.note && <div className="text-[10px] leading-tight text-muted-foreground/80">{kpi.note}</div>}
           </div>

@@ -180,7 +180,7 @@ export function VariantGridTable({ page, sort, onSort, selected, onToggle, onTog
         </div>
       </div>
 
-      <div className="w-full box-border flex flex-row justify-between items-center px-4 py-3 border-t border-[#EAEAEA] bg-white text-[12px]">
+      <div className="w-full box-border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-0 px-4 py-3 border-t border-[#EAEAEA] bg-white text-[12px]">
         <span className="text-[#666666]" aria-live="polite">
           Showing {formatNumber(from)}–{formatNumber(to)} of {formatNumber(page.total)} {page.total === 1 ? "variant" : "variants"}
         </span>
@@ -189,18 +189,18 @@ export function VariantGridTable({ page, sort, onSort, selected, onToggle, onTog
             type="button"
             disabled={page.page <= 1}
             onClick={() => onPage(page.page - 1)}
-            className="box-border flex flex-row justify-center items-center px-4 h-[30px] bg-[#FFFFFF] border border-[#666666] rounded-[8px] text-[12px] font-semibold text-[#000000] cursor-pointer hover:bg-[#F5F5F5] disabled:bg-[#F5F5F5] disabled:border-[#EAEAEA] disabled:text-[#666666] disabled:cursor-not-allowed disabled:opacity-60"
+            className="box-border flex flex-row justify-center items-center px-4 min-h-[44px] sm:min-h-[30px] h-auto sm:h-[30px] bg-[#FFFFFF] border border-[#666666] rounded-[8px] text-[12px] font-semibold text-[#000000] cursor-pointer hover:bg-[#F5F5F5] disabled:bg-[#F5F5F5] disabled:border-[#EAEAEA] disabled:text-[#666666] disabled:cursor-not-allowed disabled:opacity-60"
           >
             Previous
           </button>
-          <div aria-current="page" className="flex flex-row justify-center items-center min-w-7 h-7 px-2 bg-[#F5F5F5] rounded-[4px] text-[11px] font-medium text-[#000000]">
+          <div aria-current="page" className="flex flex-row justify-center items-center min-w-7 min-h-[44px] sm:min-h-7 h-auto sm:h-7 px-2 bg-[#F5F5F5] rounded-[4px] text-[11px] font-medium text-[#000000]">
             {page.page} / {Math.max(page.pages, 1)}
           </div>
           <button
             type="button"
             disabled={page.page >= page.pages}
             onClick={() => onPage(page.page + 1)}
-            className="box-border flex flex-row justify-center items-center px-4 h-[30px] bg-[#FFFFFF] border border-[#666666] rounded-[8px] text-[12px] font-semibold text-[#000000] cursor-pointer hover:bg-[#F5F5F5] disabled:bg-[#F5F5F5] disabled:border-[#EAEAEA] disabled:text-[#666666] disabled:cursor-not-allowed disabled:opacity-60"
+            className="box-border flex flex-row justify-center items-center px-4 min-h-[44px] sm:min-h-[30px] h-auto sm:h-[30px] bg-[#FFFFFF] border border-[#666666] rounded-[8px] text-[12px] font-semibold text-[#000000] cursor-pointer hover:bg-[#F5F5F5] disabled:bg-[#F5F5F5] disabled:border-[#EAEAEA] disabled:text-[#666666] disabled:cursor-not-allowed disabled:opacity-60"
           >
             Next
           </button>

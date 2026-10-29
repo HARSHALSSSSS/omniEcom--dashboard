@@ -46,7 +46,7 @@ interface TrackingSectionProps {
 
 function Stage({ label, count, done }: { label: string; count: number | undefined; done?: boolean }) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex shrink-0 items-center gap-2">
       {done ? (
         <CheckCircle2 className="h-4 w-4 stroke-[2] text-[#16A34A]" aria-hidden />
       ) : (
@@ -62,9 +62,9 @@ function Stage({ label, count, done }: { label: string; count: number | undefine
 
 function Connector() {
   return (
-    <div className="mx-6 flex flex-1 items-center justify-center" aria-hidden>
+    <div className="mx-3 sm:mx-6 flex flex-1 min-w-[28px] sm:min-w-[40px] items-center justify-center" aria-hidden>
       <div className="h-[1px] w-full bg-[#EAEAEA]" />
-      <ArrowRight className="ml-4 h-3.5 w-3.5 shrink-0 stroke-[1.5] text-[#666666]" />
+      <ArrowRight className="ml-2 sm:ml-4 h-3.5 w-3.5 shrink-0 stroke-[1.5] text-[#666666]" />
     </div>
   );
 }
@@ -116,7 +116,7 @@ export function TrackingSection(props: TrackingSectionProps) {
         </div>
       )}
 
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-[16px] font-semibold text-black">Tracking</h2>
           <p className="text-[11px] text-[#666666]">Dispatched shipments and what their carriers last reported · connector support must be verified</p>
@@ -126,14 +126,14 @@ export function TrackingSection(props: TrackingSectionProps) {
           onClick={() => run(undefined, "all")}
           disabled={!canWrite || sync.isPending}
           title={canWrite ? undefined : NO_WRITE_REASON}
-          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#EAEAEA] bg-white px-3.5 text-[12px] font-medium text-black shadow-sm transition-colors hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex h-9 sm:h-8 min-h-[36px] sm:min-h-0 self-start sm:self-auto items-center gap-1.5 rounded-lg border border-[#EAEAEA] bg-white px-3.5 text-[12px] font-medium text-black shadow-sm transition-colors hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-60"
         >
           <RefreshCw className={cn("h-3.5 w-3.5 stroke-[1.75] text-[#666666]", retrying === "all" && "animate-spin")} />
           <span>{retrying === "all" ? "Syncing..." : "Sync Tracking"}</span>
         </button>
       </div>
 
-      <div className="flex items-center justify-between border-y border-[#EAEAEA] px-1 py-3.5 text-[12px]">
+      <div className="flex items-center justify-between border-y border-[#EAEAEA] px-1 py-3.5 text-[12px] overflow-x-auto no-scrollbar sm:overflow-visible">
         <Stage label="Dispatched" count={stages?.dispatched} />
         <Connector />
         <Stage label="In Transit" count={stages?.inTransit} />
@@ -238,7 +238,7 @@ export function TrackingSection(props: TrackingSectionProps) {
 
       {active && (
         <div className="animate-in fade-in relative space-y-2.5 rounded-lg border border-l-4 border-neutral-200/40 border-l-[#DC2626] bg-[#FFF8F8] p-3.5 text-[11px] shadow-sm duration-200" role="alert">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2">
               <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full border border-[#DC2626] text-[9px] font-bold text-[#DC2626]" aria-hidden>
                 !
@@ -281,7 +281,7 @@ export function TrackingSection(props: TrackingSectionProps) {
                   onClick={() => run([active.shipmentId], active.shipmentId)}
                   disabled={!canWrite || sync.isPending}
                   title={canWrite ? undefined : NO_WRITE_REASON}
-                  className="inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-lg border border-[#EAEAEA] bg-white px-3 text-[11px] font-medium text-black shadow-sm transition-colors hover:bg-neutral-50 disabled:opacity-60"
+                  className="inline-flex h-8 sm:h-7 min-h-[34px] sm:min-h-0 cursor-pointer items-center gap-1.5 rounded-lg border border-[#EAEAEA] bg-white px-3 text-[11px] font-medium text-black shadow-sm transition-colors hover:bg-neutral-50 disabled:opacity-60"
                 >
                   <RefreshCw className={cn("h-3 w-3 stroke-[1.75] text-[#666666]", retrying === active.shipmentId && "animate-spin")} />
                   <span>{retrying === active.shipmentId ? "Retrying..." : "Retry"}</span>

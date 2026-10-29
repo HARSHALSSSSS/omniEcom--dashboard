@@ -16,7 +16,7 @@ export const MarketplaceHubEmptyState: React.FC<MarketplaceHubEmptyStateProps> =
   return (
     <div className="w-full">
       {/* Centered Empty State Box */}
-      <div className="w-full border border-[#EAEAEA] rounded-2xl bg-white p-16 flex flex-col items-center justify-center text-center space-y-5 min-h-[420px]">
+      <div className="w-full border border-[#EAEAEA] rounded-2xl bg-white p-6 sm:p-10 md:p-16 flex flex-col items-center justify-center text-center space-y-5 min-h-[360px] sm:min-h-[420px]">
         {/* Plug Icon Container */}
         <div className="w-10 h-10 rounded-xl bg-[#F5F5F5] border border-[#EAEAEA] flex items-center justify-center text-black">
           <Plug className="w-4 h-4 stroke-[1.8]" />
@@ -33,18 +33,18 @@ export const MarketplaceHubEmptyState: React.FC<MarketplaceHubEmptyStateProps> =
         </div>
 
         {/* Action Buttons */}
-        <div className="flex items-center gap-3 pt-1">
+        <div className="flex flex-wrap items-center justify-center gap-3 pt-1 w-full sm:w-auto">
           <button
             type="button"
             onClick={onAddChannel}
-            className="h-9 px-5 rounded-lg bg-black text-white text-[13px] font-semibold hover:bg-neutral-800 transition-colors cursor-pointer"
+            className="h-10 sm:h-9 px-5 rounded-lg bg-black text-white text-[13px] font-semibold hover:bg-neutral-800 transition-colors cursor-pointer w-full sm:w-auto"
           >
             Add channel
           </button>
           <button
             type="button"
             onClick={onBrowseConnectors}
-            className="h-9 px-5 rounded-lg border border-[#BDBDBD] text-[13px] font-semibold text-black hover:bg-neutral-50 transition-colors cursor-pointer"
+            className="h-10 sm:h-9 px-5 rounded-lg border border-[#BDBDBD] text-[13px] font-semibold text-black hover:bg-neutral-50 transition-colors cursor-pointer w-full sm:w-auto"
           >
             Browse connectors
           </button>

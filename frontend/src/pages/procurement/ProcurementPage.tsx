@@ -141,24 +141,26 @@ export default function ProcurementPage() {
 
       {/* Main Tab Navigation Bar */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-1">
-        <div role="tablist" aria-label="Procurement sections" className="flex items-center gap-6">
-          {displayedTabs.map((t) => (
-            <button
-              key={t}
-              type="button"
-              role="tab"
-              aria-selected={tab === t}
-              onClick={() => update({ tab: t })}
-              className={cn(
-                "relative pb-2 text-sm font-medium transition-colors",
-                tab === t
-                  ? "font-semibold text-foreground after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {TAB_LABEL[t]}
-            </button>
-          ))}
+        <div className="max-w-full overflow-x-auto pb-1 sm:pb-0">
+          <div role="tablist" aria-label="Procurement sections" className="flex items-center gap-4 sm:gap-6">
+            {displayedTabs.map((t) => (
+              <button
+                key={t}
+                type="button"
+                role="tab"
+                aria-selected={tab === t}
+                onClick={() => update({ tab: t })}
+                className={cn(
+                  "relative pb-2 text-sm font-medium transition-colors shrink-0 whitespace-nowrap",
+                  tab === t
+                    ? "font-semibold text-foreground after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {TAB_LABEL[t]}
+              </button>
+            ))}
+          </div>
         </div>
         <span className="text-xs text-muted-foreground">Nothing is sent to a supplier until you approve a purchase order</span>
       </div>

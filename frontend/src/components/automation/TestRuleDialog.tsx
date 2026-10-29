@@ -51,7 +51,7 @@ export function TestRuleDialog({ rule, catalog, onClose }: Props) {
   const lines = rule ? conditionLines(rule) : [];
   return (
     <Dialog open={rule !== null} onOpenChange={(o) => !o && !test.isPending && onClose()}>
-      <DialogContent className="max-h-[92vh] max-w-2xl overflow-y-auto">
+      <DialogContent className="max-h-[92vh] max-w-2xl overflow-y-auto w-[95vw] sm:w-full p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle>Test rule{rule ? `: ${rule.name}` : ""}</DialogTitle>
           <DialogDescription>A dry run. Enter what the event would carry and see whether the rule would fire. Nothing is created or changed.</DialogDescription>
@@ -97,11 +97,11 @@ export function TestRuleDialog({ rule, catalog, onClose }: Props) {
             )}
           </div>
         )}
-        <DialogFooter className="gap-2 sm:gap-2">
-          <Button type="button" variant="outline" disabled={test.isPending} onClick={onClose}>
+        <DialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+          <Button type="button" variant="outline" className="h-10 sm:h-9 cursor-pointer" disabled={test.isPending} onClick={onClose}>
             Close
           </Button>
-          <Button type="button" loading={test.isPending} onClick={run}>
+          <Button type="button" className="h-10 sm:h-9 cursor-pointer" loading={test.isPending} onClick={run}>
             Run test
           </Button>
         </DialogFooter>

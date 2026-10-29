@@ -67,7 +67,7 @@ export function ProposalDetailReviewCard({
           </p>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-3 sm:gap-4">
           <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_TONE[p.status]}`}>{STATUS_LABELS[p.status]}</span>
 
           {totalCount > 1 && (
@@ -98,7 +98,7 @@ export function ProposalDetailReviewCard({
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left">
+            <table className="w-full min-w-[440px] text-xs text-left">
               <thead>
                 <tr className="border-b border-neutral-200 text-muted-foreground font-medium">
                   <th className="pb-2 font-medium">Per unit · INR, excluding tax</th>
@@ -231,8 +231,8 @@ export function ProposalDetailReviewCard({
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
-          <Button variant="outline" size="sm" disabled title="Proposals cannot be edited: reject it and generate a new one" className="text-xs h-9 px-4 font-semibold">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <Button variant="outline" size="sm" disabled title="Proposals cannot be edited: reject it and generate a new one" className="text-xs h-9 px-4 font-semibold w-full sm:w-auto">
             Edit proposal
           </Button>
           <Button
@@ -241,7 +241,7 @@ export function ProposalDetailReviewCard({
             onClick={onRejectProposal}
             disabled={isSubmitting || approveBlocked}
             title={blockReason}
-            className="text-xs h-9 px-4 font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+            className="text-xs h-9 px-4 font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 w-full sm:w-auto"
           >
             Reject proposal
           </Button>
@@ -250,7 +250,7 @@ export function ProposalDetailReviewCard({
             onClick={onApproveProposal}
             disabled={isSubmitting || approveBlocked}
             title={blockReason}
-            className="bg-black text-white hover:bg-neutral-800 text-xs h-9 px-4 font-semibold"
+            className="bg-black text-white hover:bg-neutral-800 text-xs h-9 px-4 font-semibold w-full sm:w-auto"
           >
             Approve proposal
           </Button>

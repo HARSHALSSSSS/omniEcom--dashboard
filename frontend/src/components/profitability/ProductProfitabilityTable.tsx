@@ -13,7 +13,7 @@ const STATUS_CLASS: Record<string, string> = {
 };
 const SORT_LABEL: Record<ProductSort, string> = { revenue: "Sort: revenue", contribution: "Sort: contribution", margin: "Sort: margin", units: "Sort: units sold" };
 
-const FIELD = "h-8 rounded-md border border-border bg-background px-2.5 text-xs font-medium text-foreground";
+const FIELD = "h-9 sm:h-8 w-full sm:w-auto rounded-md border border-border bg-background px-2.5 text-xs font-medium text-foreground";
 
 interface ProductProfitabilityTableProps {
   page: ProductProfitPage | undefined;
@@ -45,19 +45,19 @@ export const ProductProfitabilityTable: React.FC<ProductProfitabilityTableProps>
 
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-card shadow-xs">
-      <div className="border-b border-border/70 p-6">
-        <div className="flex items-start justify-between">
+      <div className="border-b border-border/70 p-4 sm:p-6">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-1 sm:gap-4">
           <div>
             <h2 className="text-base font-semibold text-foreground">Product Profitability</h2>
             <p className="mt-0.5 text-xs text-muted-foreground">{filtered ? "Filtered products" : "All products"} · {query.marketplace ? (marketplaces.find((m) => m.code === query.marketplace)?.label ?? query.marketplace) : "all marketplaces"}</p>
           </div>
-          <span className="text-xs font-medium text-muted-foreground">{rangeLabel}</span>
+          <span className="text-xs font-medium text-muted-foreground shrink-0">{rangeLabel}</span>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center gap-2.5">
-          <div className="relative min-w-[200px] max-w-xs flex-1">
+        <div className="mt-4 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2.5">
+          <div className="relative w-full sm:min-w-[200px] sm:max-w-xs sm:flex-1">
             <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
-            <input type="text" aria-label="Search product or SKU" placeholder="Search product / SKU" value={text} onChange={(e) => setText(e.target.value)} className="h-8 w-full rounded-md border border-border bg-background pl-8 pr-3 text-xs focus:outline-hidden focus:ring-1 focus:ring-ring" />
+            <input type="text" aria-label="Search product or SKU" placeholder="Search product / SKU" value={text} onChange={(e) => setText(e.target.value)} className="h-9 sm:h-8 w-full rounded-md border border-border bg-background pl-8 pr-3 text-xs focus:outline-hidden focus:ring-1 focus:ring-ring" />
           </div>
 
           <select aria-label="Marketplace" className={FIELD} value={query.marketplace ?? ""} onChange={(e) => onQuery({ mk: e.target.value || null })}>
@@ -87,7 +87,7 @@ export const ProductProfitabilityTable: React.FC<ProductProfitabilityTableProps>
           </select>
 
           {filtered && (
-            <button type="button" onClick={onClear} className="h-8 rounded-md px-2.5 text-xs font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline">
+            <button type="button" onClick={onClear} className="h-9 sm:h-8 rounded-md px-2.5 text-xs font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline text-left sm:text-center">
               Clear filters
             </button>
           )}
@@ -111,8 +111,8 @@ export const ProductProfitabilityTable: React.FC<ProductProfitabilityTableProps>
           <p className="text-xs text-muted-foreground">{filtered ? "Try another search, marketplace or margin." : "Products appear here once they have orders in the dates you picked."}</p>
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+        <div className="overflow-x-auto [-webkit-overflow-scrolling:touch]">
+          <table className="w-full min-w-[780px] text-left text-xs">
             <thead>
               <tr className="border-b border-border/80 bg-muted/40 text-[11px] font-medium text-muted-foreground">
                 <th className="px-4 py-2.5 font-medium">Product</th>
@@ -174,21 +174,21 @@ export const ProductProfitabilityTable: React.FC<ProductProfitabilityTableProps>
         </div>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 bg-muted/20 p-4 text-[11px] text-muted-foreground">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-t border-border/60 bg-muted/20 p-4 text-[11px] text-muted-foreground">
         <span>
           {page ? `${rows.length} of ${page.groupsTotal} products` : ""}
           {page && page.statusCounts.unknown > 0 ? ` · ${page.statusCounts.unknown} without a complete cost picture show dashes` : ""}
           {page?.truncated ? " · more orders than the analysis limit: narrow the dates" : ""}
         </span>
         {page && page.pages > 1 && (
-          <span className="inline-flex items-center gap-2">
-            <Button size="sm" variant="outline" className="h-7 text-xs" disabled={page.page <= 1} onClick={() => onPage(page.page - 1)}>
+          <span className="inline-flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-start">
+            <Button size="sm" variant="outline" className="h-8 sm:h-7 text-xs" disabled={page.page <= 1} onClick={() => onPage(page.page - 1)}>
               Previous
             </Button>
             <span>
               Page {page.page} of {page.pages}
             </span>
-            <Button size="sm" variant="outline" className="h-7 text-xs" disabled={page.page >= page.pages} onClick={() => onPage(page.page + 1)}>
+            <Button size="sm" variant="outline" className="h-8 sm:h-7 text-xs" disabled={page.page >= page.pages} onClick={() => onPage(page.page + 1)}>
               Next
             </Button>
           </span>

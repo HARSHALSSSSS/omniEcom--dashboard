@@ -92,7 +92,7 @@ export function ShipmentsTable({ rows, selected, canWrite, refreshing, labelBusy
                   title={s.labelAvailable ? undefined : s.status === "cancelled" ? "The shipment was cancelled: its label is void." : "This shipment has no label yet."}
                   aria-label={`Print label ${s.awb ?? s.number}`}
                   onClick={() => onLabel(s.id)}
-                  className="h-7 rounded-lg border border-border bg-card px-3 text-xs font-semibold hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                  className="h-8 sm:h-7 min-h-[34px] sm:min-h-0 rounded-lg border border-border bg-card px-3 text-xs font-semibold hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {labelBusyId === s.id ? "Preparing..." : "Print Label"}
                 </button>

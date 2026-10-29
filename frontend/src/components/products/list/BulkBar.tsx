@@ -12,7 +12,7 @@ interface BulkBarProps {
 }
 
 const BUTTON =
-  "box-border flex flex-row justify-center items-center px-4 h-[30px] bg-[#FFFFFF] rounded-[8px] text-[12px] font-semibold text-[#000000] hover:bg-[#EAEAEA] transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-[#FFFFFF]";
+  "box-border flex flex-row justify-center items-center px-4 h-[30px] min-h-[38px] sm:min-h-[30px] bg-[#FFFFFF] rounded-[8px] text-[12px] font-semibold text-[#000000] hover:bg-[#EAEAEA] transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-[#FFFFFF]";
 
 /** The toolbar over the grid while products are selected. Every action is one POST /products/bulk-actions. */
 export function BulkBar({ count, canWrite, busy, onAction, onEdit, onClear }: BulkBarProps) {
@@ -20,7 +20,7 @@ export function BulkBar({ count, canWrite, busy, onAction, onEdit, onClear }: Bu
   const off = busy || !canWrite;
   return (
     <div className="w-full flex flex-col items-start gap-1">
-      <div role="toolbar" aria-label="Bulk actions" className="w-full box-border flex flex-row flex-wrap items-center px-3 min-h-[44px] bg-[#F5F5F5] rounded-[8px] gap-2 transition-all">
+      <div role="toolbar" aria-label="Bulk actions" className="w-full box-border flex flex-row flex-wrap items-center px-3 py-2 sm:py-0 min-h-[44px] bg-[#F5F5F5] rounded-[8px] gap-2 transition-all">
         <span className="text-[12px] font-semibold text-[#000000] min-w-[140px]" aria-live="polite">
           {count} {count === 1 ? "product" : "products"} selected
         </span>

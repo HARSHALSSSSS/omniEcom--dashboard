@@ -27,7 +27,7 @@ function FilterSelect({
         value={value}
         disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
-        className={`appearance-none box-border h-[34px] pl-2.5 pr-8 bg-[#FFFFFF] border rounded-[8px] text-[12px] font-medium text-[#000000] transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#000000] ${
+        className={`appearance-none box-border min-h-[44px] sm:min-h-[34px] h-auto sm:h-[34px] pl-2.5 pr-8 bg-[#FFFFFF] border rounded-[8px] text-[12px] font-medium text-[#000000] transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#000000] ${
           active ? "border-[#000000]" : "border-[#BDBDBD]"
         }`}
       >
@@ -86,7 +86,7 @@ export function VariantToolbar({ params, header, onSearch, onOption, onChannel, 
   return (
     <>
       <div className="w-full flex flex-col sm:flex-row items-center gap-2">
-        <label className="flex-1 w-full box-border flex flex-row items-center px-3 h-9 bg-[#F5F5F5] rounded-[8px] gap-2 focus-within:outline focus-within:outline-2 focus-within:outline-[#000000]">
+        <label className="flex-1 w-full box-border flex flex-row items-center px-3 min-h-[44px] sm:min-h-9 h-auto sm:h-9 bg-[#F5F5F5] rounded-[8px] gap-2 focus-within:outline focus-within:outline-2 focus-within:outline-[#000000]">
           <Search className="h-4 w-4 text-[#666666] shrink-0" aria-hidden />
           <input
             type="search"
@@ -131,7 +131,7 @@ export function VariantToolbar({ params, header, onSearch, onOption, onChannel, 
           onChange={onInventory}
         />
         {anyFilter && (
-          <button type="button" onClick={onClear} className="h-[34px] px-2 text-[12px] font-medium text-[#666666] underline hover:text-[#000000] cursor-pointer">
+          <button type="button" onClick={onClear} className="min-h-[44px] sm:min-h-[34px] h-auto sm:h-[34px] px-2 text-[12px] font-medium text-[#666666] underline hover:text-[#000000] cursor-pointer flex items-center">
             Clear filters
           </button>
         )}

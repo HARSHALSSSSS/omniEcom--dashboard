@@ -129,7 +129,7 @@ export function RuleFormDialog({ open, onOpenChange, rule, catalog, catalogLoadi
   return (
     <>
       <Dialog open={open} onOpenChange={requestClose}>
-        <DialogContent className="max-h-[92vh] max-w-3xl overflow-y-auto">
+        <DialogContent className="max-h-[92vh] max-w-3xl overflow-y-auto w-[95vw] sm:w-full p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>{editing ? "Edit rule" : "New automation rule"}</DialogTitle>
             <DialogDescription>When something happens, and your conditions hold, do one thing. Rules start as drafts and ask for approval until you say otherwise.</DialogDescription>
@@ -139,7 +139,7 @@ export function RuleFormDialog({ open, onOpenChange, rule, catalog, catalogLoadi
             {conflict && (
               <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-900">
                 <span>This rule was changed by someone else while you were editing.</span>
-                <Button type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={() => void loadLatest()}>
+                <Button type="button" size="sm" variant="outline" className="h-8 sm:h-7 text-xs cursor-pointer" onClick={() => void loadLatest()}>
                   Load latest version
                 </Button>
               </div>
@@ -246,11 +246,11 @@ export function RuleFormDialog({ open, onOpenChange, rule, catalog, catalogLoadi
               </p>
             )}
 
-            <DialogFooter className="gap-2 sm:gap-2">
-              <Button type="button" variant="outline" disabled={busy} onClick={() => requestClose(false)}>
+            <DialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+              <Button type="button" variant="outline" className="h-10 sm:h-9 cursor-pointer" disabled={busy} onClick={() => requestClose(false)}>
                 Cancel
               </Button>
-              <Button type="button" loading={busy} disabled={conflict} onClick={() => void save()}>
+              <Button type="button" className="h-10 sm:h-9 cursor-pointer" loading={busy} disabled={conflict} onClick={() => void save()}>
                 {editing ? "Save changes" : "Save rule"}
               </Button>
             </DialogFooter>

@@ -25,7 +25,7 @@ function Box({ checked, partial, disabled, label, onClick }: { checked: boolean;
       disabled={disabled}
       title={disabled ? READ_ONLY_REASON : undefined}
       onClick={onClick}
-      className={`w-4 h-4 rounded-[3px] border flex items-center justify-center shrink-0 transition-colors ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"} ${
+      className={`relative w-4 h-4 rounded-[3px] border flex items-center justify-center shrink-0 transition-colors before:content-[''] before:absolute before:-inset-2.5 before:sm:inset-0 ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"} ${
         checked || partial ? "bg-[#000000] border-[#000000]" : "bg-white border-[#BDBDBD]"
       }`}
     >
@@ -43,12 +43,13 @@ export function IssueList({ issues, selected, canWrite, onToggle, onToggleAll, o
     <div className="flex flex-col gap-2 w-full">
       <div className="flex flex-row items-center px-4 h-10 gap-3 text-[11px] font-medium leading-[145%] text-[#666666]">
         <Box checked={all} partial={some} disabled={!canWrite} label="Select all issues on this page" onClick={onToggleAll} />
-        <span className="w-[66px] shrink-0">Priority</span>
-        <span className="flex-1 min-w-[280px]">Issue</span>
-        <span className="w-[76px] shrink-0">Area</span>
-        <span className="w-[138px] shrink-0">Impact</span>
-        <span className="w-[102px] shrink-0">Due</span>
-        <span className="w-[142px] shrink-0 text-right">Action</span>
+        <span className="lg:hidden text-[12px] font-medium text-[#666666]">Select all</span>
+        <span className="hidden lg:inline-block w-[66px] shrink-0">Priority</span>
+        <span className="hidden lg:inline-block flex-1 min-w-[280px]">Issue</span>
+        <span className="hidden lg:inline-block w-[76px] shrink-0">Area</span>
+        <span className="hidden lg:inline-block w-[138px] shrink-0">Impact</span>
+        <span className="hidden lg:inline-block w-[102px] shrink-0">Due</span>
+        <span className="hidden lg:inline-block w-[142px] shrink-0 text-right">Action</span>
       </div>
 
       <div className="flex flex-col gap-2">
@@ -61,18 +62,20 @@ export function IssueList({ issues, selected, canWrite, onToggle, onToggleAll, o
               key={item.id}
               data-testid="issue-row"
               style={{ borderColor: style.color, backgroundColor: checked ? "#F3F0FF" : "#FFFFFF" }}
-              className="flex flex-row items-center px-4 py-[18px] gap-3 border rounded-[12px] shadow-[0px_3px_10px_rgba(36,50,75,0.055)] min-h-[88px] transition-all"
+              className="grid grid-cols-[auto_auto_1fr_auto] lg:flex lg:flex-row items-center lg:items-center px-4 py-3.5 lg:py-[18px] gap-x-2.5 sm:gap-x-3 gap-y-2 lg:gap-3 border rounded-[12px] shadow-[0px_3px_10px_rgba(36,50,75,0.055)] min-h-[88px] transition-all w-full"
             >
-              <Box checked={checked} disabled={!canWrite} label={`Select ${item.title}`} onClick={() => onToggle(item.id)} />
+              <div className="order-1 lg:order-none self-center shrink-0">
+                <Box checked={checked} disabled={!canWrite} label={`Select ${item.title}`} onClick={() => onToggle(item.id)} />
+              </div>
 
-              <div className="flex items-center gap-1.5 w-[66px] shrink-0">
+              <div className="flex items-center gap-1.5 order-2 lg:order-none w-auto lg:w-[66px] shrink-0">
                 <span className="h-1 w-1 rounded-full shrink-0" style={{ backgroundColor: style.bullet }} />
                 <span className="text-[12px] font-semibold leading-[145%]" style={{ color: style.color }}>
                   {PRIORITY_LABEL[item.priority]}
                 </span>
               </div>
 
-              <div className="flex flex-col gap-1 flex-1 min-w-[280px] pr-2">
+              <div className="order-5 lg:order-none col-span-full lg:col-span-1 flex flex-col gap-1 w-full lg:flex-1 lg:min-w-[280px] lg:pr-2">
                 <span className="text-[13px] font-semibold text-[#000000] leading-[145%]">{item.title}</span>
                 <span className="text-[12px] font-normal text-[#666666] leading-[145%]">{item.explanation}</span>
                 {(item.status === "in_progress" || item.statusNote) && (
@@ -89,14 +92,28 @@ export function IssueList({ issues, selected, canWrite, onToggle, onToggleAll, o
                 )}
               </div>
 
-              <span className="w-[76px] shrink-0 text-[12px] font-normal text-[#666666] leading-[145%]">{AREA_LABEL[item.area] ?? item.area}</span>
-              <span className="w-[138px] shrink-0 text-[12px] font-normal text-[#666666] leading-[145%]">{item.impact ?? "–"}</span>
-              <span className={`w-[102px] shrink-0 text-[12px] leading-[145%] ${urgent ? "font-medium text-[#000000]" : "font-normal text-[#666666]"}`}>
+              <span className="order-3 lg:order-none w-auto lg:w-[76px] shrink-0 text-[12px] font-normal text-[#666666] leading-[145%]">
+                <span className="lg:hidden text-[#BDBDBD] mr-1.5">·</span>
+                {AREA_LABEL[item.area] ?? item.area}
+              </span>
+
+              <span className="order-6 lg:order-none col-span-2 lg:col-span-1 w-auto lg:w-[138px] shrink-0 text-[12px] font-normal text-[#666666] leading-[145%] truncate">
+                {item.impact ? (
+                  <>
+                    <span className="lg:hidden font-medium text-[#666666] mr-1">Impact:</span>
+                    {item.impact}
+                  </>
+                ) : (
+                  "–"
+                )}
+              </span>
+
+              <span className={`order-4 lg:order-none justify-self-end text-right lg:text-left w-auto lg:w-[102px] shrink-0 text-[12px] leading-[145%] ${urgent ? "font-medium text-[#000000]" : "font-normal text-[#666666]"}`}>
                 {item.status === "snoozed" && item.snoozedUntil ? `Returns ${when(item.snoozedUntil)}` : (item.dueLabel ?? "No deadline")}
               </span>
 
-              <div className="w-[142px] shrink-0 text-right">
-                <button type="button" onClick={() => onOpen(item.id)} className="text-[12px] font-medium text-[#000000] hover:underline cursor-pointer">
+              <div className="order-7 lg:order-none col-span-2 lg:col-span-1 justify-self-end text-right w-auto lg:w-[142px] shrink-0">
+                <button type="button" onClick={() => onOpen(item.id)} className="text-[12px] font-medium text-[#000000] hover:underline cursor-pointer min-h-[44px] sm:min-h-0 inline-flex items-center justify-end">
                   {item.recommendedAction.label ?? "Review"} →
                 </button>
               </div>

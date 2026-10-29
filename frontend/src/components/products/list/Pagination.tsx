@@ -24,18 +24,18 @@ function windowOf(page: number, pages: number): Array<number | "gap"> {
   return out;
 }
 
-const NAV = "box-border flex flex-row justify-center items-center px-4 h-[30px] rounded-[8px] text-[12px] font-semibold border";
+const NAV = "box-border flex flex-row justify-center items-center px-4 h-[30px] min-h-[40px] sm:min-h-[30px] rounded-[8px] text-[12px] font-semibold border";
 
 export function Pagination({ page, pages, total, pageSize, shown, onPage, onPageSize }: PaginationProps) {
   const first = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const last = (page - 1) * pageSize + shown;
   return (
-    <nav aria-label="Pagination" className="w-full flex flex-row flex-wrap justify-between items-center gap-2 min-h-[34px] pt-2">
-      <span className="text-[12px] font-normal leading-[17px] text-[#666666]" aria-live="polite">
+    <nav aria-label="Pagination" className="w-full flex flex-col sm:flex-row justify-between items-center gap-3 sm:gap-2 min-h-[34px] pt-2">
+      <span className="text-[12px] font-normal leading-[17px] text-[#666666] text-center sm:text-left" aria-live="polite">
         Showing {formatNumber(first)}–{formatNumber(last)} of {formatNumber(total)} products
       </span>
 
-      <div className="flex flex-row items-center gap-2">
+      <div className="flex flex-row flex-wrap justify-center sm:justify-end items-center gap-1.5 sm:gap-2 w-full sm:w-auto">
         <button
           type="button"
           disabled={page <= 1}
@@ -57,7 +57,7 @@ export function Pagination({ page, pages, total, pageSize, shown, onPage, onPage
               aria-label={`Page ${n}`}
               aria-current={n === page ? "page" : undefined}
               onClick={() => onPage(n)}
-              className={`flex flex-row justify-center items-center min-w-[28px] h-[28px] px-1 rounded-[4px] text-[12px] font-semibold text-[#000000] ${n === page ? "bg-[#F5F5F5]" : "hover:bg-[#F5F5F5]"}`}
+              className={`flex flex-row justify-center items-center min-w-[36px] sm:min-w-[28px] h-[36px] sm:h-[28px] px-1 rounded-[4px] text-[12px] font-semibold text-[#000000] ${n === page ? "bg-[#F5F5F5]" : "hover:bg-[#F5F5F5]"}`}
             >
               {n}
             </button>
@@ -77,7 +77,7 @@ export function Pagination({ page, pages, total, pageSize, shown, onPage, onPage
           aria-label="Products per page"
           value={pageSize}
           onChange={(e) => onPageSize(Number(e.target.value))}
-          className="px-2.5 h-[34px] bg-[#FFFFFF] border border-[#BDBDBD] rounded-[8px] text-[12px] font-medium text-[#000000]"
+          className="px-2.5 h-[40px] sm:h-[34px] bg-[#FFFFFF] border border-[#BDBDBD] rounded-[8px] text-[12px] font-medium text-[#000000]"
         >
           {PAGE_SIZES.map((n) => (
             <option key={n} value={n}>

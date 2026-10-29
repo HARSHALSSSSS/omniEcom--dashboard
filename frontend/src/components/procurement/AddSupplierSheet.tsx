@@ -202,7 +202,7 @@ export function AddSupplierSheet({ open, onClose, onSaved }: AddSupplierSheetPro
                 </select>
               </Field>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Field id="sheet-sup-city" label="City (optional)">
                   <Input
                     id="sheet-sup-city"
@@ -290,7 +290,7 @@ export function AddSupplierSheet({ open, onClose, onSaved }: AddSupplierSheetPro
                 <p className="text-[11px] text-muted-foreground">Defaults for new purchase orders. You can change them later.</p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Field id="sheet-sup-terms" label="Payment terms">
                   <select
                     id="sheet-sup-terms"
@@ -349,9 +349,9 @@ export function AddSupplierSheet({ open, onClose, onSaved }: AddSupplierSheetPro
 
           </div>
 
-          <div className="flex items-center justify-between border-t border-border bg-background px-6 py-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-t border-border bg-background px-4 sm:px-6 py-4">
             <span className="text-[11px] text-muted-foreground">Saving a supplier does not send a purchase order.</span>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
               <Button type="button" variant="outline" size="sm" onClick={handleClose} disabled={create.isPending}>
                 Cancel
               </Button>

@@ -42,9 +42,9 @@ export function ShippingDrawer({ open, eyebrow, title, subtitle, onClose, childr
         aria-modal="true"
         aria-label={title}
         tabIndex={-1}
-        className="relative z-50 flex h-full w-[440px] max-w-full flex-col bg-white text-[#0A0A0A] shadow-2xl outline-none animate-in slide-in-from-right duration-300"
+        className="relative z-50 flex h-full w-full sm:w-[440px] max-w-full flex-col bg-white text-[#0A0A0A] shadow-2xl outline-none animate-in slide-in-from-right duration-300"
       >
-        <div className="flex items-center justify-between border-b border-[#EAEAEA] px-6 py-4">
+        <div className="flex items-center justify-between border-b border-[#EAEAEA] px-4 sm:px-6 py-4">
           <div>
             <div className="flex items-center gap-2 text-[10px] font-semibold uppercase text-[#666666]">
               <span>DRAWER</span>
@@ -54,12 +54,12 @@ export function ShippingDrawer({ open, eyebrow, title, subtitle, onClose, childr
             <h3 className="mt-1 text-[17px] font-semibold text-black">{title}</h3>
             {subtitle && <p className="text-[11px] text-[#666666]">{subtitle}</p>}
           </div>
-          <button type="button" onClick={onClose} aria-label="Close" className="rounded-md p-1.5 text-[#666666] transition-colors hover:bg-neutral-100 hover:text-black">
+          <button type="button" onClick={onClose} aria-label="Close" className="rounded-md p-2 sm:p-1.5 text-[#666666] transition-colors hover:bg-neutral-100 hover:text-black min-h-[36px] min-w-[36px] flex items-center justify-center">
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5 text-[12px]">{children}</div>
-        {footer && <div className="flex items-center gap-3 border-t border-[#EAEAEA] bg-white px-6 py-4">{footer}</div>}
+        <div className="flex-1 space-y-5 overflow-y-auto px-4 sm:px-6 py-5 text-[12px]">{children}</div>
+        {footer && <div className="flex flex-wrap items-center gap-3 border-t border-[#EAEAEA] bg-white px-4 sm:px-6 py-4">{footer}</div>}
       </div>
     </div>
   );
@@ -112,5 +112,5 @@ export function OptionCard({
   );
 }
 
-export const BTN_PRIMARY = "inline-flex h-9 items-center justify-center rounded-lg bg-black px-5 text-[12px] font-semibold text-white shadow-sm transition-colors hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-60";
-export const BTN_SECONDARY = "inline-flex h-9 items-center justify-center rounded-lg border border-[#EAEAEA] bg-white px-4 text-[12px] font-medium text-black transition-colors hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-60";
+export const BTN_PRIMARY = "inline-flex h-9 min-h-[38px] sm:min-h-0 items-center justify-center rounded-lg bg-black px-5 text-[12px] font-semibold text-white shadow-sm transition-colors hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-60";
+export const BTN_SECONDARY = "inline-flex h-9 min-h-[38px] sm:min-h-0 items-center justify-center rounded-lg border border-[#EAEAEA] bg-white px-4 text-[12px] font-medium text-black transition-colors hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-60";

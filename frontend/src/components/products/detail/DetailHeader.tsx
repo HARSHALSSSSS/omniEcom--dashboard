@@ -8,7 +8,7 @@ import { relative, statusLabel } from "./format";
 import type { ActionState, DetailActions } from "./useDetailActions";
 
 const MENU_ITEM =
-  "w-full text-left px-3 py-2 text-[14px] leading-[20px] font-normal text-[#000000] hover:bg-[#F5F5F5] rounded-[6px] transition-colors cursor-pointer disabled:cursor-not-allowed disabled:text-[#999999] disabled:hover:bg-transparent";
+  "w-full text-left px-3 py-2.5 sm:py-2 text-[14px] leading-[20px] font-normal text-[#000000] hover:bg-[#F5F5F5] rounded-[6px] transition-colors cursor-pointer disabled:cursor-not-allowed disabled:text-[#999999] disabled:hover:bg-transparent min-h-[36px] sm:min-h-0 flex items-center";
 
 /** Master product identity: image, title, status, counts and the primary actions. */
 export function DetailHeader({
@@ -53,10 +53,10 @@ export function DetailHeader({
 
   return (
     <div className="w-full flex flex-col md:flex-row items-start justify-between gap-6 pb-2">
-      <div className="flex flex-row items-center gap-5 min-w-0">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-5 min-w-0 w-full md:w-auto">
         <ProductImage url={overview.primaryImage?.url} alt={product.title} className="w-[100px] h-[100px] rounded-[8px] border border-[#EAEAEA] shrink-0" />
 
-        <div className="flex flex-col items-start gap-1 min-w-0">
+        <div className="flex flex-col items-start gap-1 min-w-0 w-full">
           {product.category ? <span className="text-[10px] font-medium leading-[12px] uppercase text-[#707070]">{product.category.name}</span> : null}
           <h1 className="text-[26px] font-semibold leading-[38px] text-[#000000] tracking-tight break-words max-w-full">{product.title}</h1>
           <div className="flex flex-row flex-wrap items-center gap-3 text-[12px] leading-[17px]">
@@ -71,14 +71,14 @@ export function DetailHeader({
         </div>
       </div>
 
-      <div className="flex flex-col items-end gap-2 shrink-0">
+      <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-2 w-full md:w-auto shrink-0">
         <div className="flex flex-row items-center gap-2">
           <button
             type="button"
             disabled={!state.edit.enabled}
             title={state.edit.enabled ? undefined : state.edit.reason}
             onClick={() => navigate(`${ROUTES.PRODUCTS}/${product.id}/edit`)}
-            className="px-4 h-[36px] bg-[#000000] text-[#FFFFFF] rounded-[8px] text-[12px] font-semibold hover:bg-[#1A1A1A] transition-colors disabled:bg-[#BDBDBD] disabled:cursor-not-allowed"
+            className="px-4 h-[44px] sm:h-[36px] bg-[#000000] text-[#FFFFFF] rounded-[8px] text-[12px] font-semibold hover:bg-[#1A1A1A] transition-colors disabled:bg-[#BDBDBD] disabled:cursor-not-allowed"
           >
             Edit product
           </button>
@@ -88,13 +88,13 @@ export function DetailHeader({
               aria-haspopup="menu"
               aria-expanded={menuOpen}
               onClick={() => setMenuOpen(!menuOpen)}
-              className="px-4 h-[36px] bg-[#FFFFFF] border border-[#666666] text-[#000000] rounded-[8px] text-[12px] font-semibold hover:bg-[#F5F5F5] transition-colors flex items-center gap-1.5 cursor-pointer"
+              className="px-4 h-[44px] sm:h-[36px] bg-[#FFFFFF] border border-[#666666] text-[#000000] rounded-[8px] text-[12px] font-semibold hover:bg-[#F5F5F5] transition-colors flex items-center gap-1.5 cursor-pointer"
             >
               <span>More</span>
               <ChevronDown className="h-3 w-3 text-[#666666]" aria-hidden="true" />
             </button>
             {menuOpen && (
-              <div role="menu" className="absolute right-0 top-[42px] z-50 w-[172px] bg-[#FFFFFF] border border-[#EAEAEA] shadow-[0px_4px_16px_rgba(0,0,0,0.08)] rounded-[10px] p-1.5 flex flex-col">
+              <div role="menu" className="absolute right-0 top-[48px] sm:top-[42px] z-50 w-[172px] bg-[#FFFFFF] border border-[#EAEAEA] shadow-[0px_4px_16px_rgba(0,0,0,0.08)] rounded-[10px] p-1.5 flex flex-col">
                 {item("Duplicate", state.duplicate, actions.duplicate, actions.duplicating)}
                 {item(actions.isArchived ? "Unarchive" : "Archive", state.archive, () => (actions.isArchived ? actions.archiveOrRestore() : actions.setArchiveOpen(true)), actions.archiving)}
                 {item("Export", state.export, actions.exportCsv, actions.exporting)}
@@ -104,7 +104,7 @@ export function DetailHeader({
           </div>
         </div>
         {published ? (
-          <button type="button" onClick={() => onTab("listings")} className="text-[12px] font-semibold text-[#000000] hover:underline cursor-pointer">
+          <button type="button" onClick={() => onTab("listings")} className="text-[12px] font-semibold text-[#000000] hover:underline cursor-pointer min-h-[36px] sm:min-h-0 flex items-center">
             Manage listings
           </button>
         ) : (
@@ -113,7 +113,7 @@ export function DetailHeader({
             disabled={!state.publish.enabled}
             title={state.publish.enabled ? undefined : state.publish.reason}
             onClick={() => actions.setPublishOpen(true)}
-            className="text-[12px] font-semibold text-[#000000] hover:underline cursor-pointer disabled:cursor-not-allowed disabled:text-[#999999] disabled:no-underline"
+            className="text-[12px] font-semibold text-[#000000] hover:underline cursor-pointer disabled:cursor-not-allowed disabled:text-[#999999] disabled:no-underline min-h-[36px] sm:min-h-0 flex items-center"
           >
             Publish product
           </button>

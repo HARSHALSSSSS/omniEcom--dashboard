@@ -25,7 +25,7 @@ interface ProposalDrawerProps {
 export function ProposalDrawer({ proposal: p, canApprove, onClose, onDecide }: ProposalDrawerProps) {
   return (
     <Sheet open={p !== null} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent side="right" className="w-[440px] max-w-full overflow-y-auto">
+      <SheetContent side="right" className="w-[440px] max-w-full overflow-y-auto p-4 sm:p-6">
         {p && (
           <div className="flex flex-col gap-4">
             <SheetHeader className="space-y-1 text-left">
@@ -41,7 +41,7 @@ export function ProposalDrawer({ proposal: p, canApprove, onClose, onDecide }: P
               {p.policyName && <span className="text-[11px] text-muted-foreground">Policy: {p.policyName}</span>}
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 min-[340px]:grid-cols-2 gap-3">
               <Stat label="Current price" value={money(p.currentPriceMinor, p.currency)} />
               <Stat label="Proposed price" value={money(p.proposedPriceMinor, p.currency)} hint={signedBps(p.priceChangeBps)} />
               <Stat
@@ -72,7 +72,7 @@ export function ProposalDrawer({ proposal: p, canApprove, onClose, onDecide }: P
               </p>
             )}
 
-            <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-1.5 text-xs">
+            <dl className="grid grid-cols-1 min-[340px]:grid-cols-[110px_1fr] gap-x-3 gap-y-1.5 text-xs">
               <dt className="text-muted-foreground">Created</dt>
               <dd>{formatDateTime(p.createdAt)}</dd>
               {p.expiresAt && (

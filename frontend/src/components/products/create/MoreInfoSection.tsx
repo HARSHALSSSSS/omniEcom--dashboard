@@ -32,8 +32,8 @@ export function MoreInfoSection({ form, values, options, errors, disabled }: Pro
 
   return (
     <div className="flex flex-col gap-5 w-full">
-      <div className="flex flex-row items-start gap-5 w-full">
-        <div className="flex flex-col gap-1.5 flex-1">
+      <div className="flex flex-col md:flex-row items-start gap-4 md:gap-5 w-full">
+        <div className="flex flex-col gap-1.5 flex-1 min-w-0 w-full md:w-auto">
           <TextField
             id="cp-standardCategory"
             label="Product category"
@@ -52,7 +52,7 @@ export function MoreInfoSection({ form, values, options, errors, disabled }: Pro
           </datalist>
         </div>
 
-        <SelectField id="cp-material" label="Material" className="flex-1" disabled={disabled} empty={!values.material} error={errors.material} {...register("material")}>
+        <SelectField id="cp-material" label="Material" className="flex-1 min-w-0 w-full md:w-auto" disabled={disabled} empty={!values.material} error={errors.material} {...register("material")}>
           <option value="">Select material</option>
           {!materialKnown ? <option value={values.material}>{values.material}</option> : null}
           {(options?.materials ?? []).map((m) => (
@@ -62,7 +62,7 @@ export function MoreInfoSection({ form, values, options, errors, disabled }: Pro
           ))}
         </SelectField>
 
-        <SelectField id="cp-countryOfOrigin" label="Country of origin" className="flex-1" disabled={disabled} empty={!values.countryOfOrigin} error={errors.countryOfOrigin} {...register("countryOfOrigin")}>
+        <SelectField id="cp-countryOfOrigin" label="Country of origin" className="flex-1 min-w-0 w-full md:w-auto" disabled={disabled} empty={!values.countryOfOrigin} error={errors.countryOfOrigin} {...register("countryOfOrigin")}>
           <option value="">Select country</option>
           {countryOptions(values.countryOfOrigin).map((c) => (
             <option key={c.code} value={c.code}>
@@ -73,7 +73,7 @@ export function MoreInfoSection({ form, values, options, errors, disabled }: Pro
       </div>
 
       <FieldShell id="cp-dimLength" label="Dimensions" error={errors.dimLength ?? errors.dimWidth ?? errors.dimHeight} hint="Use the product's dimensions, not its shipping package.">
-        <div className="flex flex-row items-center gap-2" role="group" aria-label="Dimensions">
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2" role="group" aria-label="Dimensions">
           {(
             [
               ["dimLength", "Length"],
@@ -81,7 +81,7 @@ export function MoreInfoSection({ form, values, options, errors, disabled }: Pro
               ["dimHeight", "Height"],
             ] as const
           ).map(([key, label]) => (
-            <div key={key} className={boxClass(errors.dimLength ?? errors[key], "flex-1")}>
+            <div key={key} className={boxClass(errors.dimLength ?? errors[key], "flex-1 min-w-[70px]")}>
               <input
                 id={key === "dimLength" ? "cp-dimLength" : `cp-${key}`}
                 type="text"
@@ -133,8 +133,8 @@ export function MoreInfoSection({ form, values, options, errors, disabled }: Pro
         </div>
       </FieldShell>
 
-      <div className="flex flex-row items-start gap-5 w-full">
-        <SelectField id="cp-gstRateBps" label="GST / tax information" className="flex-1" disabled={disabled} empty={values.gstRateBps === ""} error={errors.gstRateBps} {...register("gstRateBps")}>
+      <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-5 w-full">
+        <SelectField id="cp-gstRateBps" label="GST / tax information" className="flex-1 min-w-0 w-full sm:w-auto" disabled={disabled} empty={values.gstRateBps === ""} error={errors.gstRateBps} {...register("gstRateBps")}>
           <option value="">Select tax rate</option>
           {gstUnknown ? <option value={values.gstRateBps}>GST {Number(values.gstRateBps) / 100}%</option> : null}
           {slabs.map((s) => (
@@ -147,7 +147,7 @@ export function MoreInfoSection({ form, values, options, errors, disabled }: Pro
           id="cp-hsnCode"
           label="HSN code"
           mono
-          className="flex-1"
+          className="flex-1 min-w-0 w-full sm:w-auto"
           inputMode="numeric"
           maxLength={Math.max(...(lim?.hsnLengths ?? [8]))}
           disabled={disabled}
@@ -167,11 +167,11 @@ export function MoreInfoSection({ form, values, options, errors, disabled }: Pro
         <p className="text-[11px] text-[#666666] leading-[145%] -mt-1">Add a product-specific attribute to the master record. Confirm factual details before distributing them to listings.</p>
         <div className="flex flex-col gap-3 w-full">
           {attrs.map((attr, idx) => (
-            <div key={idx} className="flex flex-row items-end gap-5 w-full">
+            <div key={idx} className="flex flex-col sm:flex-row items-start sm:items-end gap-3 sm:gap-5 w-full">
               <TextField
                 id={idx === 0 ? "cp-customAttributes" : `cp-attr-name-${idx}`}
                 label="Attribute name"
-                className="flex-1"
+                className="flex-1 min-w-0 w-full sm:w-auto"
                 value={attr.name}
                 maxLength={lim?.customAttributes.nameMax ?? 60}
                 disabled={disabled}
@@ -181,26 +181,28 @@ export function MoreInfoSection({ form, values, options, errors, disabled }: Pro
               <TextField
                 id={`cp-attr-value-${idx}`}
                 label="Attribute value"
-                className="flex-1"
+                className="flex-1 min-w-0 w-full sm:w-auto"
                 value={attr.value}
                 maxLength={lim?.customAttributes.valueMax ?? 250}
                 disabled={disabled}
                 placeholder="Enter value"
                 onChange={(e) => setAttr(idx, { value: e.target.value })}
               />
-              <label className="flex items-center gap-1.5 h-[45px] text-[11px] text-[#333333] shrink-0 cursor-pointer">
-                <input type="checkbox" checked={attr.confirmed} disabled={disabled || !attr.name.trim() || !attr.value.trim()} onChange={(e) => setAttr(idx, { confirmed: e.target.checked })} />
-                Confirmed
-              </label>
-              <button
-                type="button"
-                disabled={disabled}
-                aria-label={`Remove attribute ${idx + 1}`}
-                className="h-[45px] text-[11px] text-[#666666] hover:text-[#000000] hover:underline cursor-pointer disabled:opacity-50"
-                onClick={() => setValue("customAttributes", attrs.length > 1 ? attrs.filter((_, i) => i !== idx) : [{ name: "", value: "", confirmed: false }], { shouldDirty: true })}
-              >
-                Remove
-              </button>
+              <div className="flex items-center gap-4 shrink-0">
+                <label className="flex items-center gap-1.5 h-[45px] text-[11px] text-[#333333] cursor-pointer">
+                  <input type="checkbox" checked={attr.confirmed} disabled={disabled || !attr.name.trim() || !attr.value.trim()} onChange={(e) => setAttr(idx, { confirmed: e.target.checked })} />
+                  Confirmed
+                </label>
+                <button
+                  type="button"
+                  disabled={disabled}
+                  aria-label={`Remove attribute ${idx + 1}`}
+                  className="h-[45px] text-[11px] text-[#666666] hover:text-[#000000] hover:underline cursor-pointer disabled:opacity-50"
+                  onClick={() => setValue("customAttributes", attrs.length > 1 ? attrs.filter((_, i) => i !== idx) : [{ name: "", value: "", confirmed: false }], { shouldDirty: true })}
+                >
+                  Remove
+                </button>
+              </div>
             </div>
           ))}
         </div>

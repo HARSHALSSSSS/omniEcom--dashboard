@@ -33,24 +33,24 @@ export function ReportsSalesTrendSection({ data, onPeriodChange, onExploreSales 
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-      <div className="space-y-4 rounded-xl border border-border bg-card p-5 lg:col-span-2">
-        <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="space-y-4 rounded-xl border border-border bg-card p-4 sm:p-5 lg:col-span-2">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
           <div>
             <h3 className="text-sm font-semibold text-foreground">Sales trend</h3>
             <span className="text-xs text-muted-foreground">Total of orders, by {PERIODS.find((p) => p.id === data.period)?.label.toLowerCase()} bucket</span>
           </div>
-          <div className="flex flex-wrap items-center gap-3 text-xs">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs">
             <div className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-sm bg-foreground" />
+              <span className="h-2.5 w-2.5 rounded-sm bg-foreground shrink-0" />
               <span className="text-foreground">{rangeText} · {formatINR(totals.grossMinor, true)}</span>
             </div>
             {compared && previous && data.previousRange && (
               <div className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-sm bg-muted-foreground/40" />
+                <span className="h-2.5 w-2.5 rounded-sm bg-muted-foreground/40 shrink-0" />
                 <span className="text-muted-foreground">{data.previousRange.from} to {data.previousRange.to} · {formatINR(previous.grossMinor, true)}</span>
               </div>
             )}
-            <select aria-label="Trend interval" className="rounded-md border border-border bg-background px-2 py-1 text-xs" value={data.period} onChange={(e) => onPeriodChange(e.target.value as TrendPeriod)}>
+            <select aria-label="Trend interval" className="h-9 sm:h-7 rounded-md border border-border bg-background px-2 py-1 text-xs" value={data.period} onChange={(e) => onPeriodChange(e.target.value as TrendPeriod)}>
               {PERIODS.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.label}
@@ -63,8 +63,8 @@ export function ReportsSalesTrendSection({ data, onPeriodChange, onExploreSales 
         {series.length === 0 ? (
           <p className="py-16 text-center text-xs text-muted-foreground">No sales in these dates.</p>
         ) : (
-          <div className="relative h-56 pl-14">
-            <div className="absolute inset-y-0 left-0 flex w-12 flex-col justify-between pb-6 text-right text-[10px] text-muted-foreground">
+          <div className="relative h-56 pl-12 sm:pl-14">
+            <div className="absolute inset-y-0 left-0 flex w-10 sm:w-12 flex-col justify-between pb-6 text-right text-[10px] text-muted-foreground">
               {ticks.map((t, i) => (
                 <div key={i}>{t}</div>
               ))}
@@ -88,7 +88,7 @@ export function ReportsSalesTrendSection({ data, onPeriodChange, onExploreSales 
         {compared && <p className="text-[11px] text-muted-foreground">The lighter bars are the comparison range, bucket by bucket from its first day.</p>}
       </div>
 
-      <div className="flex flex-col justify-between rounded-xl border border-border bg-card p-5">
+      <div className="flex flex-col justify-between rounded-xl border border-border bg-card p-4 sm:p-5">
         <div className="space-y-3">
           <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
             <BarChart3 className="h-3.5 w-3.5" aria-hidden />
@@ -113,7 +113,7 @@ export function ReportsSalesTrendSection({ data, onPeriodChange, onExploreSales 
           </div>
         </div>
         <div className="space-y-2 pt-4">
-          <Button size="sm" variant="outline" className="w-full gap-1.5 text-xs" onClick={onExploreSales}>
+          <Button size="sm" variant="outline" className="w-full h-10 sm:h-9 gap-1.5 text-xs" onClick={onExploreSales}>
             <span>Explore sales report</span>
             <ArrowRight className="h-3.5 w-3.5" aria-hidden />
           </Button>

@@ -73,23 +73,23 @@ export function RuleDrawer({ rule, ruleId, rulesLoading, catalog, canWrite, busy
 
   const footer = rule && (
     <div className="flex w-full flex-wrap justify-end gap-2">
-      <Button type="button" variant="outline" size="sm" onClick={() => onTest(rule)}>
+      <Button type="button" variant="outline" size="sm" className="h-9 sm:h-8 text-xs cursor-pointer" onClick={() => onTest(rule)}>
         Test
       </Button>
-      <Button type="button" variant="outline" size="sm" disabled={off || busy} title={off ? WRITE_REASON : undefined} onClick={() => onEdit(rule)}>
+      <Button type="button" variant="outline" size="sm" className="h-9 sm:h-8 text-xs cursor-pointer" disabled={off || busy} title={off ? WRITE_REASON : undefined} onClick={() => onEdit(rule)}>
         Edit
       </Button>
-      <Button type="button" variant="outline" size="sm" loading={busy} disabled={off} title={off ? WRITE_REASON : undefined} onClick={() => onToggle(rule)}>
+      <Button type="button" variant="outline" size="sm" className="h-9 sm:h-8 text-xs cursor-pointer" loading={busy} disabled={off} title={off ? WRITE_REASON : undefined} onClick={() => onToggle(rule)}>
         {rule.status === "active" ? "Disable" : "Enable"}
       </Button>
-      <Button type="button" variant="destructive" size="sm" disabled={off || busy} title={off ? WRITE_REASON : undefined} onClick={() => onDelete(rule)}>
+      <Button type="button" variant="destructive" size="sm" className="h-9 sm:h-8 text-xs cursor-pointer" disabled={off || busy} title={off ? WRITE_REASON : undefined} onClick={() => onDelete(rule)}>
         Delete
       </Button>
     </div>
   );
 
   return (
-    <ContextDrawer open={ruleId !== null} onClose={onClose} title={title} description={rule?.description ?? undefined} badge={rule ? <RuleBadge status={rule.status} /> : undefined} className="sm:w-[460px]" footer={footer || undefined}>
+    <ContextDrawer open={ruleId !== null} onClose={onClose} title={title} description={rule?.description ?? undefined} badge={rule ? <RuleBadge status={rule.status} /> : undefined} className="w-full sm:w-[460px]" footer={footer || undefined}>
       {!rule ? (
         rulesLoading ? (
           <div role="status" aria-label="Loading rule" className="space-y-3">

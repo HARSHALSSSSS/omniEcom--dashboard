@@ -88,7 +88,7 @@ function ConnectedRow({ ch, isSelected, onSelectChannel, onViewListings, onViewO
         <button
           type="button"
           onClick={() => onSelectChannel(ch.id)}
-          className="text-[12px] font-semibold text-black hover:underline cursor-pointer flex items-center gap-0.5"
+          className="text-[12px] font-semibold text-black hover:underline cursor-pointer flex items-center gap-0.5 py-1 sm:py-0"
         >
           <span>{attention ? "Review" : "Manage"}</span>
           <span>→</span>
@@ -99,7 +99,7 @@ function ConnectedRow({ ch, isSelected, onSelectChannel, onViewListings, onViewO
             <button
               type="button"
               aria-label={`More actions for ${ch.name}`}
-              className="h-6 px-2 rounded border border-[#E5E5E5] text-[11px] font-medium text-black hover:bg-[#F0F0F0] transition-colors cursor-pointer"
+              className="h-7 sm:h-6 px-2.5 sm:px-2 rounded border border-[#E5E5E5] text-[11px] font-medium text-black hover:bg-[#F0F0F0] transition-colors cursor-pointer"
             >
               More
             </button>
@@ -169,7 +169,7 @@ export const MarketplaceHubTable: React.FC<MarketplaceHubTableProps> = ({
   if (isCompactMode) {
     return (
       <div className="w-full border border-[#EAEAEA] rounded-xl overflow-hidden bg-white">
-        <div className="grid grid-cols-2 px-6 py-3 bg-white border-b border-[#EAEAEA] text-[12px] font-normal text-[#666666]">
+        <div className="grid grid-cols-2 px-4 sm:px-6 py-3 bg-white border-b border-[#EAEAEA] text-[12px] font-normal text-[#666666]">
           <div>Channel</div>
           <div className="text-right">Connection health</div>
         </div>
@@ -181,17 +181,17 @@ export const MarketplaceHubTable: React.FC<MarketplaceHubTableProps> = ({
               type="button"
               onClick={() => (ch.connected ? onSelectChannel(ch.id) : onConnectChannel(ch.id))}
               className={cn(
-                "w-full grid grid-cols-2 px-6 py-4 items-center text-left transition-colors cursor-pointer",
+                "w-full grid grid-cols-2 px-4 sm:px-6 py-4 items-center text-left transition-colors cursor-pointer min-h-[44px]",
                 selectedChannelId === ch.id ? "bg-[#FAFAFA]" : "hover:bg-[#FAFAFA]",
               )}
             >
-              <div className="space-y-0.5">
-                <div className="text-[14px] font-semibold text-black">{ch.name}</div>
-                <div className="text-[12px] text-[#666666]">
+              <div className="space-y-0.5 min-w-0 pr-2">
+                <div className="text-[14px] font-semibold text-black truncate">{ch.name}</div>
+                <div className="text-[12px] text-[#666666] truncate">
                   {ch.connected ? listingsText(ch.listings ?? 0) : "Not connected"}
                 </div>
               </div>
-              <div className={cn("flex items-center justify-end gap-1.5 text-[13px]", statusTone(ch.status))}>
+              <div className={cn("flex items-center justify-end gap-1.5 text-[13px] shrink-0", statusTone(ch.status))}>
                 {ch.status === "syncing" && <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse" />}
                 {STATUS_LABEL[ch.status]}
               </div>
@@ -204,51 +204,55 @@ export const MarketplaceHubTable: React.FC<MarketplaceHubTableProps> = ({
 
   return (
     <div className="w-full border border-[#EAEAEA] rounded-xl overflow-hidden bg-white">
-      <div className="grid grid-cols-12 px-6 py-3 bg-white border-b border-[#EAEAEA] text-[11px] font-medium text-[#737373]">
-        <div className="col-span-3">Channel</div>
-        <div className="col-span-1">Connection</div>
-        <div className="col-span-2">Catalog</div>
-        <div className="col-span-1">Orders</div>
-        <div className="col-span-1">Inventory</div>
-        <div className="col-span-2">Sync</div>
-        <div className="col-span-2 text-right">Actions</div>
-      </div>
+      <div className="overflow-x-auto">
+        <div className="min-w-[860px]">
+          <div className="grid grid-cols-12 px-6 py-3 bg-white border-b border-[#EAEAEA] text-[11px] font-medium text-[#737373]">
+            <div className="col-span-3">Channel</div>
+            <div className="col-span-1">Connection</div>
+            <div className="col-span-2">Catalog</div>
+            <div className="col-span-1">Orders</div>
+            <div className="col-span-1">Inventory</div>
+            <div className="col-span-2">Sync</div>
+            <div className="col-span-2 text-right">Actions</div>
+          </div>
 
-      <div className="divide-y divide-[#EAEAEA]">
-        {channels.length === 0 && <div className="px-6 py-10 text-center text-[13px] text-[#737373]">No channels match.</div>}
-        {channels.map((ch) =>
-          ch.connected && ch.account ? (
-            <ConnectedRow
-              key={ch.id}
-              ch={ch}
-              isSelected={selectedChannelId === ch.id}
-              onSelectChannel={onSelectChannel}
-              onViewListings={onViewListings}
-              onViewOrders={onViewOrders}
-              onOpenDetails={onOpenDetails}
-            />
-          ) : (
-            <div key={ch.id} className="grid grid-cols-12 px-6 py-4 items-center hover:bg-[#FAFAFA] transition-colors">
-              <div className="col-span-3">
-                <div className="text-[13px] font-semibold text-[#121212]">{ch.name}</div>
-                <div className="text-[11px] text-[#737373] mt-0.5">Not connected</div>
-              </div>
-              <div className="col-span-7 text-[12px] text-[#737373]">
-                {ch.unavailableReason ?? ch.notConnectedText ?? "Connect this channel to bring its catalog, inventory and orders into your workspace."}
-              </div>
-              <div className="col-span-2 flex justify-end">
-                <button
-                  type="button"
-                  disabled={Boolean(ch.unavailableReason)}
-                  onClick={() => onConnectChannel(ch.id)}
-                  className="h-8 px-4 rounded-lg border border-[#BDBDBD] text-[12px] font-medium text-[#121212] hover:bg-neutral-100 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Connect
-                </button>
-              </div>
-            </div>
-          ),
-        )}
+          <div className="divide-y divide-[#EAEAEA]">
+            {channels.length === 0 && <div className="px-6 py-10 text-center text-[13px] text-[#737373]">No channels match.</div>}
+            {channels.map((ch) =>
+              ch.connected && ch.account ? (
+                <ConnectedRow
+                  key={ch.id}
+                  ch={ch}
+                  isSelected={selectedChannelId === ch.id}
+                  onSelectChannel={onSelectChannel}
+                  onViewListings={onViewListings}
+                  onViewOrders={onViewOrders}
+                  onOpenDetails={onOpenDetails}
+                />
+              ) : (
+                <div key={ch.id} className="grid grid-cols-12 px-6 py-4 items-center hover:bg-[#FAFAFA] transition-colors">
+                  <div className="col-span-3">
+                    <div className="text-[13px] font-semibold text-[#121212]">{ch.name}</div>
+                    <div className="text-[11px] text-[#737373] mt-0.5">Not connected</div>
+                  </div>
+                  <div className="col-span-7 text-[12px] text-[#737373]">
+                    {ch.unavailableReason ?? ch.notConnectedText ?? "Connect this channel to bring its catalog, inventory and orders into your workspace."}
+                  </div>
+                  <div className="col-span-2 flex justify-end">
+                    <button
+                      type="button"
+                      disabled={Boolean(ch.unavailableReason)}
+                      onClick={() => onConnectChannel(ch.id)}
+                      className="h-8 px-4 rounded-lg border border-[#BDBDBD] text-[12px] font-medium text-[#121212] hover:bg-neutral-100 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Connect
+                    </button>
+                  </div>
+                </div>
+              ),
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

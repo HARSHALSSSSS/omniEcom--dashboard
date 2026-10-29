@@ -6,8 +6,8 @@ import type { PurchaseOrderStatus, SupplierStatus } from "@/types/procurement";
 import { PO_STATUS_CLASS, PO_STATUS_LABEL, SUPPLIER_STATUS_CLASS, SUPPLIER_STATUS_LABEL } from "./procurementFormat";
 import { PAGE_SIZES } from "./procurementParams";
 
-export const SELECT = "h-9 rounded-lg border border-border bg-card px-2.5 text-xs font-medium text-foreground disabled:opacity-50";
-export const FIELD_SELECT = "h-9 w-full rounded-md border border-input bg-background px-3 text-xs disabled:opacity-50";
+export const SELECT = "h-10 sm:h-9 rounded-lg border border-border bg-card px-2.5 text-xs font-medium text-foreground disabled:opacity-50";
+export const FIELD_SELECT = "h-10 sm:h-9 w-full rounded-md border border-input bg-background px-3 text-xs disabled:opacity-50";
 const CHIP = "inline-flex items-center whitespace-nowrap rounded border px-2 py-0.5 text-[10px] font-semibold";
 
 export function PoStatusPill({ status, isLate }: { status: PurchaseOrderStatus; isLate?: boolean }) {
@@ -180,11 +180,11 @@ export function Pagination({ page, pages, total, pageSize, shown, noun, onPage, 
   const first = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const last = (page - 1) * pageSize + shown;
   return (
-    <nav aria-label="Pagination" className="flex flex-wrap items-center justify-between gap-2 pt-1">
+    <nav aria-label="Pagination" className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-1">
       <span className="text-xs text-muted-foreground" aria-live="polite">
         Showing {formatNumber(first)}–{formatNumber(last)} of {formatNumber(total)} {noun}
       </span>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
         <button type="button" className={NAV} disabled={page <= 1} onClick={() => onPage(page - 1)}>
           Previous
         </button>

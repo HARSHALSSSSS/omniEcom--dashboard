@@ -95,8 +95,8 @@ export function ProductChannelPricingTable({ channels, totals, onSelectPriceItem
           {pill("proposed", "With proposals", totals?.withProposalCount)}
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1 sm:w-60">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+          <div className="relative flex-1 sm:w-60 min-w-0">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <input
               type="text"
@@ -113,7 +113,7 @@ export function ProductChannelPricingTable({ channels, totals, onSelectPriceItem
               aria-label="Channel"
               value={channelFilter}
               onChange={(e) => setChannelFilter(e.target.value)}
-              className="h-8 rounded-md border border-neutral-300 bg-white pl-2.5 pr-7 text-xs font-medium text-foreground focus:outline-none focus:border-black appearance-none cursor-pointer"
+              className="h-8 w-full sm:w-auto rounded-md border border-neutral-300 bg-white pl-2.5 pr-7 text-xs font-medium text-foreground focus:outline-none focus:border-black appearance-none cursor-pointer"
             >
               <option value="">All channels</option>
               {channels.map((c) => (
@@ -155,7 +155,7 @@ export function ProductChannelPricingTable({ channels, totals, onSelectPriceItem
       {/* Table */}
       {data && total > 0 && (
         <div className="overflow-x-auto border-t border-neutral-100 pt-2">
-          <table className="w-full text-xs text-left">
+          <table className="w-full min-w-[760px] text-xs text-left">
             <thead>
               <tr className="border-b border-neutral-200 text-muted-foreground">
                 <th className="pb-2.5 font-medium">Product / SKU</th>

@@ -11,7 +11,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const oneOf = <T extends string>(value: string | null | undefined, allowed: readonly T[]): T | undefined => allowed.find((a) => a === value);
 const uuid = (value: string | null): string | undefined => (value && UUID.test(value) ? value : undefined);
 
-export type IntelTab = "overview" | "all" | "watchlist";
+export type IntelTab = "overview" | "all";
 
 export interface IntelUrlState {
   tab: IntelTab;
@@ -33,7 +33,7 @@ export function readUrlState(params: URLSearchParams): IntelUrlState {
     (Number.isInteger(page) && page > 1) ||
     ((PAGE_SIZES as readonly number[]).includes(size) && size !== preferredPageSize(PAGE_SIZES, DEFAULT_PAGE_SIZE))
   );
-  const tab = oneOf<IntelTab>(params.get("tab"), ["overview", "all", "watchlist"]) ?? (hasCatalogParams ? "all" : "overview");
+  const tab = oneOf<IntelTab>(params.get("tab"), ["overview", "all"]) ?? (hasCatalogParams ? "all" : "overview");
   return {
     tab,
     query: {

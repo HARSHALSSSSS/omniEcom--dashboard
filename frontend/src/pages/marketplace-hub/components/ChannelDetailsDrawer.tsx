@@ -64,7 +64,7 @@ function Drawer({ connection, onClose, onViewListings, onViewOrders, onDeleted }
               type="button"
               aria-label="Close details"
               onClick={onClose}
-              className="p-1 -mr-1 rounded-md text-[#666666] hover:text-black hover:bg-neutral-100 transition-colors cursor-pointer"
+              className="p-2 -mr-2 sm:p-1 sm:-mr-1 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center rounded-md text-[#666666] hover:text-black hover:bg-neutral-100 transition-colors cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
@@ -135,7 +135,7 @@ function Drawer({ connection, onClose, onViewListings, onViewOrders, onDeleted }
               <button
                 type="button"
                 onClick={() => onViewListings(connection.id)}
-                className="w-full h-10 rounded-lg border border-[#BDBDBD] text-[13px] font-semibold text-black hover:bg-neutral-50 transition-colors cursor-pointer"
+                className="w-full h-11 sm:h-10 rounded-lg border border-[#BDBDBD] text-[13px] font-semibold text-black hover:bg-neutral-50 transition-colors cursor-pointer"
               >
                 View listings
               </button>
@@ -262,13 +262,13 @@ function Drawer({ connection, onClose, onViewListings, onViewOrders, onDeleted }
 
       {!isSyncing && (
         <div className="space-y-3 pt-6 border-t border-[#EAEAEA]">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 min-[380px]:grid-cols-2 gap-2.5 sm:gap-3">
             <span title={a.syncReason ?? undefined} className="contents">
               <button
                 type="button"
                 disabled={Boolean(a.syncReason) || a.syncing}
                 onClick={a.startSync}
-                className="h-10 px-4 rounded-lg bg-black text-white text-[13px] font-semibold hover:bg-neutral-800 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                className="h-11 sm:h-10 px-3 sm:px-4 rounded-lg bg-black text-white text-[12px] sm:text-[13px] font-semibold hover:bg-neutral-800 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Sync now
               </button>
@@ -278,7 +278,7 @@ function Drawer({ connection, onClose, onViewListings, onViewOrders, onDeleted }
                 type="button"
                 disabled={Boolean(a.testReason) || a.testing}
                 onClick={a.runTest}
-                className="h-10 px-4 rounded-lg border border-[#BDBDBD] text-[13px] font-semibold text-black hover:bg-neutral-50 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                className="h-11 sm:h-10 px-3 sm:px-4 rounded-lg border border-[#BDBDBD] text-[12px] sm:text-[13px] font-semibold text-black hover:bg-neutral-50 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Test connection
               </button>

@@ -70,8 +70,8 @@ export function FilterDropdown({
 
   const buttonText = plain ? (chosen?.label ?? label) : chosen && showValue ? `${label} · ${chosen.label}` : label;
   const buttonClass = plain
-    ? "flex items-center gap-1 hover:text-[#666666] transition-colors cursor-pointer disabled:cursor-not-allowed"
-    : `box-border flex flex-row items-center justify-between px-2.5 h-[34px] bg-[#FFFFFF] rounded-[8px] text-[12px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+    ? "flex items-center gap-1 hover:text-[#666666] transition-colors cursor-pointer disabled:cursor-not-allowed py-1 sm:py-0 min-h-[40px] sm:min-h-0"
+    : `box-border flex flex-row items-center justify-between px-2.5 h-[34px] min-h-[40px] sm:min-h-[34px] bg-[#FFFFFF] rounded-[8px] text-[12px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
         chosen ? "border border-[#000000] text-[#000000]" : "border border-[#BDBDBD] text-[#000000] hover:border-[#666666]"
       }`;
 
@@ -94,7 +94,7 @@ export function FilterDropdown({
           role="menu"
           aria-label={heading}
           style={{ width }}
-          className={`absolute ${align === "right" ? "right-0" : "left-0"} ${plain ? "top-[30px]" : "top-[40px]"} z-50 max-h-[320px] overflow-y-auto bg-[#FFFFFF] border border-[#EAEAEA] rounded-[8px] shadow-[0px_4px_12px_rgba(0,0,0,0.08)] p-1 text-xs`}
+          className={`absolute ${align === "right" ? "right-0" : "left-0"} ${plain ? "top-[30px]" : "top-[40px]"} z-50 max-h-[320px] max-w-[calc(100vw-32px)] overflow-y-auto bg-[#FFFFFF] border border-[#EAEAEA] rounded-[8px] shadow-[0px_4px_12px_rgba(0,0,0,0.08)] p-1 text-xs`}
         >
           <div className="px-2 py-1 text-[11px] font-medium text-[#666666] uppercase">{heading}</div>
           {items.length === 0 && emptyNote && <div className="px-2 py-2 text-[12px] text-[#666666]">{emptyNote}</div>}
@@ -110,7 +110,7 @@ export function FilterDropdown({
                   onChange(opt.id || null);
                   setOpen(false);
                 }}
-                className={`w-full min-h-[30px] flex items-center justify-between gap-2 px-2 py-1.5 rounded-[4px] hover:bg-[#F5F5F5] text-left ${selected ? "bg-[#F5F5F5] font-medium" : ""}`}
+                className={`w-full min-h-[36px] sm:min-h-[30px] flex items-center justify-between gap-2 px-2 py-1.5 rounded-[4px] hover:bg-[#F5F5F5] text-left cursor-pointer ${selected ? "bg-[#F5F5F5] font-medium" : ""}`}
               >
                 <span className="truncate">{opt.label}</span>
                 {selected && <Check className="h-3.5 w-3.5 text-[#666666] shrink-0" aria-hidden />}

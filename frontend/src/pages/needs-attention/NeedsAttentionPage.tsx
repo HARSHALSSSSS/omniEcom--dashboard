@@ -120,18 +120,18 @@ export default function NeedsAttentionPage() {
   return (
     <div className="flex flex-col gap-6 w-full select-none pb-12 font-['Inter',sans-serif]">
       {/* 1. Page introduction */}
-      <div className="flex flex-row justify-between items-center w-full">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0 w-full">
         <div className="flex flex-col gap-1.5 flex-1">
           <span className="text-[10px] font-medium leading-[12px] text-[#707070] uppercase tracking-normal">Operations</span>
           <h1 className="text-[26px] font-semibold text-[#000000] leading-[145%]">Needs attention</h1>
           <p className="text-[13px] font-normal text-[#666666] leading-[145%]">Resolve issues before they affect orders, inventory or sales.</p>
         </div>
 
-        <div className="flex flex-row items-center gap-3 shrink-0">
+        <div className="flex flex-row items-center justify-between sm:justify-end gap-3 w-full sm:w-auto shrink-0">
         <button
           type="button"
           onClick={refreshAll}
-          className="box-border flex flex-row items-center px-[10px] gap-[6px] h-[32px] bg-white border border-[#EAEAEA] rounded-lg hover:bg-neutral-50 transition-colors cursor-pointer"
+          className="box-border flex flex-row items-center px-[10px] gap-[6px] h-[32px] min-h-[44px] sm:min-h-0 bg-white border border-[#EAEAEA] rounded-lg hover:bg-neutral-50 transition-colors cursor-pointer"
         >
           <RotateCw className={`w-[14px] h-[14px] text-[#666666] stroke-[1.5px] ${refreshing ? "animate-spin" : ""}`} />
           <span className="text-[12px] font-normal leading-[145%] text-[#666666]">Refresh</span>
@@ -145,7 +145,7 @@ export default function NeedsAttentionPage() {
             {canWrite && !counts.isPending && (
               <>
                 {counts.data ? " · " : ""}
-                <button type="button" disabled={actions.refresh.isPending} onClick={() => actions.refresh.mutate()} className="font-medium text-[#000000] hover:underline disabled:opacity-50">
+                <button type="button" disabled={actions.refresh.isPending} onClick={() => actions.refresh.mutate()} className="font-medium text-[#000000] hover:underline disabled:opacity-50 py-1 sm:py-0 inline-block">
                   {actions.refresh.isPending ? "Checking..." : "Check now"}
                 </button>
               </>

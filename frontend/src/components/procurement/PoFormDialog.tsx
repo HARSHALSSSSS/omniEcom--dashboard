@@ -99,7 +99,7 @@ export function PoFormDialog({ target, onClose, onSaved }: Props) {
   return (
     <>
       <Dialog open={target !== null} onOpenChange={(o) => !o && requestClose()}>
-        <DialogContent className="max-h-[92vh] max-w-3xl overflow-y-auto" onInteractOutside={(e) => dirty && e.preventDefault()}>
+        <DialogContent className="max-h-[92vh] w-[95vw] sm:max-w-3xl overflow-y-auto" onInteractOutside={(e) => dirty && e.preventDefault()}>
           {target && <Loader key={targetKey} target={target} onDirty={setDirty} onCancel={requestClose} onSaved={(po, mode) => { setDirty(false); onSaved(po, mode); }} />}
         </DialogContent>
       </Dialog>
@@ -368,7 +368,7 @@ function PoForm({ order, presetSupplierId, refetch, onDirty, onCancel, onSaved }
             <span className="text-muted-foreground">Purchase order </span>
             <span className="font-mono font-semibold text-foreground">{order ? order.poNumber : "Assigned on save"}</span>
           </div>
-          <div className="flex items-center gap-4 text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-muted-foreground">
             <div>Order date: <span className="font-medium text-foreground">{order ? dateOrDash(order.orderDate) : formatInZone(new Date().toISOString(), { day: "2-digit", month: "short", year: "numeric" })}</span></div>
             <div>Currency: <span className="font-medium text-foreground">INR (₹)</span></div>
           </div>
@@ -509,7 +509,7 @@ function PoForm({ order, presetSupplierId, refetch, onDirty, onCancel, onSaved }
             </table>
           </div>
         )}
-        <div className="flex items-center justify-between pt-1 text-[11px] text-muted-foreground">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1 pt-1 text-[11px] text-muted-foreground">
           <span>+ Add line item above with search</span>
           <span>Prices exclude GST · All amounts in INR</span>
         </div>
@@ -533,7 +533,7 @@ function PoForm({ order, presetSupplierId, refetch, onDirty, onCancel, onSaved }
         </div>
 
         <div>
-          <dl aria-label="Order totals" className="ml-auto w-full max-w-xs space-y-1.5 text-xs">
+          <dl aria-label="Order totals" className="w-full sm:ml-auto sm:max-w-xs space-y-1.5 text-xs">
             <div className="flex justify-between text-muted-foreground">
               <dt>Subtotal</dt>
               <dd className="font-medium text-foreground">{formatCurrency(totals.subtotalMinor, currency)}</dd>
@@ -560,7 +560,7 @@ function PoForm({ order, presetSupplierId, refetch, onDirty, onCancel, onSaved }
           <div className="font-medium text-foreground">Created as awaiting approval</div>
           <div>No order is sent to the supplier automatically.</div>
         </div>
-        <DialogFooter className="gap-2 sm:gap-2">
+        <DialogFooter className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-2">
           <Button type="button" variant="outline" size="sm" disabled={busy} onClick={onCancel}>
             Cancel
           </Button>

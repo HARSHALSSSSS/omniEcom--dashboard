@@ -26,7 +26,7 @@ export function SupplierFilters({ q, status, sort, counts, filtered, onSearch, o
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-1 rounded-md bg-muted/40 p-0.5 text-xs">
+        <div className="flex items-center gap-1 rounded-md bg-muted/40 p-0.5 text-xs overflow-x-auto max-w-full">
           {([
             [null, "All suppliers", "all"],
             ["active", "Active", "active"],
@@ -38,7 +38,7 @@ export function SupplierFilters({ q, status, sort, counts, filtered, onSearch, o
               type="button"
               onClick={() => onStatus(value)}
               className={cn(
-                "rounded px-2.5 py-1 text-[11px] font-medium transition-colors",
+                "rounded px-2.5 py-1 text-[11px] font-medium transition-colors shrink-0 whitespace-nowrap",
                 (status ?? null) === value ? "bg-background text-foreground shadow-2xs" : "text-muted-foreground hover:text-foreground"
               )}
             >
@@ -87,7 +87,7 @@ export function SupplierTable({ rows, refreshing, activeId, onOpen }: SupplierTa
   return (
     <div className={cn("overflow-hidden rounded-xl border border-border bg-card shadow-2xs transition-opacity", refreshing && "opacity-60")} aria-busy={refreshing}>
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-left text-xs">
+        <table className="w-full min-w-[750px] border-collapse text-left text-xs">
           <thead>
             <tr className="border-b border-border bg-muted/40 text-[11px] font-medium text-muted-foreground">
               <th scope="col" className="w-10 px-4 py-3">

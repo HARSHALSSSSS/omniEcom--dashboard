@@ -167,12 +167,12 @@ export default function CreateProductPage() {
       {/* 1. header */}
       <div className="flex flex-col gap-3 pb-6 border-b border-[#EAEAEA]">
         <div className="text-[12px] leading-[145%] text-[#666666]">Products / Create product</div>
-        <div className="flex flex-row items-center justify-between">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-2">
           <div className="flex flex-col gap-1.5 max-w-[936px]">
             <h1 className="text-[26px] font-semibold text-[#000000] leading-[145%]">Create product</h1>
             <p className="text-[13px] font-normal text-[#666666] leading-[145%]">Build a master product that can be distributed across your connected sales channels.</p>
           </div>
-          <div className="flex flex-row items-center gap-2 shrink-0">
+          <div className="flex flex-row items-center gap-2 shrink-0 w-full sm:w-auto justify-start sm:justify-end">
             <button type="button" onClick={() => void c.saveDraft()} disabled={readOnly || c.savingDraft || c.continuing} className={outlineButton}>
               {c.savingDraft ? "Saving..." : "Save draft"}
             </button>
@@ -216,7 +216,7 @@ export default function CreateProductPage() {
       </div>
 
       {/* 2. workspace */}
-      <div className="flex flex-row items-start pt-6 gap-8 w-full flex-1">
+      <div className="flex flex-col lg:flex-row items-start pt-6 gap-8 w-full flex-1">
         <fieldset disabled={readOnly} className="flex flex-col gap-6 flex-1 min-w-0 border-0 p-0 m-0">
           <legend className="sr-only">Product details</legend>
           {!c.moreInfoOpen ? (
@@ -255,8 +255,8 @@ export default function CreateProductPage() {
                   ))}
                 </SelectField>
 
-                <div className="flex flex-row items-start gap-5 w-full">
-                  <div className="flex-1 flex flex-col gap-2 min-w-0">
+                <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-5 w-full">
+                  <div className="flex-1 flex flex-col gap-2 min-w-0 w-full sm:w-auto">
                   <SelectField
                     id="cp-categoryId"
                     label="Category"

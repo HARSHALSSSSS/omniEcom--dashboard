@@ -23,8 +23,8 @@ interface ListingBulkBarProps {
   onClear: () => void;
 }
 
-const GHOST = "h-8 cursor-pointer rounded-lg border border-[#BDBDBD] bg-white px-3 text-[12px] font-medium text-black transition-colors hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50";
-const PRIMARY = "flex h-8 cursor-pointer items-center gap-1.5 rounded-lg bg-black px-4 text-[12px] font-semibold text-white transition-colors hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50";
+const GHOST = "h-9 sm:h-8 min-h-[44px] sm:min-h-8 cursor-pointer rounded-lg border border-[#BDBDBD] bg-white px-3 text-[12px] font-medium text-black transition-colors hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50 inline-flex items-center justify-center";
+const PRIMARY = "flex h-9 sm:h-8 min-h-[44px] sm:min-h-8 cursor-pointer items-center justify-center gap-1.5 rounded-lg bg-black px-4 text-[12px] font-semibold text-white transition-colors hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50";
 
 /** the bar over the table while rows are selected: edit, publish, unpublish, sync, export and a More menu */
 export function ListingBulkBar({ count, max, mode, canWrite, busy, running, onAction, onCreate, onEdit, onExport, onAudit, onFullReview, onToggleAll, onClear }: ListingBulkBarProps) {
@@ -34,9 +34,9 @@ export function ListingBulkBar({ count, max, mode, canWrite, busy, running, onAc
   const spin = (a: ListingBulkAction | "create") => running === a && <Loader2 className="h-3 w-3 animate-spin" aria-hidden />;
 
   return (
-    <div role="toolbar" aria-label="Bulk actions" className="mb-3 flex min-h-12 w-full flex-wrap items-center justify-between gap-2 rounded-lg border border-[#EAEAEA] bg-white px-4 py-2">
-      <div className="flex items-center gap-3">
-        <button type="button" onClick={onToggleAll} aria-label="Toggle all selection" title="Toggle all selection" className="flex h-4 w-4 cursor-pointer items-center justify-center rounded bg-black text-white">
+    <div role="toolbar" aria-label="Bulk actions" className="mb-3 flex min-h-12 w-full flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-2 rounded-lg border border-[#EAEAEA] bg-white px-4 py-2.5 sm:py-2">
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+        <button type="button" onClick={onToggleAll} aria-label="Toggle all selection" title="Toggle all selection" className="flex h-5 w-5 sm:h-4 sm:w-4 cursor-pointer items-center justify-center rounded bg-black text-white shrink-0">
           <Check className="h-3 w-3 stroke-[3]" aria-hidden />
         </button>
         <span className="text-[13px] font-semibold tracking-tight text-black" aria-live="polite">
@@ -45,7 +45,7 @@ export function ListingBulkBar({ count, max, mode, canWrite, busy, running, onAc
         <span className="text-[11px] text-[#666666]">Up to {max} at a time</span>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {mode === "variants" ? (
           <>
             <button type="button" className={PRIMARY} disabled={off} title={reason} onClick={onCreate}>

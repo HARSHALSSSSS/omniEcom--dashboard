@@ -20,20 +20,20 @@ export const MarginPressureCard: React.FC<MarginPressureCardProps> = ({ page, wo
   const n = (v: number | undefined) => (v === undefined ? "—" : v.toLocaleString("en-IN"));
 
   const tile = (label: string, value: number | undefined, status: StatusFilter, tone: string, hint: string) => (
-    <button type="button" onClick={() => onFilter(status)} disabled={!value} title={hint} className="rounded-lg border border-border/70 p-3 text-left transition-colors hover:bg-muted/40 disabled:cursor-default disabled:opacity-70 disabled:hover:bg-transparent">
+    <button type="button" onClick={() => onFilter(status)} disabled={!value} title={hint} className="rounded-lg border border-border/70 p-3 text-left transition-colors hover:bg-muted/40 disabled:cursor-default disabled:opacity-70 disabled:hover:bg-transparent min-w-0 min-h-[44px]">
       <div className={`text-2xl font-bold tabular-nums ${tone}`}>{n(value)}</div>
       <div className="mt-0.5 text-[11px] text-muted-foreground">{label}</div>
     </button>
   );
 
   return (
-    <div className="space-y-4 rounded-xl border border-border bg-card p-6 shadow-xs">
+    <div className="space-y-4 rounded-xl border border-border bg-card p-4 sm:p-6 shadow-xs">
       <div>
         <h2 className="text-base font-semibold text-foreground">Margin pressure</h2>
         <p className="mt-0.5 text-xs text-muted-foreground">{target === null ? "No margin target set: products are split by whether they earn anything. Set one in Pricing policies." : `Margin target ${percent(target / 100)} (the strictest active pricing policy)`}</p>
       </div>
 
-      <div className={`grid gap-3 ${target === null ? "grid-cols-2" : "grid-cols-3"}`}>
+      <div className={`grid gap-3 ${target === null ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1 sm:grid-cols-3"}`}>
         {tile(target === null ? "Earning (0% or more)" : `Healthy (at or above ${percent(target / 100, 0)})`, c?.healthy, "healthy", "text-emerald-600", "Show the healthy products")}
         {target !== null && tile("Below target", c?.belowTarget, "below_target", "text-amber-600", "Show the products below the target")}
         {tile("Low contribution (negative)", c?.low, "low", "text-rose-600", "Show the products that lose money")}
@@ -51,9 +51,9 @@ export const MarginPressureCard: React.FC<MarginPressureCardProps> = ({ page, wo
         <div className="space-y-2 border-t border-border/60 pt-3">
           <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Needs a look first</div>
           {worst.map((p) => (
-            <button key={p.key} type="button" onClick={() => onSelect(p)} className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-xs hover:bg-muted/40">
-              <span className="font-medium text-foreground">{p.title ?? p.label}</span>
-              <span className="tabular-nums text-muted-foreground">
+            <button key={p.key} type="button" onClick={() => onSelect(p)} className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 w-full rounded-md p-2 text-left text-xs hover:bg-muted/40 min-h-[40px]">
+              <span className="font-medium text-foreground truncate">{p.title ?? p.label}</span>
+              <span className="shrink-0 tabular-nums text-muted-foreground text-[11px] sm:text-xs">
                 {money(p.revenue.amountMinor)} · {percent(p.marginPercent)}
               </span>
             </button>

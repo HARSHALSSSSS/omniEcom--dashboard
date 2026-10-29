@@ -17,7 +17,7 @@ interface VersionConflictDialogProps {
 export function VersionConflictDialog({ open, noun, hasMyEdits, busy, onReload, onClose }: VersionConflictDialogProps) {
   return (
     <Dialog open={open} onOpenChange={(o) => !o && !busy && onClose()}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="w-[95vw] sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base">
             <AlertTriangle className="h-4 w-4 text-amber-600" aria-hidden />

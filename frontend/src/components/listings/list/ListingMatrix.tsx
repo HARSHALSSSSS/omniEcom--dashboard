@@ -85,24 +85,26 @@ export function ListingMatrix({ matrix, onShowMore, onShowFewer, loading }: { ma
         </div>
       </div>
 
-      <div className="flex flex-row flex-wrap items-center gap-4 border-t border-[#EAEAEA] bg-[#FFFFFF] px-4 py-2 text-[10px] font-normal text-[#666666]">
-        {LEGEND.map((l) => (
-          <div key={l.label} className="flex items-center gap-1.5">
-            <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: l.color }} />
-            <span>{l.label}</span>
-          </div>
-        ))}
-        <div className="ml-auto flex flex-wrap items-center gap-3 text-[#666666]">
+      <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center justify-between gap-3 sm:gap-4 border-t border-[#EAEAEA] bg-[#FFFFFF] px-4 py-2 text-[10px] font-normal text-[#666666]">
+        <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+          {LEGEND.map((l) => (
+            <div key={l.label} className="flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: l.color }} />
+              <span>{l.label}</span>
+            </div>
+          ))}
+        </div>
+        <div className="w-full sm:w-auto sm:ml-auto flex flex-wrap items-center gap-3 text-[#666666]">
           <span>
             Showing {items.length} of {formatNumber(matrix.total)} master products · Master Product → Channel Listing → Marketplace
           </span>
           {onShowMore && items.length < matrix.total && (
-            <button type="button" onClick={onShowMore} disabled={loading} className="cursor-pointer text-[11px] font-semibold text-[#000000] hover:underline disabled:cursor-wait disabled:opacity-60">
+            <button type="button" onClick={onShowMore} disabled={loading} className="min-h-[44px] sm:min-h-0 inline-flex items-center cursor-pointer text-[11px] font-semibold text-[#000000] hover:underline disabled:cursor-wait disabled:opacity-60">
               {loading ? "Loading…" : "Show more products"}
             </button>
           )}
           {onShowFewer && (
-            <button type="button" onClick={onShowFewer} className="cursor-pointer text-[11px] font-medium text-[#666666] hover:text-[#000000] hover:underline">
+            <button type="button" onClick={onShowFewer} className="min-h-[44px] sm:min-h-0 inline-flex items-center cursor-pointer text-[11px] font-medium text-[#666666] hover:text-[#000000] hover:underline">
               Show fewer
             </button>
           )}

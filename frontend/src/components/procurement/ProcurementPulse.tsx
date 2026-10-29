@@ -30,14 +30,14 @@ interface TileProps {
 
 function Tile({ tone, value, label, note }: TileProps) {
   return (
-    <div className="flex items-start gap-2.5">
+    <div className="flex items-start gap-2.5 min-w-0">
       <span className={cn("mt-2 h-2 w-2 shrink-0 rounded-full", DOT[tone])} />
-      <div>
-        <div className="flex items-baseline gap-1.5">
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-baseline gap-1.5">
           <span className="text-xl font-bold tracking-tight text-foreground">{value}</span>
           <span className="text-xs font-medium text-foreground">{label}</span>
         </div>
-        <div className="text-[11px] text-muted-foreground">{note}</div>
+        <div className="text-[11px] text-muted-foreground truncate sm:whitespace-normal">{note}</div>
       </div>
     </div>
   );
@@ -86,7 +86,7 @@ export function ProcurementPulse({ overview: o, variant = "procurement", classNa
       <div className="flex flex-wrap items-center justify-between text-xs text-muted-foreground">
         <span className="text-xs font-semibold text-foreground">{title}</span>
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-6 pt-1">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:flex lg:flex-wrap lg:items-center lg:justify-between gap-4 sm:gap-6 pt-1">
         {tiles.map((t) => (
           <Tile key={t.label} {...t} />
         ))}

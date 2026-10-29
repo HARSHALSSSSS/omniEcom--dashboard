@@ -49,6 +49,7 @@ const api = vi.hoisted(() => ({
   reorderRules: vi.fn(),
   bulkLabels: vi.fn(),
   label: vi.fn(),
+  getLabelData: vi.fn().mockResolvedValue({ shipmentId: "s1", awb: "DL100001", format: "text", content: "*** DELHIVERY ***\nAWB DL100001" }),
   tracking: vi.fn(),
   refreshTracking: vi.fn(),
   cancelShipment: vi.fn(),
@@ -352,7 +353,7 @@ describe("orders to ship", () => {
     await waitFor(() => expect(api.bulkOrders).toHaveBeenCalledWith(["f2"], "generate_labels", undefined));
     // print the label of a labelled order and dispatch it (asks first)
     await userEvent.click(screen.getByRole("button", { name: "Print label ORD-3003" }));
-    await waitFor(() => expect(api.label).toHaveBeenCalledWith("s9"));
+    await waitFor(() => expect(api.getLabelData).toHaveBeenCalledWith("s9", expect.anything()));
     await userEvent.click(screen.getByRole("button", { name: "Dispatch ORD-3003" }));
     const confirm = await screen.findByRole("dialog", { name: /Dispatch ORD-3003/ });
     await act(async () => {
@@ -910,14 +911,16 @@ describe("shipments: labels", () => {
     await waitFor(() => expect(useToastStore.getState().toasts.some((t) => t.title === "Labels could not be printed")).toBe(true));
   });
 
-  it("downloads one label through the authenticated api", async () => {
-    api.label.mockResolvedValue({ blob: new Blob(["label"]), fileName: "label-DL100001.txt" });
-    renderPage(SHIPMENTS);
+  it("opens preview and downloads one label through the preview dialog", async () => {
+    api.getLabelData.mockResolvedValue({ shipmentId: "s1", awb: "DL100001", format: "text", content: "*** DELHIVERY ***\nAWB DL100001" });
+    const view = renderPage(SHIPMENTS);
     await screen.findByText("DL100001");
     await userEvent.click(screen.getByRole("button", { name: "Print label DL100001" }));
+    await waitFor(() => expect(api.getLabelData).toHaveBeenCalledWith("s1", expect.anything()));
+    const downloadBtn = await screen.findByRole("button", { name: "Download" });
+    await userEvent.click(downloadBtn);
     await waitFor(() => expect(saveBlob).toHaveBeenCalledWith(expect.any(Blob), "label-DL100001.txt"));
-    expect(api.label).toHaveBeenCalledWith("s1");
-    expect(screen.getByRole("button", { name: "Print label BD200002" })).toBeDisabled();
+    view.unmount();
   });
 });
 

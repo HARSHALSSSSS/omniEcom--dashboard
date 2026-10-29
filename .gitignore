@@ -11,3 +11,5 @@ coverage/
 .idea/
 .vscode/*
 !.vscode/extensions.json
+TESTING_GUIDE/
+qa/

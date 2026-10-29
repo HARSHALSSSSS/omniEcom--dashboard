@@ -22,8 +22,8 @@ interface FilterProps {
 
 export function ScheduleFilters({ status, total, onStatus }: FilterProps) {
   return (
-    <div className="flex flex-wrap items-center gap-2" role="search" aria-label="Filter schedules">
-      <select aria-label="Schedule status" className={SELECT} value={status ?? ""} onChange={(e) => onStatus(e.target.value || null)}>
+    <div className="flex flex-wrap items-center justify-between gap-2" role="search" aria-label="Filter schedules">
+      <select aria-label="Schedule status" className={cn(SELECT, "w-full sm:w-auto")} value={status ?? ""} onChange={(e) => onStatus(e.target.value || null)}>
         <option value="">Active and paused</option>
         {SCHEDULE_STATUSES.map((s) => (
           <option key={s} value={s}>
@@ -31,7 +31,7 @@ export function ScheduleFilters({ status, total, onStatus }: FilterProps) {
           </option>
         ))}
       </select>
-      <span className="ml-auto text-xs text-muted-foreground" aria-live="polite">
+      <span className="w-full sm:w-auto sm:ml-auto text-xs text-muted-foreground text-right sm:text-left" aria-live="polite">
         {formatNumber(total)} {total === 1 ? "schedule" : "schedules"}
       </span>
     </div>

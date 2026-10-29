@@ -46,7 +46,7 @@ export function FilterSelect({
         value={value}
         onChange={(e) => onChange(e.target.value || null)}
         className={cn(
-          "h-8 appearance-none rounded-lg border border-[#EAEAEA] bg-white py-0 pl-2.5 pr-7 text-[12px] transition-colors hover:bg-neutral-50 focus:border-black focus:outline-none",
+          "h-9 sm:h-8 min-h-[36px] sm:min-h-0 appearance-none rounded-lg border border-[#EAEAEA] bg-white py-0 pl-2.5 pr-7 text-[12px] transition-colors hover:bg-neutral-50 focus:border-black focus:outline-none",
           value ? "font-medium text-black" : "text-[#666666]",
         )}
       >
@@ -58,7 +58,7 @@ export function FilterSelect({
           </option>
         ))}
       </select>
-      <ChevronDown className="pointer-events-none absolute right-2 top-2.5 h-3 w-3 text-[#666666]" aria-hidden />
+      <ChevronDown className="pointer-events-none absolute right-2 top-3 sm:top-2.5 h-3 w-3 text-[#666666]" aria-hidden />
     </span>
   );
 }
@@ -73,15 +73,15 @@ export function SearchBox({ value, label, placeholder, onSearch }: { value: stri
     return () => clearTimeout(timer);
   }, [text, value, onSearch]);
   return (
-    <div className="relative min-w-[240px] max-w-[500px] flex-1">
-      <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 stroke-[1.5] text-[#666666]" aria-hidden />
+    <div className="relative w-full sm:w-auto min-w-0 sm:min-w-[240px] max-w-[500px] flex-1">
+      <Search className="absolute left-2.5 top-3 sm:top-2.5 h-3.5 w-3.5 stroke-[1.5] text-[#666666]" aria-hidden />
       <input
         type="search"
         aria-label={label}
         placeholder={placeholder}
         value={text}
         onChange={(e) => setText(e.target.value)}
-        className="h-8 w-full rounded-lg border border-[#EAEAEA] bg-white pl-8 pr-3 text-[12px] text-black placeholder:text-[#666666] focus:border-black focus:outline-none"
+        className="h-9 sm:h-8 min-h-[36px] sm:min-h-0 w-full rounded-lg border border-[#EAEAEA] bg-white pl-8 pr-3 text-[12px] text-black placeholder:text-[#666666] focus:border-black focus:outline-none"
       />
     </div>
   );

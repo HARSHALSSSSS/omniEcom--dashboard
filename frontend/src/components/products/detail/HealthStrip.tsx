@@ -48,13 +48,13 @@ export function AttentionBanner({ banner }: { banner: ProductOverview["attention
   const navigate = useNavigate();
   if (!banner) return null;
   return (
-    <div role="status" className="w-full flex flex-row items-center justify-between text-[12px] py-1">
+    <div role="status" className="w-full flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-[12px] py-1">
       <div className="flex flex-row items-center gap-2">
-        <AlertCircle className="h-4 w-4 text-[#666666]" aria-hidden="true" />
+        <AlertCircle className="h-4 w-4 text-[#666666] shrink-0" aria-hidden="true" />
         <span className="font-semibold text-[#000000]">Needs attention</span>
         <span className="text-[#666666]">{banner.text}.</span>
       </div>
-      <button type="button" onClick={() => navigate(toAppPath(banner.action.href))} className="font-semibold text-[#000000] hover:underline cursor-pointer">
+      <button type="button" onClick={() => navigate(toAppPath(banner.action.href))} className="font-semibold text-[#000000] hover:underline cursor-pointer min-h-[36px] sm:min-h-0 flex items-center shrink-0">
         {banner.action.key === "complete_product" ? "Complete product" : "Review →"}
       </button>
     </div>

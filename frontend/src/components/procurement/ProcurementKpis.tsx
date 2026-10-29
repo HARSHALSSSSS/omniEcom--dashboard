@@ -23,7 +23,7 @@ interface ProcurementKpisProps {
 export function ProcurementKpis({ overview: o, loading, failed }: ProcurementKpisProps) {
   if (loading) {
     return (
-      <div role="status" aria-label="Loading procurement summary" className="grid grid-cols-2 gap-4 md:grid-cols-4">
+      <div role="status" aria-label="Loading procurement summary" className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
         {[0, 1, 2, 3].map((i) => (
           <Skeleton key={i} className="h-[92px] rounded-xl" />
         ))}
@@ -39,7 +39,7 @@ export function ProcurementKpis({ overview: o, loading, failed }: ProcurementKpi
   }
   const lead = o.averageLeadTimeDays ?? o.configuredLeadTimeDays;
   return (
-    <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
       <Tile
         label="Open purchase orders"
         value={formatNumber(o.openPurchaseOrders)}

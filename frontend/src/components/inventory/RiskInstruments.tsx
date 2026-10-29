@@ -44,17 +44,21 @@ function HorizonRow({ item, scaleMax, onOpen }: { item: HorizonItem; scaleMax: n
         <div className="relative h-[22px] w-full">
           <div className="absolute left-0 top-[2px] h-[2.5px] w-full rounded-full bg-[#F2F2F2]" />
           {fillPct > 0 && <div style={{ width: `${fillPct}%`, backgroundColor: color }} className="absolute left-0 top-[2px] h-[2.5px] rounded-full" />}
-          {(hasCover || item.stock === 0) && <div style={{ left: fillPct === 0 ? "0px" : `calc(${fillPct}% - 1px)`, backgroundColor: color }} className="absolute top-0 h-[7px] w-[2px] rounded-sm" />}
+          {(hasCover || item.stock === 0) && <div style={{ left: fillPct === 0 ? "0px" : `calc(${fillPct}% - 1px)`, backgroundColor: color }} className="absolute top-0 h-[7px] w-[2px] rounded-sm" title={coverText} />}
           <div style={{ left: `calc(${leadPct}% - 0.75px)` }} className="absolute top-0 h-[9px] w-[1.5px] bg-[#555555]" title={`${item.leadTimeDays}d lead`} />
           <div className="absolute left-0 top-[10px] flex w-full flex-row items-center text-[10px] text-[#888888]">
-            <span>0</span>
-            {hasCover && (
-              <span style={{ position: "absolute", left: `${fillPct}%`, transform: "translateX(-50%)" }}>{Math.round(cover)}d</span>
-            )}
-            <span style={{ position: "absolute", left: `${leadPct}%`, transform: "translateX(6px)" }} className="text-[#555555]">
+            {leadPct >= 16 && <span>0</span>}
+            <span
+              style={{
+                position: "absolute",
+                left: `${leadPct}%`,
+                transform: leadPct < 16 ? (leadPct < 6 ? "none" : "translateX(-25%)") : leadPct > 82 ? "translateX(-100%)" : "translateX(-50%)",
+              }}
+              className="whitespace-nowrap text-[#555555]"
+            >
               {item.leadTimeDays}d lead
             </span>
-            <span className="ml-auto">{scaleMax}d</span>
+            {leadPct <= 82 && <span className="ml-auto">{scaleMax}d</span>}
           </div>
         </div>
       </div>

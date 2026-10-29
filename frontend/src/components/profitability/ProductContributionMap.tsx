@@ -49,7 +49,7 @@ export const ProductContributionMap: React.FC<ProductContributionMapProps> = ({ 
   );
 
   return (
-    <div className="space-y-4 rounded-xl border border-border bg-card p-6 shadow-xs">
+    <div className="space-y-4 rounded-xl border border-border bg-card p-4 sm:p-6 shadow-xs">
       <div>
         <h2 className="text-base font-semibold text-foreground">Product contribution map</h2>
         <p className="mt-0.5 text-xs text-muted-foreground">
@@ -60,16 +60,18 @@ export const ProductContributionMap: React.FC<ProductContributionMapProps> = ({ 
       {placed.length === 0 ? (
         <p className="py-10 text-center text-xs text-muted-foreground">{products.length === 0 ? "No products sold in this period." : "No product has a complete cost picture yet, so none can be placed."}</p>
       ) : (
-        <>
-          <div className="text-[11px] font-medium text-muted-foreground">Contribution margin ↑</div>
-          <div className="grid min-h-[260px] grid-cols-2 grid-rows-2 divide-x divide-y divide-border/60 overflow-hidden rounded-lg border border-border/70 bg-background/50">
-            {cell("marketing", "Marketing opportunity", "Low demand + High margin")}
-            {cell("scale", "Scale opportunity", "High demand + High margin")}
-            {cell("review", "Review candidate", "Low demand + Low margin")}
-            {cell("optimize", "Optimize pricing / cost", "High demand + Low margin")}
+        <div className="overflow-x-auto [-webkit-overflow-scrolling:touch]">
+          <div className="min-w-[460px]">
+            <div className="text-[11px] font-medium text-muted-foreground">Contribution margin ↑</div>
+            <div className="grid min-h-[260px] grid-cols-2 grid-rows-2 divide-x divide-y divide-border/60 overflow-hidden rounded-lg border border-border/70 bg-background/50">
+              {cell("marketing", "Marketing opportunity", "Low demand + High margin")}
+              {cell("scale", "Scale opportunity", "High demand + High margin")}
+              {cell("review", "Review candidate", "Low demand + Low margin")}
+              {cell("optimize", "Optimize pricing / cost", "High demand + Low margin")}
+            </div>
+            <div className="flex justify-end text-[11px] font-medium text-muted-foreground">Demand →</div>
           </div>
-          <div className="flex justify-end text-[11px] font-medium text-muted-foreground">Demand →</div>
-        </>
+        </div>
       )}
       {unplaced > 0 && placed.length > 0 && (
         <p className="text-[11px] text-muted-foreground">
