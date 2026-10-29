@@ -16,7 +16,7 @@
     "@oms/contracts": "workspace:*",
     "@oms/marketplace-core": "workspace:*",
     "zod": "^4.6.6",
-    "fastify": "^5.12.5",
+    "fastify": "^5.12.7",
     "fastify-type-provider-zod": "^7.0.0",
     "@oms/mod-marketplace-accounts": "workspace:*",
     "@oms/mod-marketplace-connectors": "workspace:*",
