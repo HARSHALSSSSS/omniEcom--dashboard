@@ -17,7 +17,7 @@
     "@opentelemetry/exporter-trace-otlp-http": "^0.222.0",
     "@opentelemetry/instrumentation-http": "^0.222.0",
     "@opentelemetry/instrumentation-pg": "^0.74.0",
-    "@opentelemetry/resources": "^2.11.0",
+    "@opentelemetry/resources": "^3.0.0",
     "@opentelemetry/semantic-conventions": "^1.43.0",
     "@oms/config": "workspace:*",
     "@oms/logging": "workspace:*"
