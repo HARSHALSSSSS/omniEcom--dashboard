@@ -74,3 +74,74 @@ export function isSafeInternalRedirect(path: string | null | undefined): boolean
   }
   return true;
 }
+
+/**
+ * Trusted domains for external OAuth authorization redirects.
+ */
+export const TRUSTED_OAUTH_DOMAINS = [
+  "amazon.com",
+  "amazon.in",
+  "shopify.com",
+  "myshopify.com",
+  "flipkart.com",
+  "myntra.com",
+  "nykaa.com",
+  "meesho.com",
+  "localhost",
+  "127.0.0.1",
+] as const;
+
+/**
+ * Validates that an external redirect target (such as OAuth authorization URLs)
+ * strictly uses a valid HTTP or HTTPS protocol, contains no control characters,
+ * contains no embedded credentials, and optionally matches an allowlist of trusted domains.
+ * Remote external destinations must use HTTPS; HTTP is only permitted on localhost.
+ */
+export function isSafeExternalRedirect(
+  url: string | null | undefined,
+  allowedHosts?: readonly string[],
+): boolean {
+  if (!url || typeof url !== "string") return false;
+  const trimmed = url.trim();
+  if (!trimmed) return false;
+
+  // Block control characters / CRLF injection
+  for (let i = 0; i < trimmed.length; i++) {
+    const code = trimmed.charCodeAt(i);
+    if (code <= 0x1f || code === 0x7f) return false;
+  }
+
+  try {
+    const parsed = new URL(trimmed);
+    const isLocal =
+      parsed.hostname === "localhost" ||
+      parsed.hostname === "127.0.0.1" ||
+      parsed.hostname === "[::1]";
+
+    // Remote endpoints must use HTTPS; HTTP is only accepted for local dev/testing
+    if (parsed.protocol !== "https:" && !(parsed.protocol === "http:" && isLocal)) {
+      return false;
+    }
+
+    // Disallow userinfo (e.g. https://attacker@victim.com)
+    if (parsed.username || parsed.password) {
+      return false;
+    }
+
+    // If an allowlist of trusted domains is specified, enforce it
+    if (allowedHosts && allowedHosts.length > 0) {
+      const host = parsed.hostname.toLowerCase();
+      const match = allowedHosts.some((allowed) => {
+        const lower = allowed.toLowerCase();
+        return host === lower || host.endsWith(`.${lower}`);
+      });
+      if (!match) return false;
+    }
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+

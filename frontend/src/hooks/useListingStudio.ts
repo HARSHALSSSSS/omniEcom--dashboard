@@ -43,11 +43,10 @@ export const useStudio = (id: string) =>
     queryKey: STUDIO_KEYS.studio(id),
     queryFn: () => listingStudioApi.getStudio(id),
     enabled: !!id,
-    staleTime: 0,
-    refetchOnMount: "always",
+    staleTime: 30_000,
   });
 
-export { useDebounced } from "@/hooks/useDebounced";
+export { useDebounced, useDebounce } from "@/hooks/useDebounced";
 
 /** marketplace category search of the category dialog */
 export const useCategorySearch = (accountId: string | undefined, query: string, enabled: boolean) =>
@@ -223,10 +222,11 @@ export function useStudioController(id: string) {
   // ---------------------------------------------------------------- the listing flow and its job
   const jobQuery = useQuery<SyncJob>({
     queryKey: STUDIO_KEYS.job(jobRef?.id ?? ""),
-    queryFn: () => listingStudioApi.getJob(jobRef?.id ?? ""),
+    queryFn: ({ signal }) => listingStudioApi.getJob(jobRef?.id ?? "", signal),
     enabled: !!jobRef,
     retry: false,
     refetchInterval: (q) => (q.state.data && isJobDone(q.state.data.status) ? false : JOB_POLL_MS),
+    refetchIntervalInBackground: false,
   });
   const job = jobQuery.data ?? null;
   const handledJob = useRef<string | null>(null);

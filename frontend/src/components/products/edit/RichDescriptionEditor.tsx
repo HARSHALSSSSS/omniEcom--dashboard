@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { cn } from "@/utils/cn";
-import { sanitizeHtml } from "@/utils/security";
+import { isSafeUrl, sanitizeHtml } from "@/utils/security";
 import { DESCRIPTION_MAX, htmlToPlain } from "./form";
 
 interface Props {
@@ -13,9 +13,16 @@ interface Props {
   describedBy?: string;
 }
 
-const exec = (command: string, arg?: string) => {
+const exec = (command: string, arg?: string): boolean => {
   // execCommand is deprecated but is the only dependency-free way to get bold / italic / list / link in a contenteditable
-  if (typeof document.execCommand === "function") document.execCommand(command, false, arg);
+  if (typeof document.execCommand === "function") {
+    try {
+      return document.execCommand(command, false, arg);
+    } catch {
+      return false;
+    }
+  }
+  return false;
 };
 
 /**
@@ -43,6 +50,15 @@ export function RichDescriptionEditor({ id, value, onChange, disabled, invalid, 
     onChange(emitted.current);
   };
 
+  const onPaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const text = e.clipboardData.getData("text/plain");
+    if (!exec("insertText", text) && ref.current) {
+      ref.current.append(document.createTextNode(text));
+    }
+    emit();
+  };
+
   const chars = [...htmlToPlain(value)].length;
   const tools = [
     { label: "Bold", text: "Bold", run: () => exec("bold") },
@@ -52,8 +68,14 @@ export function RichDescriptionEditor({ id, value, onChange, disabled, invalid, 
       label: "Add link",
       text: "Link",
       run: () => {
-        const url = window.prompt("Link address (https://...)");
-        if (url && /^https?:\/\//i.test(url.trim())) exec("createLink", url.trim());
+        const rawUrl = window.prompt("Link address (https://...)");
+        if (!rawUrl) return;
+        const trimmed = rawUrl.trim();
+        // Disallow javascript: and invalid schemes before creating DOM link
+        if (isSafeUrl(trimmed) && /^https?:\/\//i.test(trimmed)) {
+          exec("createLink", trimmed);
+          emit();
+        }
       },
     },
   ];
@@ -95,6 +117,7 @@ export function RichDescriptionEditor({ id, value, onChange, disabled, invalid, 
             contentEditable={!disabled}
             suppressContentEditableWarning
             onInput={emit}
+            onPaste={onPaste}
             className="min-h-[66px] w-full text-[13px] text-[#000000] leading-[145%] outline-none bg-transparent [&_ul]:list-disc [&_ul]:pl-5 [&_a]:underline"
           />
         </div>

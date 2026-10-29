@@ -76,7 +76,7 @@ export const ordersApi = {
   activity: async (limit = 5, signal?: AbortSignal) =>
     unwrap<OrderActivityItem[]>(await client.get(ENDPOINTS.ORDERS_ACTIVITY, { params: { limit }, signal })),
 
-  views: async () => unwrap<OrderSavedView[]>(await client.get(ENDPOINTS.VIEWS, { params: { screen: "orders" } })),
+  views: async (signal?: AbortSignal) => unwrap<OrderSavedView[]>(await client.get(ENDPOINTS.VIEWS, { params: { screen: "orders" }, ...(signal ? { signal } : {}) })),
 
   createView: async (input: { name: string; filters: Record<string, unknown>; sort: string | null; shared: boolean }) =>
     unwrap<OrderSavedView>(await client.post(ENDPOINTS.VIEWS, { screen: "orders", ...input })),
@@ -102,17 +102,17 @@ export const ordersApi = {
   /** holds stock for the lines that are still short */
   allocate: async (id: string) => unwrap<{ order: OrderDetail; reserved: number; wanted: number }>(await client.post(`${ENDPOINTS.ORDER(id)}/allocate`, {})),
 
-  cancellationReasons: async () => unwrap<CancellationReason[]>(await client.get(ENDPOINTS.ORDERS_CANCELLATION_REASONS)),
+  cancellationReasons: async (signal?: AbortSignal) => unwrap<CancellationReason[]>(await client.get(ENDPOINTS.ORDERS_CANCELLATION_REASONS, signal ? { signal } : undefined)),
 
   /** a 200 with a result per order, even when some of them failed */
   bulk: async (action: BulkOrderAction, ids: string[], params: BulkOrderParams = {}) =>
     unwrap<BulkOrdersResponse>(await client.post(ENDPOINTS.ORDERS_BULK, { action, ids, params })),
 
   /** connected accounts (sync targets) and the marketplaces' own names */
-  channels: async (): Promise<{ accounts: OrderAccount[]; options: MarketplaceRef[] }> => {
+  channels: async (signal?: AbortSignal): Promise<{ accounts: OrderAccount[]; options: MarketplaceRef[] }> => {
     const [accounts, marketplaces] = await Promise.all([
-      client.get<{ data: OrderAccount[] }>(ENDPOINTS.MARKETPLACE_ACCOUNTS, { params: { limit: 100 } }),
-      client.get<{ data: Array<{ code: string; displayName: string }> }>(ENDPOINTS.MARKETPLACES).catch(() => null),
+      client.get<{ data: OrderAccount[] }>(ENDPOINTS.MARKETPLACE_ACCOUNTS, { params: { limit: 100 }, ...(signal ? { signal } : {}) }),
+      client.get<{ data: Array<{ code: string; displayName: string }> }>(ENDPOINTS.MARKETPLACES, signal ? { signal } : undefined).catch(() => null),
     ]);
     const names = new Map((marketplaces?.data.data ?? []).map((m) => [m.code, m.displayName]));
     const seen = new Map<string, MarketplaceRef>();
@@ -125,8 +125,8 @@ export const ordersApi = {
     };
   },
 
-  warehouses: async (): Promise<WarehouseOption[]> => {
-    const res = await client.get<{ data: WarehouseOption[] }>(ENDPOINTS.WAREHOUSES, { params: { limit: 100, "filter[status]": "active" } });
+  warehouses: async (signal?: AbortSignal): Promise<WarehouseOption[]> => {
+    const res = await client.get<{ data: WarehouseOption[] }>(ENDPOINTS.WAREHOUSES, { params: { limit: 100, "filter[status]": "active" }, ...(signal ? { signal } : {}) });
     return res.data.data.map((w) => ({ id: w.id, code: w.code, name: w.name, isDefault: w.isDefault }));
   },
 

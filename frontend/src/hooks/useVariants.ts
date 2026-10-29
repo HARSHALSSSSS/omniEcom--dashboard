@@ -64,7 +64,7 @@ export function useWarehouses(enabled: boolean) {
     queryKey: VARIANT_KEYS.warehouses,
     queryFn: ({ signal }) => variantsApi.warehouses(signal),
     enabled,
-    staleTime: 60_000,
+    staleTime: 5 * 60_000,
     retry: false,
   });
 }

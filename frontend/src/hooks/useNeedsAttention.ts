@@ -52,19 +52,19 @@ export function useIssueHistory(status: HistoryStatus, page: number, pageSize: n
 /** the "Recommended action" banner; null when the server has nothing to say */
 export function useQueueRecommendation() {
   const staleTime = useStaleTime(30_000);
-  return useQuery({ queryKey: ATTENTION_KEYS.recommendation(), queryFn: () => attentionApi.recommendation(), staleTime });
+  return useQuery({ queryKey: ATTENTION_KEYS.recommendation(), queryFn: ({ signal }) => attentionApi.recommendation(signal), staleTime });
 }
 
 /** members an issue can be assigned to (needs issues:write); an error simply hides assigning */
 export function useAssignees(enabled: boolean) {
   // assignees list is stable (roles / members rarely change) so 5 min is fine
   const staleTime = useStaleTime(5 * 60_000);
-  return useQuery({ queryKey: ATTENTION_KEYS.assignees(), queryFn: () => attentionApi.assignees(), enabled, staleTime, retry: false });
+  return useQuery({ queryKey: ATTENTION_KEYS.assignees(), queryFn: ({ signal }) => attentionApi.assignees(signal), enabled, staleTime, retry: false });
 }
 
 export function useIssueDetail(id: string | null) {
   const staleTime = useStaleTime(30_000);
-  return useQuery({ queryKey: ATTENTION_KEYS.detail(id ?? ""), queryFn: () => attentionApi.detail(id as string), enabled: Boolean(id), staleTime });
+  return useQuery({ queryKey: ATTENTION_KEYS.detail(id ?? ""), queryFn: ({ signal }) => attentionApi.detail(id as string, signal), enabled: Boolean(id), staleTime });
 }
 
 /** what the person is told when a write fails (the server's own rule names win over the generic text) */

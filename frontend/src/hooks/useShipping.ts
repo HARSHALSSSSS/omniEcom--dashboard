@@ -229,7 +229,8 @@ export function useShippingSync() {
     queryFn: ({ signal }) => shippingApi.syncJob(id as string, signal),
     enabled: id !== null,
     placeholderData: latest.data && latest.data.id === id ? latest.data : undefined,
-    refetchInterval: (q) => (q.state.data && !SYNC_RUNNING.includes(q.state.data.status) ? false : 1000),
+    refetchInterval: (q) => (q.state.data && !SYNC_RUNNING.includes(q.state.data.status) ? false : 2500),
+    refetchIntervalInBackground: false,
   });
   const job = poll.data ?? null;
   const running = job !== null && SYNC_RUNNING.includes(job.status);

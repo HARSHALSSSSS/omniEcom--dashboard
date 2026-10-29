@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { errorMessage } from "@/api/errors";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -35,6 +35,7 @@ export function PricingOverviewView({ overview, onReviewProposals, onTableQueryC
   const navigate = useNavigate();
   const canWrite = useCan("pricing:write");
   const [feesFor, setFeesFor] = useState<string | null>(null);
+  const reviewCostsBusy = useRef(false);
   const margins = useMarginOverview();
   const pending = useProposals(OPPORTUNITIES);
 
@@ -70,12 +71,16 @@ export function PricingOverviewView({ overview, onReviewProposals, onTableQueryC
   };
   // unit costs are edited on a product's variants: open the first product of this channel that has no cost price
   const reviewCosts = async (row: ChannelMargin) => {
+    if (reviewCostsBusy.current) return;
+    reviewCostsBusy.current = true;
     try {
       const page = await pricingApi.priceTable({ accountId: row.accountId, state: "unknown_cost", sort: "product", page: 1, pageSize: 1 });
       const first = page.items[0];
       navigate(first ? `${ROUTES.PRODUCTS}/${first.productId}/variants` : ROUTES.PRODUCTS);
     } catch {
       navigate(ROUTES.PRODUCTS);
+    } finally {
+      reviewCostsBusy.current = false;
     }
   };
   const editFees = (row: ChannelMargin) => setFeesFor(row.accountId);

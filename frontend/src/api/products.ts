@@ -127,8 +127,8 @@ export const catalogApi = {
 
 /** the product endpoints the create / edit / detail screens still use (each of those sections replaces its part) */
 export const productsApi = {
-  getProduct: async (id: string): Promise<Product> => {
-    const response = await client.get<{ data: Product }>(`/products/${id}`);
+  getProduct: async (id: string, signal?: AbortSignal): Promise<Product> => {
+    const response = await client.get<{ data: Product }>(`/products/${id}`, signal ? { signal } : undefined);
     return response.data.data;
   },
 

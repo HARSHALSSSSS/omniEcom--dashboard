@@ -231,8 +231,8 @@ export interface Readiness {
 }
 
 export const onboardingApi = {
-  get: async () => unwrap<OnboardingProgress>(await client.get(ENDPOINTS.ONBOARDING)),
-  options: async () => unwrap<OnboardingOptions>(await client.get(ENDPOINTS.ONBOARDING_OPTIONS)),
+  get: async (signal?: AbortSignal) => unwrap<OnboardingProgress>(await client.get(ENDPOINTS.ONBOARDING, signal ? { signal } : undefined)),
+  options: async (signal?: AbortSignal) => unwrap<OnboardingOptions>(await client.get(ENDPOINTS.ONBOARDING_OPTIONS, signal ? { signal } : undefined)),
 
   saveBusiness: async (input: BusinessInput) =>
     unwrap<{ business: OnboardingBusiness; state: OnboardingProgress }>(await client.put(ENDPOINTS.ONBOARDING_BUSINESS, input)),
@@ -240,37 +240,37 @@ export const onboardingApi = {
     unwrap<OnboardingProgress>(await client.put(ENDPOINTS.ONBOARDING_STEP_DRAFT(step), { data })),
   skip: async (step: StepKey) => unwrap<OnboardingProgress>(await client.post(ENDPOINTS.ONBOARDING_STEP_SKIP(step), {})),
 
-  channels: async () => unwrap<ChannelsResult>(await client.get(ENDPOINTS.ONBOARDING_CHANNELS)),
+  channels: async (signal?: AbortSignal) => unwrap<ChannelsResult>(await client.get(ENDPOINTS.ONBOARDING_CHANNELS, signal ? { signal } : undefined)),
   saveChannels: async (selected: string[]) =>
     unwrap<{ selected: string[]; state: OnboardingProgress }>(await client.put(ENDPOINTS.ONBOARDING_CHANNELS, { selected })),
   connectChannel: async (code: string, body: { displayName?: string; mode?: "live" | "sandbox" } = {}) =>
     unwrap<ConnectChannelResult>(await client.post(ENDPOINTS.ONBOARDING_CHANNEL_CONNECT(code), body)),
-  connectorForm: async (code: string) => unwrap<ConnectorForm>(await client.get(ENDPOINTS.ONBOARDING_CONNECTOR(code))),
+  connectorForm: async (code: string, signal?: AbortSignal) => unwrap<ConnectorForm>(await client.get(ENDPOINTS.ONBOARDING_CONNECTOR(code), signal ? { signal } : undefined)),
   /** sends the credentials once; the server validates them with the marketplace before storing them */
   authorizeAccount: async (accountId: string, credentials: Record<string, string>) =>
     unwrap<{ id: string; status: string; connectionStatus: string }>(
       await client.post(ENDPOINTS.ONBOARDING_ACCOUNT_AUTHORIZE(accountId), { credentials }),
     ),
 
-  products: async () => unwrap<CatalogOverview>(await client.get(ENDPOINTS.ONBOARDING_PRODUCTS)),
+  products: async (signal?: AbortSignal) => unwrap<CatalogOverview>(await client.get(ENDPOINTS.ONBOARDING_PRODUCTS, signal ? { signal } : undefined)),
   refreshCounts: async (accountId?: string) =>
     unwrap<RefreshCountsResult>(await client.post(ENDPOINTS.ONBOARDING_PRODUCTS_REFRESH_COUNTS, accountId ? { accountId } : {})),
   importCatalog: async (accountId: string) =>
     unwrap<ImportStarted>(await client.post(ENDPOINTS.ONBOARDING_PRODUCTS_IMPORT, { accountId })),
-  syncJob: async (id: string) => unwrap<SyncJob>(await client.get(ENDPOINTS.ONBOARDING_SYNC_JOB(id))),
+  syncJob: async (id: string, signal?: AbortSignal) => unwrap<SyncJob>(await client.get(ENDPOINTS.ONBOARDING_SYNC_JOB(id), signal ? { signal } : undefined)),
   continueProducts: async () => unwrap<OnboardingProgress>(await client.post(ENDPOINTS.ONBOARDING_PRODUCTS_CONTINUE, {})),
 
-  inventory: async () => unwrap<InventorySetup>(await client.get(ENDPOINTS.ONBOARDING_INVENTORY)),
+  inventory: async (signal?: AbortSignal) => unwrap<InventorySetup>(await client.get(ENDPOINTS.ONBOARDING_INVENTORY, signal ? { signal } : undefined)),
   saveInventory: async (input: InventoryInput) =>
     unwrap<{ warehouseId: string; created: boolean; setup: InventorySetup; state: OnboardingProgress }>(
       await client.put(ENDPOINTS.ONBOARDING_INVENTORY, input),
     ),
-  inventoryOverview: async () => unwrap<InventoryOverview>(await client.get(ENDPOINTS.ONBOARDING_INVENTORY_OVERVIEW)),
+  inventoryOverview: async (signal?: AbortSignal) => unwrap<InventoryOverview>(await client.get(ENDPOINTS.ONBOARDING_INVENTORY_OVERVIEW, signal ? { signal } : undefined)),
 
-  fulfillment: async () => unwrap<FulfillmentSetup>(await client.get(ENDPOINTS.ONBOARDING_FULFILLMENT)),
+  fulfillment: async (signal?: AbortSignal) => unwrap<FulfillmentSetup>(await client.get(ENDPOINTS.ONBOARDING_FULFILLMENT, signal ? { signal } : undefined)),
   saveFulfillment: async (input: FulfillmentInput) =>
     unwrap<{ fulfillment: FulfillmentSetup; state: OnboardingProgress }>(await client.put(ENDPOINTS.ONBOARDING_FULFILLMENT, input)),
 
-  readiness: async () => unwrap<Readiness>(await client.get(ENDPOINTS.ONBOARDING_READINESS)),
+  readiness: async (signal?: AbortSignal) => unwrap<Readiness>(await client.get(ENDPOINTS.ONBOARDING_READINESS, signal ? { signal } : undefined)),
   complete: async () => unwrap<{ alreadyCompleted: boolean; completedAt: string }>(await client.post(ENDPOINTS.ONBOARDING_COMPLETE, {})),
 };

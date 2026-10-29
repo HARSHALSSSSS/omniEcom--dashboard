@@ -24,27 +24,29 @@ export const CONNECTOR_KEYS = {
 export function useConnections() {
   return useQuery<ConnectionsListResponse>({
     queryKey: CONNECTOR_KEYS.connections(),
-    queryFn: connectorsApi.getConnections,
-    staleTime: 15_000,
+    queryFn: ({ signal }) => connectorsApi.getConnections(signal),
+    staleTime: 30_000,
     refetchInterval: (q) =>
       q.state.data?.data.some((c) => c.syncState === "syncing") ? 4000 : false,
+    refetchIntervalInBackground: false,
   });
 }
 
 export function useConnection(id: string | null) {
   return useQuery<ChannelConnection>({
     queryKey: CONNECTOR_KEYS.connection(id ?? ""),
-    queryFn: () => (id ? connectorsApi.getConnection(id) : Promise.reject(new Error("No id"))),
+    queryFn: ({ signal }) => (id ? connectorsApi.getConnection(id, signal) : Promise.reject(new Error("No id"))),
     enabled: Boolean(id),
-    staleTime: 15_000,
+    staleTime: 30_000,
     refetchInterval: (q) => (q.state.data?.syncState === "syncing" ? 4000 : false),
+    refetchIntervalInBackground: false,
   });
 }
 
 export function useConnectorDirectory() {
   return useQuery({
     queryKey: CONNECTOR_KEYS.directory(),
-    queryFn: connectorsApi.getDirectory,
+    queryFn: ({ signal }) => connectorsApi.getDirectory(signal),
     staleTime: 60_000,
   });
 }
@@ -52,11 +54,11 @@ export function useConnectorDirectory() {
 export function useConnectorHealth() {
   return useQuery<HealthOverviewResponse["data"]>({
     queryKey: CONNECTOR_KEYS.health(),
-    queryFn: connectorsApi.getHealthOverview,
+    queryFn: ({ signal }) => connectorsApi.getHealthOverview(signal),
     staleTime: 15_000,
-    // the screen is a live monitor: keep it fresh, also when the tab is in the background
+    // the screen is a live monitor: keep it fresh, but stop polling when tab is backgrounded
     refetchInterval: 30_000,
-    refetchIntervalInBackground: true,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -165,10 +167,14 @@ export function useDisconnectConnection() {
 export function useRecentSyncJobs() {
   return useQuery<HubSyncJob[]>({
     queryKey: CONNECTOR_KEYS.syncJobs(),
-    queryFn: connectorsApi.getRecentSyncJobs,
+    queryFn: ({ signal }) => connectorsApi.getRecentSyncJobs(signal),
     staleTime: 10_000,
-    refetchInterval: 15_000,
-    refetchIntervalInBackground: true,
+    refetchInterval: (q) => {
+      const data = q.state.data;
+      const hasActive = data?.some((j) => j.status === "running" || j.status === "queued");
+      return hasActive ? 10_000 : 30_000;
+    },
+    refetchIntervalInBackground: false,
   });
 }
 

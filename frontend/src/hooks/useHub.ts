@@ -24,8 +24,9 @@ export function useHubAccounts() {
   return useQuery({
     queryKey: HUB_KEYS.accounts(businessId),
     queryFn: ({ signal }) => hubApi.accounts(signal),
-    staleTime: 15_000,
+    staleTime: 30_000,
     refetchInterval: (q) => (q.state.data?.items.some((a) => a.syncState === "syncing") ? 4000 : false),
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -35,8 +36,9 @@ export function useHubAccount(id: string | null) {
     queryFn: ({ signal }) => hubApi.account(id as string, signal),
     enabled: Boolean(id),
     retry: false,
-    staleTime: 15_000,
+    staleTime: 30_000,
     refetchInterval: (q) => (q.state.data?.syncState === "syncing" ? 4000 : false),
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -174,8 +176,8 @@ export function useSetupSync(accountId: string | null, seed: string[]) {
     queryFn: ({ signal }) => hubApi.syncStatus(accountId as string, signal),
     enabled: Boolean(accountId) && ids.length > 0,
     gcTime: 0,
-    // the setup step must notice the end of the jobs even while the tab is in the background
-    refetchIntervalInBackground: true,
+    // stop background polling when the browser tab is hidden
+    refetchIntervalInBackground: false,
     refetchInterval: (q) => {
       const s = q.state.data;
       if (!s) return 1500;

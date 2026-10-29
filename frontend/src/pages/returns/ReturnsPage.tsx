@@ -36,7 +36,7 @@ export default function ReturnsPage() {
   const canWrite = useCan("returns:write");
 
   const query = ledgerQueryOf(url);
-  const summary = useReturnsSummary(days);
+  const summary = useReturnsSummary(days, view === "overview");
   const overview = useReturnsOverview();
   const insights = useReturnsInsights(days);
   const marketplaces = useReturnMarketplaces();

@@ -41,9 +41,9 @@ export const NotificationsPanel = () => {
   const list = useInfiniteQuery({
     queryKey: [...KEY, { unreadOnly, category }],
     enabled: notificationsPanelOpen,
-    staleTime: 0,
+    staleTime: 15_000,
     refetchInterval: notificationsPanelOpen ? PANEL_REFRESH_MS : false,
-    refetchIntervalInBackground: true,
+    refetchIntervalInBackground: false,
     initialPageParam: null as string | number | null,
     queryFn: ({ pageParam }) => workspaceApi.notifications({ before: pageParam, limit: 20, unread: unreadOnly, category: category || undefined }),
     getNextPageParam: (last) => last.nextBefore ?? undefined,

@@ -16,9 +16,9 @@ export const AUDIT_KEYS = {
 /** a screen that shows a sync in progress refreshes itself this often */
 export const SYNC_POLL_MS = 4000;
 
-export const useReadinessAudit = () => useQuery({ queryKey: AUDIT_KEYS.readiness, queryFn: listingAuditApi.getReadiness, staleTime: 0, refetchOnMount: "always" });
+export const useReadinessAudit = () => useQuery({ queryKey: AUDIT_KEYS.readiness, queryFn: ({ signal }) => listingAuditApi.getReadiness(signal), staleTime: 15_000 });
 
-export const usePublishingPreparation = () => useQuery({ queryKey: AUDIT_KEYS.publishing, queryFn: listingAuditApi.getPublishing, staleTime: 0, refetchOnMount: "always" });
+export const usePublishingPreparation = () => useQuery({ queryKey: AUDIT_KEYS.publishing, queryFn: ({ signal }) => listingAuditApi.getPublishing(signal), staleTime: 15_000 });
 
 /** the sync telemetry of a listing; polls while a step is in progress */
 export const useListingSync = (id: string) =>
@@ -26,12 +26,12 @@ export const useListingSync = (id: string) =>
     queryKey: AUDIT_KEYS.sync(id),
     queryFn: () => listingAuditApi.getSync(id),
     enabled: !!id,
-    staleTime: 0,
-    refetchOnMount: "always",
+    staleTime: 10_000,
     refetchInterval: (q) => ((q.state.data as ListingSync | undefined)?.state === "syncing" ? SYNC_POLL_MS : false),
+    refetchIntervalInBackground: false,
   });
 
-export const useListingChannels = (id: string) => useQuery({ queryKey: AUDIT_KEYS.channels(id), queryFn: () => listingAuditApi.getChannels(id), enabled: !!id, staleTime: 15_000 });
+export const useListingChannels = (id: string) => useQuery({ queryKey: AUDIT_KEYS.channels(id), queryFn: ({ signal }) => listingAuditApi.getChannels(id, signal), enabled: !!id, staleTime: 15_000 });
 
 const refreshListings = (qc: ReturnType<typeof useQueryClient>) => {
   void qc.invalidateQueries({ queryKey: AUDIT_KEYS.all });

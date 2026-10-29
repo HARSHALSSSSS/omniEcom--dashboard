@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { productCreationApi } from "@/api/productCreation.api";
 import { errorMessage } from "@/api/errors";
+import { useSubmitLock } from "@/hooks/useSubmitGuard";
 import type { ReadinessState, SkuCheck } from "@/types/productCreation";
 import { TextField } from "./fields";
 import { hintClass, errorClass, linkButton } from "./fieldStyles";
@@ -60,13 +61,16 @@ export function SkuField({ value, onChange, productId, skuState, disabled, error
   const available = !!result && result.valid && result.available;
   const verified = available && skuState === "done";
   const canVerify = available && !verified && !disabled;
-
+  const acquire = useSubmitLock();
   const verify = async () => {
+    const release = acquire();
+    if (!release) return;
     setVerifying(true);
     setVerifyError(null);
     try {
       setVerifyError(await onVerify(code));
     } finally {
+      release();
       setVerifying(false);
     }
   };

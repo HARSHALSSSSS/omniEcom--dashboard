@@ -94,7 +94,7 @@ export function ShipmentsSection(props: ShipmentsSectionProps) {
     const pdf = results && pdfOf(results);
     if (!pdf) return;
     const href = URL.createObjectURL(pdf.blob);
-    window.open(href, "_blank", "noopener");
+    window.open(href, "_blank", "noopener,noreferrer");
     setTimeout(() => URL.revokeObjectURL(href), 60_000);
   };
 

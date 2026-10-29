@@ -108,9 +108,12 @@ export const isDraft = (c: Pick<PromotionCampaign, "status">): boolean => c.stat
 /** "1499" or "1499.50" to minor units (149950); null when it is not a plain amount with at most two decimals */
 export function parseMinor(text: string): number | null {
   const t = text.trim().replace(/,/g, "");
-  const m = /^(\d{1,9})(?:\.(\d{1,2}))?$/.exec(t);
-  if (!m) return null;
-  return Number(m[1]) * 100 + Number((m[2] ?? "").padEnd(2, "0") || "0");
+  const parts = t.split(".");
+  if (parts.length > 2 || parts.length === 0) return null;
+  const [whole, frac] = parts;
+  if (!whole || !/^\d{1,9}$/.test(whole)) return null;
+  if (frac !== undefined && !/^\d{1,2}$/.test(frac)) return null;
+  return Number(whole) * 100 + Number((frac ?? "").padEnd(2, "0") || "0");
 }
 
 /** 149950 to "1499.5" for editing (no grouping, no trailing zeros) */
@@ -123,9 +126,12 @@ export function minorToInput(minor: number): string {
 /** "12.5" percent to basis points (1250); null when it has more than two decimals */
 export function parseBps(text: string): number | null {
   const t = text.trim();
-  const m = /^(\d{1,3})(?:\.(\d{1,2}))?$/.exec(t);
-  if (!m) return null;
-  return Number(m[1]) * 100 + Number((m[2] ?? "").padEnd(2, "0") || "0");
+  const parts = t.split(".");
+  if (parts.length > 2 || parts.length === 0) return null;
+  const [whole, frac] = parts;
+  if (!whole || !/^\d{1,3}$/.test(whole)) return null;
+  if (frac !== undefined && !/^\d{1,2}$/.test(frac)) return null;
+  return Number(whole) * 100 + Number((frac ?? "").padEnd(2, "0") || "0");
 }
 
 /** 1250 bps to "12.5" */

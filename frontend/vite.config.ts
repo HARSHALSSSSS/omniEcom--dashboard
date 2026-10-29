@@ -30,9 +30,18 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    // Prevent unminified source code leakage in production builds
+    sourcemap: false,
+  },
   server: {
     port: 5173,
     open: true,
+    headers: {
+      "X-Content-Type-Options": "nosniff",
+      "X-Frame-Options": "DENY",
+      "Referrer-Policy": "strict-origin-when-cross-origin",
+    },
     // the browser talks to /api/v1 on this origin; Vite forwards it to the API (no CORS, no cookies involved)
     proxy: {
       "/api": {

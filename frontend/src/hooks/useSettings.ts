@@ -37,8 +37,7 @@ export const useSettingsQuery = () =>
   useQuery({
     queryKey: SETTINGS_KEYS.overview,
     queryFn: () => settingsApi.get(),
-    staleTime: 0,
-    refetchOnMount: "always",
+    staleTime: 60_000,
     // the `version` of the baseline must stay the one the seller started from, so a background refetch never silently replaces it
     refetchOnWindowFocus: false,
   });
@@ -211,8 +210,12 @@ export function useSettingsController() {
       void refreshShell().catch(() => undefined);
       // the business name, currency, number format, time zone and low-stock threshold are read all over the app
       // the same re-read covers what obeys the pricing, stock and preference settings (pricing, promotions, profitability, inventory, listings, reports)
-      if (built.modified.some((k) => SHELL_FIELDS.includes(k) || k.startsWith("ext:") || k === "bufferPercent" || k === "roundPriceToNine"))
-        void qc.invalidateQueries({ predicate: (q) => q.queryKey[0] !== "settings" });
+      if (built.modified.some((k) => SHELL_FIELDS.includes(k) || k.startsWith("ext:") || k === "bufferPercent" || k === "roundPriceToNine")) {
+        const affectedDomains = ["pricing", "promotions", "inventory", "listings", "reports", "analytics"];
+        void qc.invalidateQueries({
+          predicate: (q) => typeof q.queryKey[0] === "string" && affectedDomains.includes(q.queryKey[0]),
+        });
+      }
       toast({ title: "Settings saved", variant: "success" });
       return "saved";
     } catch (e) {
@@ -371,7 +374,7 @@ export function useTeamActions() {
 
 // ---------------------------------------------------------------- account security
 
-export const useSessions = () => useQuery({ queryKey: SETTINGS_KEYS.sessions, queryFn: () => settingsApi.sessions(), staleTime: 0, refetchOnMount: "always" });
+export const useSessions = () => useQuery({ queryKey: SETTINGS_KEYS.sessions, queryFn: () => settingsApi.sessions(), staleTime: 30_000 });
 
 export function useSecurityActions() {
   const qc = useQueryClient();

@@ -23,8 +23,8 @@ export function ProductField({ id, value, onPick, onPickCatalog, disabled }: Pro
     const t = window.setTimeout(() => setQ(text.trim()), 300);
     return () => window.clearTimeout(t);
   }, [text]);
-  const results = useInventoryLedger({ q, page: 1, pageSize: 8 }, searching && q !== "");
-  const unstocked = useUnstockedVariants(q, Boolean(onPickCatalog) && searching && q !== "");
+  const results = useInventoryLedger({ q, page: 1, pageSize: 8 }, searching && q.length >= 2);
+  const unstocked = useUnstockedVariants(q, Boolean(onPickCatalog) && searching && q.length >= 2);
   const unstockedItems = onPickCatalog ? (unstocked.data ?? []) : [];
 
   if (!searching && value) {
@@ -47,10 +47,10 @@ export function ProductField({ id, value, onPick, onPickCatalog, disabled }: Pro
         <Search className="h-3.5 w-3.5 stroke-[1.75px] text-[#888888]" aria-hidden />
         <input id={id} autoComplete="off" aria-label="Search for a product" value={text} onChange={(e) => setText(e.target.value)} placeholder="Search SKU, product or barcode" className="w-full border-none bg-transparent text-[12px] text-[#111111] outline-none placeholder:text-[#888888]" />
       </div>
-      {q !== "" && results.isPending && <p className="m-0 text-[11px] text-[#737373]">Searching...</p>}
-      {q !== "" && results.isError && <p role="alert" className="m-0 text-[11px] text-red-700">The search failed. Try again.</p>}
-      {results.data && results.data.items.length === 0 && unstockedItems.length === 0 && !unstocked.isPending && <p className="m-0 text-[11px] text-[#737373]">No product matches &quot;{q}&quot;.</p>}
-      {results.data && results.data.items.length > 0 && q !== "" && (
+      {q.length >= 2 && results.isPending && <p className="m-0 text-[11px] text-[#737373]">Searching...</p>}
+      {q.length >= 2 && results.isError && <p role="alert" className="m-0 text-[11px] text-red-700">The search failed. Try again.</p>}
+      {q.length >= 2 && results.data && results.data.items.length === 0 && unstockedItems.length === 0 && !unstocked.isPending && <p className="m-0 text-[11px] text-[#737373]">No product matches &quot;{q}&quot;.</p>}
+      {results.data && results.data.items.length > 0 && q.length >= 2 && (
         <ul className="m-0 max-h-48 list-none divide-y divide-[#F0F0F0] overflow-auto rounded-lg border border-[#EAEAEA] bg-white p-0">
           {results.data.items.map((r) => (
             <li key={r.variantId}>

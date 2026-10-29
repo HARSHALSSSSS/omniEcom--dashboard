@@ -41,10 +41,10 @@ function refreshRest(qc: QueryClient) {
 
 // ------------------------------------------------------------------------------------------------ state
 export const useOnboardingState = () =>
-  useQuery({ queryKey: ONBOARDING_KEYS.state, queryFn: onboardingApi.get, staleTime: 0, refetchOnMount: "always" });
+  useQuery({ queryKey: ONBOARDING_KEYS.state, queryFn: ({ signal }) => onboardingApi.get(signal), staleTime: 30_000 });
 
 export const useOnboardingOptions = () =>
-  useQuery({ queryKey: ONBOARDING_KEYS.options, queryFn: onboardingApi.options, staleTime: 60 * 60 * 1000 });
+  useQuery({ queryKey: ONBOARDING_KEYS.options, queryFn: ({ signal }) => onboardingApi.options(signal), staleTime: 60 * 60 * 1000 });
 
 function useStateMutation<TVars, TResult>(fn: (vars: TVars) => Promise<TResult>, pick: (result: TResult) => OnboardingProgress) {
   const qc = useQueryClient();
@@ -64,14 +64,14 @@ export const useSkipStep = () => useStateMutation((step: StepKey) => onboardingA
 export const useContinueProducts = () => useStateMutation(() => onboardingApi.continueProducts(), (r) => r);
 
 // ------------------------------------------------------------------------------------------------ channels
-export const useChannels = () => useQuery({ queryKey: ONBOARDING_KEYS.channels, queryFn: onboardingApi.channels, staleTime: 0, refetchOnMount: "always" });
+export const useChannels = () => useQuery({ queryKey: ONBOARDING_KEYS.channels, queryFn: ({ signal }) => onboardingApi.channels(signal), staleTime: 30_000 });
 
 export const useSaveChannels = () => useStateMutation((selected: string[]) => onboardingApi.saveChannels(selected), (r) => r.state);
 
 export const useConnectorForm = (code: string | null) =>
   useQuery({
     queryKey: ONBOARDING_KEYS.connector(code ?? ""),
-    queryFn: () => onboardingApi.connectorForm(code as string),
+    queryFn: ({ signal }) => onboardingApi.connectorForm(code as string, signal),
     enabled: !!code,
     staleTime: 10 * 60 * 1000,
   });
@@ -97,11 +97,11 @@ export function useConnectChannel() {
 export const useCatalog = () =>
   useQuery({
     queryKey: ONBOARDING_KEYS.products,
-    queryFn: onboardingApi.products,
-    staleTime: 0,
-    refetchOnMount: "always",
+    queryFn: ({ signal }) => onboardingApi.products(signal),
+    staleTime: 15_000,
     // an import keeps running on the server (even across a reload): watch it until it settles
     refetchInterval: (q) => (q.state.data?.items.some((i) => i.importStatus === "importing") ? 3000 : false),
+    refetchIntervalInBackground: false,
   });
 
 export function useRefreshCounts() {
@@ -133,19 +133,20 @@ export const useSyncJob = (jobId: string | null) =>
     staleTime: 0,
     gcTime: 0,
     refetchInterval: (q) => (q.state.data && SYNC_JOB_TERMINAL.includes(q.state.data.status) ? false : 1500),
+    refetchIntervalInBackground: false,
   });
 
 // ------------------------------------------------------------------------------------------------ inventory
-export const useInventorySetup = () => useQuery({ queryKey: ONBOARDING_KEYS.inventory, queryFn: onboardingApi.inventory, staleTime: 0, refetchOnMount: "always" });
-export const useInventoryOverview = () => useQuery({ queryKey: ONBOARDING_KEYS.inventoryOverview, queryFn: onboardingApi.inventoryOverview, staleTime: 0, refetchOnMount: "always" });
+export const useInventorySetup = () => useQuery({ queryKey: ONBOARDING_KEYS.inventory, queryFn: ({ signal }) => onboardingApi.inventory(signal), staleTime: 30_000 });
+export const useInventoryOverview = () => useQuery({ queryKey: ONBOARDING_KEYS.inventoryOverview, queryFn: ({ signal }) => onboardingApi.inventoryOverview(signal), staleTime: 30_000 });
 export const useSaveInventory = () => useStateMutation((input: InventoryInput) => onboardingApi.saveInventory(input), (r) => r.state);
 
 // ------------------------------------------------------------------------------------------------ fulfillment
-export const useFulfillment = () => useQuery({ queryKey: ONBOARDING_KEYS.fulfillment, queryFn: onboardingApi.fulfillment, staleTime: 0, refetchOnMount: "always" });
+export const useFulfillment = () => useQuery({ queryKey: ONBOARDING_KEYS.fulfillment, queryFn: ({ signal }) => onboardingApi.fulfillment(signal), staleTime: 30_000 });
 export const useSaveFulfillment = () => useStateMutation((input: FulfillmentInput) => onboardingApi.saveFulfillment(input), (r) => r.state);
 
 // ------------------------------------------------------------------------------------------------ ready
-export const useReadiness = () => useQuery({ queryKey: ONBOARDING_KEYS.readiness, queryFn: onboardingApi.readiness, staleTime: 0, refetchOnMount: "always" });
+export const useReadiness = () => useQuery({ queryKey: ONBOARDING_KEYS.readiness, queryFn: ({ signal }) => onboardingApi.readiness(signal), staleTime: 30_000 });
 
 /** "Go to dashboard": finishes onboarding on the server, then re-reads it so the guards let the user into the workspace */
 export function useCompleteOnboarding() {

@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { useVariantSearch } from "@/hooks/usePricing";
+import { useDebounced } from "@/hooks/useDebounced";
 import { usePriceSimulation } from "@/hooks/useSettings";
 import { formatINR } from "@/utils/format";
 import type { ChannelTier, PriceEnding, PricingTierConfig, SettingsChannel, SettingsOverview } from "@/types/settings";
@@ -74,10 +75,11 @@ export function PricingMarginsTab({ canWrite = true, s, v, ctl }: PricingMargins
 
   // simulator inputs: a real variant, a real channel, an optional price to test
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounced(search.trim(), 300);
   const [variant, setVariant] = useState<{ id: string; sku: string; productTitle: string } | null>(null);
   const [accountId, setAccountId] = useState("");
   const [priceText, setPriceText] = useState("");
-  const options = useVariantSearch(variant ? "" : search);
+  const options = useVariantSearch(variant ? "" : debouncedSearch);
   const priceMinor = priceText.trim() && Number(priceText) > 0 ? Math.round(Number(priceText) * 100) : undefined;
   const sim = usePriceSimulation({ variantId: variant?.id, accountId: accountId || undefined, priceMinor }, Boolean(variant));
 
