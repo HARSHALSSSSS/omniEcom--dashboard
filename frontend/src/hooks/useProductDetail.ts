@@ -147,6 +147,14 @@ export function useUploadImages(id: string) {
   });
 }
 
+export function useDeleteImage(id: string) {
+  const refresh = useRefreshProduct(id);
+  return useGuardedMutation({
+    mutationFn: (documentId: string) => productDetailApi.deleteDocument(documentId),
+    onSettled: refresh,
+  });
+}
+
 /** the variants a publish creates listings for (first 100 active ones) */
 export function usePublishVariants(id: string, enabled: boolean) {
   return useQuery({
@@ -189,7 +197,8 @@ export function usePublishProduct(id: string) {
  * through the client; an absolute (pre-signed) URL is loaded directly.
  */
 export function useImageSrc(url: string | null | undefined) {
-  const absolute = !!url && /^https?:\/\//i.test(url);
+  const isApiRoute = !!url && (url.startsWith("/") || url.includes("/api/v1/"));
+  const absolute = !!url && /^https?:\/\//i.test(url) && !isApiRoute;
   const { data: blob, isError } = useQuery({
     queryKey: ["productDetail", "image-bytes", url],
     queryFn: ({ signal }) => productDetailApi.imageBlob(url ?? "", signal),

@@ -48,9 +48,9 @@ export const AddChannelModal: React.FC<AddChannelModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-[580px] p-0 bg-white border border-[#EAEAEA] rounded-[24px] overflow-hidden shadow-2xl gap-0 font-['Inter',sans-serif] [&>button]:right-6 [&>button]:top-6 [&>button]:text-[#555555] [&>button]:hover:text-black">
+      <DialogContent className="w-[calc(100%-2rem)] max-w-[580px] p-0 bg-white border border-[#EAEAEA] rounded-2xl sm:rounded-[24px] overflow-hidden shadow-2xl gap-0 font-['Inter',sans-serif] [&>button]:right-4 sm:[&>button]:right-6 [&>button]:top-4 sm:[&>button]:top-6 [&>button]:text-[#555555] [&>button]:hover:text-black">
         {/* Header */}
-        <DialogHeader className="px-8 pt-7 pb-5 border-b border-[#EAEAEA] text-left">
+        <DialogHeader className="px-5 sm:px-8 pt-6 sm:pt-7 pb-4 sm:pb-5 border-b border-[#EAEAEA] text-left">
           <DialogTitle className="text-[22px] font-semibold text-black tracking-tight leading-snug">
             Add a sales channel
           </DialogTitle>
@@ -61,18 +61,18 @@ export const AddChannelModal: React.FC<AddChannelModalProps> = ({
 
         {/* Channels List */}
         <div className="divide-y divide-[#EAEAEA] max-h-[380px] overflow-y-auto">
-          {isPending && !propChannels && <div className="px-8 py-6 text-[13px] text-[#666666]">Loading connectors...</div>}
-          {isError && !propChannels && <div role="alert" className="px-8 py-6 text-[13px] text-red-600">The connector list could not be loaded.</div>}
+          {isPending && !propChannels && <div className="px-5 sm:px-8 py-6 text-[13px] text-[#666666]">Loading connectors...</div>}
+          {isError && !propChannels && <div role="alert" className="px-5 sm:px-8 py-6 text-[13px] text-red-600">The connector list could not be loaded.</div>}
           {channelOptions.map((ch) => (
             <div
               key={ch.id}
-              className="px-8 py-4 flex items-center justify-between hover:bg-[#FAFAFA] transition-colors"
+              className="px-5 sm:px-8 py-3.5 sm:py-4 flex items-center justify-between hover:bg-[#FAFAFA] transition-colors"
             >
-              <div className="space-y-0.5 pr-4">
-                <div className="text-[14px] font-semibold text-black">
+              <div className="space-y-0.5 pr-3 sm:pr-4 min-w-0">
+                <div className="text-[14px] font-semibold text-black truncate">
                   {ch.name}
                 </div>
-                <div className="text-[12px] text-[#666666]">
+                <div className="text-[12px] text-[#666666] truncate">
                   {ch.unavailableReason ?? ch.type}
                 </div>
               </div>
@@ -92,7 +92,7 @@ export const AddChannelModal: React.FC<AddChannelModalProps> = ({
                       onConnect(ch.id);
                       onClose();
                     }}
-                    className="h-9 px-6 rounded-xl border border-[#1F2937] text-[13px] font-semibold text-black hover:bg-neutral-100 transition-colors cursor-pointer"
+                    className="h-10 sm:h-9 px-4 sm:px-6 rounded-xl border border-[#1F2937] text-[13px] font-semibold text-black hover:bg-neutral-100 transition-colors cursor-pointer"
                   >
                     {ch.actionText || "Connect"}
                   </button>
@@ -103,7 +103,7 @@ export const AddChannelModal: React.FC<AddChannelModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="px-8 pt-5 pb-7 border-t border-[#EAEAEA] space-y-2">
+        <div className="px-5 sm:px-8 pt-4 sm:pt-5 pb-6 sm:pb-7 border-t border-[#EAEAEA] space-y-2">
           <button
             type="button"
             onClick={() => {

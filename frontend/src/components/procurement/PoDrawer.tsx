@@ -66,7 +66,7 @@ export function PoDrawer({ orderId, onClose, onEdit, onOpen }: PoDrawerProps) {
       <ContextDrawer
         open={orderId !== undefined}
         onClose={onClose}
-        className="w-[680px] sm:max-w-[680px]"
+        className="w-full sm:w-[680px] sm:max-w-[680px]"
         title={po ? po.poNumber : "Purchase order"}
         description={po ? `${po.supplierName} · deliver to ${po.warehouseName}` : undefined}
         badge={
@@ -155,7 +155,7 @@ function Actions({ po, canWrite, canApprove, busy, businessName, onDialog, onEdi
           Delete draft
         </Button>
       )}
-      <span className="ml-auto flex items-center gap-1">
+      <span className="flex flex-wrap items-center gap-1 sm:ml-auto">
         <Button size="sm" variant="ghost" className="gap-1 text-xs" onClick={() => printHtml(orderPrintHtml(po, businessName))}>
           <Printer className="h-3.5 w-3.5" aria-hidden />
           Print

@@ -323,10 +323,10 @@ function ScheduleForm({ target, catalog, timezone, onDirty, onCancel, onSaved }:
       </Field>
 
       <DialogFooter className="gap-2 sm:gap-0">
-        <Button type="button" variant="outline" size="sm" disabled={busy} onClick={onCancel}>
+        <Button type="button" variant="outline" size="sm" className="h-10 sm:h-9" disabled={busy} onClick={onCancel}>
           Cancel
         </Button>
-        <Button type="submit" size="sm" loading={busy}>
+        <Button type="submit" size="sm" className="h-10 sm:h-9" loading={busy}>
           {schedule ? "Save changes" : "Schedule report"}
         </Button>
       </DialogFooter>

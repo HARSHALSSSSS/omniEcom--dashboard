@@ -24,7 +24,7 @@ function StepRow({ step, index, revenue, compare }: { step: WaterfallStep; index
   const width = step.amountMinor === null || revenue <= 0 ? 0 : Math.min(100, (Math.abs(step.amountMinor) / revenue) * 100);
   const change = step.change?.changePercent;
   return (
-    <li className={cn("grid grid-cols-[2rem_1fr_auto] items-start gap-x-3 gap-y-1 py-3.5 text-[13px]", subtotal && "rounded-lg bg-muted/60 px-3 font-semibold")} data-testid={`step-${step.key}`}>
+    <li className={cn("grid grid-cols-[1.5rem_1fr_auto] sm:grid-cols-[2rem_1fr_auto] items-start gap-x-2 sm:gap-x-3 gap-y-1 py-3 sm:py-3.5 text-[12px] sm:text-[13px]", subtotal && "rounded-lg bg-muted/60 px-2 sm:px-3 font-semibold")} data-testid={`step-${step.key}`}>
       <span className="pt-0.5 font-mono text-[11px] text-muted-foreground">{String(index + 1).padStart(2, "0")}</span>
       <div className="min-w-0 space-y-1">
         <div className="flex flex-wrap items-center gap-2">
@@ -59,8 +59,8 @@ interface Props {
 export function WaterfallCard({ data, onExport }: Props) {
   const compare = data.comparison !== null;
   return (
-    <section aria-labelledby="waterfall-title" className="space-y-4 rounded-xl border border-border bg-card p-6 shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border pb-4">
+    <section aria-labelledby="waterfall-title" className="space-y-4 rounded-xl border border-border bg-card p-4 sm:p-6 shadow-sm">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 border-b border-border pb-4">
         <div>
           <h2 id="waterfall-title" className="text-base font-semibold text-foreground">
             Profit and loss waterfall
@@ -70,7 +70,7 @@ export function WaterfallCard({ data, onExport }: Props) {
             {data.comparison ? ` Compared with ${rangeLabel(data.comparison.range)}.` : ""}
           </p>
         </div>
-        <Button variant="outline" size="sm" className="gap-2 text-xs" onClick={onExport}>
+        <Button variant="outline" size="sm" className="w-full sm:w-auto h-9 sm:h-8 gap-2 text-xs shrink-0" onClick={onExport}>
           <Download className="h-3.5 w-3.5" aria-hidden />
           Export waterfall (CSV)
         </Button>

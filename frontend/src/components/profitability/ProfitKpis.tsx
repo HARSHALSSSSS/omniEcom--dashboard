@@ -5,9 +5,9 @@ import { DASH, missingList, money, percent, rangeLabel, signed } from "./profitF
 
 function Card({ label, value, tone, children }: { label: string; value: string; tone?: string; children?: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+    <div className="rounded-xl border border-border bg-card p-4 sm:p-5 shadow-sm min-w-0">
       <span className="text-[11px] font-medium uppercase text-muted-foreground">{label}</span>
-      <div className={cn("mt-1 text-[28px] font-bold leading-tight", tone ?? "text-foreground")}>{value}</div>
+      <div className={cn("mt-1 text-2xl sm:text-[28px] font-bold leading-tight break-words", tone ?? "text-foreground")}>{value}</div>
       <div className="mt-1 min-h-4 text-[11px] text-muted-foreground">{children}</div>
     </div>
   );
@@ -18,7 +18,7 @@ const trend = (v: number | null | undefined) => (v === null || v === undefined |
 export function ProfitKpis({ data, loading }: { data: Waterfall | undefined; loading: boolean }) {
   if (!data) {
     return (
-      <div role="status" aria-label={loading ? "Loading profitability" : "No figures"} className="grid grid-cols-1 gap-5 md:grid-cols-3">
+      <div role="status" aria-label={loading ? "Loading profitability" : "No figures"} className="grid grid-cols-1 gap-4 sm:gap-5 md:grid-cols-3">
         {[0, 1, 2].map((i) => (
           <Skeleton key={i} className="h-[124px] w-full rounded-xl" />
         ))}
@@ -28,7 +28,7 @@ export function ProfitKpis({ data, loading }: { data: Waterfall | undefined; loa
   const cmp = data.comparison;
   const net = data.netContributionMinor;
   return (
-    <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+    <div className="grid grid-cols-1 gap-4 sm:gap-5 md:grid-cols-3">
       <Card label="Gross revenue" value={money(data.grossRevenueMinor)}>
         {cmp ? (
           <span className={trend(cmp.grossRevenue.changePercent)}>

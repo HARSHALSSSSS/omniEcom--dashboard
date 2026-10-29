@@ -20,7 +20,7 @@ const LABEL = "text-[11px] font-medium uppercase tracking-wider text-muted-foreg
 export function PricingKpis({ overview, loading, error, onRetry, onOpenPending, onOpenPolicies }: PricingKpisProps) {
   if (loading && !overview) {
     return (
-      <div role="status" aria-label="Loading pricing summary" className="grid grid-cols-2 gap-4 md:grid-cols-4">
+      <div role="status" aria-label="Loading pricing summary" className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
         {Array.from({ length: 4 }, (_, i) => (
           <Skeleton key={i} className="h-[98px] rounded-xl" />
         ))}
@@ -41,7 +41,7 @@ export function PricingKpis({ overview, loading, error, onRetry, onOpenPending, 
   const gain = overview.potentialMarginGainMinor;
   const channelNames = overview.channels.map((c) => c.name);
   return (
-    <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+    <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
       <button type="button" onClick={onOpenPending} className={`${TILE} transition-colors hover:bg-muted/30`}>
         <span className={LABEL}>Pending proposals</span>
         <span className="font-mono text-2xl font-bold text-foreground">{formatNumber(overview.pendingProposals)}</span>

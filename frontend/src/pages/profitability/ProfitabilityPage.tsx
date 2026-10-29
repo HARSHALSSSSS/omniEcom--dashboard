@@ -125,7 +125,7 @@ export default function ProfitabilityPage() {
         <div className="flex items-center text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
           <span>PROFITABILITY WORKSPACE</span>
         </div>
-        <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">
               Profitability
@@ -136,14 +136,14 @@ export default function ProfitabilityPage() {
           </div>
 
           {/* Top Actions */}
-          <div className="flex items-center gap-2 relative">
+          <div className="flex flex-wrap items-center gap-2 relative w-full sm:w-auto">
             {canRead && <RefreshButton onRefresh={() => void waterfall.refetch()} spinning={waterfall.isFetching} />}
 
             <Button
               variant="outline"
               size="sm"
               onClick={exportWaterfall}
-              className="h-8 gap-1.5 text-xs font-medium border-border"
+              className="h-9 sm:h-8 gap-1.5 text-xs font-medium border-border"
             >
               <Download className="h-3.5 w-3.5" />
               <span>Export</span>
@@ -155,14 +155,14 @@ export default function ProfitabilityPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => setRangeDropdownOpen(!rangeDropdownOpen)}
-                className="h-8 gap-1.5 text-xs font-medium border-border"
+                className="h-9 sm:h-8 gap-1.5 text-xs font-medium border-border max-w-[230px] sm:max-w-none truncate"
               >
-                <span>Date range - {preset === "30d" ? "Last 30 days" : preset === "90d" ? "Last 90 days" : preset === "mtd" ? "This month" : preset === "last_month" ? "Last month" : preset === "ytd" ? "This year" : "Custom"}</span>
-                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="truncate">Date range - {preset === "30d" ? "Last 30 days" : preset === "90d" ? "Last 90 days" : preset === "mtd" ? "This month" : preset === "last_month" ? "Last month" : preset === "ytd" ? "This year" : "Custom"}</span>
+                <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
               </Button>
 
               {rangeDropdownOpen && (
-                <div className="absolute right-0 top-full mt-1 w-44 rounded-md border border-border bg-card p-1 shadow-lg z-20 text-xs">
+                <div className="absolute right-0 top-full mt-1 w-44 max-w-[calc(100vw-2rem)] rounded-md border border-border bg-card p-1 shadow-lg z-20 text-xs">
                   <button
                     type="button"
                     onClick={() => pickPreset("30d")}
@@ -201,7 +201,7 @@ export default function ProfitabilityPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => setMoreMenuOpen(!moreMenuOpen)}
-                className="h-8 gap-1.5 text-xs font-medium border-border"
+                className="h-9 sm:h-8 gap-1.5 text-xs font-medium border-border"
                 title="More options"
               >
                 <span>More</span>
@@ -209,7 +209,7 @@ export default function ProfitabilityPage() {
               </Button>
 
               {moreMenuOpen && (
-                <div className="absolute right-0 top-full mt-1 w-48 rounded-md border border-border bg-card p-1 shadow-lg z-20 text-xs">
+                <div className="absolute right-0 top-full mt-1 w-48 max-w-[calc(100vw-2rem)] rounded-md border border-border bg-card p-1 shadow-lg z-20 text-xs">
                   <button
                     type="button"
                     onClick={() => {
@@ -239,9 +239,9 @@ export default function ProfitabilityPage() {
       </div>
 
       {/* Tabs / Sub-bar */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border/80 pb-3">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-border/80 pb-3">
         {/* Left Tabs */}
-        <div role="tablist" aria-label="Profitability view" className="flex items-center gap-6 text-xs">
+        <div role="tablist" aria-label="Profitability view" className="flex items-center gap-4 sm:gap-6 text-xs overflow-x-auto max-w-full pb-1 sm:pb-0 [-webkit-overflow-scrolling:touch]">
           <button
             type="button"
             role="tab"
@@ -250,7 +250,7 @@ export default function ProfitabilityPage() {
               setActiveTab("overview");
               if (view !== "waterfall") update({ view: "waterfall" });
             }}
-            className={`font-semibold pb-1 relative transition-colors ${
+            className={`shrink-0 font-semibold pb-1.5 sm:pb-1 min-h-[38px] sm:min-h-0 relative transition-colors ${
               view === "waterfall" && activeTab === "overview"
                 ? "text-foreground after:absolute after:bottom-[-13px] after:inset-x-0 after:h-0.5 after:bg-foreground"
                 : "text-muted-foreground hover:text-foreground"
@@ -267,7 +267,7 @@ export default function ProfitabilityPage() {
               setActiveTab("products");
               if (view !== "waterfall") update({ view: "waterfall" });
             }}
-            className={`font-semibold pb-1 relative transition-colors ${
+            className={`shrink-0 font-semibold pb-1.5 sm:pb-1 min-h-[38px] sm:min-h-0 relative transition-colors ${
               activeTab === "products"
                 ? "text-foreground after:absolute after:bottom-[-13px] after:inset-x-0 after:h-0.5 after:bg-foreground"
                 : "text-muted-foreground hover:text-foreground"
@@ -284,7 +284,7 @@ export default function ProfitabilityPage() {
               setActiveTab("spend");
               update({ view: "spend", account: null, q: null });
             }}
-            className={`font-semibold pb-1 relative transition-colors ${
+            className={`shrink-0 font-semibold pb-1.5 sm:pb-1 min-h-[38px] sm:min-h-0 relative transition-colors ${
               view === "spend"
                 ? "text-foreground after:absolute after:bottom-[-13px] after:inset-x-0 after:h-0.5 after:bg-foreground"
                 : "text-muted-foreground hover:text-foreground"
@@ -295,46 +295,44 @@ export default function ProfitabilityPage() {
         </div>
 
         {/* Right Info & Period Selector */}
-        <div className="flex flex-col items-end text-right">
-          <div className="flex items-center gap-3 text-xs">
-            <span className="text-muted-foreground">{range ? `${rangeLabel(range)} · ${currency}` : "No dates chosen"}</span>
-            <span className="text-border">|</span>
-            <div className="flex items-center gap-2 font-medium">
-              <span className="text-muted-foreground">Period options:</span>
-              <button
-                type="button"
-                onClick={() => {
-                  const today = new Date().toISOString().slice(0, 10);
-                  const d = new Date();
-                  d.setDate(d.getDate() - 6);
-                  update({ range: "custom", from: d.toISOString().slice(0, 10), to: today });
-                }}
-                className="px-1.5 py-0.5 rounded text-muted-foreground hover:text-foreground"
-              >
-                7 days
-              </button>
-              <button
-                type="button"
-                onClick={() => pickPreset("30d")}
-                className={`px-1.5 py-0.5 rounded ${preset === "30d" ? "font-bold text-foreground bg-muted" : "text-muted-foreground hover:text-foreground"}`}
-              >
-                30 days
-              </button>
-              <button
-                type="button"
-                onClick={() => pickPreset("90d")}
-                className={`px-1.5 py-0.5 rounded ${preset === "90d" ? "font-bold text-foreground bg-muted" : "text-muted-foreground hover:text-foreground"}`}
-              >
-                90 days
-              </button>
-              <button
-                type="button"
-                onClick={() => pickPreset("custom")}
-                className={`px-1.5 py-0.5 rounded ${preset === "custom" ? "font-bold text-foreground bg-muted" : "text-muted-foreground hover:text-foreground"}`}
-              >
-                Custom
-              </button>
-            </div>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 text-xs w-full md:w-auto">
+          <span className="text-muted-foreground shrink-0">{range ? `${rangeLabel(range)} · ${currency}` : "No dates chosen"}</span>
+          <span className="hidden sm:inline text-border">|</span>
+          <div className="flex flex-wrap items-center gap-1 sm:gap-2 font-medium">
+            <span className="text-muted-foreground">Period options:</span>
+            <button
+              type="button"
+              onClick={() => {
+                const today = new Date().toISOString().slice(0, 10);
+                const d = new Date();
+                d.setDate(d.getDate() - 6);
+                update({ range: "custom", from: d.toISOString().slice(0, 10), to: today });
+              }}
+              className="px-2 py-1 min-h-[32px] sm:min-h-0 rounded text-muted-foreground hover:text-foreground"
+            >
+              7 days
+            </button>
+            <button
+              type="button"
+              onClick={() => pickPreset("30d")}
+              className={`px-2 py-1 min-h-[32px] sm:min-h-0 rounded ${preset === "30d" ? "font-bold text-foreground bg-muted" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              30 days
+            </button>
+            <button
+              type="button"
+              onClick={() => pickPreset("90d")}
+              className={`px-2 py-1 min-h-[32px] sm:min-h-0 rounded ${preset === "90d" ? "font-bold text-foreground bg-muted" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              90 days
+            </button>
+            <button
+              type="button"
+              onClick={() => pickPreset("custom")}
+              className={`px-2 py-1 min-h-[32px] sm:min-h-0 rounded ${preset === "custom" ? "font-bold text-foreground bg-muted" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              Custom
+            </button>
           </div>
         </div>
       </div>
@@ -351,12 +349,12 @@ export default function ProfitabilityPage() {
             ) : (
               <div className={refreshing ? "space-y-6 opacity-60 transition-opacity" : "space-y-6"} aria-busy={refreshing}>
                 {data && data.ordersAnalysed === 0 && (
-                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed border-border bg-card p-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-dashed border-border bg-card p-4">
                     <div>
                       <p className="text-sm font-semibold text-foreground">No sales in this period</p>
                       <p className="text-xs text-muted-foreground">There are no orders between {data.range.from} and {data.range.to}. Pick a longer range to see profitability.</p>
                     </div>
-                    <Button size="sm" variant="outline" className="text-xs" onClick={() => pickPreset("90d")}>
+                    <Button size="sm" variant="outline" className="w-full sm:w-auto h-9 sm:h-8 text-xs shrink-0" onClick={() => pickPreset("90d")}>
                       Show the last 90 days
                     </Button>
                   </div>

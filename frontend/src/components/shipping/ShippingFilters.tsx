@@ -5,8 +5,8 @@ import { PAYMENT_FILTERS, SHIPMENT_STATUSES, type ShipmentFilters, type Shipment
 import type { WarehouseOption } from "@/api/shipping.api";
 import { PAYMENT_LABELS, STATUS_LABELS } from "./shippingParams";
 
-const SELECT = "h-9 rounded-lg border border-border bg-card px-2.5 text-xs font-medium text-foreground";
-const DATE = "h-9 rounded-lg border border-border bg-card px-2 text-xs font-medium text-foreground";
+const SELECT = "h-10 sm:h-9 min-h-[40px] sm:min-h-0 rounded-lg border border-border bg-card px-2.5 text-xs font-medium text-foreground";
+const DATE = "h-10 sm:h-9 min-h-[40px] sm:min-h-0 rounded-lg border border-border bg-card px-2 text-xs font-medium text-foreground";
 
 export type FilterPatch = Partial<Record<"carrier" | "status" | "warehouse" | "payment" | "label" | "from" | "to", string | null>>;
 
@@ -37,7 +37,7 @@ export function ShippingFilters({ filters, carriers, warehouses, filtered, onSea
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <div className="relative w-full max-w-xs flex-1">
+      <div className="relative w-full sm:w-auto sm:max-w-xs flex-1 min-w-[200px]">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
         <Input
           type="search"
@@ -45,7 +45,7 @@ export function ShippingFilters({ filters, carriers, warehouses, filtered, onSea
           placeholder="Search AWB, order #, customer or pincode..."
           value={text}
           onChange={(e: React.ChangeEvent<HTMLInputElement>) => setText(e.target.value)}
-          className="pl-9 text-xs"
+          className="h-10 sm:h-9 min-h-[40px] sm:min-h-0 pl-9 text-xs"
         />
       </div>
 

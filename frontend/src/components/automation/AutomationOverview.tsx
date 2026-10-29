@@ -14,7 +14,7 @@ interface Props {
 export function AutomationOverview({ overview: o, loading, error, onRetry }: Props) {
   if (loading) {
     return (
-      <div role="status" aria-label="Loading overview" className="grid grid-cols-2 gap-4 md:grid-cols-4">
+      <div role="status" aria-label="Loading overview" className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
         {Array.from({ length: 4 }, (_, i) => (
           <Skeleton key={i} className="h-[98px] w-full rounded-xl" />
         ))}
@@ -32,7 +32,7 @@ export function AutomationOverview({ overview: o, loading, error, onRetry }: Pro
     );
   }
   return (
-    <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
       <Stat label="Active rules" value={formatNumber(o.activeRules)} hint={`of ${formatNumber(o.totalRules)} rule${o.totalRules === 1 ? "" : "s"}`} tone={o.activeRules > 0 ? "text-emerald-600" : undefined} />
       <Stat label="Awaiting approval" value={formatNumber(o.pendingApprovals)} hint={o.pendingApprovals > 0 ? "Proposed actions need a decision" : "Nothing waiting"} tone={o.pendingApprovals > 0 ? "text-amber-600" : undefined} />
       <Stat label="Runs, last 24 hours" value={formatNumber(o.runs24h)} hint={o.lastRunAt ? `Last run ${formatRelativeTime(o.lastRunAt)}${o.lastRunRule ? `: ${o.lastRunRule}` : ""}` : "No run yet"} />

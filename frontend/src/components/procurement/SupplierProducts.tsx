@@ -135,7 +135,7 @@ function AddProduct({ supplierId, offer, onDone }: { supplierId: string; offer: 
       <p className="text-xs font-semibold">
         {offer.title} <span className="font-mono font-normal text-muted-foreground">{offer.sku}</span>
       </p>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
         <label className="text-[11px] text-muted-foreground">
           Price per unit
           <Input aria-label="Price per unit" inputMode="decimal" value={draft.cost} onChange={(e: React.ChangeEvent<HTMLInputElement>) => patch({ cost: e.target.value })} className={CELL} autoComplete="off" />

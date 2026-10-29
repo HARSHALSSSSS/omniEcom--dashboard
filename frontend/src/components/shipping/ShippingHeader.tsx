@@ -6,7 +6,7 @@ import { SHIPPING_VIEWS, SYNC_FAILED, SYNC_RUNNING, type ShippingOverview, type 
 import { NO_CONFIGURE_REASON, NO_WRITE_REASON } from "./shippingFormat";
 import { VIEW_LABELS } from "./shippingParams";
 
-const OUTLINE_BTN = "inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#EAEAEA] bg-white px-3 text-[12px] font-normal text-[#000000] transition-colors hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-60";
+const OUTLINE_BTN = "inline-flex h-9 sm:h-8 min-h-[36px] sm:min-h-0 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60 shadow-2xs";
 
 /** what the header knows about Sync Shipping: the job (null when none is shown), whether it is being started, and why starting failed */
 export interface SyncState {
@@ -24,10 +24,10 @@ interface SyncPanelProps {
 
 function Eyebrow({ label }: { label: string }) {
   return (
-    <div className="flex items-center gap-2 text-[10px]">
-      <span className="font-semibold uppercase tracking-wider text-[#666666]">STATUS REPLACEMENT</span>
-      <span className="h-2.5 w-[1px] bg-[#BDBDBD]" />
-      <span className="text-[11px] font-semibold text-black">{label}</span>
+    <div className="flex items-center gap-2 text-xs">
+      <span className="font-semibold uppercase tracking-wider text-muted-foreground">STATUS REPLACEMENT</span>
+      <span className="h-2.5 w-[1px] bg-border" />
+      <span className="text-xs font-semibold text-foreground">{label}</span>
     </div>
   );
 }
@@ -43,69 +43,69 @@ function SyncPanel({ sync, overview, onDismiss, onViewExceptions }: SyncPanelPro
     const done = job?.progress.done ?? 0;
     const percent = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
     return (
-      <div role="status" className="animate-in fade-in space-y-3 rounded-xl border border-[#DCEBFE] bg-[#F7FAFF] p-4 shadow-sm duration-200 sm:p-5">
+      <div role="status" className="animate-in fade-in space-y-3 rounded-xl border border-blue-200 bg-blue-50/50 dark:border-blue-900/50 dark:bg-blue-950/20 p-4 shadow-2xs duration-200 sm:p-5">
         <Eyebrow label="Syncing" />
-        <div className="flex items-center gap-2 text-[13px] font-semibold text-black">
-          <RefreshCw className="h-4 w-4 animate-spin stroke-[2] text-[#2563EB]" />
+        <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+          <RefreshCw className="h-4 w-4 animate-spin text-blue-600 dark:text-blue-400" />
           <span>Synchronizing shipping data…</span>
         </div>
-        <div className="flex items-center justify-between text-[11px] text-black">
+        <div className="flex items-center justify-between text-xs text-foreground">
           <span>Orders: {job?.payload.orders === undefined ? "—" : formatNumber(job.payload.orders)}</span>
           <span>
             Shipping statuses: {formatNumber(done)} / {formatNumber(total)}
             {job && job.progress.failed > 0 ? ` · ${formatNumber(job.progress.failed)} failed` : ""}
           </span>
         </div>
-        <div role="progressbar" aria-label="Shipping sync progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} className="h-1.5 w-full overflow-hidden rounded-full bg-[#EAEAEA]">
-          <div className="h-full rounded-full bg-[#2563EB] transition-[width] duration-300" style={{ width: `${percent}%` }} />
+        <div role="progressbar" aria-label="Shipping sync progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} className="h-1.5 w-full overflow-hidden rounded-full bg-border">
+          <div className="h-full rounded-full bg-blue-600 dark:bg-blue-400 transition-[width] duration-300" style={{ width: `${percent}%` }} />
         </div>
-        <div className="flex items-center gap-2 pt-0.5 text-[11px] font-medium text-[#2563EB]">
-          <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full border border-[#2563EB]">
-            <span className="h-1 w-1 rounded-full bg-[#2563EB]" />
+        <div className="flex items-center gap-2 pt-0.5 text-xs font-medium text-blue-600 dark:text-blue-400">
+          <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full border border-current">
+            <span className="h-1 w-1 rounded-full bg-current" />
           </span>
           <span>Tracking updates: {job?.status === "queued" || !job ? "waiting to start" : "processing"} · {percent}%</span>
         </div>
-        <p className="text-[11px] text-[#666666]">Keep working while shipping data synchronizes.</p>
+        <p className="text-xs text-muted-foreground">Keep working while shipping data synchronizes.</p>
       </div>
     );
   }
   if (failed) {
     return (
-      <div role="alert" className="animate-in fade-in space-y-2 rounded-xl border border-[#FECACA] bg-[#FFF8F8] p-4 shadow-sm duration-200 sm:p-5">
+      <div role="alert" className="animate-in fade-in space-y-2 rounded-xl border border-rose-200 bg-rose-50/50 dark:border-rose-900/50 dark:bg-rose-950/20 p-4 shadow-2xs duration-200 sm:p-5">
         <div className="flex items-center justify-between">
           <Eyebrow label="Sync failed" />
-          <button type="button" onClick={onDismiss} title="Dismiss" aria-label="Dismiss" className="cursor-pointer rounded p-1 text-neutral-400 transition-colors hover:bg-neutral-100/50 hover:text-neutral-700">
+          <button type="button" onClick={onDismiss} title="Dismiss" aria-label="Dismiss" className="cursor-pointer rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
             <X className="h-3.5 w-3.5" />
           </button>
         </div>
-        <div className="flex items-center gap-2 text-[13px] font-semibold text-black">
-          <AlertTriangle className="h-4 w-4 stroke-[2] text-[#DC2626]" />
+        <div className="flex items-center gap-2 text-sm font-semibold text-rose-600 dark:text-rose-400">
+          <AlertTriangle className="h-4 w-4" />
           <span>Shipping sync did not complete</span>
         </div>
-        <p className="text-[11px] text-[#666666]">{failed}</p>
+        <p className="text-xs text-muted-foreground">{failed}</p>
       </div>
     );
   }
   if (result) {
     const stat = (k: string): number => result.stats[k] ?? 0;
     return (
-      <div className="animate-in fade-in space-y-3 rounded-xl border border-[#DCFCE7] bg-[#F9FEFA] p-4 shadow-sm duration-200 sm:p-5">
+      <div className="animate-in fade-in space-y-3 rounded-xl border border-emerald-200 bg-emerald-50/50 dark:border-emerald-900/50 dark:bg-emerald-950/20 p-4 shadow-2xs duration-200 sm:p-5">
         <div className="flex items-center justify-between">
           <Eyebrow label="Completion" />
-          <button type="button" onClick={onDismiss} title="Dismiss" aria-label="Dismiss sync result" className="cursor-pointer rounded p-1 text-neutral-400 transition-colors hover:bg-neutral-100/50 hover:text-neutral-700">
+          <button type="button" onClick={onDismiss} title="Dismiss" aria-label="Dismiss sync result" className="cursor-pointer rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
             <X className="h-3.5 w-3.5" />
           </button>
         </div>
-        <div className="flex items-center gap-2 text-[13px] font-semibold text-black">
-          <CheckCircle2 className="h-4 w-4 stroke-[2] text-[#16A34A]" />
+        <div className="flex items-center gap-2 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+          <CheckCircle2 className="h-4 w-4" />
           <span>Shipping sync complete</span>
         </div>
-        <div className="flex flex-wrap items-center gap-3 text-[11px]">
-          <span className="font-bold text-black">{formatNumber(stat("processed"))} processed</span>
-          <span className="font-medium text-[#16A34A]">{formatNumber(stat("updated"))} updated</span>
-          <span className="font-medium text-[#D97706]">{formatNumber(stat("requireAttention"))} require attention</span>
+        <div className="flex flex-wrap items-center gap-3 text-xs">
+          <span className="font-bold text-foreground">{formatNumber(stat("processed"))} processed</span>
+          <span className="font-medium text-emerald-600 dark:text-emerald-400">{formatNumber(stat("updated"))} updated</span>
+          <span className="font-medium text-amber-600 dark:text-amber-500">{formatNumber(stat("requireAttention"))} require attention</span>
         </div>
-        <p className="text-[11px] leading-relaxed text-[#666666]">
+        <p className="text-xs leading-relaxed text-muted-foreground">
           {stat("requireAttention")} {stat("requireAttention") === 1 ? "exception" : "exceptions"} from this sync only
           {overview ? `; Overview's ${overview.attention.total} represent overall shipping attention.` : "."}
         </p>
@@ -113,12 +113,12 @@ function SyncPanel({ sync, overview, onDismiss, onViewExceptions }: SyncPanelPro
           <button
             type="button"
             onClick={onViewExceptions}
-            className="inline-flex h-8 cursor-pointer items-center gap-2 rounded-lg border border-[#EAEAEA] bg-white px-3.5 text-[12px] font-medium text-black shadow-sm transition-colors hover:bg-neutral-50"
+            className="inline-flex h-8 cursor-pointer items-center gap-2 rounded-md border border-border bg-background px-3 text-xs font-medium text-foreground shadow-2xs transition-colors hover:bg-muted"
           >
-            <ArrowRight className="h-3.5 w-3.5 stroke-[1.75] text-black" />
+            <ArrowRight className="h-3.5 w-3.5 text-foreground" />
             <span>View Exceptions</span>
           </button>
-          <button type="button" onClick={onDismiss} className="cursor-pointer text-[11px] font-medium text-[#666666] underline hover:text-black">
+          <button type="button" onClick={onDismiss} className="cursor-pointer text-xs font-medium text-muted-foreground underline hover:text-foreground">
             Dismiss
           </button>
         </div>
@@ -126,8 +126,8 @@ function SyncPanel({ sync, overview, onDismiss, onViewExceptions }: SyncPanelPro
     );
   }
   return (
-    <div className="flex items-center gap-2 text-[11px] leading-[16px] text-[#666666]">
-      <CheckCircle2 className="h-3 w-3 stroke-[1.5] text-[#16A34A]" />
+    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
       <span>
         {overview
           ? `${overview.statusLine.connectedChannels} connected ${overview.statusLine.connectedChannels === 1 ? "channel" : "channels"} · ${overview.statusLine.activeMethods} shipping ${overview.statusLine.activeMethods === 1 ? "method" : "methods"} active · ${overview.statusLine.ordersNeedAttention} ${overview.statusLine.ordersNeedAttention === 1 ? "order needs" : "orders need"} attention`
@@ -173,20 +173,20 @@ export function ShippingHeader(props: ShippingHeaderProps) {
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-2">
-        <span className="text-[10px] font-medium uppercase tracking-wider text-[#707070]">SHIPPING OPERATIONS</span>
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">SHIPPING OPERATIONS</p>
       </div>
 
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-        <h1 className="text-[26px] font-semibold leading-[38px] text-[#000000]">Shipping</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Shipping</h1>
 
         <div className="flex flex-wrap items-center gap-2">
           <button type="button" onClick={props.onRules} title={canConfigure ? undefined : "You can review the rules; only an admin can create them."} className={OUTLINE_BTN}>
-            <GitBranch className="h-3.5 w-3.5 stroke-[1.5] text-[#666666]" />
+            <GitBranch className="h-3.5 w-3.5 text-muted-foreground" />
             <span>Shipping Rules</span>
           </button>
 
           <button type="button" onClick={props.onAddProvider} disabled={!canConfigure} title={canConfigure ? undefined : NO_CONFIGURE_REASON} className={OUTLINE_BTN}>
-            <Plus className="h-3.5 w-3.5 stroke-[1.5] text-[#666666]" />
+            <Plus className="h-3.5 w-3.5 text-muted-foreground" />
             <span>Add Provider</span>
           </button>
 
@@ -195,9 +195,9 @@ export function ShippingHeader(props: ShippingHeaderProps) {
             onClick={props.onSync}
             disabled={!canWrite || syncing || refreshing}
             title={canWrite ? undefined : NO_WRITE_REASON}
-            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-black bg-black px-3 text-[12px] font-semibold text-white shadow-sm transition-colors hover:bg-neutral-800 disabled:opacity-75"
+            className="inline-flex h-9 sm:h-8 min-h-[36px] sm:min-h-0 items-center gap-1.5 rounded-md bg-neutral-900 dark:bg-neutral-100 px-3 text-xs font-medium text-white dark:text-neutral-900 shadow-2xs transition-colors hover:bg-neutral-800 dark:hover:bg-neutral-200 disabled:opacity-60 cursor-pointer disabled:cursor-not-allowed"
           >
-            <RefreshCw className={cn("h-3.5 w-3.5 stroke-[1.5] text-white", (syncing || refreshing) && "animate-spin")} />
+            <RefreshCw className={cn("h-3.5 w-3.5", (syncing || refreshing) && "animate-spin")} />
             <span>{syncing ? "Syncing..." : "Sync Shipping"}</span>
           </button>
 
@@ -208,12 +208,12 @@ export function ShippingHeader(props: ShippingHeaderProps) {
               aria-haspopup="menu"
               aria-expanded={menu}
               onClick={() => setMenu((m) => !m)}
-              className="inline-flex h-8 w-9 items-center justify-center rounded-lg border border-[#EAEAEA] bg-white text-[12px] text-[#000000] transition-colors hover:bg-neutral-50"
+              className="inline-flex h-9 w-9 sm:h-8 sm:w-8 min-h-[36px] min-w-[36px] sm:min-h-0 sm:min-w-0 items-center justify-center rounded-md border border-border bg-background text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground shadow-2xs cursor-pointer"
             >
-              <MoreHorizontal className="h-4 w-4 text-[#666666]" />
+              <MoreHorizontal className="h-4 w-4" />
             </button>
             {menu && (
-              <div role="menu" className="absolute right-0 z-30 mt-1 w-44 rounded-lg border border-[#EAEAEA] bg-white py-1 text-[12px] shadow-lg">
+              <div role="menu" className="absolute right-0 z-30 mt-1 w-44 rounded-lg border border-border bg-popover py-1 text-xs text-popover-foreground shadow-md">
                 <button
                   type="button"
                   role="menuitem"
@@ -221,9 +221,9 @@ export function ShippingHeader(props: ShippingHeaderProps) {
                     setMenu(false);
                     props.onManifests();
                   }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-black hover:bg-neutral-50"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-foreground hover:bg-muted transition-colors cursor-pointer"
                 >
-                  <Layers className="h-3.5 w-3.5 text-[#666666]" aria-hidden /> Manifests
+                  <Layers className="h-3.5 w-3.5 text-muted-foreground" aria-hidden /> Manifests
                 </button>
                 <button
                   type="button"
@@ -232,9 +232,9 @@ export function ShippingHeader(props: ShippingHeaderProps) {
                     setMenu(false);
                     props.onPickupSlots();
                   }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-black hover:bg-neutral-50"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-foreground hover:bg-muted transition-colors cursor-pointer"
                 >
-                  <CalendarClock className="h-3.5 w-3.5 text-[#666666]" aria-hidden /> Pickup slots
+                  <CalendarClock className="h-3.5 w-3.5 text-muted-foreground" aria-hidden /> Pickup slots
                 </button>
                 <button
                   type="button"
@@ -243,9 +243,9 @@ export function ShippingHeader(props: ShippingHeaderProps) {
                     setMenu(false);
                     props.onRefresh();
                   }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-black hover:bg-neutral-50"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-foreground hover:bg-muted transition-colors cursor-pointer"
                 >
-                  <RefreshCw className="h-3.5 w-3.5 text-[#666666]" aria-hidden /> Refresh data
+                  <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" aria-hidden /> Refresh data
                 </button>
               </div>
             )}
@@ -253,7 +253,7 @@ export function ShippingHeader(props: ShippingHeaderProps) {
         </div>
       </div>
 
-      <p className="text-[13px] leading-[19px] text-[#666666]">Choose, configure and monitor the shipping method used to move every order.</p>
+      <p className="text-sm text-muted-foreground max-w-2xl">Choose, configure and monitor the shipping method used to move every order.</p>
 
       <SyncPanel
         sync={props.sync}
@@ -262,8 +262,8 @@ export function ShippingHeader(props: ShippingHeaderProps) {
         onViewExceptions={props.onViewExceptions}
       />
 
-      <div className="mt-2 flex items-center justify-between border-b border-[#EAEAEA]">
-        <div role="tablist" aria-label="Shipping workspace" className="flex flex-wrap items-center gap-x-7">
+      <div className="mt-2 flex items-center justify-between border-b border-border">
+        <div role="tablist" aria-label="Shipping workspace" className="flex items-center gap-x-6 overflow-x-auto no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0">
           {SHIPPING_VIEWS.map((id) => (
             <button
               key={id}
@@ -272,8 +272,10 @@ export function ShippingHeader(props: ShippingHeaderProps) {
               aria-selected={view === id}
               onClick={() => onView(id)}
               className={cn(
-                "relative pb-2.5 text-[12px] transition-colors",
-                view === id ? "font-semibold text-black after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-black" : "font-normal text-[#666666] hover:text-black",
+                "-mb-px border-b-2 pb-2.5 text-xs transition-colors cursor-pointer shrink-0 whitespace-nowrap",
+                view === id
+                  ? "border-primary text-foreground font-semibold"
+                  : "border-transparent font-medium text-muted-foreground hover:text-foreground",
               )}
             >
               {VIEW_LABELS[id]}

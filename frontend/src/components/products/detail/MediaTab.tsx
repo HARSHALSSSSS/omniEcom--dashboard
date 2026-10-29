@@ -1,8 +1,8 @@
 import { useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, Upload } from "lucide-react";
+import { ArrowLeft, ArrowRight, Trash2, Upload } from "lucide-react";
 import { errorMessage } from "@/api/errors";
 import { useCan } from "@/hooks/useCan";
-import { useProductImages, useReorderImages, useSetPrimaryImage, useUploadImages } from "@/hooks/useProductDetail";
+import { useDeleteImage, useProductImages, useReorderImages, useSetPrimaryImage, useUploadImages } from "@/hooks/useProductDetail";
 import { toast } from "@/hooks/useToast";
 import type { ProductDocument } from "@/types/productDetail";
 import { ProductImage } from "./ProductImage";
@@ -13,7 +13,7 @@ const ACCEPT = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 const MAX_BYTES = 10 * 1024 * 1024;
 
 const ICON_BTN =
-  "h-7 w-7 inline-flex items-center justify-center rounded-[6px] border border-[#EAEAEA] bg-white text-[#000000] hover:bg-[#F5F5F5] cursor-pointer disabled:cursor-not-allowed disabled:text-[#BDBDBD] disabled:hover:bg-white";
+  "h-7 w-7 min-h-[36px] min-w-[36px] sm:min-h-7 sm:min-w-7 inline-flex items-center justify-center rounded-[6px] border border-[#EAEAEA] bg-white text-[#000000] hover:bg-[#F5F5F5] cursor-pointer disabled:cursor-not-allowed disabled:text-[#BDBDBD] disabled:hover:bg-white";
 
 /** the gallery of a product: real images, make primary, reorder, upload */
 export function MediaTab({ id, title }: { id: string; title: string }) {
@@ -22,6 +22,7 @@ export function MediaTab({ id, title }: { id: string; title: string }) {
   const setPrimary = useSetPrimaryImage(id);
   const reorder = useReorderImages(id);
   const upload = useUploadImages(id);
+  const remove = useDeleteImage(id);
   const fileRef = useRef<HTMLInputElement>(null);
   const [percent, setPercent] = useState<number | null>(null);
 
@@ -29,7 +30,7 @@ export function MediaTab({ id, title }: { id: string; title: string }) {
   if (q.isError) return <TabError label="media" error={q.error} onRetry={() => void q.refetch()} />;
 
   const images: ProductDocument[] = q.data.filter((d) => d.status === "uploaded" || d.status === "processed");
-  const busy = setPrimary.isPending || reorder.isPending || upload.isPending;
+  const busy = setPrimary.isPending || reorder.isPending || upload.isPending || remove.isPending;
   const lowRes = images.filter((d) => d.warnings.includes("low_resolution")).length;
   const hasPlaceholder = images.some((d) => d.isPlaceholder);
 
@@ -49,6 +50,12 @@ export function MediaTab({ id, title }: { id: string; title: string }) {
     setPrimary.mutate(d.id, {
       onSuccess: () => toast({ title: "Primary image updated", description: `${d.fileName} is now the primary image.`, variant: "success" }),
       onError: (e) => toast({ title: "Could not change the primary image", description: errorMessage(e), variant: "destructive" }),
+    });
+
+  const deleteImage = (d: ProductDocument) =>
+    remove.mutate(d.id, {
+      onSuccess: () => toast({ title: "Image deleted", description: `${d.fileName} was removed.`, variant: "success" }),
+      onError: (e) => toast({ title: "Could not delete image", description: errorMessage(e), variant: "destructive" }),
     });
 
   const onFiles = (list: FileList | null) => {
@@ -102,7 +109,7 @@ export function MediaTab({ id, title }: { id: string; title: string }) {
                 disabled={!canWrite || busy}
                 title={canWrite ? undefined : NO_PERMISSION}
                 onClick={() => fileRef.current?.click()}
-                className="px-4 h-[36px] bg-[#FFFFFF] border border-[#666666] text-[#000000] rounded-[8px] text-[12px] font-semibold hover:bg-[#F5F5F5] transition-colors flex items-center gap-1.5 cursor-pointer disabled:cursor-not-allowed disabled:text-[#999999] disabled:border-[#BDBDBD]"
+                className="px-4 h-[44px] sm:h-[36px] bg-[#FFFFFF] border border-[#666666] text-[#000000] rounded-[8px] text-[12px] font-semibold hover:bg-[#F5F5F5] transition-colors flex items-center gap-1.5 cursor-pointer disabled:cursor-not-allowed disabled:text-[#999999] disabled:border-[#BDBDBD]"
               >
                 <Upload className="h-3.5 w-3.5" aria-hidden="true" />
                 {percent === null ? "Upload images" : `Uploading ${percent}%`}
@@ -114,7 +121,7 @@ export function MediaTab({ id, title }: { id: string; title: string }) {
         {images.length === 0 ? (
           <Empty title="No images yet" text="Products need at least one image before they can be published." />
         ) : (
-          <ul aria-label="Product images" className={`w-full grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4 ${busy ? "opacity-70" : ""}`}>
+          <ul aria-label="Product images" className={`w-full grid grid-cols-1 min-[480px]:grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4 ${busy ? "opacity-70" : ""}`}>
             {images.map((d, i) => (
               <li key={d.id} className="flex flex-col items-start gap-2">
                 <ProductImage url={d.downloadUrl} alt={`${title} - ${d.fileName}`} className="w-full aspect-square rounded-[8px] border border-[#EAEAEA]" />
@@ -126,7 +133,7 @@ export function MediaTab({ id, title }: { id: string; title: string }) {
                     {d.isPlaceholder ? " · Placeholder" : ""}
                   </span>
                 </div>
-                <div className="flex flex-row items-center gap-1.5">
+                <div className="flex flex-row flex-wrap items-center gap-1.5">
                   <button type="button" aria-label={`Move ${d.fileName} earlier`} disabled={!canWrite || busy || i === 0} title={canWrite ? undefined : NO_PERMISSION} onClick={() => move(i, -1)} className={ICON_BTN}>
                     <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
                   </button>
@@ -139,11 +146,21 @@ export function MediaTab({ id, title }: { id: string; title: string }) {
                       disabled={!canWrite || busy}
                       title={canWrite ? undefined : NO_PERMISSION}
                       onClick={() => makePrimary(d)}
-                      className="px-2.5 h-7 rounded-[6px] border border-[#EAEAEA] bg-white text-[11px] font-semibold text-[#000000] hover:bg-[#F5F5F5] cursor-pointer disabled:cursor-not-allowed disabled:text-[#BDBDBD] disabled:hover:bg-white"
+                      className="px-2.5 h-[36px] sm:h-7 rounded-[6px] border border-[#EAEAEA] bg-white text-[11px] font-semibold text-[#000000] hover:bg-[#F5F5F5] cursor-pointer disabled:cursor-not-allowed disabled:text-[#BDBDBD] disabled:hover:bg-white flex items-center"
                     >
                       Make primary
                     </button>
                   )}
+                  <button
+                    type="button"
+                    aria-label={`Delete ${d.fileName}`}
+                    disabled={!canWrite || busy}
+                    title={canWrite ? undefined : NO_PERMISSION}
+                    onClick={() => deleteImage(d)}
+                    className={`${ICON_BTN} hover:text-[#B42318] hover:border-[#F2B8B5]`}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  </button>
                 </div>
               </li>
             ))}

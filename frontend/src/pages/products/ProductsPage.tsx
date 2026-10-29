@@ -248,7 +248,7 @@ export default function ProductsPage() {
 
   // ---- render
   const kpiCard = (value: number | undefined, label: string, color: string, first = false) => (
-    <div className={`flex-1 flex flex-col items-start gap-1 ${first ? "" : "pl-6 border-l border-[#EAEAEA]"}`}>
+    <div className={`flex-1 min-w-[100px] sm:min-w-0 shrink-0 sm:shrink flex flex-col items-start gap-1 ${first ? "" : "pl-4 sm:pl-6 border-l border-[#EAEAEA]"}`}>
       <span className="text-[26px] font-semibold leading-[38px] text-[#000000]">{count(value)}</span>
       <span className={`text-[12px] font-normal leading-[17px] ${color}`}>{label}</span>
     </div>
@@ -259,7 +259,7 @@ export default function ProductsPage() {
   return (
     <div className="relative w-full flex flex-col items-start gap-6 font-['Inter',sans-serif] text-[#000000]">
       <div className="w-full flex flex-col items-start gap-6">
-        <div className="w-full flex flex-row items-center justify-between">
+        <div className="w-full flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-2">
           <div className="flex-1 flex flex-col items-start gap-1.5">
             <span className="text-[10px] font-medium leading-[12px] uppercase text-[#707070]">Catalog</span>
             <h1 className="text-[26px] font-semibold leading-[38px] text-[#000000] tracking-tight">Products</h1>
@@ -268,7 +268,7 @@ export default function ProductsPage() {
             </p>
           </div>
 
-          <div className="flex flex-row items-center gap-2">
+          <div className="flex flex-row items-center gap-2 w-full sm:w-auto justify-start sm:justify-end shrink-0">
             <div className="relative" ref={importRoot}>
               <button
                 type="button"
@@ -277,13 +277,13 @@ export default function ProductsPage() {
                 disabled={!canImport}
                 title={canImport ? undefined : "You do not have permission to import products"}
                 onClick={() => setImportOpen((o) => !o)}
-                className="box-border flex flex-row justify-center items-center px-4 h-[36px] w-[86px] bg-[#FFFFFF] border border-[#666666] rounded-[8px] text-[12px] font-semibold text-[#000000] hover:bg-[#F5F5F5] transition-colors disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-[#FFFFFF]"
+                className="box-border flex flex-row justify-center items-center px-4 h-[36px] min-h-[44px] sm:min-h-[36px] w-[86px] bg-[#FFFFFF] border border-[#666666] rounded-[8px] text-[12px] font-semibold text-[#000000] hover:bg-[#F5F5F5] transition-colors disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-[#FFFFFF]"
               >
                 Import
               </button>
 
               {importOpen && (
-                <div role="menu" aria-label="Import products" className="absolute right-0 top-[42px] z-50 w-[240px] bg-[#FFFFFF] border border-[#EAEAEA] rounded-[8px] shadow-[0px_4px_16px_rgba(0,0,0,0.08)] p-2 flex flex-col gap-1 text-left">
+                <div role="menu" aria-label="Import products" className="absolute right-0 top-[42px] z-50 w-[240px] max-w-[calc(100vw-32px)] bg-[#FFFFFF] border border-[#EAEAEA] rounded-[8px] shadow-[0px_4px_16px_rgba(0,0,0,0.08)] p-2 flex flex-col gap-1 text-left">
                   <div className="px-3 pt-1.5 pb-2 text-[10px] font-medium leading-[14px] uppercase text-[#666666] tracking-wider">IMPORT PRODUCTS</div>
                   {IMPORT_SOURCES.map((s) => (
                     <button
@@ -308,7 +308,7 @@ export default function ProductsPage() {
               disabled={!canWrite}
               title={canWrite ? undefined : NO_EDIT_REASON}
               onClick={() => navigate(ROUTES.PRODUCTS_NEW)}
-              className={PRIMARY_BUTTON}
+              className={`${PRIMARY_BUTTON} min-h-[44px] sm:min-h-[36px]`}
             >
               + Create product
             </button>
@@ -316,7 +316,7 @@ export default function ProductsPage() {
         </div>
 
         {/* catalog totals (never narrowed by the filters) */}
-        <div className="w-full flex flex-row items-start py-1 gap-6" aria-busy={kpi.isPending} aria-label="Catalog totals">
+        <div className="w-full flex flex-row items-start py-1 gap-4 sm:gap-6 overflow-x-auto scrollbar-none pb-2 sm:pb-0" aria-busy={kpi.isPending} aria-label="Catalog totals">
           {kpiCard(kpi.data?.products, "Products", "text-[#9F06FE]", true)}
           {kpiCard(kpi.data?.variants, "Variants", "text-[#008FE1]")}
           {kpiCard(kpi.data?.activeVariants, "Active", "text-[#509F06]")}
@@ -326,7 +326,7 @@ export default function ProductsPage() {
       </div>
 
       <div className="w-full flex flex-col items-start gap-4">
-        <div role="tablist" aria-label="Product views" className="w-full flex flex-row items-start gap-7 border-b border-[#EAEAEA] h-[42px]">
+        <div role="tablist" aria-label="Product views" className="w-full flex flex-row items-start gap-5 sm:gap-7 border-b border-[#EAEAEA] h-[42px] overflow-x-auto scrollbar-none shrink-0">
           {TABS.map((t) => {
             const active = tab === t.id;
             const n = tabCount(t.id, tabStats.data);
@@ -337,7 +337,7 @@ export default function ProductsPage() {
                 role="tab"
                 aria-selected={active}
                 onClick={() => update({ tab: t.id })}
-                className={`flex flex-row items-center px-0.5 gap-2 h-[42px] transition-all ${active ? "border-b-2 border-[#000000]" : "text-[#666666] hover:text-[#000000]"}`}
+                className={`flex flex-row items-center px-0.5 gap-2 h-[42px] transition-all shrink-0 whitespace-nowrap ${active ? "border-b-2 border-[#000000]" : "text-[#666666] hover:text-[#000000]"}`}
               >
                 <span className={`text-[12px] ${active ? "font-semibold text-[#000000]" : "font-normal text-[#666666]"}`}>{t.label}</span>
                 {n !== undefined && <span className="text-[11px] font-normal text-[#666666]">{formatNumber(n)}</span>}
@@ -346,8 +346,8 @@ export default function ProductsPage() {
           })}
         </div>
 
-        <div className="w-full flex items-center gap-3">
-          <div className="flex-1 box-border flex flex-row items-center px-3 h-[40px] bg-[#FFFFFF] border border-[#BDBDBD] rounded-[8px] gap-2.5 transition-all focus-within:border-[#000000] focus-within:ring-1 focus-within:ring-[#000000]/10">
+        <div className="w-full flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
+          <div className="flex-1 box-border flex flex-row items-center px-3 h-[40px] min-h-[44px] sm:min-h-[40px] bg-[#FFFFFF] border border-[#BDBDBD] rounded-[8px] gap-2.5 transition-all focus-within:border-[#000000] focus-within:ring-1 focus-within:ring-[#000000]/10">
             <div className="h-4 w-4 rounded-full border border-[#666666] flex items-center justify-center shrink-0" aria-hidden>
               <div className="h-1.5 w-1.5 rounded-full border border-[#666666]" />
             </div>
@@ -357,19 +357,19 @@ export default function ProductsPage() {
               placeholder="Search by product name, SKU, barcode..."
               value={searchText}
               onChange={(e) => onSearch(e.target.value)}
-              className="flex-1 bg-transparent text-[13px] leading-[19px] text-[#000000] placeholder-[#666666] border-none outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 shadow-none"
+              className="flex-1 min-w-0 bg-transparent text-[13px] leading-[19px] text-[#000000] placeholder-[#666666] border-none outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 shadow-none"
             />
             {!searchText && <span className="text-[11px] font-normal text-[#666666] tracking-tight shrink-0" aria-hidden>⌘ K</span>}
           </div>
           {searchText && (
-            <button type="button" onClick={clearSearch} className="text-[12px] font-normal text-[#666666] hover:text-[#000000] cursor-pointer shrink-0 transition-colors">
+            <button type="button" onClick={clearSearch} className="text-[12px] font-normal text-[#666666] hover:text-[#000000] cursor-pointer shrink-0 transition-colors self-end sm:self-auto py-1 sm:py-0">
               Clear search
             </button>
           )}
         </div>
 
-        <div className="w-full flex flex-row justify-between items-center min-h-[34px] relative">
-          <div className="flex flex-row flex-wrap items-center gap-2">
+        <div className="w-full flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3 lg:gap-0 min-h-[34px] relative">
+          <div className="flex flex-row flex-wrap items-center gap-2 w-full lg:w-auto">
             <FilterDropdown
               label="Category"
               heading="Category"
@@ -415,13 +415,13 @@ export default function ProductsPage() {
             <FilterDropdown label="Product type" heading="Product type" allLabel="All types" value={filters.productType ?? null} options={TYPE_OPTIONS} width={196} onChange={(id) => update({ type: id })} />
           </div>
 
-          <div className="flex flex-row items-center gap-4 text-[12px] font-medium text-[#000000]">
+          <div className="flex flex-row flex-wrap items-center justify-between sm:justify-start lg:justify-end gap-3 sm:gap-4 text-[12px] font-medium text-[#000000] w-full lg:w-auto pt-1 lg:pt-0 border-t lg:border-t-0 border-[#EAEAEA]">
             <SavedViewsMenu canSave={canSaveView} onApply={applyView} onSave={() => setSaveViewOpen(true)} />
             <button
               type="button"
               onClick={onExport}
               disabled={exporter.isPending || !list.data}
-              className="hover:text-[#666666] transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+              className="hover:text-[#666666] transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 py-1 sm:py-0 min-h-[44px] sm:min-h-0 inline-flex items-center"
             >
               {exporter.isPending ? "Exporting..." : "Export CSV"}
             </button>
@@ -457,7 +457,7 @@ export default function ProductsPage() {
       </div>
 
       <div className="w-full flex flex-col items-start gap-1">
-        <div className="w-full flex flex-row justify-between items-center text-[12px]">
+        <div className="w-full flex flex-col sm:flex-row justify-between items-start sm:items-center gap-1 sm:gap-0 text-[12px]">
           <div className="flex items-center gap-3">
             <span className="font-medium text-[#000000]">Master products are your single source of truth.</span>
             {items.length > 0 && (

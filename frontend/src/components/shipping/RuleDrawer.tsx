@@ -45,8 +45,8 @@ const OPS: Record<FieldType, Array<[string, string]>> = {
 
 const firstOp = (field: string): string => OPS[FIELD_TYPE[field] ?? "string"][0]?.[0] ?? "eq";
 
-const SELECT = "h-8 w-full appearance-none rounded-lg border border-[#EAEAEA] bg-white px-3 pr-8 text-[11px] font-medium text-black focus:border-black focus:outline-none";
-const INPUT = "h-8 w-full rounded-lg border border-[#EAEAEA] bg-white px-3 text-[11px] text-black focus:border-black focus:outline-none";
+const SELECT = "h-9 sm:h-8 min-h-[36px] sm:min-h-0 w-full appearance-none rounded-lg border border-[#EAEAEA] bg-white px-3 pr-8 text-[11px] font-medium text-black focus:border-black focus:outline-none";
+const INPUT = "h-9 sm:h-8 min-h-[36px] sm:min-h-0 w-full rounded-lg border border-[#EAEAEA] bg-white px-3 text-[11px] text-black focus:border-black focus:outline-none";
 
 interface Row {
   key: number;

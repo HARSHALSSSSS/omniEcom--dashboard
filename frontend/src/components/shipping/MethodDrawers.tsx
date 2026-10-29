@@ -8,7 +8,7 @@ import type { CapSet, CapValue, ProviderCatalogEntry, ProviderKind, ShippingMeth
 import { BTN_PRIMARY, BTN_SECONDARY, OptionCard, ShippingDrawer } from "./ShippingDrawer";
 import { CAP_TEXT, NO_CONFIGURE_REASON, failedChecks } from "./shippingFormat";
 
-const FIELD = "h-8 w-full rounded-lg border border-[#EAEAEA] bg-white px-3 text-[11px] text-black focus:border-black focus:outline-none";
+const FIELD = "h-9 sm:h-8 min-h-[36px] sm:min-h-0 w-full rounded-lg border border-[#EAEAEA] bg-white px-3 text-[11px] text-black focus:border-black focus:outline-none";
 
 
 const CAP_ROWS: Array<[keyof CapSet, string]> = [

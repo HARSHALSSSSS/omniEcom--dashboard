@@ -90,7 +90,7 @@ export function ProcurementOverviewTab({ overview, suggestions, suggestionsLoadi
         key={id}
         type="button"
         onClick={() => setPoFilter(id)}
-        className={`rounded px-2.5 py-1 text-[11px] font-medium transition-colors ${
+        className={`shrink-0 whitespace-nowrap rounded px-2.5 py-1 text-[11px] font-medium transition-colors ${
           poFilter === id ? `bg-background shadow-2xs ${tone ? "text-rose-600 dark:text-rose-400" : "text-foreground"}` : tone ? "text-rose-600 hover:text-rose-700 dark:text-rose-400" : "text-muted-foreground hover:text-foreground"
         }`}
       >
@@ -120,7 +120,7 @@ export function ProcurementOverviewTab({ overview, suggestions, suggestionsLoadi
               <Empty title="Stock levels are fine" description="No product is running low against its recent sales, after counting what is already on order. Suggestions appear here when one is." />
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full border-collapse text-left text-xs">
+                <table className="w-full min-w-[620px] border-collapse text-left text-xs">
                   <thead>
                     <tr className="border-b border-border bg-muted/40 text-[11px] font-medium text-muted-foreground">
                       <th scope="col" className="px-4 py-3">Product / Supplier</th>
@@ -173,9 +173,9 @@ export function ProcurementOverviewTab({ overview, suggestions, suggestionsLoadi
                 </table>
               </div>
             )}
-            <div className="flex items-center justify-between border-t border-border bg-muted/20 px-4 py-2.5 text-[11px] text-muted-foreground">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-t border-border bg-muted/20 px-4 py-2.5 text-[11px] text-muted-foreground">
               <span>From your recent sales speed and stock, minus what is already on order. Review quantities before ordering.</span>
-              <button type="button" onClick={() => onNavigateTab("reorder")} className="font-medium text-foreground hover:underline">
+              <button type="button" onClick={() => onNavigateTab("reorder")} className="font-medium text-foreground hover:underline shrink-0 whitespace-nowrap">
                 View all {cnt(overview?.reorderSuggestionsCount ?? suggestions.length)} →
               </button>
             </div>
@@ -212,21 +212,21 @@ export function ProcurementOverviewTab({ overview, suggestions, suggestionsLoadi
       </div>
 
       <div className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-3 sm:gap-4">
             <h3 className="text-sm font-semibold text-foreground">Purchase orders</h3>
-            <div className="flex items-center gap-1 rounded-md bg-muted/40 p-0.5 text-xs">
+            <div className="flex items-center gap-1 rounded-md bg-muted/40 p-0.5 text-xs overflow-x-auto max-w-full">
               {chip("all", "All open", cnt(allOpen))}
               {chip("draft", "Awaiting approval", cnt(awaiting))}
               {chip("incoming", "Incoming", cnt(incoming))}
               {chip("overdue", "Overdue", cnt(overdue), "late")}
             </div>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-4">
             <span className="text-xs text-muted-foreground">
               {displayedOrders.length} shown of {cnt(allOpen)} open orders
             </span>
-            <button type="button" onClick={() => onNavigateTab("orders", poFilter === "draft" ? "draft" : undefined)} className="text-xs font-medium text-foreground hover:underline">
+            <button type="button" onClick={() => onNavigateTab("orders", poFilter === "draft" ? "draft" : undefined)} className="text-xs font-medium text-foreground hover:underline whitespace-nowrap">
               View all purchase orders →
             </button>
           </div>
@@ -244,7 +244,7 @@ export function ProcurementOverviewTab({ overview, suggestions, suggestionsLoadi
             <Empty title={poFilter === "overdue" ? "No delivery is overdue" : poFilter === "draft" ? "Nothing is waiting for approval" : "No open purchase orders in this view"} description="Orders that match appear here." />
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-left text-xs">
+              <table className="w-full min-w-[680px] border-collapse text-left text-xs">
                 <thead>
                   <tr className="border-b border-border bg-muted/40 text-[11px] font-medium text-muted-foreground">
                     <th scope="col" className="px-4 py-3">Purchase order</th>
@@ -306,7 +306,7 @@ export function ProcurementOverviewTab({ overview, suggestions, suggestionsLoadi
             </Empty>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-left text-xs">
+              <table className="w-full min-w-[640px] border-collapse text-left text-xs">
                 <thead>
                   <tr className="border-b border-border bg-muted/40 text-[11px] font-medium text-muted-foreground">
                     <th scope="col" className="px-4 py-3">Supplier</th>

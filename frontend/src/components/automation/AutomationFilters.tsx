@@ -7,7 +7,7 @@ import { RULE_STATUSES, RUN_STATUSES, type AutomationCatalog, type AutomationRul
 import { RUN_LABELS, STATUS_LABELS, triggerLabel } from "./autoFormat";
 import type { AutomationUrlState } from "./autoParams";
 
-const SELECT = "h-9 max-w-[260px] rounded-lg border border-border bg-card px-2.5 text-xs font-medium text-foreground disabled:opacity-50";
+const SELECT = "h-10 sm:h-9 w-full sm:w-auto sm:max-w-[260px] rounded-lg border border-border bg-card px-2.5 text-xs font-medium text-foreground disabled:opacity-50";
 
 interface Props {
   state: AutomationUrlState;
@@ -43,7 +43,7 @@ export function AutomationFilters({ state, rules, catalog, filtered, onSearch, o
 
   return (
     <div className="space-y-3">
-      <div role="tablist" aria-label={rulesTab ? "Rule status" : "Run status"} className="flex flex-wrap gap-2">
+      <div role="tablist" aria-label={rulesTab ? "Rule status" : "Run status"} className="flex flex-wrap gap-1.5 sm:gap-2">
         {["", ...statuses].map((s) => {
           const selected = s === active;
           const n = count(s);
@@ -54,7 +54,7 @@ export function AutomationFilters({ state, rules, catalog, filtered, onSearch, o
               role="tab"
               aria-selected={selected}
               onClick={() => onStatus(s || null)}
-              className={cn("rounded-lg px-3 py-1.5 text-xs font-medium transition-colors", selected ? "bg-primary text-primary-foreground" : "border border-border bg-card text-muted-foreground hover:bg-muted")}
+              className={cn("min-h-[36px] sm:min-h-0 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer", selected ? "bg-primary text-primary-foreground" : "border border-border bg-card text-muted-foreground hover:bg-muted")}
             >
               {s === "" ? "All" : label(s)}
               {n !== undefined && <span className="ml-1.5 font-mono opacity-80">{formatNumber(n)}</span>}
@@ -63,12 +63,12 @@ export function AutomationFilters({ state, rules, catalog, filtered, onSearch, o
         })}
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2">
         {rulesTab ? (
           <>
-            <div className="relative w-full max-w-sm flex-1">
+            <div className="relative w-full sm:max-w-sm flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-              <Input type="search" aria-label="Search rules" placeholder="Search by rule name or description..." value={text} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setText(e.target.value)} className="pl-9 text-xs" />
+              <Input type="search" aria-label="Search rules" placeholder="Search by rule name or description..." value={text} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setText(e.target.value)} className="h-10 sm:h-9 pl-9 text-xs w-full" />
             </div>
             <select aria-label="Trigger" className={SELECT} value={state.trigger ?? ""} onChange={(e) => onTrigger(e.target.value || null)}>
               <option value="">Any trigger</option>
@@ -92,7 +92,7 @@ export function AutomationFilters({ state, rules, catalog, filtered, onSearch, o
         )}
 
         {filtered && (
-          <button type="button" onClick={onClear} className="h-9 rounded-lg px-2.5 text-xs font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline">
+          <button type="button" onClick={onClear} className="h-10 sm:h-9 rounded-lg px-2.5 text-xs font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline self-start sm:self-auto cursor-pointer">
             Clear filters
           </button>
         )}

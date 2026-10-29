@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 
 function StateBox({ title, description, children, role }: { title: string; description: string; children?: ReactNode; role?: "alert" }) {
   return (
-    <div role={role} className="flex min-h-[260px] flex-col items-center justify-center gap-2 border-y border-[#EAEAEA] bg-white px-6 text-center">
+    <div role={role} className="w-full flex min-h-[260px] flex-col items-center justify-center gap-2 border-y border-[#EAEAEA] bg-white px-6 text-center">
       <h2 className="text-base font-semibold text-foreground">{title}</h2>
       <p className="max-w-[520px] text-xs text-muted-foreground">{description}</p>
       {children && <div className="flex items-center gap-2 pt-2">{children}</div>}

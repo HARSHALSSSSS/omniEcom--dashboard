@@ -55,11 +55,11 @@ export function RunDetailDialog({ runId, catalog, onClose }: Props) {
           </div>
         )}
         <DialogFooter className="gap-2 sm:gap-0">
-          <Button type="button" variant="outline" size="sm" onClick={onClose}>
+          <Button type="button" variant="outline" size="sm" className="h-10 sm:h-9" onClick={onClose}>
             Close
           </Button>
           {run?.downloadable && (
-            <Button type="button" size="sm" className="gap-2" onClick={() => void downloadRunFile(run)}>
+            <Button type="button" size="sm" className="gap-2 h-10 sm:h-9" onClick={() => void downloadRunFile(run)}>
               <Download className="h-4 w-4" aria-hidden />
               Download
             </Button>

@@ -29,16 +29,16 @@ export function ListingsPagination({ page, pages, total, pageSize, shown, noun, 
   const first = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const last = (page - 1) * pageSize + shown;
   return (
-    <nav aria-label="Pagination" className="flex w-full flex-row flex-wrap items-center justify-between gap-2 pt-2.5 text-[12px]">
+    <nav aria-label="Pagination" className="flex w-full flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-2 pt-2.5 text-[12px]">
       <span className="font-normal text-[#666666]" aria-live="polite">
         Showing {formatNumber(first)}–{formatNumber(last)} of {formatNumber(total)} {noun}
       </span>
-      <div className="flex items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-1.5 w-full sm:w-auto">
         <button
           type="button"
           disabled={page <= 1}
           onClick={() => onPage(page - 1)}
-          className="h-7 cursor-pointer rounded-md border border-[#BDBDBD] px-2.5 text-[12px] text-[#666666] transition-colors hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40"
+          className="h-8 sm:h-7 min-h-[44px] sm:min-h-7 inline-flex items-center justify-center cursor-pointer rounded-md border border-[#BDBDBD] px-3 sm:px-2.5 text-[12px] text-[#666666] transition-colors hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40"
         >
           Previous
         </button>
@@ -54,7 +54,7 @@ export function ListingsPagination({ page, pages, total, pageSize, shown, noun, 
               aria-label={`Page ${n}`}
               aria-current={n === page ? "page" : undefined}
               onClick={() => onPage(n)}
-              className={cn("flex h-7 min-w-7 cursor-pointer items-center justify-center rounded px-1 text-[12px]", n === page ? "bg-[#F5F5F5] font-semibold text-[#000000]" : "text-[#666666] hover:bg-[#F5F5F5]")}
+              className={cn("flex h-8 sm:h-7 min-h-[44px] sm:min-h-7 min-w-8 sm:min-w-7 cursor-pointer items-center justify-center rounded px-2 sm:px-1 text-[12px]", n === page ? "bg-[#F5F5F5] font-semibold text-[#000000]" : "text-[#666666] hover:bg-[#F5F5F5]")}
             >
               {n}
             </button>
@@ -64,7 +64,7 @@ export function ListingsPagination({ page, pages, total, pageSize, shown, noun, 
           type="button"
           disabled={page >= pages}
           onClick={() => onPage(page + 1)}
-          className="h-7 cursor-pointer rounded-md border border-[#BDBDBD] px-2.5 text-[12px] text-[#000000] transition-colors hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40"
+          className="h-8 sm:h-7 min-h-[44px] sm:min-h-7 inline-flex items-center justify-center cursor-pointer rounded-md border border-[#BDBDBD] px-3 sm:px-2.5 text-[12px] text-[#000000] transition-colors hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40"
         >
           Next
         </button>
@@ -72,7 +72,7 @@ export function ListingsPagination({ page, pages, total, pageSize, shown, noun, 
           aria-label="Listings per page"
           value={pageSize}
           onChange={(e) => onPageSize(Number(e.target.value))}
-          className="h-7 cursor-pointer rounded-md border border-[#BDBDBD] bg-white px-2 text-[12px] font-medium text-[#000000] focus:outline-none"
+          className="h-8 sm:h-7 min-h-[44px] sm:min-h-7 cursor-pointer rounded-md border border-[#BDBDBD] bg-white px-2 text-[12px] font-medium text-[#000000] focus:outline-none"
         >
           {PAGE_SIZES.map((n) => (
             <option key={n} value={n}>

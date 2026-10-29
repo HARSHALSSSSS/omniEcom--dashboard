@@ -51,7 +51,7 @@ function Tile({ label, value, delta, note }: TileProps) {
   return (
     <div className="space-y-1 rounded-xl border border-border bg-card p-4">
       <span className="text-xs text-muted-foreground">{label}</span>
-      <div className="font-mono text-2xl font-extrabold text-foreground">{value}</div>
+      <div className="font-mono text-xl sm:text-2xl font-extrabold text-foreground">{value}</div>
       <DeltaLine delta={delta} />
       <p className="text-[11px] text-muted-foreground">{delta.note && delta.tone !== "none" ? `${delta.note} · ${note}` : note}</p>
     </div>
@@ -70,7 +70,7 @@ export function ReportsOverviewKpiStrip({ data }: { data: OverviewKpis }) {
     <div className="space-y-2">
       <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">COMMERCE PERFORMANCE</span>
 
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         <Tile
           label="Net sales"
           value={formatINR(t.netSalesMinor, true)}

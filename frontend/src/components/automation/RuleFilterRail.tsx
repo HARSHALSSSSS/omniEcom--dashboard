@@ -38,11 +38,11 @@ export function RuleFilterRail({ rules, catalog, selectedMode, selectedStatus, s
   const triggers = tally(rules, (r) => r.triggerEvent);
 
   return (
-    <aside className={cn("flex w-[240px] shrink-0 flex-col gap-5 rounded-xl border border-border bg-card p-4 text-xs", className)}>
+    <aside className={cn("flex w-full lg:w-[240px] shrink-0 flex-col gap-5 rounded-xl border border-border bg-card p-4 text-xs", className)}>
       <div className="space-y-2">
         <div className="flex items-center justify-between border-b border-border pb-2">
           <span className="font-bold uppercase tracking-wider text-muted-foreground">Execution Mode</span>
-          <button type="button" onClick={onReset} className="text-[11px] font-semibold text-muted-foreground hover:text-foreground">
+          <button type="button" onClick={onReset} className="text-[11px] font-semibold text-muted-foreground hover:text-foreground cursor-pointer">
             Reset
           </button>
         </div>
@@ -52,7 +52,7 @@ export function RuleFilterRail({ rules, catalog, selectedMode, selectedStatus, s
               key={mode}
               type="button"
               onClick={() => onSelectMode(mode)}
-              className={cn("flex w-full items-center justify-between rounded px-2 py-1.5 text-left font-medium transition-colors", selectedMode === mode ? "bg-muted font-bold text-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground")}
+              className={cn("flex w-full min-h-[36px] sm:min-h-0 items-center justify-between rounded px-2 py-2 sm:py-1.5 text-left font-medium transition-colors cursor-pointer", selectedMode === mode ? "bg-muted font-bold text-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground")}
             >
               <div className="flex items-center gap-2">
                 {mode === MODE_AUTO && <span className="h-2 w-2 rounded-full bg-emerald-500" />}
@@ -69,7 +69,7 @@ export function RuleFilterRail({ rules, catalog, selectedMode, selectedStatus, s
         <span className="font-bold uppercase tracking-wider text-muted-foreground">Status</span>
         <div className="space-y-1">
           {statuses.map(([st, n]) => (
-            <label key={st} className="flex cursor-pointer items-center justify-between rounded px-2 py-1 hover:bg-muted/30">
+            <label key={st} className="flex min-h-[36px] sm:min-h-0 cursor-pointer items-center justify-between rounded px-2 py-1.5 sm:py-1 hover:bg-muted/30">
               <div className="flex items-center gap-2">
                 <input type="checkbox" checked={selectedStatus === st} onChange={() => onSelectStatus(selectedStatus === st ? null : st)} className="h-3.5 w-3.5 rounded border-border" />
                 <span>{STATUS_LABELS[st]}</span>
@@ -87,7 +87,7 @@ export function RuleFilterRail({ rules, catalog, selectedMode, selectedStatus, s
         ) : (
           <div className="space-y-1">
             {channels.map(([ch, n]) => (
-              <div key={ch} className="flex items-center justify-between rounded px-2 py-1">
+              <div key={ch} className="flex min-h-[32px] sm:min-h-0 items-center justify-between rounded px-2 py-1">
                 <span>{ch}</span>
                 <span className="font-mono text-[11px] text-muted-foreground">{n}</span>
               </div>
@@ -107,7 +107,7 @@ export function RuleFilterRail({ rules, catalog, selectedMode, selectedStatus, s
                 key={tg}
                 type="button"
                 onClick={() => onSelectTrigger(selectedTrigger === tg ? null : tg)}
-                className={cn("flex w-full items-center justify-between rounded px-2 py-1 text-left hover:bg-muted/30", selectedTrigger === tg && "bg-muted font-bold")}
+                className={cn("flex w-full min-h-[36px] sm:min-h-0 items-center justify-between rounded px-2 py-2 sm:py-1 text-left hover:bg-muted/30 cursor-pointer", selectedTrigger === tg && "bg-muted font-bold")}
               >
                 <span>{triggerLabel(tg, catalog)}</span>
                 <span className="font-mono text-[11px] text-muted-foreground">{n}</span>

@@ -35,7 +35,7 @@ export function PricingPagination({ page, pages, total, pageSize, shown, noun, o
       <span className="text-xs text-muted-foreground" aria-live="polite">
         Showing {formatNumber(first)}–{formatNumber(last)} of {formatNumber(total)} {noun}
       </span>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
         <button type="button" className={NAV} disabled={page <= 1} onClick={() => onPage(page - 1)}>
           Previous
         </button>

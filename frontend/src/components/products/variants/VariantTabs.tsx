@@ -20,7 +20,7 @@ interface Props {
 /** the real tab counts from GET /products/{id}/variant-grid/counts (blank until they load) */
 export function VariantTabs({ active, counts, onChange }: Props) {
   return (
-    <div role="tablist" aria-label="Variant lifecycle" className="w-full flex flex-row items-start gap-7 border-b border-[#EAEAEA] h-[42px] overflow-x-auto">
+    <div role="tablist" aria-label="Variant lifecycle" className="w-full flex flex-row items-start gap-7 border-b border-[#EAEAEA] h-[42px] overflow-x-auto scrollbar-none shrink-0">
       {TAB_LABELS.map((tab) => {
         const isActive = active === tab.id;
         const count = counts?.[COUNT_KEY[tab.id]];
@@ -31,7 +31,7 @@ export function VariantTabs({ active, counts, onChange }: Props) {
             role="tab"
             aria-selected={isActive}
             onClick={() => onChange(tab.id)}
-            className={`flex flex-row items-center gap-1.5 px-0.5 h-[42px] transition-all text-[12px] cursor-pointer whitespace-nowrap ${
+            className={`flex flex-row items-center gap-1.5 px-0.5 h-[42px] transition-all text-[12px] cursor-pointer whitespace-nowrap shrink-0 ${
               isActive ? "border-b-2 border-[#000000] font-semibold text-[#000000]" : "border-b-0 text-[#666666] hover:text-[#000000] font-normal"
             }`}
           >

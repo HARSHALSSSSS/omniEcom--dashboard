@@ -133,11 +133,11 @@ export default function ReportsPage() {
 
   const counts: Partial<Record<ReportsTab, number>> = { schedules: overview.data?.schedules.total };
   const headerAction = (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2 w-full sm:w-auto">
       <Button
         variant="outline"
         size="sm"
-        className="gap-2 text-xs font-semibold"
+        className="w-full sm:w-auto h-10 sm:h-9 gap-2 text-xs font-semibold"
         disabled={!canWrite || !cat}
         title={noWrite}
         onClick={() => setScheduleForm({ kind: "create" })}
@@ -163,7 +163,7 @@ export default function ReportsPage() {
       />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div role="tablist" aria-label="Reports sections" className="inline-flex flex-wrap items-center gap-1 rounded-lg border border-border bg-muted p-1">
+        <div role="tablist" aria-label="Reports sections" className="inline-flex max-w-full overflow-x-auto flex-nowrap sm:flex-wrap items-center gap-1 rounded-lg border border-border bg-muted p-1">
           {visibleTabs.map((t) => (
             <button
               key={t}
@@ -171,7 +171,7 @@ export default function ReportsPage() {
               role="tab"
               aria-selected={tab === t}
               onClick={() => update({ tab: t })}
-              className={cn("rounded-md px-3.5 py-1.5 text-xs font-medium transition-all", tab === t ? "bg-background font-semibold text-foreground shadow-xs" : "text-muted-foreground hover:text-foreground")}
+              className={cn("shrink-0 rounded-md px-3.5 py-2 sm:py-1.5 min-h-[38px] sm:min-h-0 text-xs font-medium transition-all", tab === t ? "bg-background font-semibold text-foreground shadow-xs" : "text-muted-foreground hover:text-foreground")}
             >
               {TAB_LABEL[t]}
               {counts[t] !== undefined && <span className="ml-1.5 font-mono text-[11px] text-muted-foreground">{formatNumber(counts[t] ?? 0)}</span>}
@@ -199,7 +199,7 @@ export default function ReportsPage() {
       {tab === "reports" && (
         <div className="space-y-8">
           {overview.isLoading ? (
-            <div role="status" aria-label="Loading reports" className="grid grid-cols-1 gap-5 md:grid-cols-3">
+            <div role="status" aria-label="Loading reports" className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
               {[0, 1, 2].map((i) => (
                 <div key={i} className="h-52 animate-pulse rounded-xl bg-muted" />
               ))}
@@ -218,7 +218,7 @@ export default function ReportsPage() {
                         : "No active schedules"}
                     </p>
                   </div>
-                  <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                     {overview.data.featured.map((f) => (
                       <FeaturedCard key={f.type} report={f} entry={entryOf(cat, f.type)} canWrite={canWrite} noWrite={noWrite} busyKey={exporter.busyKey} onGenerate={generateFeatured} onCustomise={customise} />
                     ))}

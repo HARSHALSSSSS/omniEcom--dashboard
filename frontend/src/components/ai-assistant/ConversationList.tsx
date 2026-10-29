@@ -132,22 +132,22 @@ export function ConversationList({ selectedId, onSelect, onNew, onGone, disabled
   };
 
   return (
-    <section aria-label="Conversations" className="flex min-h-0 flex-1 flex-col gap-3 rounded-xl border border-border bg-card p-5">
+    <section aria-label="Conversations" className="flex min-h-0 flex-1 flex-col gap-3 rounded-xl border border-border bg-card p-3.5 sm:p-5">
       <div className="flex items-center justify-between border-b border-border pb-3">
         <h2 className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-foreground">
           <Clock className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
           Conversations
           {list.data && <span className="font-normal text-muted-foreground">{total}</span>}
         </h2>
-        <Button size="sm" variant="outline" className="h-7 gap-1 px-2 text-[11px]" disabled={disabled} onClick={onNew}>
+        <Button size="sm" variant="outline" className="h-7 min-h-[32px] sm:min-h-0 gap-1 px-2 text-[11px]" disabled={disabled} onClick={onNew}>
           <Plus className="h-3 w-3" aria-hidden />
           New
         </Button>
       </div>
 
-      <div className="flex gap-2">
-        <Input aria-label="Search conversations" placeholder="Search by title" value={search} onChange={(e) => setSearch(e.target.value)} className="h-8 text-xs" maxLength={100} />
-        <select aria-label="Show conversations" value={filter} onChange={(e) => setFilter(e.target.value as ConversationFilter)} className="h-8 rounded-md border border-border bg-card px-2 text-xs">
+      <div className="flex flex-col sm:flex-row gap-2">
+        <Input aria-label="Search conversations" placeholder="Search by title" value={search} onChange={(e) => setSearch(e.target.value)} className="h-8 text-xs flex-1 min-w-0" maxLength={100} />
+        <select aria-label="Show conversations" value={filter} onChange={(e) => setFilter(e.target.value as ConversationFilter)} className="h-8 rounded-md border border-border bg-card px-2 text-xs w-full sm:w-auto shrink-0">
           {FILTERS.map((f) => (
             <option key={f.value} value={f.value}>
               {f.label}
@@ -193,13 +193,13 @@ export function ConversationList({ selectedId, onSelect, onNew, onGone, disabled
                   </span>
                 </button>
                 <div className="flex shrink-0 items-center">
-                  <Button variant="ghost" size="icon-sm" aria-label={`Rename ${c.title}`} onClick={() => setRenaming(c)}>
+                  <Button variant="ghost" size="icon-sm" className="min-h-[32px] min-w-[32px] sm:min-h-0 sm:min-w-0" aria-label={`Rename ${c.title}`} onClick={() => setRenaming(c)}>
                     <Pencil className="h-3.5 w-3.5" aria-hidden />
                   </Button>
-                  <Button variant="ghost" size="icon-sm" aria-label={`${c.status === "active" ? "Archive" : "Restore"} ${c.title}`} disabled={setStatus.isPending} onClick={() => toggleArchive(c)}>
+                  <Button variant="ghost" size="icon-sm" className="min-h-[32px] min-w-[32px] sm:min-h-0 sm:min-w-0" aria-label={`${c.status === "active" ? "Archive" : "Restore"} ${c.title}`} disabled={setStatus.isPending} onClick={() => toggleArchive(c)}>
                     {c.status === "active" ? <Archive className="h-3.5 w-3.5" aria-hidden /> : <ArchiveRestore className="h-3.5 w-3.5" aria-hidden />}
                   </Button>
-                  <Button variant="ghost" size="icon-sm" aria-label={`Delete ${c.title}`} onClick={() => setDeleting(c)}>
+                  <Button variant="ghost" size="icon-sm" className="min-h-[32px] min-w-[32px] sm:min-h-0 sm:min-w-0" aria-label={`Delete ${c.title}`} onClick={() => setDeleting(c)}>
                     <Trash2 className="h-3.5 w-3.5" aria-hidden />
                   </Button>
                 </div>

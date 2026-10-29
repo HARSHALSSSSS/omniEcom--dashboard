@@ -69,7 +69,7 @@ export function QueueFilters({ area, priority, status, due, matching, onChange }
 
       <div className="flex flex-row items-center gap-2 flex-wrap">
         {dropdowns.map((d) => (
-          <div key={d.key} className="relative">
+          <div key={d.key} className="relative max-w-full">
             <button
               type="button"
               aria-label={`${d.label} filter`}
@@ -77,7 +77,7 @@ export function QueueFilters({ area, priority, status, due, matching, onChange }
               aria-expanded={open === d.key}
               onClick={() => setOpen(open === d.key ? null : d.key)}
               style={{ width: `${d.width}px` }}
-              className={`flex items-center justify-between px-2.5 h-[34px] bg-white border rounded-[8px] text-[12px] transition-colors ${
+              className={`flex items-center justify-between px-2.5 h-[34px] min-h-[44px] sm:min-h-0 max-w-full bg-white border rounded-[8px] text-[12px] transition-colors ${
                 open === d.key || (d.key === "status" && status === "in_progress") ? "border-[#000000]" : "border-[#BDBDBD] hover:border-[#666666]"
               }`}
             >
@@ -90,7 +90,7 @@ export function QueueFilters({ area, priority, status, due, matching, onChange }
               <div
                 role="listbox"
                 style={{ width: `${d.width}px`, boxShadow: "0px 4px 12px rgba(0, 0, 0, 0.051)" }}
-                className="absolute left-0 top-[38px] bg-white border border-[#EAEAEA] rounded-[8px] p-1 flex flex-col gap-0.5 z-40 animate-in fade-in duration-100"
+                className="absolute left-0 top-[38px] max-w-[calc(100vw-32px)] bg-white border border-[#EAEAEA] rounded-[8px] p-1 flex flex-col gap-0.5 z-40 animate-in fade-in duration-100"
               >
                 {d.options.map((o) => (
                   <button
@@ -102,7 +102,7 @@ export function QueueFilters({ area, priority, status, due, matching, onChange }
                       onChange({ [d.key]: o.value });
                       setOpen(null);
                     }}
-                    className={`flex items-center justify-between w-full h-8 px-2 rounded-[4px] text-[12px] leading-[145%] transition-colors ${
+                    className={`flex items-center justify-between w-full min-h-[40px] sm:min-h-0 h-8 px-2 rounded-[4px] text-[12px] leading-[145%] transition-colors ${
                       d.value === o.value ? "bg-[#F5F5F5] text-[#000000] font-normal" : "bg-white text-[#000000] font-normal hover:bg-neutral-50"
                     }`}
                   >
@@ -122,7 +122,7 @@ export function QueueFilters({ area, priority, status, due, matching, onChange }
               setOpen(null);
               onChange({ area: undefined, priority: undefined, status: undefined, due: undefined });
             }}
-            className="ml-2 text-[12px] font-medium text-[#000000] hover:underline cursor-pointer"
+            className="ml-2 min-h-[44px] sm:min-h-0 flex items-center text-[12px] font-medium text-[#000000] hover:underline cursor-pointer"
           >
             Clear filters
           </button>

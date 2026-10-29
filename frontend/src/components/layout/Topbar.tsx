@@ -54,9 +54,9 @@ export const Topbar: React.FC = () => {
   const isConnectorDetail = location.pathname.startsWith(`${ROUTES.MARKETPLACE_HUB_CONNECTORS}/`);
 
   return (
-    <header className="flex h-[72px] items-center justify-between border-b border-[#EAEAEA] bg-white px-8 z-20 shrink-0 font-['Inter',sans-serif]">
+    <header className="flex h-14 md:h-[72px] items-center justify-between border-b border-[#EAEAEA] bg-white px-3 sm:px-6 lg:px-8 z-20 shrink-0 font-['Inter',sans-serif] gap-2">
       {/* Left: Breadcrumbs */}
-      <div className="flex items-center gap-3 text-[12px] leading-[17px]">
+      <div className="flex items-center gap-1.5 sm:gap-3 text-[12px] leading-[17px] min-w-0 truncate">
 
         {isCreateProduct ? (
           <>
@@ -242,18 +242,19 @@ export const Topbar: React.FC = () => {
       </div>
 
       {/* Right controls */}
-      <div className="flex items-center gap-[18px]">
+      <div className="flex items-center gap-2 sm:gap-3 lg:gap-[18px] shrink-0">
         {/* Global Search trigger */}
         <button
           type="button"
           onClick={() => setGlobalSearchOpen(true)}
-          className="flex h-9 w-[278px] items-center justify-between rounded-lg bg-[#F5F5F5] px-3 text-[12px] text-[#666666] hover:bg-neutral-200/60 transition-colors"
+          className="flex h-9 w-9 sm:w-[180px] lg:w-[278px] items-center justify-center sm:justify-between rounded-lg bg-[#F5F5F5] px-2 sm:px-3 text-[12px] text-[#666666] hover:bg-neutral-200/60 transition-colors"
+          title="Search products, orders, SKUs..."
         >
-          <div className="flex items-center gap-2">
-            <Search className="h-4 w-4 text-[#666666] stroke-[1.5px]" />
-            <span className="truncate">Search products, orders, SKUs...</span>
+          <div className="flex items-center gap-2 min-w-0">
+            <Search className="h-4 w-4 text-[#666666] stroke-[1.5px] shrink-0" />
+            <span className="truncate hidden sm:inline">Search products, orders, SKUs...</span>
           </div>
-          <span className="pointer-events-none text-[12px] font-mono text-[#666666]">
+          <span className="pointer-events-none text-[12px] font-mono text-[#666666] hidden lg:inline">
             ⌘K
           </span>
         </button>
@@ -272,33 +273,33 @@ export const Topbar: React.FC = () => {
         <button
           type="button"
           onClick={() => useUiStore.getState().toggleNotificationsPanel()}
-          className="relative flex h-[15px] w-[15px] items-center justify-center text-[#666666] hover:text-[#0A0A0A] transition-colors"
+          className="relative flex h-9 w-9 sm:h-[15px] sm:w-[15px] lg:h-[15px] lg:w-[15px] items-center justify-center text-[#666666] hover:text-[#0A0A0A] transition-colors"
           title="Notifications"
         >
           <Bell className="h-[15px] w-[15px] stroke-[1.5px]" />
-          {unread > 0 && <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-red-500" aria-label={`${unread} unread notifications`} />}
+          {unread > 0 && <span className="absolute 1 sm:-top-1 sm:-right-1 h-2 w-2 rounded-full bg-red-500" aria-label={`${unread} unread notifications`} />}
         </button>
 
         {/* AI assistant trigger */}
         <Link
           to={ROUTES.AI_ASSISTANT}
-          className="flex items-center gap-[5px] text-[12px] text-[#000000] hover:opacity-80 transition-opacity"
+          className="flex h-9 sm:h-auto items-center gap-[5px] text-[12px] text-[#000000] hover:opacity-80 transition-opacity px-1 sm:px-0"
           title="AI Assistant"
         >
           <span className="text-[#666666]">✦</span>
-          <span className="text-[12px] font-normal">AI</span>
+          <span className="text-[12px] font-normal hidden sm:inline">AI</span>
         </Link>
 
         {/* Business switcher */}
-        <div className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity">
-          <span className="text-[12px] font-semibold text-[#000000]">
+        <div className="flex items-center gap-1 sm:gap-2 cursor-pointer hover:opacity-80 transition-opacity">
+          <span className="text-[12px] font-semibold text-[#000000] max-w-[70px] sm:max-w-[120px] lg:max-w-none truncate">
             {businessName}
           </span>
-          <ChevronDown className="h-3 w-3 text-[#666666] stroke-[1.5px]" />
+          <ChevronDown className="h-3 w-3 text-[#666666] stroke-[1.5px] shrink-0" />
         </div>
 
         {/* User avatar circle */}
-        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#F5F5F5] text-[12px] font-normal text-[#000000]">
+        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#F5F5F5] text-[12px] font-normal text-[#000000] shrink-0">
           {userInitial}
         </div>
       </div>

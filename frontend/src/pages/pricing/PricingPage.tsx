@@ -95,7 +95,7 @@ export default function PricingPage() {
             Review price proposals, margin context, and channel-level pricing across your catalog.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <RefreshButton onRefresh={() => void overview.refetch()} spinning={overview.isFetching} />
           <Button
             variant="outline"
@@ -143,48 +143,50 @@ export default function PricingPage() {
 
       {/* 3. Figma Tabs Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-3">
-        <div role="tablist" aria-label="Pricing sections" className="inline-flex items-center gap-1 rounded-lg border border-border bg-muted/60 p-1">
-          {PRIMARY_TABS.map((v) => {
-            const selected = v === view;
-            const n = v === "proposals" ? overview.data?.pendingProposals : undefined;
-            return (
+        <div className="max-w-full overflow-x-auto pb-1 sm:pb-0">
+          <div role="tablist" aria-label="Pricing sections" className="inline-flex items-center gap-1 rounded-lg border border-border bg-muted/60 p-1">
+            {PRIMARY_TABS.map((v) => {
+              const selected = v === view;
+              const n = v === "proposals" ? overview.data?.pendingProposals : undefined;
+              return (
+                <button
+                  key={v}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  onClick={() => update({ view: v === "overview" ? null : v })}
+                  className={cn(
+                    "rounded-md px-3.5 py-1.5 text-xs font-medium transition-colors cursor-pointer whitespace-nowrap",
+                    selected ? "bg-card font-semibold text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {VIEW_LABELS[v]}
+                  {n !== undefined && <span className="ml-1.5 font-mono">{formatNumber(n)}</span>}
+                </button>
+              );
+            })}
+            {/* Secondary views when selected */}
+            {view === "policies" && (
               <button
-                key={v}
                 type="button"
                 role="tab"
-                aria-selected={selected}
-                onClick={() => update({ view: v === "overview" ? null : v })}
-                className={cn(
-                  "rounded-md px-3.5 py-1.5 text-xs font-medium transition-colors cursor-pointer",
-                  selected ? "bg-card font-semibold text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-                )}
+                aria-selected={true}
+                className="rounded-md px-3.5 py-1.5 text-xs font-semibold bg-card text-foreground shadow-sm whitespace-nowrap"
               >
-                {VIEW_LABELS[v]}
-                {n !== undefined && <span className="ml-1.5 font-mono">{formatNumber(n)}</span>}
+                Strategy rules
               </button>
-            );
-          })}
-          {/* Secondary views when selected */}
-          {view === "policies" && (
-            <button
-              type="button"
-              role="tab"
-              aria-selected={true}
-              className="rounded-md px-3.5 py-1.5 text-xs font-semibold bg-card text-foreground shadow-sm"
-            >
-              Strategy rules
-            </button>
-          )}
-          {view === "competitors" && (
-            <button
-              type="button"
-              role="tab"
-              aria-selected={true}
-              className="rounded-md px-3.5 py-1.5 text-xs font-semibold bg-card text-foreground shadow-sm"
-            >
-              Competitor prices
-            </button>
-          )}
+            )}
+            {view === "competitors" && (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={true}
+                className="rounded-md px-3.5 py-1.5 text-xs font-semibold bg-card text-foreground shadow-sm whitespace-nowrap"
+              >
+                Competitor prices
+              </button>
+            )}
+          </div>
         </div>
         <p className="text-xs text-muted-foreground">
           Based on your costs and channel fees · No prices changed automatically

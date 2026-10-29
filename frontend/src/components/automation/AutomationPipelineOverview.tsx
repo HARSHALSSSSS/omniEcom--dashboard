@@ -74,7 +74,7 @@ export function AutomationPipelineOverview({
           <span className="text-xs text-muted-foreground">Last 24 hours</span>
         </div>
 
-        <div className="mt-5 grid grid-cols-2 items-center gap-4 md:grid-cols-4">
+        <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 items-center gap-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground">
               <Eye className="h-5 w-5" />
@@ -157,10 +157,10 @@ export function AutomationPipelineOverview({
             ) : (
               <div className="mt-4 divide-y divide-border">
                 {approvals.map((item) => (
-                  <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 py-3.5">
-                    <div className="min-w-[280px] space-y-1">
-                      <h4 className="text-sm font-semibold text-foreground">{item.recommendedAction}</h4>
-                      <p className="text-xs text-muted-foreground">
+                  <div key={item.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-3.5">
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <h4 className="text-sm font-semibold text-foreground break-words">{item.recommendedAction}</h4>
+                      <p className="text-xs text-muted-foreground break-words">
                         {item.entityName} · {item.skuOrOrder}
                       </p>
                       <div className="flex flex-wrap items-center gap-2 pt-0.5 text-[11px]">
@@ -172,14 +172,14 @@ export function AutomationPipelineOverview({
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <Button size="sm" variant="outline" className="text-xs" onClick={() => onReviewApproval(item)}>
+                    <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+                      <Button size="sm" variant="outline" className="h-9 sm:h-8 text-xs cursor-pointer" onClick={() => onReviewApproval(item)}>
                         Review
                       </Button>
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="text-xs text-muted-foreground hover:text-foreground"
+                        className="h-9 sm:h-8 text-xs text-muted-foreground hover:text-foreground cursor-pointer"
                         disabled={!canWrite}
                         title={canWrite ? undefined : "Deciding on runs needs the automation:write permission"}
                         onClick={() => onDismissApproval(item)}
@@ -208,25 +208,25 @@ export function AutomationPipelineOverview({
                 {runs.map((run) => {
                   const st = STATUS_TEXT[run.executionStatus];
                   return (
-                    <div key={run.id} className="flex items-center justify-between py-3 text-xs">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted text-foreground">
+                    <div key={run.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 py-3 text-xs">
+                      <div className="flex items-start sm:items-center gap-3 min-w-0">
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted text-foreground mt-0.5 sm:mt-0">
                           <Zap className="h-3.5 w-3.5" />
                         </div>
-                        <div className="space-y-0.5">
-                          <span className="font-semibold text-foreground">{run.summary}</span>
-                          <p className="text-muted-foreground">
+                        <div className="space-y-0.5 min-w-0">
+                          <span className="font-semibold text-foreground block truncate">{run.summary}</span>
+                          <p className="text-muted-foreground truncate">
                             {run.ruleName} · {run.entityName}
                           </p>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-4 text-right">
+                      <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-4 text-left sm:text-right shrink-0 pl-10 sm:pl-0">
                         <div>
                           <span className={cn("font-semibold", st.cls)}>● {st.text}</span>
                           <p className="text-[11px] text-muted-foreground">{formatDateTime(run.timestamp)}</p>
                         </div>
-                        <button type="button" onClick={() => onOpenRun(run.id)} className="text-muted-foreground hover:text-foreground">
+                        <button type="button" onClick={() => onOpenRun(run.id)} className="h-8 flex items-center text-muted-foreground hover:text-foreground cursor-pointer">
                           Details ↗
                         </button>
                       </div>

@@ -160,6 +160,14 @@ export function useShipmentLabel() {
   return useGuardedMutation({ mutationFn: (id: string) => shippingApi.label(id) });
 }
 
+export function useShipmentLabelData(shipmentId: string | null) {
+  return useQuery({
+    queryKey: [...SHIPPING_KEYS.all, "shipment-label-data", shipmentId],
+    queryFn: ({ signal }) => (shipmentId ? shippingApi.getLabelData(shipmentId, signal) : Promise.reject(new Error("No shipment id"))),
+    enabled: Boolean(shipmentId),
+  });
+}
+
 const useInvalidateAll = () => {
   const qc = useQueryClient();
   return () => qc.invalidateQueries({ queryKey: SHIPPING_KEYS.all });

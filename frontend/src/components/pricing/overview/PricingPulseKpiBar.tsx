@@ -32,11 +32,11 @@ export function PricingPulseKpiBar({
         Pricing pulse
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-1 min-[420px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {/* Metric 1: Products in view */}
         <div className="rounded-xl border border-neutral-200 bg-white p-4 shadow-sm space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="h-1.5 w-1.5 rounded-full bg-black shrink-0" />
+          <div className="flex flex-wrap items-baseline gap-2">
+            <span className="h-1.5 w-1.5 rounded-full bg-black shrink-0 self-center" />
             <span className="text-2xl font-bold tracking-tight text-foreground">{num(productsInView)}</span>
             <span className="text-xs font-semibold text-foreground">Products in view</span>
           </div>
@@ -47,8 +47,8 @@ export function PricingPulseKpiBar({
 
         {/* Metric 2: Avg margin */}
         <div className="rounded-xl border border-neutral-200 bg-white p-4 shadow-sm space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="h-1.5 w-1.5 rounded-full bg-black shrink-0" />
+          <div className="flex flex-wrap items-baseline gap-2">
+            <span className="h-1.5 w-1.5 rounded-full bg-black shrink-0 self-center" />
             <span className="text-2xl font-bold tracking-tight text-foreground">{marginText(avgMarginBps)}</span>
             <span className="text-xs font-semibold text-foreground">Avg. est. margin</span>
           </div>
@@ -61,8 +61,8 @@ export function PricingPulseKpiBar({
 
         {/* Metric 3: Below margin target */}
         <div className="rounded-xl border border-neutral-200 bg-white p-4 shadow-sm space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" />
+          <div className="flex flex-wrap items-baseline gap-2">
+            <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0 self-center" />
             <span
               className={cn(
                 "text-2xl font-bold tracking-tight",
@@ -82,8 +82,8 @@ export function PricingPulseKpiBar({
 
         {/* Metric 4: Pricing opportunities */}
         <div className="rounded-xl border border-neutral-200 bg-white p-4 shadow-sm space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="h-1.5 w-1.5 rounded-full bg-black shrink-0" />
+          <div className="flex flex-wrap items-baseline gap-2">
+            <span className="h-1.5 w-1.5 rounded-full bg-black shrink-0 self-center" />
             <span className="text-2xl font-bold tracking-tight text-foreground">{num(pricingOpportunitiesCount)}</span>
             <span className="text-xs font-semibold text-foreground">Pricing opportunities</span>
           </div>
@@ -92,8 +92,8 @@ export function PricingPulseKpiBar({
 
         {/* Metric 5: Updates applied */}
         <div className="rounded-xl border border-neutral-200 bg-white p-4 shadow-sm space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="h-1.5 w-1.5 rounded-full bg-black shrink-0" />
+          <div className="flex flex-wrap items-baseline gap-2">
+            <span className="h-1.5 w-1.5 rounded-full bg-black shrink-0 self-center" />
             <span className="text-2xl font-bold tracking-tight text-foreground">{num(updatesAppliedCount)}</span>
             <span className="text-xs font-semibold text-foreground">Updates applied</span>
           </div>

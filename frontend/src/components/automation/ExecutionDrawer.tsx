@@ -41,16 +41,16 @@ export function ExecutionDrawer({ executionId, rules, canWrite, busy, onClose, o
     <div className="flex w-full flex-wrap justify-end gap-2">
       {e.status === "pending_approval" && (
         <>
-          <Button type="button" variant="outline" size="sm" disabled={off || busy} title={off ? WRITE_REASON : undefined} onClick={() => onDismiss(e)}>
+          <Button type="button" variant="outline" size="sm" className="h-9 sm:h-8 text-xs cursor-pointer" disabled={off || busy} title={off ? WRITE_REASON : undefined} onClick={() => onDismiss(e)}>
             Dismiss
           </Button>
-          <Button type="button" size="sm" loading={busy} disabled={off} title={off ? WRITE_REASON : undefined} onClick={() => onApprove(e)}>
+          <Button type="button" size="sm" className="h-9 sm:h-8 text-xs cursor-pointer" loading={busy} disabled={off} title={off ? WRITE_REASON : undefined} onClick={() => onApprove(e)}>
             Approve and run
           </Button>
         </>
       )}
       {e.canRollback && (
-        <Button type="button" variant="outline" size="sm" loading={busy} disabled={off} title={off ? WRITE_REASON : undefined} onClick={() => onRollback(e)}>
+        <Button type="button" variant="outline" size="sm" className="h-9 sm:h-8 text-xs cursor-pointer" loading={busy} disabled={off} title={off ? WRITE_REASON : undefined} onClick={() => onRollback(e)}>
           Roll back
         </Button>
       )}
@@ -58,7 +58,7 @@ export function ExecutionDrawer({ executionId, rules, canWrite, busy, onClose, o
   );
 
   return (
-    <ContextDrawer open={executionId !== null} onClose={onClose} title={title} description={e ? `${actionLabel(e.actionType)} · ${formatDateTime(e.createdAt)}` : undefined} badge={e ? <ExecutionBadge status={e.status} /> : undefined} className="sm:w-[460px]" footer={footer || undefined}>
+    <ContextDrawer open={executionId !== null} onClose={onClose} title={title} description={e ? `${actionLabel(e.actionType)} · ${formatDateTime(e.createdAt)}` : undefined} badge={e ? <ExecutionBadge status={e.status} /> : undefined} className="w-full sm:w-[460px]" footer={footer || undefined}>
       {q.isLoading ? (
         <div role="status" aria-label="Loading run" className="space-y-3">
           <Skeleton className="h-6 w-2/3" />

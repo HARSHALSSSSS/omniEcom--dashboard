@@ -97,7 +97,7 @@ function windowOfPages(page: number, pages: number): Array<number | "gap"> {
   return out;
 }
 
-const NAV = "h-8 rounded-lg border border-border bg-card px-3 text-xs font-semibold hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50";
+const NAV = "h-9 sm:h-8 rounded-lg border border-border bg-card px-3 text-xs font-semibold hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer";
 
 interface PaginationProps {
   page: number;
@@ -114,17 +114,17 @@ export function AutoPagination({ page, pages, total, pageSize, shown, noun, onPa
   const first = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const last = (page - 1) * pageSize + shown;
   return (
-    <nav aria-label="Pagination" className="flex flex-wrap items-center justify-between gap-2 pt-1">
+    <nav aria-label="Pagination" className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
       <span className="text-xs text-muted-foreground" aria-live="polite">
         Showing {formatNumber(first)}–{formatNumber(last)} of {formatNumber(total)} {noun}
       </span>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
         <button type="button" className={NAV} disabled={page <= 1} onClick={() => onPage(page - 1)}>
           Previous
         </button>
         {windowOfPages(page, pages).map((n, i) =>
           n === "gap" ? (
-            <span key={`gap-${i}`} className="text-xs text-muted-foreground" aria-hidden>
+            <span key={`gap-${i}`} className="px-1 text-xs text-muted-foreground" aria-hidden>
               ...
             </span>
           ) : (
@@ -134,7 +134,7 @@ export function AutoPagination({ page, pages, total, pageSize, shown, noun, onPa
               aria-label={`Page ${n}`}
               aria-current={n === page ? "page" : undefined}
               onClick={() => onPage(n)}
-              className={`h-7 min-w-[28px] rounded px-1 text-xs font-semibold ${n === page ? "bg-muted" : "hover:bg-muted"}`}
+              className={`h-9 sm:h-7 min-w-[36px] sm:min-w-[28px] rounded px-1.5 text-xs font-semibold cursor-pointer ${n === page ? "bg-muted font-bold" : "hover:bg-muted"}`}
             >
               {n}
             </button>
@@ -143,7 +143,7 @@ export function AutoPagination({ page, pages, total, pageSize, shown, noun, onPa
         <button type="button" className={NAV} disabled={page >= pages} onClick={() => onPage(page + 1)}>
           Next
         </button>
-        <select aria-label="Rows per page" value={pageSize} onChange={(e) => onPageSize(Number(e.target.value))} className="h-8 rounded-lg border border-border bg-card px-2 text-xs font-medium">
+        <select aria-label="Rows per page" value={pageSize} onChange={(e) => onPageSize(Number(e.target.value))} className="h-9 sm:h-8 rounded-lg border border-border bg-card px-2 text-xs font-medium cursor-pointer">
           {PAGE_SIZES.map((n) => (
             <option key={n} value={n}>
               {n} / page
@@ -157,10 +157,10 @@ export function AutoPagination({ page, pages, total, pageSize, shown, noun, onPa
 
 export function Stat({ label, value, hint, tone }: { label: string; value: string; hint?: string; tone?: string }) {
   return (
-    <div className="flex flex-col gap-1 rounded-xl border border-border bg-card p-4 shadow-sm">
-      <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</span>
-      <span className="font-mono text-2xl font-bold text-foreground">{value}</span>
-      {hint && <span className={cn("text-[11px]", tone ?? "text-muted-foreground")}>{hint}</span>}
+    <div className="flex flex-col gap-1 rounded-xl border border-border bg-card p-4 shadow-sm min-w-0">
+      <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground truncate">{label}</span>
+      <span className="font-mono text-2xl font-bold text-foreground truncate">{value}</span>
+      {hint && <span className={cn("text-[11px] break-words", tone ?? "text-muted-foreground")}>{hint}</span>}
     </div>
   );
 }
@@ -169,7 +169,7 @@ export function Line({ label, children }: { label: string; children: ReactNode }
   return (
     <div className="flex items-start justify-between gap-3 border-b border-border pb-2">
       <span className="shrink-0 text-muted-foreground">{label}</span>
-      <span className="text-right font-semibold text-foreground">{children}</span>
+      <span className="text-right font-semibold text-foreground break-words">{children}</span>
     </div>
   );
 }

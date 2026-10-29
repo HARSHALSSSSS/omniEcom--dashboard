@@ -49,13 +49,13 @@ export function SavedViewsMenu({ canSave, onApply, onSave }: SavedViewsMenuProps
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        className="hover:text-[#666666] transition-colors cursor-pointer"
+        className="hover:text-[#666666] transition-colors cursor-pointer py-1 sm:py-0 min-h-[40px] sm:min-h-0 inline-flex items-center"
       >
         Saved views
       </button>
 
       {open && (
-        <div role="menu" aria-label="Saved views" className="absolute right-0 top-[30px] z-50 w-[260px] bg-[#FFFFFF] border border-[#EAEAEA] rounded-[8px] shadow-[0px_4px_12px_rgba(0,0,0,0.08)] p-1 text-[12px]">
+        <div role="menu" aria-label="Saved views" className="absolute right-0 top-[30px] z-50 w-[260px] max-w-[calc(100vw-32px)] bg-[#FFFFFF] border border-[#EAEAEA] rounded-[8px] shadow-[0px_4px_12px_rgba(0,0,0,0.08)] p-1 text-[12px]">
           <div className="px-2 py-1 text-[11px] font-medium text-[#666666] uppercase">Saved views</div>
 
           {views.isPending && <div className="px-2 py-2 text-[#666666]">Loading views...</div>}
@@ -157,11 +157,11 @@ export function SaveViewPopover({ lines, filters, sort, onClose }: SaveViewPopov
     <div
       role="dialog"
       aria-label="Save current view"
-      className="fixed bottom-8 right-8 z-50 w-[338px] bg-[#FFFFFF] border border-[#EAEAEA] shadow-[0px_4px_16px_rgba(0,0,0,0.12)] rounded-[8px] p-4 flex flex-col gap-4 text-xs animate-in fade-in slide-in-from-bottom-2"
+      className="fixed bottom-4 sm:bottom-8 right-4 sm:right-8 left-4 sm:left-auto z-50 max-w-[calc(100vw-32px)] sm:w-[338px] bg-[#FFFFFF] border border-[#EAEAEA] shadow-[0px_4px_16px_rgba(0,0,0,0.12)] rounded-[8px] p-4 flex flex-col gap-4 text-xs animate-in fade-in slide-in-from-bottom-2"
     >
       <div className="w-full flex items-center justify-between">
         <h3 className="text-[13px] font-semibold text-[#000000]">Save current view</h3>
-        <button type="button" onClick={onClose} aria-label="Close" className="text-[#666666] hover:text-[#000000]">
+        <button type="button" onClick={onClose} aria-label="Close" className="text-[#666666] hover:text-[#000000] p-1">
           <X className="h-3.5 w-3.5" aria-hidden />
         </button>
       </div>
@@ -211,13 +211,13 @@ export function SaveViewPopover({ lines, filters, sort, onClose }: SaveViewPopov
         </label>
 
         <div className="w-full flex items-center justify-end gap-2 pt-1">
-          <button type="button" onClick={onClose} className="px-4 h-[32px] bg-[#FFFFFF] text-[12px] font-semibold text-[#000000] hover:bg-[#F5F5F5] rounded-[8px]">
+          <button type="button" onClick={onClose} className="px-4 h-[32px] min-h-[44px] sm:min-h-[32px] bg-[#FFFFFF] text-[12px] font-semibold text-[#000000] hover:bg-[#F5F5F5] rounded-[8px]">
             Cancel
           </button>
           <button
             type="submit"
             disabled={create.isPending}
-            className="px-4 h-[32px] bg-[#000000] text-[12px] font-semibold text-[#FFFFFF] hover:bg-[#1A1A1A] rounded-[8px] disabled:opacity-60"
+            className="px-4 h-[32px] min-h-[44px] sm:min-h-[32px] bg-[#000000] text-[12px] font-semibold text-[#FFFFFF] hover:bg-[#1A1A1A] rounded-[8px] disabled:opacity-60"
           >
             {create.isPending ? "Saving..." : "Save view"}
           </button>

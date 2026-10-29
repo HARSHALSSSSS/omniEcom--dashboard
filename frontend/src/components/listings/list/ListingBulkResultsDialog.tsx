@@ -41,7 +41,7 @@ interface ListingBulkResultsDialogProps {
 export function ListingBulkResultsDialog({ view, onClose }: ListingBulkResultsDialogProps) {
   return (
     <Dialog open={view !== null} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-[calc(100vw-32px)] sm:max-w-lg">
         {view && (
           <>
             <DialogHeader>
@@ -67,7 +67,7 @@ export function ListingBulkResultsDialog({ view, onClose }: ListingBulkResultsDi
               ))}
             </ul>
             <DialogFooter className="mt-4">
-              <Button size="sm" className="text-xs" onClick={onClose}>
+              <Button size="sm" className="text-xs min-h-[44px] sm:min-h-9 w-full sm:w-auto" onClick={onClose}>
                 Done
               </Button>
             </DialogFooter>

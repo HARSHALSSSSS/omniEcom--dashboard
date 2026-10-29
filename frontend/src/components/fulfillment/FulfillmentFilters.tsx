@@ -8,12 +8,16 @@ import { EXCEPTION_STATUS_LABELS, PRIORITY_LABELS, type FulfillmentUrlState } fr
 
 const SELECT = "h-8 rounded-lg border border-border bg-background px-2.5 text-xs font-medium text-foreground hover:bg-muted/30 focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50 cursor-pointer";
 
+export type QueueSort = "sla_soonest" | "sla_latest" | "order_newest";
+
 interface FulfillmentFiltersProps {
   state: FulfillmentUrlState;
   warehouses: WarehouseOption[];
   /** null while the carriers cannot be read (no shipping access): the filter is then left out */
   carriers: CarrierOption[] | null;
   filtered: boolean;
+  sort?: QueueSort;
+  onSort?: (sort: QueueSort) => void;
   onSearch: (q: string) => void;
   onWarehouse: (id: string | null) => void;
   onCarrier: (code: string | null) => void;
@@ -29,6 +33,8 @@ export function FulfillmentFilters({
   warehouses,
   carriers,
   filtered,
+  sort = "sla_soonest",
+  onSort,
   onSearch,
   onWarehouse,
   onCarrier,
@@ -84,15 +90,6 @@ export function FulfillmentFilters({
             ))}
           </select>
 
-          {/* Marketplace / Channel */}
-          <select aria-label="Marketplace" className={SELECT} defaultValue="">
-            <option value="">Marketplace ▾</option>
-            <option value="Amazon">Amazon</option>
-            <option value="Flipkart">Flipkart</option>
-            <option value="Meesho">Meesho</option>
-            <option value="Shopify">Shopify</option>
-          </select>
-
           {/* Carrier selector (when permission granted) */}
           {carrierOptions && (
             <select
@@ -125,7 +122,7 @@ export function FulfillmentFilters({
             ))}
           </select>
 
-          {/* SLA / Exceptions */}
+          {/* Exceptions */}
           {exceptions ? (
             <select
               aria-label="Exception status"
@@ -146,27 +143,20 @@ export function FulfillmentFilters({
               value={state.hasException === undefined ? "" : String(state.hasException)}
               onChange={(e) => onException((e.target.value || null) as "true" | "false" | null)}
             >
-              <option value="">SLA ▾</option>
+              <option value="">Exceptions ▾</option>
               <option value="true">Has open exceptions</option>
               <option value="false">No open exceptions</option>
             </select>
           )}
-
-          {/* Assigned picker */}
-          <select aria-label="Assigned picker" className={SELECT} defaultValue="">
-            <option value="">Assigned picker ▾</option>
-            <option value="unassigned">Unassigned</option>
-            <option value="rahul">Rahul</option>
-            <option value="amit">Amit</option>
-          </select>
         </div>
 
-        {/* Right side: SLA soonest first sort dropdown */}
+        {/* Right side: Sorting dropdown */}
         <div className="flex items-center gap-2">
           <select
             aria-label="Sort queue"
             className={cn(SELECT, "text-muted-foreground")}
-            defaultValue="sla_soonest"
+            value={sort}
+            onChange={(e) => onSort?.(e.target.value as QueueSort)}
           >
             <option value="sla_soonest">⇅ SLA: soonest first</option>
             <option value="sla_latest">⇅ SLA: latest first</option>

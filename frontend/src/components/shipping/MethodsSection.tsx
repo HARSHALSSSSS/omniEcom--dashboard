@@ -10,7 +10,7 @@ import type { ShippingMethod } from "@/types/shipping";
 import { CAP_TEXT, KIND_SUBTITLE, NO_CONFIGURE_REASON, dateOrDash, failedChecks, methodKindLabel } from "./shippingFormat";
 import { Notice } from "./shippingUi";
 
-const DETAIL_BTN = "h-8 rounded-lg border border-[#EAEAEA] bg-white px-3 font-normal text-black transition-colors hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50";
+const DETAIL_BTN = "h-9 sm:h-8 min-h-[36px] sm:min-h-0 rounded-lg border border-[#EAEAEA] bg-white px-3 font-normal text-black transition-colors hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50";
 const ORDER_TYPE: Record<string, string> = { prepaid: "Prepaid", cod: "Cash on delivery" };
 
 function StateLine({ m }: { m: ShippingMethod }) {
@@ -81,12 +81,12 @@ export function MethodsSection({ canConfigure, embedded, onAddProvider, onConfig
         </div>
       )}
 
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-[16px] font-semibold text-black">Shipping Methods</h2>
           <p className="text-[11px] text-[#666666]">Configured methods and connector capabilities, without inferred support.</p>
         </div>
-        <button type="button" onClick={onAddProvider} disabled={off} title={off ? NO_CONFIGURE_REASON : undefined} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#EAEAEA] bg-white px-3 text-[12px] text-black transition-colors hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50">
+        <button type="button" onClick={onAddProvider} disabled={off} title={off ? NO_CONFIGURE_REASON : undefined} className="inline-flex h-9 sm:h-8 min-h-[36px] sm:min-h-0 self-start sm:self-auto items-center gap-1.5 rounded-lg border border-[#EAEAEA] bg-white px-3 text-[12px] text-black transition-colors hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50">
           <Plus className="h-3.5 w-3.5 stroke-[1.5] text-[#666666]" />
           <span>Add Provider</span>
         </button>
@@ -118,7 +118,7 @@ export function MethodsSection({ canConfigure, embedded, onAddProvider, onConfig
       ) : (
         <>
           <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
-            <div className="space-y-2 border-[#EAEAEA] pr-4 md:col-span-4 md:border-r">
+            <div className="space-y-2 border-[#EAEAEA] pr-0 pb-4 border-b md:border-b-0 md:pb-0 md:pr-4 md:col-span-4 md:border-r">
               <h3 className="mb-2 text-[12px] font-semibold text-black">Connected Shipping Methods</h3>
               {items.map((m) => {
                 const active = m.id === selected.id;
@@ -179,8 +179,8 @@ export function MethodsSection({ canConfigure, embedded, onAddProvider, onConfig
                 )}
               </div>
 
-              <div className="overflow-hidden rounded-lg border border-[#EAEAEA] bg-white text-[11px]">
-                <div className="grid grid-cols-12 border-b border-[#EAEAEA] bg-[#F5F5F5] px-3 py-2 text-[10px] font-normal text-[#666666]">
+              <div className="overflow-x-auto rounded-lg border border-[#EAEAEA] bg-white text-[11px]">
+                <div className="grid min-w-[420px] sm:min-w-0 grid-cols-12 border-b border-[#EAEAEA] bg-[#F5F5F5] px-3 py-2 text-[10px] font-normal text-[#666666]">
                   <div className="col-span-4">Property</div>
                   <div className="col-span-8">Configuration</div>
                 </div>
@@ -203,7 +203,7 @@ export function MethodsSection({ canConfigure, embedded, onAddProvider, onConfig
                     ["Shipments (30 days)", usage ? `${formatNumber(usage.shipmentsLast30d)} shipped · ${formatNumber(usage.inTransit)} in transit` : "—"],
                   ] as const
                 ).map(([k, v], i, all) => (
-                  <div key={k} className={cn("grid grid-cols-12 px-3 py-2.5", i < all.length - 1 && "border-b border-[#EAEAEA]")}>
+                  <div key={k} className={cn("grid min-w-[420px] sm:min-w-0 grid-cols-12 px-3 py-2.5", i < all.length - 1 && "border-b border-[#EAEAEA]")}>
                     <div className="col-span-4 text-black">{k}</div>
                     <div className="col-span-8 text-black">
                       {v}
@@ -217,7 +217,7 @@ export function MethodsSection({ canConfigure, embedded, onAddProvider, onConfig
                 <button type="button" className={DETAIL_BTN} disabled={off || selected.isDefault || !selected.active || patch.isPending} title={off ? NO_CONFIGURE_REASON : selected.isDefault ? "This is already the default method." : undefined} onClick={() => change(selected, { isDefault: true }, `${selected.name} is now the default`)}>
                   Set as default
                 </button>
-                <button type="button" className="h-8 rounded-lg border border-black bg-black px-3 font-semibold text-white transition-colors hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50" disabled={off} title={off ? NO_CONFIGURE_REASON : undefined} onClick={() => onConfigure(selected)}>
+                <button type="button" className="h-9 sm:h-8 min-h-[36px] sm:min-h-0 rounded-lg border border-black bg-black px-3 font-semibold text-white transition-colors hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50" disabled={off} title={off ? NO_CONFIGURE_REASON : undefined} onClick={() => onConfigure(selected)}>
                   Configure
                 </button>
                 <button type="button" className={DETAIL_BTN} disabled={off || patch.isPending} title={off ? NO_CONFIGURE_REASON : undefined} onClick={() => change(selected, { active: !selected.active }, selected.active ? `${selected.name} disabled` : `${selected.name} enabled`)}>
@@ -265,8 +265,8 @@ export function MethodsSection({ canConfigure, embedded, onAddProvider, onConfig
 
           <div className="space-y-2 pt-4">
             <h3 className="text-[12px] font-semibold text-black">Capability matrix</h3>
-            <div className="overflow-hidden rounded-lg border border-[#EAEAEA] bg-white text-[11px]">
-              <div className="grid grid-cols-12 border-b border-[#EAEAEA] bg-[#F5F5F5] px-3 py-2 text-[10px] font-normal text-[#666666]">
+            <div className="overflow-x-auto rounded-lg border border-[#EAEAEA] bg-white text-[11px]">
+              <div className="grid min-w-[620px] md:min-w-0 grid-cols-12 border-b border-[#EAEAEA] bg-[#F5F5F5] px-3 py-2 text-[10px] font-normal text-[#666666]">
                 <div className="col-span-3">Method</div>
                 <div className="col-span-2">Label support</div>
                 <div className="col-span-2">Tracking support</div>
@@ -274,7 +274,7 @@ export function MethodsSection({ canConfigure, embedded, onAddProvider, onConfig
                 <div className="col-span-3">Status synchronization</div>
               </div>
               {(methods.data?.capabilityMatrix ?? []).map((row, idx) => (
-                <div key={`${row.methodId ?? row.method}-${idx}`} className="grid grid-cols-12 border-b border-[#EAEAEA] px-3 py-2.5 text-black last:border-b-0 hover:bg-neutral-50/50">
+                <div key={`${row.methodId ?? row.method}-${idx}`} className="grid min-w-[620px] md:min-w-0 grid-cols-12 border-b border-[#EAEAEA] px-3 py-2.5 text-black last:border-b-0 hover:bg-neutral-50/50">
                   <div className="col-span-3 font-medium">{row.name}</div>
                   {(["label", "tracking", "dispatchUpdate", "statusSync"] as const).map((k, i) => (
                     <div key={k} className={cn(i === 3 ? "col-span-3" : "col-span-2", CAP_TEXT[row[k]].tone === "text-[#16A34A]" ? "text-[#16A34A]" : "text-[#666666]")}>

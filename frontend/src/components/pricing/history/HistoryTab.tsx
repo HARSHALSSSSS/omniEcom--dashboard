@@ -34,7 +34,7 @@ export function HistoryTab({ url, channels }: HistoryTabProps) {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <select aria-label="History channel" className={SELECT_CLASS} value={query.accountId ?? ""} onChange={(e) => update({ account: e.target.value || null })}>
+        <select aria-label="History channel" className={`${SELECT_CLASS} w-full sm:w-auto`} value={query.accountId ?? ""} onChange={(e) => update({ account: e.target.value || null })}>
           <option value="">All channels</option>
           {channels.map((c) => (
             <option key={c.accountId} value={c.accountId}>
@@ -42,7 +42,7 @@ export function HistoryTab({ url, channels }: HistoryTabProps) {
             </option>
           ))}
         </select>
-        <select aria-label="Price field" className={SELECT_CLASS} value={query.field ?? ""} onChange={(e) => update({ field: (e.target.value as PriceField) || null })}>
+        <select aria-label="Price field" className={`${SELECT_CLASS} w-full sm:w-auto`} value={query.field ?? ""} onChange={(e) => update({ field: (e.target.value as PriceField) || null })}>
           <option value="">All price types</option>
           {PRICE_FIELDS.map((f) => (
             <option key={f} value={f}>
@@ -99,12 +99,12 @@ export function HistoryTab({ url, channels }: HistoryTabProps) {
               </tbody>
             </table>
           </div>
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
             <span className="text-xs text-muted-foreground" aria-live="polite">
               {rows.length} {rows.length === 1 ? "change" : "changes"} loaded{list.hasNextPage ? "" : ", this is the oldest"}
             </span>
             {list.hasNextPage && (
-              <Button variant="outline" size="sm" className="text-xs" loading={list.isFetchingNextPage} onClick={() => void list.fetchNextPage()}>
+              <Button variant="outline" size="sm" className="text-xs w-full sm:w-auto" loading={list.isFetchingNextPage} onClick={() => void list.fetchNextPage()}>
                 Load older changes
               </Button>
             )}

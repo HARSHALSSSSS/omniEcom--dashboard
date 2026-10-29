@@ -190,7 +190,7 @@ function VariantForm({ productId, base, initial, leadBefore, readOnly, onDone, o
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field id="vf-mrp" title="MRP" error={e("mrp")}>
             {rupee(<Input id="vf-mrp" inputMode="decimal" className="pl-7" {...register("mrp")} error={!!e("mrp")} aria-invalid={!!e("mrp")} placeholder="0.00" />)}
           </Field>
@@ -205,7 +205,7 @@ function VariantForm({ productId, base, initial, leadBefore, readOnly, onDone, o
           </Field>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
           <Field id="vf-weight" title="Weight (g)" error={e("weight")}>
             <Input id="vf-weight" inputMode="numeric" {...register("weight")} error={!!e("weight")} aria-invalid={!!e("weight")} />
           </Field>
@@ -220,7 +220,7 @@ function VariantForm({ productId, base, initial, leadBefore, readOnly, onDone, o
           </Field>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field id="vf-status" title="Status" error={e("status")} help="Inactive variants are archived and not sold.">
             <select id="vf-status" {...register("status")} className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm">
               <option value="active">Active</option>
@@ -235,12 +235,12 @@ function VariantForm({ productId, base, initial, leadBefore, readOnly, onDone, o
         </div>
       </fieldset>
 
-      <SheetFooter className="border-t border-[#EAEAEA] px-6 py-4 gap-2 sm:space-x-0">
-        <Button type="button" variant="outline" onClick={onDone}>
+      <SheetFooter className="border-t border-[#EAEAEA] px-6 py-4 flex-col sm:flex-row gap-2 sm:space-x-0">
+        <Button type="button" variant="outline" onClick={onDone} className="min-h-[44px] sm:min-h-9 w-full sm:w-auto">
           {readOnly ? "Close" : "Cancel"}
         </Button>
         {!readOnly && (
-          <Button type="submit" loading={saving} disabled={conflict}>
+          <Button type="submit" loading={saving} disabled={conflict} className="min-h-[44px] sm:min-h-9 w-full sm:w-auto">
             {base ? "Save changes" : "Add variant"}
           </Button>
         )}

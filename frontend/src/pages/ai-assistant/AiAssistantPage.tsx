@@ -143,14 +143,14 @@ function Workspace({ onBlocked }: { onBlocked: (r: BlockReason) => void }) {
     <div className="flex flex-col gap-4">
       {/* Top Tab Switcher */}
       <div className="flex items-center justify-between">
-        <div role="tablist" aria-label="AI Assistant Views" className="inline-flex items-center gap-1 rounded-lg border border-border bg-muted p-1">
+        <div role="tablist" aria-label="AI Assistant Views" className="inline-flex w-full sm:w-auto items-center gap-1 rounded-lg border border-border bg-muted p-1">
           <button
             type="button"
             role="tab"
             aria-selected={activeTab === "current"}
             onClick={() => setTab("current")}
             className={cn(
-              "rounded-md px-3.5 py-1.5 text-xs font-medium transition-all",
+              "flex-1 sm:flex-initial text-center justify-center min-h-[36px] sm:min-h-0 rounded-md px-3.5 py-1.5 text-xs font-medium transition-all",
               activeTab === "current"
                 ? "bg-background font-semibold text-foreground shadow-xs"
                 : "text-muted-foreground hover:text-foreground"
@@ -164,7 +164,7 @@ function Workspace({ onBlocked }: { onBlocked: (r: BlockReason) => void }) {
             aria-selected={activeTab === "history"}
             onClick={() => setTab("history")}
             className={cn(
-              "rounded-md px-3.5 py-1.5 text-xs font-medium transition-all",
+              "flex-1 sm:flex-initial text-center justify-center min-h-[36px] sm:min-h-0 rounded-md px-3.5 py-1.5 text-xs font-medium transition-all",
               activeTab === "history"
                 ? "bg-background font-semibold text-foreground shadow-xs"
                 : "text-muted-foreground hover:text-foreground"
@@ -190,8 +190,8 @@ function Workspace({ onBlocked }: { onBlocked: (r: BlockReason) => void }) {
           onOpenConversation={openConversationFromHistory}
         />
       ) : (
-        <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-          <div className="flex min-h-[560px] flex-col lg:h-[calc(100vh-300px)]">
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+          <div className="flex min-h-[480px] sm:min-h-[560px] flex-col lg:h-[calc(100vh-300px)]">
             <ChatPanel
               detail={selectedId ? conversation : undefined}
               selected={selectedId !== null}
@@ -229,7 +229,7 @@ function Workspace({ onBlocked }: { onBlocked: (r: BlockReason) => void }) {
                     type="button"
                     onClick={() => setActiveRightTab("product")}
                     className={cn(
-                      "flex-1 rounded py-1 text-xs font-medium transition-colors",
+                      "flex-1 rounded py-1 min-h-[36px] sm:min-h-0 text-xs font-medium transition-colors",
                       activeRightTab === "product"
                         ? "bg-card font-semibold text-foreground shadow-xs"
                         : "text-muted-foreground hover:text-foreground"
@@ -241,7 +241,7 @@ function Workspace({ onBlocked }: { onBlocked: (r: BlockReason) => void }) {
                     type="button"
                     onClick={() => setActiveRightTab("insights")}
                     className={cn(
-                      "flex-1 rounded py-1 text-xs font-medium transition-colors",
+                      "flex-1 rounded py-1 min-h-[36px] sm:min-h-0 text-xs font-medium transition-colors",
                       activeRightTab === "insights"
                         ? "bg-card font-semibold text-foreground shadow-xs"
                         : "text-muted-foreground hover:text-foreground"

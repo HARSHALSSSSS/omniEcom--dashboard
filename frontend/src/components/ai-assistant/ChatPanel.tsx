@@ -62,52 +62,52 @@ export function ChatPanel(p: ChatPanelProps) {
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card">
       {/* Top Breadcrumb Context bar if active */}
       {p.breadcrumb && (
-        <div className="flex items-center justify-between border-b border-border bg-muted/20 px-5 py-2 text-xs">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 border-b border-border bg-muted/20 px-3 sm:px-5 py-2 text-xs">
+          <div className="flex items-center gap-2 min-w-0">
             {p.onBack && (
               <button
                 type="button"
                 onClick={p.onBack}
-                className="font-medium text-muted-foreground hover:text-foreground"
+                className="shrink-0 font-medium text-muted-foreground hover:text-foreground"
               >
                 ← Back
               </button>
             )}
-            <span className="text-muted-foreground">/</span>
-            <span className="font-medium text-foreground">{p.breadcrumb}</span>
+            <span className="shrink-0 text-muted-foreground">/</span>
+            <span className="truncate font-medium text-foreground">{p.breadcrumb}</span>
           </div>
-          {p.contextNote && <span className="text-[11px] text-muted-foreground">{p.contextNote}</span>}
+          {p.contextNote && <span className="shrink-0 text-[11px] text-muted-foreground">{p.contextNote}</span>}
         </div>
       )}
 
-      <div className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-border px-5">
-        <div className="flex min-w-0 items-center gap-3">
+      <div className="flex min-h-[3.5rem] shrink-0 flex-wrap sm:flex-nowrap items-center justify-between gap-2.5 sm:gap-3 border-b border-border px-3.5 sm:px-5 py-2.5 sm:py-0">
+        <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-black text-white" aria-hidden>
             <Sparkles className="h-4 w-4" />
           </div>
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2">
               <h2 className="truncate text-sm font-semibold text-foreground">{p.detail?.title ?? "New conversation"}</h2>
-              <span className="rounded bg-muted px-1.5 py-0.2 text-[10px] font-semibold text-muted-foreground">
+              <span className="shrink-0 rounded bg-muted px-1.5 py-0.2 text-[10px] font-semibold text-muted-foreground">
                 Review only
               </span>
             </div>
-            <p className="text-[11px] text-muted-foreground">Advisory assistant: answers from your orders, stock, returns and pricing data</p>
+            <p className="hidden text-[11px] text-muted-foreground sm:block">Advisory assistant: answers from your orders, stock, returns and pricing data</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           {p.onRestore && (
-            <Button size="sm" variant="outline" loading={p.restoring} onClick={p.onRestore}>
+            <Button size="sm" variant="outline" loading={p.restoring} onClick={p.onRestore} className="min-h-[36px] sm:min-h-0">
               Restore conversation
             </Button>
           )}
-          <Button size="sm" variant="outline" className="text-xs" onClick={p.onNew}>
+          <Button size="sm" variant="outline" className="min-h-[36px] sm:min-h-0 text-xs" onClick={p.onNew}>
             + New conversation
           </Button>
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto bg-muted/20 p-5" aria-live="polite" aria-busy={p.pendingText !== null}>
+      <div className="min-h-0 flex-1 space-y-4 sm:space-y-5 overflow-y-auto bg-muted/20 p-3 sm:p-5" aria-live="polite" aria-busy={p.pendingText !== null}>
         {p.loading && (
           <div role="status" aria-label="Loading conversation" className="space-y-3">
             <Skeleton className="h-16 w-2/3" />
@@ -139,7 +139,7 @@ export function ChatPanel(p: ChatPanelProps) {
             <p className="max-w-md text-xs text-muted-foreground">Ask in plain language, or pick a question to start.</p>
             <div className="flex flex-wrap justify-center gap-2">
               {STARTERS.map((s) => (
-                <Button key={s} size="sm" variant="outline" className="h-auto py-1.5 text-xs" disabled={!!p.lockedReason} onClick={() => p.onAsk(s)}>
+                <Button key={s} size="sm" variant="outline" className="h-auto min-h-[36px] sm:min-h-0 py-1.5 text-xs text-left whitespace-normal max-w-full" disabled={!!p.lockedReason} onClick={() => p.onAsk(s)}>
                   {s}
                 </Button>
               ))}
@@ -153,8 +153,8 @@ export function ChatPanel(p: ChatPanelProps) {
 
         {p.pendingText !== null && (
           <>
-            <div className="ml-auto flex max-w-[88%] flex-col items-end gap-1">
-              <div className="rounded-xl bg-black p-4 text-[13px] leading-relaxed text-white opacity-70">
+            <div className="ml-auto flex max-w-[95%] sm:max-w-[88%] flex-col items-end gap-1">
+              <div className="rounded-xl bg-black p-3.5 sm:p-4 text-[13px] leading-relaxed text-white opacity-70">
                 <p className="whitespace-pre-wrap break-words">{p.pendingText}</p>
               </div>
               <span className="px-1 text-[11px] text-muted-foreground">Sending</span>
@@ -167,14 +167,14 @@ export function ChatPanel(p: ChatPanelProps) {
         )}
 
         {p.failure && (
-          <div role="alert" className="mx-auto flex max-w-[88%] flex-col gap-2 rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-xs">
+          <div role="alert" className="mx-auto flex max-w-[95%] sm:max-w-[88%] flex-col gap-2 rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-xs">
             <p className="font-semibold text-destructive">Your message was not sent.</p>
             <p className="text-muted-foreground">{p.failure.message}</p>
             <div className="flex gap-2">
-              <Button size="sm" onClick={p.onRetrySend}>
+              <Button size="sm" onClick={p.onRetrySend} className="min-h-[36px] sm:min-h-0">
                 Try again
               </Button>
-              <Button size="sm" variant="ghost" onClick={p.onDismissFailure}>
+              <Button size="sm" variant="ghost" onClick={p.onDismissFailure} className="min-h-[36px] sm:min-h-0">
                 Dismiss
               </Button>
             </div>
@@ -193,7 +193,7 @@ export function ChatPanel(p: ChatPanelProps) {
                 <button
                   key={fu}
                   type="button"
-                  className="rounded-full border border-border bg-card px-3 py-1 text-xs text-foreground hover:bg-muted"
+                  className="rounded-full border border-border bg-card px-3 py-1.5 sm:py-1 text-xs text-foreground hover:bg-muted min-h-[32px] sm:min-h-0 text-left"
                   onClick={() => p.onAsk(fu)}
                 >
                   {fu}

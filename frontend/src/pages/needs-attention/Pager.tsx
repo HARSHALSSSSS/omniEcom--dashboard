@@ -12,7 +12,7 @@ export function Pager({ page, pages, shown, total, fetching, onPage }: Props) {
   const atStart = page <= 1;
   const atEnd = page >= pages;
   return (
-    <div className="flex flex-row justify-between items-center pt-2 h-[30px] w-full text-[12px] text-[#666666]">
+    <div className="flex flex-col sm:flex-row justify-between items-center gap-2 sm:gap-0 pt-2 min-h-[30px] sm:h-[30px] w-full text-[12px] text-[#666666]">
       <span className="font-normal leading-[145%]">
         Showing {shown} of {total}
       </span>
@@ -21,7 +21,7 @@ export function Pager({ page, pages, shown, total, fetching, onPage }: Props) {
           type="button"
           disabled={atStart || fetching}
           onClick={() => onPage(page - 1)}
-          className={`px-4 h-[30px] rounded-[8px] border text-[12px] font-semibold flex items-center justify-center transition-colors ${
+          className={`px-4 h-[30px] min-h-[44px] sm:min-h-0 rounded-[8px] border text-[12px] font-semibold flex items-center justify-center transition-colors ${
             atStart ? "bg-[#F5F5F5] border-[#EAEAEA] text-[#666666] cursor-not-allowed" : "bg-white border-[#666666] text-[#000000] hover:bg-neutral-50"
           }`}
         >
@@ -34,7 +34,7 @@ export function Pager({ page, pages, shown, total, fetching, onPage }: Props) {
           type="button"
           disabled={atEnd || fetching}
           onClick={() => onPage(page + 1)}
-          className={`px-4 h-[30px] rounded-[8px] border text-[12px] font-semibold flex items-center justify-center transition-colors ${
+          className={`px-4 h-[30px] min-h-[44px] sm:min-h-0 rounded-[8px] border text-[12px] font-semibold flex items-center justify-center transition-colors ${
             atEnd ? "bg-[#F5F5F5] border-[#EAEAEA] text-[#666666] cursor-not-allowed" : "bg-white border-[#666666] text-[#000000] hover:bg-neutral-50"
           }`}
         >

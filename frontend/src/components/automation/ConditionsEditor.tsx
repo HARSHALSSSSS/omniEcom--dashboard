@@ -32,12 +32,12 @@ export function ConditionsEditor({ form, facts, operators }: Props) {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-xs">
           <h3 className="font-semibold text-foreground">Only when</h3>
-          <select aria-label="Match all or any condition" className="h-8 rounded-md border border-input bg-transparent px-2 text-xs" {...register("combinator")}>
+          <select aria-label="Match all or any condition" className="h-9 sm:h-8 rounded-md border border-input bg-transparent px-2 text-xs cursor-pointer" {...register("combinator")}>
             <option value="all">all of these are true</option>
             <option value="any">any of these is true</option>
           </select>
         </div>
-        <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={() => append(EMPTY_CONDITION)} disabled={fields.length >= 20}>
+        <Button type="button" variant="outline" size="sm" className="h-8 sm:h-7 text-xs cursor-pointer" onClick={() => append(EMPTY_CONDITION)} disabled={fields.length >= 20}>
           <Plus className="mr-1 h-3 w-3" aria-hidden />
           Add condition
         </Button>
@@ -57,9 +57,9 @@ export function ConditionsEditor({ form, facts, operators }: Props) {
             const op = rows?.[i]?.op ?? "eq";
             const e = errs?.[i];
             return (
-              <li key={f.id} className="grid gap-2 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1.2fr)_auto] sm:items-start">
+              <li key={f.id} className="grid grid-cols-1 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1.2fr)_auto] gap-2 sm:items-start p-2.5 sm:p-0 rounded-lg sm:rounded-none bg-muted/20 sm:bg-transparent border sm:border-0 border-border">
                 <div>
-                  <Input aria-label={`Condition ${i + 1} fact`} list={listId} placeholder="Fact, e.g. available" className="text-xs" error={Boolean(e?.field)} {...register(`conditions.${i}.field` as const)} />
+                  <Input aria-label={`Condition ${i + 1} fact`} list={listId} placeholder="Fact, e.g. available" className="h-10 sm:h-9 text-xs" error={Boolean(e?.field)} {...register(`conditions.${i}.field` as const)} />
                   {e?.field?.message && (
                     <p role="alert" className="mt-1 text-[11px] text-destructive">
                       {e.field.message}
@@ -75,7 +75,7 @@ export function ConditionsEditor({ form, facts, operators }: Props) {
                 </select>
                 <div>
                   {needsValue(op) ? (
-                    <Input aria-label={`Condition ${i + 1} value`} placeholder={HINTS[op] ?? "Value"} className="text-xs" error={Boolean(e?.value)} {...register(`conditions.${i}.value` as const)} />
+                    <Input aria-label={`Condition ${i + 1} value`} placeholder={HINTS[op] ?? "Value"} className="h-10 sm:h-9 text-xs" error={Boolean(e?.value)} {...register(`conditions.${i}.value` as const)} />
                   ) : (
                     <select aria-label={`Condition ${i + 1} value`} className={SELECT} {...register(`conditions.${i}.value` as const)}>
                       <option value="true">has a value</option>
@@ -88,9 +88,11 @@ export function ConditionsEditor({ form, facts, operators }: Props) {
                     </p>
                   )}
                 </div>
-                <Button type="button" variant="ghost" size="icon-sm" aria-label={`Remove condition ${i + 1}`} onClick={() => remove(i)}>
-                  <Trash2 className="h-3.5 w-3.5" aria-hidden />
-                </Button>
+                <div className="flex justify-end sm:block">
+                  <Button type="button" variant="ghost" size="icon-sm" className="h-9 w-9 sm:h-7 sm:w-7 cursor-pointer" aria-label={`Remove condition ${i + 1}`} onClick={() => remove(i)}>
+                    <Trash2 className="h-4 w-4 sm:h-3.5 sm:w-3.5" aria-hidden />
+                  </Button>
+                </div>
               </li>
             );
           })}

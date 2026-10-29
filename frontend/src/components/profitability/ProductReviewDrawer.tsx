@@ -50,12 +50,12 @@ export const ProductReviewDrawer: React.FC<ProductReviewDrawerProps> = ({ produc
           <Row label="Returns/refunds" c={product.refunds} />
         </div>
 
-        <div className="flex items-end justify-between rounded-lg border border-border/70 p-3">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2 rounded-lg border border-border/70 p-3">
           <div>
             <span className="text-[11px] text-muted-foreground">Contribution</span>
             <div className="text-lg font-bold tabular-nums text-foreground">{product.contributionMinor === null ? DASH : money(product.contributionMinor)}</div>
           </div>
-          <div className="text-right">
+          <div className="text-left sm:text-right">
             <span className="text-[11px] text-muted-foreground">Contribution margin</span>
             <div className="text-lg font-bold tabular-nums text-foreground">{percent(product.marginPercent)}</div>
           </div>
@@ -76,30 +76,32 @@ export const ProductReviewDrawer: React.FC<ProductReviewDrawerProps> = ({ produc
           {product.channels.length === 0 ? (
             <p className="text-muted-foreground">No marketplace figures.</p>
           ) : (
-            <table className="w-full text-left">
-              <thead>
-                <tr className="border-b border-border text-[11px] text-muted-foreground">
-                  <th className="py-1.5 font-medium">Marketplace</th>
-                  <th className="py-1.5 text-right font-medium">Units</th>
-                  <th className="py-1.5 text-right font-medium">Revenue</th>
-                  <th className="py-1.5 text-right font-medium">Margin</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/50">
-                {product.channels.map((ch) => (
-                  <tr key={ch.marketplace}>
-                    <td className="py-1.5 font-medium text-foreground">{channelName(ch.marketplace)}</td>
-                    <td className="py-1.5 text-right tabular-nums">{ch.units}</td>
-                    <td className="py-1.5 text-right tabular-nums">{money(ch.revenueMinor)}</td>
-                    <td className="py-1.5 text-right tabular-nums">{percent(ch.marginPercent)}</td>
+            <div className="overflow-x-auto [-webkit-overflow-scrolling:touch]">
+              <table className="w-full min-w-[280px] text-left">
+                <thead>
+                  <tr className="border-b border-border text-[11px] text-muted-foreground">
+                    <th className="py-1.5 font-medium">Marketplace</th>
+                    <th className="py-1.5 text-right font-medium">Units</th>
+                    <th className="py-1.5 text-right font-medium">Revenue</th>
+                    <th className="py-1.5 text-right font-medium">Margin</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-border/50">
+                  {product.channels.map((ch) => (
+                    <tr key={ch.marketplace}>
+                      <td className="py-1.5 font-medium text-foreground">{channelName(ch.marketplace)}</td>
+                      <td className="py-1.5 text-right tabular-nums">{ch.units}</td>
+                      <td className="py-1.5 text-right tabular-nums">{money(ch.revenueMinor)}</td>
+                      <td className="py-1.5 text-right tabular-nums">{percent(ch.marginPercent)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
 
-        <Link to={ROUTES.PRICING} className="inline-flex text-xs font-semibold text-foreground underline">
+        <Link to={ROUTES.PRICING} className="inline-flex items-center min-h-[44px] text-xs font-semibold text-foreground underline">
           Open Pricing
         </Link>
       </div>

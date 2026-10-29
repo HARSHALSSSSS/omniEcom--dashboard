@@ -39,7 +39,7 @@ export function ListingDetailDrawer({ listingId, onClose }: ListingDetailDrawerP
 
 function DrawerPanel({ listingId, onClose }: { listingId: string; onClose: () => void }) {
   const query = useStudio(listingId);
-  const frame = "flex h-full w-[430px] max-w-[95vw] flex-col justify-between overflow-y-auto border-l border-[#EAEAEA] bg-white shadow-2xl animate-in slide-in-from-right duration-200";
+  const frame = "flex h-full w-full sm:w-[430px] max-w-full sm:max-w-[430px] flex-col justify-between overflow-y-auto border-l border-[#EAEAEA] bg-white shadow-2xl animate-in slide-in-from-right duration-200";
 
   if (query.isLoading) {
     return (
@@ -56,7 +56,7 @@ function DrawerPanel({ listingId, onClose }: { listingId: string; onClose: () =>
       <div role="dialog" aria-modal="true" aria-label="Listing details" className={frame}>
         <div className="space-y-3 p-6 text-sm">
           <div className="flex justify-end">
-            <button type="button" onClick={onClose} aria-label="Close" className="-mr-1 cursor-pointer rounded p-1 text-neutral-400 hover:text-black">
+            <button type="button" onClick={onClose} aria-label="Close" className="-mr-1 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center cursor-pointer rounded p-1 text-neutral-400 hover:text-black">
               <X className="h-4 w-4" aria-hidden />
             </button>
           </div>
@@ -168,7 +168,7 @@ function DrawerBody({ studio, frame, onClose }: { studio: ListingStudio; frame: 
               </span>
             </div>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close" className="-mr-1 cursor-pointer rounded p-1 text-neutral-400 transition-colors hover:text-black">
+          <button type="button" onClick={onClose} aria-label="Close" className="-mr-1 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center cursor-pointer rounded p-1 text-neutral-400 transition-colors hover:text-black">
             <X className="h-4 w-4 stroke-[2]" aria-hidden />
           </button>
         </div>
@@ -364,7 +364,7 @@ function DrawerBody({ studio, frame, onClose }: { studio: ListingStudio; frame: 
 
       {/* bottom actions */}
       <div className="space-y-2.5 border-t border-[#EAEAEA] bg-white p-6 pt-4">
-        <Link to={studioPath} onClick={onClose} className="flex h-10 w-full cursor-pointer items-center justify-center rounded-lg bg-black text-xs font-semibold text-white shadow-none transition-colors hover:bg-neutral-800">
+        <Link to={studioPath} onClick={onClose} className="flex h-10 min-h-[44px] sm:min-h-10 w-full cursor-pointer items-center justify-center rounded-lg bg-black text-xs font-semibold text-white shadow-none transition-colors hover:bg-neutral-800">
           Open listing
         </Link>
         <div className="grid grid-cols-2 gap-2.5">
@@ -373,7 +373,7 @@ function DrawerBody({ studio, frame, onClose }: { studio: ListingStudio; frame: 
             onClick={() => void fixWithAi()}
             disabled={!issue || !canWrite || aiBusy}
             title={!issue ? "Nothing to fix here" : !canWrite ? "Your role can view listings but not change them." : "Suggests a value from the product data. Nothing is saved until you confirm it."}
-            className="flex h-9 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-neutral-300 text-xs font-semibold text-black shadow-none transition-colors hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex h-9 min-h-[44px] sm:min-h-9 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-neutral-300 text-xs font-semibold text-black shadow-none transition-colors hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {aiBusy ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : <Sparkles className="h-3 w-3 text-neutral-700" aria-hidden />}
             Fix with AI
@@ -383,12 +383,12 @@ function DrawerBody({ studio, frame, onClose }: { studio: ListingStudio; frame: 
             onClick={() => review("")}
             disabled={!issue || !canWrite}
             title={!issue ? "Nothing to fix here" : !canWrite ? "Your role can view listings but not change them." : undefined}
-            className="flex h-9 cursor-pointer items-center justify-center rounded-lg border border-neutral-300 text-xs font-semibold text-black shadow-none transition-colors hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex h-9 min-h-[44px] sm:min-h-9 cursor-pointer items-center justify-center rounded-lg border border-neutral-300 text-xs font-semibold text-black shadow-none transition-colors hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Manual Fix
           </button>
         </div>
-        <Link to={ROUTES.LISTING_BLOCKED.replace(":id", listing.id)} onClick={onClose} className="block text-center text-xs font-medium text-neutral-600 hover:text-black hover:underline">
+        <Link to={ROUTES.LISTING_BLOCKED.replace(":id", listing.id)} onClick={onClose} className="text-center text-xs font-medium text-neutral-600 hover:text-black hover:underline py-2 sm:py-0 min-h-[44px] sm:min-h-0 flex items-center justify-center">
           Issue details
         </Link>
       </div>

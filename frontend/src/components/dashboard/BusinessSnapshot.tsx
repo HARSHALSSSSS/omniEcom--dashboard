@@ -18,14 +18,14 @@ export const BusinessSnapshot: React.FC<BusinessSnapshotProps> = ({ metrics }) =
     </div>
 
     <div
-      className={`grid grid-cols-2 ${COLUMNS[metrics.length] ?? "md:grid-cols-4"} border border-[#EAEAEA] rounded-[12px] bg-white divide-y md:divide-y-0 md:divide-x divide-[#EAEAEA] overflow-hidden min-h-[123px]`}
+      className={`grid grid-cols-1 sm:grid-cols-2 ${COLUMNS[metrics.length] ?? "md:grid-cols-4"} border border-[#EAEAEA] rounded-[12px] bg-white divide-y md:divide-y-0 md:divide-x divide-[#EAEAEA] overflow-hidden min-h-[123px]`}
     >
       {metrics.map((metric) => (
-        <div key={metric.key} className="flex flex-col justify-between p-[20px_24px] gap-2 min-w-0">
+        <div key={metric.key} className="flex flex-col justify-between p-4 sm:p-[20px_24px] gap-2 min-w-0">
           <span className="text-[12px] font-normal leading-[145%] text-[#666666]">
             {METRIC_LABELS[metric.key] ?? metric.key}
           </span>
-          <span className="text-[28px] font-semibold leading-[120%] text-[#000000] tracking-normal truncate">
+          <span className="text-[24px] sm:text-[28px] font-semibold leading-[120%] text-[#000000] tracking-normal truncate">
             {metricValue(metric)}
           </span>
           <span className="text-[11px] font-normal leading-[145%] text-[#666666]">{metricChange(metric)}</span>

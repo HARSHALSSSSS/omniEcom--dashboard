@@ -26,16 +26,16 @@ interface ListingIssuesProps {
 export function ListingIssues({ issues, active, onToggle, onFilter }: ListingIssuesProps) {
   if (issues.notReady === 0 && !active) {
     return (
-      <section aria-label="Why not live" className="flex w-full flex-row items-center justify-between border-y border-[#EAEAEA] py-2.5 text-[12px]">
+      <section aria-label="Why not live" className="flex w-full flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-y border-[#EAEAEA] py-2.5 text-[12px]">
         <span className="font-semibold text-[#16A34A]">Every listing is ready to publish</span>
-        <Link to={ROUTES.LISTINGS_READINESS} className="shrink-0 font-semibold text-[#000000] hover:underline">
+        <Link to={ROUTES.LISTINGS_READINESS} className="shrink-0 font-semibold text-[#000000] hover:underline min-h-[44px] sm:min-h-0 inline-flex items-center">
           Audit readiness →
         </Link>
       </section>
     );
   }
   return (
-    <section aria-label="Why not live" className="flex w-full flex-row items-center justify-between gap-3 border-y border-[#EAEAEA] py-2.5 text-[12px]">
+    <section aria-label="Why not live" className="flex w-full flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-y border-[#EAEAEA] py-2.5 text-[12px]">
       <div className="flex flex-row flex-wrap items-center gap-2">
         <span className="font-semibold text-[#D97706]">{formatNumber(issues.notReady)} listings are not ready to publish</span>
         <span className="text-[11px] text-[#666666]">—</span>
@@ -49,7 +49,7 @@ export function ListingIssues({ issues, active, onToggle, onFilter }: ListingIss
                 aria-pressed={on}
                 onClick={() => onToggle(on ? null : chip.issue)}
                 title={on ? "Show every listing again" : `Show only the listings with ${ISSUE_LABELS[chip.issue].toLowerCase()}`}
-                className={cn("flex cursor-pointer items-center gap-1.5 transition-colors", on ? "font-semibold underline" : "hover:underline")}
+                className={cn("flex min-h-[44px] sm:min-h-0 cursor-pointer items-center gap-1.5 transition-colors py-1 sm:py-0", on ? "font-semibold underline" : "hover:underline")}
               >
                 <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: chip.color }} />
                 <span className="text-[#000000]">
@@ -60,11 +60,11 @@ export function ListingIssues({ issues, active, onToggle, onFilter }: ListingIss
           );
         })}
       </div>
-      <div className="flex shrink-0 items-center gap-4">
-        <Link to={ROUTES.LISTINGS_READINESS} className="font-medium text-[#666666] hover:text-[#000000] hover:underline">
+      <div className="flex flex-wrap items-center gap-4 shrink-0 pt-1 sm:pt-0">
+        <Link to={ROUTES.LISTINGS_READINESS} className="font-medium text-[#666666] hover:text-[#000000] hover:underline min-h-[44px] sm:min-h-0 inline-flex items-center">
           Audit readiness →
         </Link>
-        <button type="button" onClick={onFilter} className="cursor-pointer font-semibold text-[#000000] hover:underline">
+        <button type="button" onClick={onFilter} className="cursor-pointer font-semibold text-[#000000] hover:underline min-h-[44px] sm:min-h-0 inline-flex items-center">
           Filter by issue →
         </button>
       </div>

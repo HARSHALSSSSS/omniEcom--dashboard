@@ -35,15 +35,15 @@ export function ReportsCatalogSection({ catalog, loading, error, onRetry, canWri
 
   return (
     <div className="space-y-6">
-      <div className="space-y-4 rounded-xl border border-border bg-card p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="space-y-4 rounded-xl border border-border bg-card p-4 sm:p-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h3 className="text-sm font-semibold text-foreground">Available reports</h3>
             <span className="text-xs text-muted-foreground">{loading ? "Loading..." : `${entries.length} reports you can generate for any dates`}</span>
           </div>
-          <div className="relative">
+          <div className="relative w-full sm:w-56">
             <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
-            <input type="text" placeholder="Find a report..." aria-label="Find a report" value={query} onChange={(e) => setQuery(e.target.value)} className="h-8 w-56 rounded-md border border-border bg-background pl-8 pr-3 text-xs" />
+            <input type="text" placeholder="Find a report..." aria-label="Find a report" value={query} onChange={(e) => setQuery(e.target.value)} className="h-10 sm:h-8 w-full rounded-md border border-border bg-background pl-8 pr-3 text-xs" />
           </div>
         </div>
 
@@ -62,7 +62,7 @@ export function ReportsCatalogSection({ catalog, loading, error, onRetry, canWri
                   key={c.label}
                   type="button"
                   onClick={() => setCategory(c.label)}
-                  className={cn("rounded-md px-3 py-1 text-xs font-medium transition-colors", category === c.label ? "bg-foreground font-semibold text-background" : "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground")}
+                  className={cn("rounded-md px-3 py-1.5 sm:py-1 min-h-[36px] sm:min-h-0 text-xs font-medium transition-colors", category === c.label ? "bg-foreground font-semibold text-background" : "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground")}
                 >
                   {c.label} <span className="font-mono opacity-70">{c.count}</span>
                 </button>
@@ -70,7 +70,7 @@ export function ReportsCatalogSection({ catalog, loading, error, onRetry, canWri
             </div>
 
             <div className="overflow-x-auto rounded-lg border border-border">
-              <table className="w-full border-collapse text-left text-xs">
+              <table className="w-full min-w-[640px] border-collapse text-left text-xs">
                 <thead>
                   <tr className="border-b border-border bg-muted/40 text-[11px] font-medium text-muted-foreground">
                     <th className="px-4 py-2.5">Report</th>
@@ -105,7 +105,7 @@ export function ReportsCatalogSection({ catalog, loading, error, onRetry, canWri
                         <td className="px-4 py-3 text-muted-foreground">{e.sheets.length > 0 ? e.sheets.join(", ") : "—"}</td>
                         <td className="px-4 py-3 text-muted-foreground">{e.formats.map((f) => f.toUpperCase()).join(" · ")}</td>
                         <td className="px-4 py-3 text-right">
-                          <Button size="sm" variant="outline" className="gap-1.5 text-xs" disabled={!canWrite} title={noWrite} onClick={() => onGenerate(e)} aria-label={`Export ${e.title}`}>
+                          <Button size="sm" variant="outline" className="gap-1.5 text-xs h-9" disabled={!canWrite} title={noWrite} onClick={() => onGenerate(e)} aria-label={`Export ${e.title}`}>
                             <Download className="h-3.5 w-3.5" aria-hidden />
                             Export
                           </Button>
@@ -120,14 +120,14 @@ export function ReportsCatalogSection({ catalog, loading, error, onRetry, canWri
         )}
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-muted/20 p-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-border bg-muted/20 p-4 sm:p-5">
         <div>
           <h4 className="text-sm font-semibold text-foreground">Keep your team informed</h4>
           <p className="mt-1 text-xs text-muted-foreground">
             {activeSchedules === undefined ? "Choose a report, recipients and cadence." : activeSchedules > 0 ? `${activeSchedules} active ${activeSchedules === 1 ? "schedule sends" : "schedules send"} reports on a cadence.` : "No schedules are active; nothing is sent automatically."}
           </p>
         </div>
-        <Button size="sm" className="gap-1.5 text-xs" disabled={!canWrite || !catalog} title={noWrite} onClick={onCreateSchedule}>
+        <Button size="sm" className="w-full sm:w-auto h-10 sm:h-9 shrink-0 gap-1.5 text-xs" disabled={!canWrite || !catalog} title={noWrite} onClick={onCreateSchedule}>
           <Plus className="h-3.5 w-3.5" aria-hidden />
           Create schedule
         </Button>

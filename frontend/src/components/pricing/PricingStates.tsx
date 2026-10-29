@@ -4,10 +4,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export function StateBox({ title, description, children, role }: { title: string; description: string; children?: ReactNode; role?: "alert" }) {
   return (
-    <div role={role} className="flex min-h-[220px] flex-col items-center justify-center gap-2 rounded-xl border border-border bg-card px-6 text-center">
+    <div role={role} className="flex min-h-[220px] flex-col items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 sm:px-6 py-6 text-center">
       <h2 className="text-base font-semibold text-foreground">{title}</h2>
       <p className="max-w-[520px] text-xs text-muted-foreground">{description}</p>
-      {children && <div className="flex items-center gap-2 pt-2">{children}</div>}
+      {children && <div className="flex flex-wrap items-center justify-center gap-2 pt-2">{children}</div>}
     </div>
   );
 }

@@ -80,21 +80,21 @@ export function ConversationHistoryView({ conversations, loading = false, error 
   const filtering = Boolean(search.trim()) || dateFilter !== "all" || source !== "all";
 
   return (
-    <div className="flex min-h-[750px] flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card">
-      <div className="border-b border-border p-5">
+    <div className="flex min-h-[500px] sm:min-h-[600px] lg:min-h-[750px] flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card">
+      <div className="border-b border-border p-3.5 sm:p-5">
         <h2 className="text-base font-bold text-foreground">Conversation history</h2>
         <p className="text-xs text-muted-foreground">Find previous questions and continue where you left off.</p>
 
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="relative min-w-[260px] max-w-md flex-1">
+        <div className="mt-4 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center justify-between gap-3">
+          <div className="relative w-full sm:min-w-[240px] max-w-md flex-1">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" aria-hidden />
             <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search conversations, products or SKUs..." aria-label="Search conversations" className="h-9 pl-9 text-xs" />
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <label className="flex items-center gap-1.5 rounded-md border border-border bg-muted/40 px-3 py-1.5">
-              <Layers className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
-              <select aria-label="Source" value={source} onChange={(e) => onSourceChange(e.target.value as ContextSource | "all")} className="bg-transparent text-foreground outline-none">
+          <div className="flex flex-wrap items-center gap-2 text-xs w-full sm:w-auto">
+            <label className="flex flex-1 sm:flex-initial items-center gap-1.5 rounded-md border border-border bg-muted/40 px-3 py-1.5 min-h-[38px] sm:min-h-0">
+              <Layers className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+              <select aria-label="Source" value={source} onChange={(e) => onSourceChange(e.target.value as ContextSource | "all")} className="w-full bg-transparent text-foreground outline-none">
                 <option value="all">All sources</option>
                 {CONTEXT_SOURCES.map((s) => (
                   <option key={s} value={s}>
@@ -103,9 +103,9 @@ export function ConversationHistoryView({ conversations, loading = false, error 
                 ))}
               </select>
             </label>
-            <label className="flex items-center gap-1.5 rounded-md border border-border bg-muted/40 px-3 py-1.5">
-              <Calendar className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
-              <select aria-label="Date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value as DateFilterId)} className="bg-transparent text-foreground outline-none">
+            <label className="flex flex-1 sm:flex-initial items-center gap-1.5 rounded-md border border-border bg-muted/40 px-3 py-1.5 min-h-[38px] sm:min-h-0">
+              <Calendar className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+              <select aria-label="Date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value as DateFilterId)} className="w-full bg-transparent text-foreground outline-none">
                 {DATE_FILTERS.map((d) => (
                   <option key={d.id} value={d.id}>
                     {d.label}
@@ -118,7 +118,7 @@ export function ConversationHistoryView({ conversations, loading = false, error 
       </div>
 
       <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_380px]">
-        <div className="min-h-0 flex-1 overflow-y-auto p-4">
+        <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4">
           {error && conversations.length === 0 ? (
             <LoadError what="The conversation history" message={errorMessage(error)} onRetry={onRetry ?? (() => undefined)} />
           ) : loading && conversations.length === 0 ? (
@@ -152,15 +152,15 @@ export function ConversationHistoryView({ conversations, loading = false, error 
                             type="button"
                             aria-pressed={active}
                             onClick={() => setPickedId(c.id)}
-                            className={cn("flex w-full items-start justify-between gap-3 rounded-lg border p-3 text-left transition-colors", active ? "border-foreground bg-muted/30" : "border-transparent bg-card hover:border-border hover:bg-muted/10")}
+                            className={cn("flex w-full items-start justify-between gap-2.5 sm:gap-3 rounded-lg border p-2.5 sm:p-3 text-left transition-colors min-h-[44px]", active ? "border-foreground bg-muted/30" : "border-transparent bg-card hover:border-border hover:bg-muted/10")}
                           >
-                            <span className="flex min-w-0 gap-3">
+                            <span className="flex min-w-0 gap-2.5 sm:gap-3">
                               <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-foreground">
                                 <MessageSquare className="h-3.5 w-3.5" aria-hidden />
                               </span>
                               <span className="min-w-0 space-y-1">
                                 <span className="block truncate text-xs font-semibold text-foreground">{c.title}</span>
-                                <span className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                                <span className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-[11px] text-muted-foreground">
                                   {c.context?.source && <span className="rounded bg-muted px-1.5 py-0.5 font-medium text-foreground">{SOURCE_LABELS[c.context.source]}</span>}
                                   {c.context?.sku && <span className="font-mono">{c.context.sku}</span>}
                                   <span>
@@ -190,10 +190,10 @@ export function ConversationHistoryView({ conversations, loading = false, error 
         </div>
 
         {previewOpen ? (
-          <aside className="hidden flex-col overflow-y-auto border-l border-border bg-card p-5 text-xs lg:flex">
+          <aside className="flex flex-col overflow-y-auto border-t lg:border-t-0 lg:border-l border-border bg-card p-4 sm:p-5 text-xs">
             <div className="flex items-center justify-between border-b border-border pb-3">
               <span className="font-semibold uppercase tracking-wider text-muted-foreground">Conversation preview</span>
-              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="Collapse" onClick={() => setPreviewOpen(false)}>
+              <Button variant="ghost" size="sm" className="hidden lg:flex h-7 w-7 p-0" title="Collapse" onClick={() => setPreviewOpen(false)}>
                 <PanelRightClose className="h-4 w-4 text-muted-foreground" />
               </Button>
             </div>
@@ -225,13 +225,13 @@ export function ConversationHistoryView({ conversations, loading = false, error 
                     {firstQuestion && (
                       <div className="space-y-1.5">
                         <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">First question</span>
-                        <div className="rounded-lg border border-border bg-muted/20 p-3 text-xs text-foreground">{firstQuestion}</div>
+                        <div className="rounded-lg border border-border bg-muted/20 p-3 text-xs text-foreground break-words">{firstQuestion}</div>
                       </div>
                     )}
                     {lastAnswer && (
                       <div className="space-y-1.5">
                         <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Last answer</span>
-                        <p className="line-clamp-6 whitespace-pre-line leading-relaxed text-muted-foreground">{lastAnswer}</p>
+                        <p className="line-clamp-6 whitespace-pre-line leading-relaxed text-muted-foreground break-words">{lastAnswer}</p>
                       </div>
                     )}
                     {!firstQuestion && <p className="text-muted-foreground">No messages in this conversation yet.</p>}
@@ -240,7 +240,7 @@ export function ConversationHistoryView({ conversations, loading = false, error 
                 {/* The earlier "Still to verify" box had no source, so it is left out until answers carry open questions. */}
 
                 <div className="pt-2">
-                  <Button size="sm" className="w-full text-xs" onClick={() => onOpenConversation(selected.id)}>
+                  <Button size="sm" className="w-full text-xs min-h-[40px] sm:min-h-0" onClick={() => onOpenConversation(selected.id)}>
                     Open conversation
                   </Button>
                 </div>

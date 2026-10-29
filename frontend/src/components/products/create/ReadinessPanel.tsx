@@ -63,7 +63,7 @@ export function ReadinessPanel({ readiness, loading, onFix, onVerify, onConfirmB
   const chain = readiness?.chain ?? ["Product", "Variants", "Inventory", "Listings", "Channels"];
 
   return (
-    <aside aria-label="Product readiness" className="flex flex-col gap-7 w-[272px] border-l border-[#EAEAEA] pl-6 shrink-0">
+    <aside aria-label="Product readiness" className="flex flex-col gap-7 w-full lg:w-[272px] border-t lg:border-t-0 lg:border-l border-[#EAEAEA] pt-6 lg:pt-0 pl-0 lg:pl-6 shrink-0">
       <div className="flex flex-col gap-4 w-full">
         <span className="text-[13px] font-semibold text-[#000000] leading-[145%]">Product readiness</span>
 

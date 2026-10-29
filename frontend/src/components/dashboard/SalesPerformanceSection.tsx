@@ -80,7 +80,7 @@ export const SalesPerformanceSection: React.FC<SalesPerformanceSectionProps> = (
   return (
     <section
       aria-labelledby="sales-title"
-      className="w-full bg-[#FAFAFA] border border-[#EAEAEA] rounded-[12px] p-6 flex flex-col gap-7"
+      className="w-full bg-[#FAFAFA] border border-[#EAEAEA] rounded-[12px] p-4 sm:p-6 flex flex-col gap-5 sm:gap-7"
     >
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex flex-col gap-2">
@@ -95,7 +95,7 @@ export const SalesPerformanceSection: React.FC<SalesPerformanceSectionProps> = (
         <div
           role="group"
           aria-label="Sales period"
-          className="inline-flex items-center rounded-[8px] bg-[#E6F4FF] p-1 gap-1 self-start"
+          className="inline-flex items-center rounded-[8px] bg-[#E6F4FF] p-1 gap-1 self-start max-w-full overflow-x-auto flex-wrap sm:flex-nowrap"
         >
           {PERIOD_OPTIONS.map((option) => (
             <button
@@ -103,7 +103,7 @@ export const SalesPerformanceSection: React.FC<SalesPerformanceSectionProps> = (
               type="button"
               aria-pressed={period === option.value}
               onClick={() => onPeriodChange(option.value)}
-              className={`w-[72px] h-[30px] rounded-[8px] border border-[#BFDBFE] text-[12px] font-semibold transition-all flex items-center justify-center leading-[145%] text-[#000000] ${
+              className={`w-16 sm:w-[72px] h-9 sm:h-[30px] rounded-[8px] border border-[#BFDBFE] text-[12px] font-semibold transition-all flex items-center justify-center leading-[145%] text-[#000000] cursor-pointer ${
                 period === option.value ? "bg-[#DBEAFE]" : "bg-[#E6F4FF] hover:bg-[#d5e9fc]"
               }`}
             >
@@ -113,7 +113,7 @@ export const SalesPerformanceSection: React.FC<SalesPerformanceSectionProps> = (
         </div>
       </div>
 
-      <div className="flex flex-col lg:flex-row items-stretch gap-8">
+      <div className="flex flex-col lg:flex-row items-stretch gap-6 lg:gap-8">
         <div className="flex-1 flex flex-col gap-5 min-w-0">
           <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[11px] min-h-4">
             <div className="flex items-center gap-2">
@@ -131,13 +131,13 @@ export const SalesPerformanceSection: React.FC<SalesPerformanceSectionProps> = (
 
           <div
             aria-busy={refreshing}
-            className={`w-full bg-[#191F28] rounded-[20px] p-6 shadow-md relative h-[325px] flex flex-col justify-end transition-opacity ${
+            className={`w-full bg-[#191F28] rounded-[16px] sm:rounded-[20px] p-3 sm:p-6 shadow-md relative h-[300px] sm:h-[325px] flex flex-col justify-end transition-opacity ${
               refreshing ? "opacity-60" : ""
             }`}
           >
             <div role="img" aria-label={chartLabel} className="w-full">
               <ResponsiveContainer width="100%" height={265}>
-                <LineChart data={rows} margin={{ top: 15, right: 25, left: -10, bottom: 5 }}>
+                <LineChart data={rows} margin={{ top: 15, right: 15, left: -15, bottom: 5 }}>
                   <CartesianGrid stroke="#2E3B4F" strokeWidth={2} strokeDasharray="0" vertical={false} />
                   <XAxis
                     dataKey="label"

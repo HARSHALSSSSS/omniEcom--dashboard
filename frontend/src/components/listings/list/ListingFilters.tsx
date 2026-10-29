@@ -23,7 +23,7 @@ import {
 } from "@/types/listing";
 import { CONTENT_LABELS, INVENTORY_LABELS, LIFECYCLE_LABELS, POTENTIAL_HINTS, POTENTIAL_LABELS, PRODUCT_STATUS_LABELS, READINESS_LABELS, SORT_OPTIONS, SOURCE_LABELS } from "./listingParams";
 
-const SELECT = "h-[34px] cursor-pointer appearance-none rounded-lg border border-[#BDBDBD] bg-white px-2.5 pr-6 text-[12px] font-medium text-[#000000] focus:outline-none disabled:opacity-50";
+const SELECT = "h-[34px] min-h-[44px] sm:min-h-[34px] cursor-pointer appearance-none rounded-lg border border-[#BDBDBD] bg-white px-2.5 pr-6 text-[12px] font-medium text-[#000000] focus:outline-none disabled:opacity-50 max-w-full";
 
 interface ListingFiltersProps {
   filters: Filters;
@@ -104,7 +104,7 @@ export function ListingFilters({
 
   return (
     <div className="flex w-full flex-row flex-wrap items-center gap-2">
-      <div className="relative flex h-[34px] w-[280px] items-center gap-2 rounded-lg bg-[#F5F5F5] px-2.5">
+      <div className="relative flex h-[38px] sm:h-[34px] min-h-[44px] sm:min-h-[34px] w-full sm:w-[280px] items-center gap-2 rounded-lg bg-[#F5F5F5] px-2.5">
         <Search className="h-3.5 w-3.5 shrink-0 text-[#666666]" aria-hidden />
         <input
           ref={input}
@@ -234,7 +234,7 @@ export function ListingFilters({
             onClick={() => onAttention(!filters.attention)}
             title="Needs review, failed and blocked listings"
             className={cn(
-              "h-[34px] cursor-pointer rounded-lg border px-2.5 text-[12px] font-medium transition-colors",
+              "h-[34px] min-h-[44px] sm:min-h-[34px] inline-flex items-center justify-center cursor-pointer rounded-lg border px-2.5 text-[12px] font-medium transition-colors",
               filters.attention ? "border-[#D97706] bg-[#FEF3C7] text-[#92400E]" : "border-[#BDBDBD] bg-white text-[#000000] hover:bg-neutral-50",
             )}
           >
@@ -256,7 +256,7 @@ export function ListingFilters({
       <button
         type="button"
         onClick={onClear}
-        className="h-[34px] cursor-pointer rounded-lg border border-[#BDBDBD] bg-white px-2.5 text-[12px] font-medium text-[#000000] transition-colors hover:bg-neutral-50"
+        className="h-[34px] min-h-[44px] sm:min-h-[34px] inline-flex items-center justify-center cursor-pointer rounded-lg border border-[#BDBDBD] bg-white px-2.5 text-[12px] font-medium text-[#000000] transition-colors hover:bg-neutral-50"
       >
         Reset filters
       </button>

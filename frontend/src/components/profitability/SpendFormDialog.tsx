@@ -136,11 +136,11 @@ export function SpendFormDialog({ open, onOpenChange, row, accounts, onSaved }: 
             <Field label="Notes (optional)" htmlFor="spend-notes" error={errors.notes?.message}>
               <Textarea id="spend-notes" rows={2} {...register("notes")} />
             </Field>
-            <DialogFooter className="gap-2 sm:gap-0">
-              <Button type="button" variant="outline" disabled={busy} onClick={() => requestClose(false)}>
+            <DialogFooter className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-0">
+              <Button type="button" variant="outline" className="w-full sm:w-auto h-10 sm:h-9" disabled={busy} onClick={() => requestClose(false)}>
                 Cancel
               </Button>
-              <Button type="submit" loading={busy}>
+              <Button type="submit" className="w-full sm:w-auto h-10 sm:h-9" loading={busy}>
                 {editing ? "Save changes" : "Record spend"}
               </Button>
             </DialogFooter>

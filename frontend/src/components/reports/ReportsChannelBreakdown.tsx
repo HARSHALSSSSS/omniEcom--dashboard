@@ -25,7 +25,7 @@ export function ReportsChannelBreakdown({ data, info, onViewChannelReport }: Rep
   const compared = data.compare !== "none";
 
   return (
-    <div className="space-y-3 rounded-xl border border-border bg-card p-5">
+    <div className="space-y-3 rounded-xl border border-border bg-card p-4 sm:p-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-foreground">Channel breakdown</h3>
         <span className="text-xs text-muted-foreground">

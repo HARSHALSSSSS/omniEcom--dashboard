@@ -50,14 +50,14 @@ interface Props {
 export function ChannelsTable({ data, onExport }: Props) {
   return (
     <section aria-labelledby="channels-title" className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border p-4">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 border-b border-border p-4">
         <div>
           <h2 id="channels-title" className="text-sm font-semibold text-foreground">
             Net margin by marketplace
           </h2>
           <p className="text-[11px] text-muted-foreground">Costs are shown as positive amounts. A dash means the cost is not known for that marketplace.</p>
         </div>
-        <Button variant="outline" size="sm" className="gap-2 text-xs" onClick={onExport} disabled={data.channels.length === 0}>
+        <Button variant="outline" size="sm" className="w-full sm:w-auto h-9 sm:h-8 gap-2 text-xs" onClick={onExport} disabled={data.channels.length === 0}>
           <Download className="h-3.5 w-3.5" aria-hidden />
           Export channels (CSV)
         </Button>
@@ -65,8 +65,8 @@ export function ChannelsTable({ data, onExport }: Props) {
       {data.channels.length === 0 ? (
         <p className="p-6 text-center text-xs text-muted-foreground">No orders in this period, so there is nothing to split by marketplace.</p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-left text-xs">
+        <div className="overflow-x-auto [-webkit-overflow-scrolling:touch]">
+          <table className="w-full min-w-[700px] border-collapse text-left text-xs">
             <thead>
               <tr className="border-b border-border bg-muted/50 text-[11px] font-medium text-muted-foreground">
                 <th scope="col" className="px-4 py-3">Channel</th>

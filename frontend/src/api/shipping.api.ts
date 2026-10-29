@@ -252,6 +252,10 @@ export const shippingApi = {
       : { blob: new Blob([label.content], { type: "text/plain" }), fileName: `label-${name}.txt` };
   },
 
+  /** fetches the raw label payload (format: 'text' | 'pdf_base64', content, awb) */
+  getLabelData: async (shipmentId: string, signal?: AbortSignal): Promise<ShipmentLabel> =>
+    unwrap<ShipmentLabel>(await client.get(ENDPOINTS.SHIPMENT_LABEL(shipmentId), { signal })),
+
   tracking: async (shipmentId: string, signal?: AbortSignal) => unwrap<TrackingEvent[]>(await client.get(ENDPOINTS.SHIPMENT_TRACKING(shipmentId), { signal })),
 
   refreshTracking: async (shipmentId: string) => unwrap<{ applied: number; recorded: number }>(await client.post(ENDPOINTS.SHIPMENT_REFRESH_TRACKING(shipmentId), {})),

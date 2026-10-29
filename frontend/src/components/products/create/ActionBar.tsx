@@ -36,9 +36,9 @@ export function ActionBar({ sidebarCollapsed, canWrite, status, savedAt, saveErr
 
   return (
     <div
-      className={`fixed bottom-0 right-0 z-20 flex flex-row items-center justify-between h-[72px] px-12 bg-white border-t border-[#EAEAEA] transition-all duration-300 ${sidebarCollapsed ? "left-14" : "left-[224px]"}`}
+      className={`fixed bottom-0 right-0 z-20 flex flex-col sm:flex-row items-stretch sm:items-center justify-between min-h-[72px] py-3 sm:py-0 px-4 sm:px-6 md:px-12 bg-white border-t border-[#EAEAEA] transition-all duration-300 left-0 ${sidebarCollapsed ? "md:left-14" : "md:left-[224px]"}`}
     >
-      <div className="flex flex-row items-center gap-4">
+      <div className="flex flex-row flex-wrap items-center gap-2 sm:gap-4">
         <button type="button" onClick={onSaveDraft} disabled={!canWrite || savingDraft || continuing} className={outlineButton}>
           {savingDraft ? "Saving..." : "Save as draft"}
         </button>
@@ -57,8 +57,8 @@ export function ActionBar({ sidebarCollapsed, canWrite, status, savedAt, saveErr
         ) : null}
       </div>
 
-      <div className="flex flex-row items-center gap-2">
-        <span className="text-[11px] text-[#666666] leading-[145%] mr-2">Continue checks this step only</span>
+      <div className="flex flex-row flex-wrap items-center justify-end gap-2 mt-2 sm:mt-0">
+        <span className="hidden sm:inline text-[11px] text-[#666666] leading-[145%] mr-2">Continue checks this step only</span>
         <button type="button" onClick={onBack} className={ghostButton}>
           Back
         </button>

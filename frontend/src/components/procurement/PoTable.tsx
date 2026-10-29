@@ -17,7 +17,7 @@ export function PoTable({ rows, refreshing, activeId, onOpen }: PoTableProps) {
   return (
     <div className={cn("overflow-hidden rounded-xl border border-border bg-card shadow-2xs transition-opacity", refreshing && "opacity-60")} aria-busy={refreshing}>
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-left text-xs">
+        <table className="w-full min-w-[720px] border-collapse text-left text-xs">
           <thead>
             <tr className="border-b border-border bg-muted/40 text-[11px] font-medium text-muted-foreground">
               <th scope="col" className="w-10 px-4 py-3">

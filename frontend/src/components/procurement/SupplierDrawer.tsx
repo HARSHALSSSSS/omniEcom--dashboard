@@ -49,7 +49,7 @@ export function SupplierDrawer({ supplierId, onClose, onEdit, onNewOrder, onOpen
       <ContextDrawer
         open={supplierId !== undefined}
         onClose={onClose}
-        className="w-[720px] sm:max-w-[720px]"
+        className="w-full sm:w-[720px] sm:max-w-[720px]"
         title={s ? s.name : "Supplier"}
         description={s ? `${s.code}${s.location ? ` · ${s.location}` : ""}` : undefined}
         badge={s ? <SupplierStatusPill status={s.status} /> : undefined}
@@ -62,7 +62,7 @@ export function SupplierDrawer({ supplierId, onClose, onEdit, onNewOrder, onOpen
               <Button size="sm" variant="outline" className="text-xs" disabled={!canWrite} title={noWrite} onClick={() => onEdit(s)}>
                 Edit supplier
               </Button>
-              <Button size="sm" variant="ghost" className="ml-auto text-xs text-rose-700" disabled={!canWrite} title={noWrite} onClick={() => setConfirmDelete(true)}>
+              <Button size="sm" variant="ghost" className="sm:ml-auto text-xs text-rose-700" disabled={!canWrite} title={noWrite} onClick={() => setConfirmDelete(true)}>
                 Delete
               </Button>
             </div>

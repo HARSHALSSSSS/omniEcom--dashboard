@@ -29,9 +29,9 @@ export const MarketplaceHubToolbar: React.FC<MarketplaceHubToolbarProps> = ({
   onSortChange,
 }) => {
   return (
-    <div className="w-full flex items-center gap-3">
+    <div className="w-full flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
       {/* Search Input Container */}
-      <div className="relative flex-1">
+      <div className="relative flex-1 min-w-0">
         <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8C8C8C]" />
         <input
           type="text"
@@ -39,7 +39,7 @@ export const MarketplaceHubToolbar: React.FC<MarketplaceHubToolbarProps> = ({
           onChange={(e) => onSearchChange(e.target.value)}
           placeholder="Search channels..."
           aria-label="Search channels"
-          className="w-full h-10 pl-9 pr-4 rounded-lg border border-[#E5E5E5] bg-white text-[13px] text-[#121212] placeholder:text-[#8C8C8C] focus:border-[#121212] transition-colors"
+          className="w-full h-11 sm:h-10 pl-9 pr-4 rounded-lg border border-[#E5E5E5] bg-white text-[13px] text-[#121212] placeholder:text-[#8C8C8C] focus:border-[#121212] transition-colors"
         />
       </div>
 
@@ -48,7 +48,7 @@ export const MarketplaceHubToolbar: React.FC<MarketplaceHubToolbarProps> = ({
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="shrink-0 h-10 px-3.5 flex items-center gap-1.5 rounded-lg border border-[#E5E5E5] bg-white text-[12px] font-medium text-[#121212] hover:bg-[#F9F9F9] transition-colors cursor-pointer"
+            className="shrink-0 h-11 sm:h-10 px-3.5 flex items-center justify-between sm:justify-start gap-1.5 rounded-lg border border-[#E5E5E5] bg-white text-[12px] font-medium text-[#121212] hover:bg-[#F9F9F9] transition-colors cursor-pointer"
           >
             <span>Sort: {SORT_LABELS[sortBy]}</span>
             <ChevronDown className="w-3.5 h-3.5 text-[#737373]" />

@@ -29,7 +29,7 @@ interface StatusTabsProps {
 export function PoStatusTabs({ active, counts, onChange }: StatusTabsProps) {
   const tabs = [undefined, ...PO_STATUSES] as const;
   return (
-    <div role="tablist" aria-label="Purchase order status" className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-7">
+    <div role="tablist" aria-label="Purchase order status" className="grid grid-cols-2 gap-2 sm:gap-3 sm:grid-cols-4 xl:grid-cols-7">
       {tabs.map((status) => {
         const key = status ?? "all";
         const selected = status === active;
@@ -41,7 +41,7 @@ export function PoStatusTabs({ active, counts, onChange }: StatusTabsProps) {
             role="tab"
             aria-selected={selected}
             onClick={() => onChange(status)}
-            className={cn("rounded-xl border p-3.5 text-left transition-all", selected ? `${TONE[key]} shadow-sm` : "border-border bg-card hover:bg-muted/30")}
+            className={cn("rounded-xl border p-2.5 sm:p-3.5 text-left transition-all", selected ? `${TONE[key]} shadow-sm` : "border-border bg-card hover:bg-muted/30")}
           >
             <span className="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{PO_TAB_LABEL[key]}</span>
             <span className="mt-1 block font-mono text-xl font-bold text-foreground">{n === undefined ? "—" : formatNumber(n)}</span>
@@ -69,7 +69,7 @@ export function SearchBox({ value, label, placeholder, onSearch }: SearchBoxProp
     return () => clearTimeout(timer);
   }, [text, value, onSearch]);
   return (
-    <div className="relative w-full max-w-sm flex-1">
+    <div className="relative w-full sm:max-w-sm flex-1">
       <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
       <Input type="search" aria-label={label} placeholder={placeholder} value={text} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setText(e.target.value)} className="pl-9 text-xs" />
     </div>
@@ -99,15 +99,15 @@ export function PoFilters({ filters, sort, suppliers, warehouses, filtered, expo
   const knownSupplier = !filters.supplierId || suppliers.some((s) => s.id === filters.supplierId);
   return (
     <div className="space-y-3">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <SearchBox value={filters.q ?? ""} label="Search purchase orders" placeholder="Search by PO number, supplier, reference or SKU..." onSearch={onSearch} />
-        <Button variant="outline" size="sm" className="gap-2 text-xs" disabled={exporting || total === 0} onClick={onExport}>
+        <Button variant="outline" size="sm" className="gap-2 text-xs w-full sm:w-auto" disabled={exporting || total === 0} onClick={onExport}>
           <Download className="h-3.5 w-3.5" aria-hidden />
           {exporting ? "Preparing CSV..." : "Export CSV"}
         </Button>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <select aria-label="Supplier" className={SELECT} value={filters.supplierId ?? ""} onChange={(e) => onSupplier(e.target.value || null)}>
+        <select aria-label="Supplier" className={cn(SELECT, "max-w-full")} value={filters.supplierId ?? ""} onChange={(e) => onSupplier(e.target.value || null)}>
           <option value="">All suppliers</option>
           {!knownSupplier && filters.supplierId && <option value={filters.supplierId}>Selected supplier</option>}
           {suppliers.map((s) => (
@@ -117,7 +117,7 @@ export function PoFilters({ filters, sort, suppliers, warehouses, filtered, expo
           ))}
         </select>
         {warehouses.length > 1 && (
-          <select aria-label="Warehouse" className={SELECT} value={filters.warehouseId ?? ""} onChange={(e) => onWarehouse(e.target.value || null)}>
+          <select aria-label="Warehouse" className={cn(SELECT, "max-w-full")} value={filters.warehouseId ?? ""} onChange={(e) => onWarehouse(e.target.value || null)}>
             <option value="">All warehouses</option>
             {warehouses.map((w) => (
               <option key={w.id} value={w.id}>
@@ -126,15 +126,15 @@ export function PoFilters({ filters, sort, suppliers, warehouses, filtered, expo
             ))}
           </select>
         )}
-        <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <label className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
           Ordered from
           <input type="date" aria-label="Ordered from" className={SELECT} value={filters.from ?? ""} max={filters.to || undefined} onChange={(e) => onFrom(e.target.value || null)} />
         </label>
-        <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <label className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
           to
           <input type="date" aria-label="Ordered to" className={SELECT} value={filters.to ?? ""} min={filters.from || undefined} onChange={(e) => onTo(e.target.value || null)} />
         </label>
-        <select aria-label="Sort purchase orders" className={SELECT} value={sort} onChange={(e) => onSort(e.target.value as PoSort)}>
+        <select aria-label="Sort purchase orders" className={cn(SELECT, "max-w-full")} value={sort} onChange={(e) => onSort(e.target.value as PoSort)}>
           {PO_SORT_OPTIONS.map((o) => (
             <option key={o.id} value={o.id}>
               {o.label}

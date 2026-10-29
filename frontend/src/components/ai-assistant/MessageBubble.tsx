@@ -47,7 +47,7 @@ function Actions({ message }: { message: AssistantMessage }) {
     setPending(null);
   };
 
-  const cls = cn(buttonVariants({ variant: "outline", size: "sm" }), "h-auto gap-1.5 py-1.5 text-xs");
+  const cls = cn(buttonVariants({ variant: "outline", size: "sm" }), "h-auto min-h-[36px] sm:min-h-0 gap-1.5 py-1.5 text-xs text-left whitespace-normal");
   const meta = pending ? ACTION_CONFIRM[pending.actionType] : ACTION_CONFIRM.navigate;
   return (
     <div className="flex flex-wrap gap-2 pt-1">
@@ -57,7 +57,7 @@ function Actions({ message }: { message: AssistantMessage }) {
           return (
             <Link key={a.label} to={plain} className={cls}>
               {a.label}
-              <ArrowRight className="h-3 w-3" aria-hidden />
+              <ArrowRight className="h-3 w-3 shrink-0" aria-hidden />
             </Link>
           );
         }
@@ -65,7 +65,7 @@ function Actions({ message }: { message: AssistantMessage }) {
         return (
           <button key={a.label} type="button" disabled={!usable} className={cls} onClick={() => setPending(a)}>
             {a.label}
-            <ArrowRight className="h-3 w-3" aria-hidden />
+            <ArrowRight className="h-3 w-3 shrink-0" aria-hidden />
           </button>
         );
       })}
@@ -84,12 +84,12 @@ function Actions({ message }: { message: AssistantMessage }) {
 export function MessageBubble({ message }: { message: AssistantMessage }) {
   const bot = message.role === "assistant";
   return (
-    <article aria-label={bot ? "Assistant message" : "Your message"} className={cn("flex max-w-[88%] gap-3", bot ? "mr-auto" : "ml-auto flex-row-reverse")}>
-      <div className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white", bot ? "bg-black" : "bg-blue-600")} aria-hidden>
-        {bot ? <Bot className="h-4 w-4" /> : <User className="h-4 w-4" />}
+    <article aria-label={bot ? "Assistant message" : "Your message"} className={cn("flex max-w-[95%] sm:max-w-[88%] gap-2 sm:gap-3", bot ? "mr-auto" : "ml-auto flex-row-reverse")}>
+      <div className={cn("flex h-7 w-7 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-full text-white", bot ? "bg-black" : "bg-blue-600")} aria-hidden>
+        {bot ? <Bot className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> : <User className="h-3.5 w-3.5 sm:h-4 sm:w-4" />}
       </div>
-      <div className="flex min-w-0 flex-col gap-2">
-        <div className={cn("rounded-xl p-4 text-[13px] leading-relaxed", bot ? "border border-border bg-card text-foreground" : "bg-black text-white")}>
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
+        <div className={cn("rounded-xl p-3 sm:p-4 text-[13px] leading-relaxed break-words overflow-hidden", bot ? "border border-border bg-card text-foreground" : "bg-black text-white")}>
           {bot ? <Markdown text={message.content} /> : <p className="whitespace-pre-wrap break-words">{message.content}</p>}
         </div>
         {bot && message.dataVisual && <Visual visual={message.dataVisual} />}
@@ -102,7 +102,7 @@ export function MessageBubble({ message }: { message: AssistantMessage }) {
             <div className="ml-auto flex items-center gap-1 opacity-70 hover:opacity-100">
               <button
                 type="button"
-                className="rounded p-1 hover:bg-muted"
+                className="min-h-[32px] sm:min-h-0 rounded p-1 hover:bg-muted"
                 title="Copy response"
                 onClick={() => navigator.clipboard.writeText(message.content)}
               >

@@ -20,18 +20,18 @@ function hrefFor(key: string, id: string): string {
 export function EditSidebar({ editor }: { editor: EditorView }) {
   const id = editor.product.id;
   return (
-    <aside aria-label="Product sections" className="flex flex-col gap-5 w-[120px] shrink-0">
-      <nav aria-label="Product" className="flex flex-col gap-5">
+    <aside aria-label="Product sections" className="flex flex-col sm:flex-row lg:flex-col justify-between sm:items-start gap-5 w-full lg:w-[120px] pb-5 lg:pb-0 border-b lg:border-b-0 border-[#EAEAEA] shrink-0">
+      <nav aria-label="Product" className="flex flex-col gap-3 sm:gap-5 w-full sm:w-auto lg:w-full">
         <span className="text-[12px] font-semibold text-[#000000] leading-[145%]">Product</span>
-        <ul className="flex flex-col gap-1 w-full">
+        <ul className="flex flex-row flex-wrap lg:flex-col gap-1 w-full">
           {editor.nav.map((n) => {
             const current = n.key === "overview";
             const cls = cn(
-              "flex items-center justify-between gap-1 h-8 px-2.5 rounded-[4px] text-left transition-colors w-full text-[12px] leading-[145%]",
+              "flex items-center justify-between gap-1 h-8 px-2.5 rounded-[4px] text-left transition-colors text-[12px] leading-[145%]",
               current ? "bg-[#F5F5F5] font-semibold text-[#000000]" : "bg-white font-normal text-[#666666] hover:text-[#000000] hover:bg-neutral-50 cursor-pointer",
             );
             return (
-              <li key={n.key}>
+              <li key={n.key} className="shrink-0 lg:w-full">
                 {current ? (
                   <span aria-current="page" className={cls}>
                     <span className="truncate">{n.label}</span>
@@ -47,8 +47,8 @@ export function EditSidebar({ editor }: { editor: EditorView }) {
           })}
         </ul>
       </nav>
-      <div className="w-full h-[1px] bg-[#EAEAEA]" />
-      <dl className="flex flex-col gap-4 w-full">
+      <div className="hidden lg:block w-full h-[1px] bg-[#EAEAEA]" />
+      <dl className="flex flex-row flex-wrap lg:flex-col gap-4 w-full sm:w-auto lg:w-full">
         <div className="flex flex-col gap-1">
           <dt className="text-[11px] font-normal text-[#666666] leading-[145%]">Product ID</dt>
           <dd className="text-[11px] font-normal text-[#000000] leading-[145%] break-all">{editor.meta.productId}</dd>

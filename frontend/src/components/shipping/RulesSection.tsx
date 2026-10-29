@@ -96,7 +96,7 @@ export function RulesSection({ canRead, canConfigure, embedded, onCreate, onEdit
         </div>
       )}
 
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-[16px] font-semibold text-black">Shipping Rules</h2>
           <p className="text-[11px] text-[#666666]">Control which shipping method is preferred for different operating conditions.</p>
@@ -106,7 +106,7 @@ export function RulesSection({ canRead, canConfigure, embedded, onCreate, onEdit
           onClick={onCreate}
           disabled={off}
           title={off ? NO_CONFIGURE_REASON : undefined}
-          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-black bg-black px-3 text-[12px] font-semibold text-white shadow-sm transition-colors hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex h-9 sm:h-8 min-h-[36px] sm:min-h-0 self-start sm:self-auto items-center gap-1.5 rounded-lg border border-black bg-black px-3 text-[12px] font-semibold text-white shadow-sm transition-colors hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-60"
         >
           <Plus className="h-3.5 w-3.5 stroke-[1.5] text-white" />
           <span>Create Shipping Rule</span>
@@ -152,7 +152,7 @@ export function RulesSection({ canRead, canConfigure, embedded, onCreate, onEdit
               </div>
             </div>
 
-            <div className="space-y-2 md:col-span-5 md:border-l md:border-[#EAEAEA] md:pl-6">
+            <div className="space-y-2 border-t pt-4 border-[#EAEAEA] md:border-t-0 md:pt-0 md:col-span-5 md:border-l md:border-[#EAEAEA] md:pl-6">
               {selected.status === "enabled" ? (
                 <div className="flex items-center gap-1.5 text-[11px] font-medium text-[#16A34A]">
                   <CheckCircle2 className="h-3 w-3 stroke-[2]" aria-hidden />
@@ -175,19 +175,19 @@ export function RulesSection({ canRead, canConfigure, embedded, onCreate, onEdit
                     [selected.status === "enabled" ? "Disable" : "Enable", () => toggle(selected)],
                   ] as const
                 ).map(([label, fn]) => (
-                  <button key={label} type="button" disabled={off || busy} title={off ? NO_CONFIGURE_REASON : undefined} onClick={fn} className="h-8 rounded-lg border border-[#EAEAEA] bg-white px-3 text-[12px] text-black transition-colors hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50">
+                  <button key={label} type="button" disabled={off || busy} title={off ? NO_CONFIGURE_REASON : undefined} onClick={fn} className="h-9 sm:h-8 min-h-[36px] sm:min-h-0 rounded-lg border border-[#EAEAEA] bg-white px-3 text-[12px] text-black transition-colors hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50">
                     {label}
                   </button>
                 ))}
-                <button type="button" disabled={off || busy} title={off ? NO_CONFIGURE_REASON : undefined} onClick={() => setConfirmDelete(selected)} className="h-8 rounded-lg border border-[#EAEAEA] bg-white px-3 text-[12px] text-[#DC2626] transition-colors hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50">
+                <button type="button" disabled={off || busy} title={off ? NO_CONFIGURE_REASON : undefined} onClick={() => setConfirmDelete(selected)} className="h-9 sm:h-8 min-h-[36px] sm:min-h-0 rounded-lg border border-[#EAEAEA] bg-white px-3 text-[12px] text-[#DC2626] transition-colors hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50">
                   Delete
                 </button>
               </div>
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-lg border border-[#EAEAEA] bg-white text-[11px]">
-            <div className="grid grid-cols-12 border-b border-[#EAEAEA] bg-[#F5F5F5] px-3 py-2 text-[10px] font-normal text-[#666666]">
+          <div className="overflow-x-auto rounded-lg border border-[#EAEAEA] bg-white text-[11px]">
+            <div className="grid min-w-[650px] md:min-w-0 grid-cols-12 border-b border-[#EAEAEA] bg-[#F5F5F5] px-3 py-2 text-[10px] font-normal text-[#666666]">
               <div className="col-span-4">Rule</div>
               <div className="col-span-1">Status</div>
               <div className="col-span-1">Priority</div>
@@ -196,7 +196,7 @@ export function RulesSection({ canRead, canConfigure, embedded, onCreate, onEdit
               <div className="col-span-2 text-right">Action</div>
             </div>
             {items.map((r) => (
-              <div key={r.id} className={cn("grid grid-cols-12 items-center px-3 py-2.5 text-black hover:bg-neutral-50/50", r.id === selected.id && "bg-neutral-50")}>
+              <div key={r.id} className={cn("grid min-w-[650px] md:min-w-0 grid-cols-12 items-center px-3 py-2.5 text-black hover:bg-neutral-50/50", r.id === selected.id && "bg-neutral-50")}>
                 <div className="col-span-4">
                   <button type="button" aria-pressed={r.id === selected.id} onClick={() => setSelectedId(r.id)} className="text-left font-medium hover:underline">
                     {r.name}

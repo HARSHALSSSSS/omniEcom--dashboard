@@ -29,7 +29,7 @@ function Menu({ label, disabled, disabledReason, buttonClassName, direction = "d
           <div
             role="menu"
             style={{ boxShadow: "0px 4px 12px rgba(0, 0, 0, 0.051)" }}
-            className={`absolute left-0 ${direction === "up" ? "bottom-[36px]" : "top-[36px]"} w-[200px] max-h-[260px] overflow-y-auto bg-white border border-[#EAEAEA] rounded-[8px] p-1 flex flex-col gap-0.5 z-[70]`}
+            className={`absolute left-0 ${direction === "up" ? "bottom-[36px]" : "top-[36px]"} w-[200px] max-w-[calc(100vw-32px)] max-h-[260px] overflow-y-auto bg-white border border-[#EAEAEA] rounded-[8px] p-1 flex flex-col gap-0.5 z-[70]`}
           >
             {children(() => setOpen(false))}
           </div>
@@ -39,7 +39,7 @@ function Menu({ label, disabled, disabledReason, buttonClassName, direction = "d
   );
 }
 
-const ITEM = "w-full min-h-8 px-2 flex items-center text-left text-[12px] font-normal leading-[145%] text-[#000000] rounded hover:bg-neutral-100 transition-colors";
+const ITEM = "w-full min-h-[40px] sm:min-h-8 px-2 flex items-center text-left text-[12px] font-normal leading-[145%] text-[#000000] rounded hover:bg-neutral-100 transition-colors";
 
 interface SnoozeProps {
   disabled?: boolean;

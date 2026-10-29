@@ -101,7 +101,7 @@ export function ReorderPanel({ onOpenOrder, onOpenSuppliers }: ReorderPanelProps
 
       <div className="overflow-hidden rounded-xl border border-border bg-card shadow-2xs">
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-left text-xs">
+          <table className="w-full min-w-[780px] border-collapse text-left text-xs">
             <thead>
               <tr className="border-b border-border bg-muted/40 text-[11px] font-medium text-muted-foreground">
                 <th scope="col" className="w-10 px-4 py-3">
@@ -158,7 +158,7 @@ export function ReorderPanel({ onOpenOrder, onOpenSuppliers }: ReorderPanelProps
       </div>
 
       <Dialog open={result !== null} onOpenChange={(o) => !o && setResult(null)}>
-        <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
+        <DialogContent className="max-h-[90vh] w-[95vw] sm:max-w-lg overflow-y-auto">
           {result && (
             <>
               <DialogHeader>

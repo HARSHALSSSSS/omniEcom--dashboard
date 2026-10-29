@@ -28,7 +28,7 @@ interface FiltersProps {
 export function RunFilters({ type, status, trigger, filtered, total, onType, onStatus, onTrigger, onClear }: FiltersProps) {
   return (
     <div className="flex flex-wrap items-center gap-2" role="search" aria-label="Filter report history">
-      <select aria-label="Report type" className={SELECT} value={type ?? ""} onChange={(e) => onType(e.target.value || null)}>
+      <select aria-label="Report type" className={cn(SELECT, "w-full sm:w-auto")} value={type ?? ""} onChange={(e) => onType(e.target.value || null)}>
         <option value="">All reports</option>
         {REPORT_TYPES.map((t) => (
           <option key={t} value={t}>
@@ -36,7 +36,7 @@ export function RunFilters({ type, status, trigger, filtered, total, onType, onS
           </option>
         ))}
       </select>
-      <select aria-label="Status" className={SELECT} value={status ?? ""} onChange={(e) => onStatus(e.target.value || null)}>
+      <select aria-label="Status" className={cn(SELECT, "w-full sm:w-auto")} value={status ?? ""} onChange={(e) => onStatus(e.target.value || null)}>
         <option value="">Any status</option>
         {RUN_STATUSES.map((s) => (
           <option key={s} value={s}>
@@ -44,7 +44,7 @@ export function RunFilters({ type, status, trigger, filtered, total, onType, onS
           </option>
         ))}
       </select>
-      <select aria-label="Started by" className={SELECT} value={trigger ?? ""} onChange={(e) => onTrigger(e.target.value || null)}>
+      <select aria-label="Started by" className={cn(SELECT, "w-full sm:w-auto")} value={trigger ?? ""} onChange={(e) => onTrigger(e.target.value || null)}>
         <option value="">Manual and scheduled</option>
         {RUN_TRIGGERS.map((t) => (
           <option key={t} value={t}>
@@ -53,11 +53,11 @@ export function RunFilters({ type, status, trigger, filtered, total, onType, onS
         ))}
       </select>
       {filtered && (
-        <Button variant="ghost" size="sm" className="text-xs" onClick={onClear}>
+        <Button variant="ghost" size="sm" className="h-10 sm:h-9 text-xs" onClick={onClear}>
           Clear filters
         </Button>
       )}
-      <span className="ml-auto text-xs text-muted-foreground" aria-live="polite">
+      <span className="w-full sm:w-auto sm:ml-auto text-xs text-muted-foreground text-right sm:text-left" aria-live="polite">
         {formatNumber(total)} {total === 1 ? "run" : "runs"}
       </span>
     </div>

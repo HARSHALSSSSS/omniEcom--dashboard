@@ -44,7 +44,15 @@ export function ListingRow({ row, selected, canWrite, busy, onToggle, onQuickVie
   );
 
   return (
-    <div role="row" className={cn("relative flex min-h-[48px] w-full flex-row items-center px-4 py-1.5 pl-12 text-[12px] transition-colors hover:bg-[#FAFAFA]", selected && "bg-[#F9FAFB]")}>
+    <div
+      role="row"
+      onClick={(e) => {
+        const el = e.target as HTMLElement;
+        if (el.closest("a, button, input, label")) return;
+        onQuickView(row);
+      }}
+      className={cn("relative flex min-h-[48px] w-full flex-row items-center px-4 py-1.5 pl-12 text-[12px] transition-colors hover:bg-[#FAFAFA] cursor-pointer", selected && "bg-[#F9FAFB]")}
+    >
       {/* the readiness meter on the left edge */}
       <div className="pointer-events-none absolute left-[3px] top-1/2 h-7 w-[3px] -translate-y-1/2 rounded-sm bg-[#E5E7EB]" title={`Readiness score: ${score}%`}>
         <div className="absolute bottom-0 w-full rounded-sm transition-all" style={{ height: `${score}%`, backgroundColor: scoreColor }} />

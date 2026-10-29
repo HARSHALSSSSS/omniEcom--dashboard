@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ExceptionsTable, ResolveExceptionDialog } from "@/components/fulfillment/ExceptionsPanel";
 import { FulfillmentBulkBar, HandoverDialog, HandoverResultsDialog } from "@/components/fulfillment/FulfillmentBulkBar";
 import { FulfillmentDrawer } from "@/components/fulfillment/FulfillmentDrawer";
-import { FulfillmentFilters } from "@/components/fulfillment/FulfillmentFilters";
+import { FulfillmentFilters, type QueueSort } from "@/components/fulfillment/FulfillmentFilters";
 import { FulfillmentPagination, FulfillmentTabs } from "@/components/fulfillment/FulfillmentNav";
 import { QueueTable } from "@/components/fulfillment/QueueTable";
 import { OrderFlowStepper } from "@/components/fulfillment/OrderFlowStepper";
@@ -69,8 +69,27 @@ export default function FulfillmentPage() {
   const [resolving, setResolving] = useState<{ row: ExceptionRow; status: "resolved" | "dismissed" } | null>(null);
   const [resolveError, setResolveError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [sortOrder, setSortOrder] = useState<QueueSort>("sla_soonest");
 
-  const rows = useMemo(() => queue.data?.items ?? [], [queue.data]);
+  const rows = useMemo(() => {
+    const raw = queue.data?.items ?? [];
+    return [...raw].sort((a, b) => {
+      if (sortOrder === "sla_soonest") {
+        const ma = a.sla?.minutesRemaining ?? Infinity;
+        const mb = b.sla?.minutesRemaining ?? Infinity;
+        return ma - mb;
+      }
+      if (sortOrder === "sla_latest") {
+        const ma = a.sla?.minutesRemaining ?? -Infinity;
+        const mb = b.sla?.minutesRemaining ?? -Infinity;
+        return mb - ma;
+      }
+      if (sortOrder === "order_newest") {
+        return new Date(b.placedAt).getTime() - new Date(a.placedAt).getTime();
+      }
+      return 0;
+    });
+  }, [queue.data, sortOrder]);
   const selectedRows = useMemo(() => rows.filter((r) => selected.has(r.fulfillmentId)), [rows, selected]);
 
   // Derive real priority breach orders from backend queue items
@@ -237,6 +256,13 @@ export default function FulfillmentPage() {
               className="gap-1.5 text-xs font-medium"
               onClick={onPickList}
               disabled={selectedRows.length === 0 || !canWrite}
+              title={
+                !canWrite
+                  ? "Your role can view fulfillment but not change it."
+                  : selectedRows.length === 0
+                  ? "Select one or more orders below to generate a pick list"
+                  : undefined
+              }
             >
               <Printer className="h-3.5 w-3.5 text-muted-foreground" />
               Print pick list
@@ -246,7 +272,7 @@ export default function FulfillmentPage() {
       />
 
       {/* 2. Top Mode Switcher & Floor Status */}
-      <FulfillmentTabs active={tab} counts={counts} onChange={(t) => update({ tab: t })} />
+      <FulfillmentTabs active={tab} counts={counts} onChange={(t) => update({ tab: t })} updatedAt={queue.dataUpdatedAt} />
 
       {/* 3. Order Flow Stepper matching Figma Screen 1 */}
       <OrderFlowStepper
@@ -276,7 +302,7 @@ export default function FulfillmentPage() {
               </span>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
-              All orders · {warehouses.data?.[0]?.name ?? "Mumbai warehouse"} · All pickers
+              All orders · {warehouses.data?.find((w) => w.id === url.warehouse)?.name ?? (warehouses.data?.length === 1 ? warehouses.data[0].name : "All warehouses")} · All pickers
             </p>
           </div>
         </div>
@@ -286,6 +312,8 @@ export default function FulfillmentPage() {
           warehouses={warehouses.data ?? []}
           carriers={canReadShipping && carriers.data ? carriers.data : null}
           filtered={filtered}
+          sort={sortOrder}
+          onSort={setSortOrder}
           onSearch={(q) => update({ q }, { replace: true })}
           onWarehouse={(warehouse) => update({ warehouse })}
           onCarrier={(carrier) => update({ carrier })}

@@ -88,7 +88,7 @@ export function CreateMasterListingModal({ open, onClose, channels, canWrite, in
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
-      <DialogContent className="max-w-xl">
+      <DialogContent className="max-w-[calc(100vw-32px)] sm:max-w-xl">
         {result ? (
           <>
             <DialogHeader>
@@ -126,11 +126,11 @@ export function CreateMasterListingModal({ open, onClose, channels, canWrite, in
                 </li>
               ))}
             </ul>
-            <DialogFooter className="mt-4">
+            <DialogFooter className="mt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2">
               <Button
                 size="sm"
                 variant="outline"
-                className="text-xs"
+                className="text-xs min-h-[44px] sm:min-h-9"
                 onClick={() => {
                   setResult(null);
                   setProducts(new Map());
@@ -138,7 +138,7 @@ export function CreateMasterListingModal({ open, onClose, channels, canWrite, in
               >
                 Create more
               </Button>
-              <Button size="sm" className="text-xs" onClick={onClose}>
+              <Button size="sm" className="text-xs min-h-[44px] sm:min-h-9" onClick={onClose}>
                 Done
               </Button>
             </DialogFooter>
@@ -245,12 +245,12 @@ export function CreateMasterListingModal({ open, onClose, channels, canWrite, in
               )}
             </div>
 
-            <DialogFooter className="mt-4 items-center">
+            <DialogFooter className="mt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
               <span className="mr-auto text-[11px] text-[#666666]">{pairs > 0 ? `${formatNumber(pairs)} ${pairs === 1 ? "draft listing" : "draft listings"} to prepare` : ""}</span>
-              <Button size="sm" variant="outline" className="text-xs" onClick={onClose}>
+              <Button size="sm" variant="outline" className="text-xs min-h-[44px] sm:min-h-9" onClick={onClose}>
                 Cancel
               </Button>
-              <Button size="sm" className="text-xs" disabled={!ready} onClick={submit}>
+              <Button size="sm" className="text-xs min-h-[44px] sm:min-h-9" disabled={!ready} onClick={submit}>
                 {creator.isPending ? (
                   <>
                     <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />

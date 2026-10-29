@@ -38,18 +38,18 @@ export const RevenueWaterfallSection: React.FC<RevenueWaterfallSectionProps> = (
   });
 
   return (
-    <div className="space-y-4 rounded-xl border border-border bg-card p-6 shadow-xs">
-      <div className="flex items-start justify-between">
+    <div className="space-y-4 rounded-xl border border-border bg-card p-4 sm:p-6 shadow-xs">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-1 sm:gap-4">
         <div>
           <h2 className="text-base font-semibold text-foreground">Where revenue goes</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">Revenue less returns, product cost, fees, shipping and advertising leaves the contribution.</p>
         </div>
-        <span className="text-xs font-medium text-muted-foreground">{data ? `${data.range.from} to ${data.range.to}` : ""}</span>
+        <span className="text-xs font-medium text-muted-foreground shrink-0">{data ? `${data.range.from} to ${data.range.to}` : ""}</span>
       </div>
 
-      <div className="flex h-56 items-end gap-3 overflow-x-auto border-b border-border pb-0">
+      <div className="flex h-56 items-end gap-2 sm:gap-3 overflow-x-auto border-b border-border pb-1 [-webkit-overflow-scrolling:touch]">
         {bars.map(({ s, bottom, height }) => (
-          <div key={s.key} className="flex min-w-[84px] flex-1 flex-col items-center gap-1" title={s.tooltip}>
+          <div key={s.key} className="flex min-w-[76px] sm:min-w-[84px] flex-1 flex-col items-center gap-1 shrink-0" title={s.tooltip}>
             <span className="font-mono text-[11px] font-semibold text-foreground">{s.amountMinor === null ? DASH : s.type === "negative" ? `-${money(Math.abs(s.amountMinor))}` : money(s.amountMinor)}</span>
             <div className="relative h-40 w-full">
               {s.amountMinor === null ? (

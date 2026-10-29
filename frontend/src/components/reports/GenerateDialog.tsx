@@ -96,10 +96,10 @@ function GenerateForm({ target, periods, onClose, onGenerate }: Omit<Props, "tar
       </label>
 
       <DialogFooter className="gap-2 sm:gap-0">
-        <Button type="button" variant="outline" size="sm" disabled={busy} onClick={onClose}>
+        <Button type="button" variant="outline" size="sm" className="h-10 sm:h-9" disabled={busy} onClick={onClose}>
           Cancel
         </Button>
-        <Button type="submit" size="sm" loading={busy}>
+        <Button type="submit" size="sm" className="h-10 sm:h-9" loading={busy}>
           Generate report
         </Button>
       </DialogFooter>

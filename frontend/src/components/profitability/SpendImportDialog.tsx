@@ -120,20 +120,20 @@ export function SpendImportDialog({ open, onClose }: { open: boolean; onClose: (
         )}
         {result && <Summary r={result} />}
 
-        <DialogFooter className="gap-2 sm:gap-0">
+        <DialogFooter className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-0">
           {imported ? (
-            <Button size="sm" onClick={onClose}>
+            <Button size="sm" className="w-full sm:w-auto h-10 sm:h-9" onClick={onClose}>
               Done
             </Button>
           ) : (
             <>
-              <Button type="button" variant="outline" size="sm" disabled={importer.isPending} onClick={onClose}>
+              <Button type="button" variant="outline" size="sm" className="w-full sm:w-auto h-10 sm:h-9" disabled={importer.isPending} onClick={onClose}>
                 Cancel
               </Button>
-              <Button type="button" variant="outline" size="sm" disabled={csv.trim() === "" || importer.isPending} onClick={() => run(true)}>
+              <Button type="button" variant="outline" size="sm" className="w-full sm:w-auto h-10 sm:h-9" disabled={csv.trim() === "" || importer.isPending} onClick={() => run(true)}>
                 Check without saving
               </Button>
-              <Button type="button" size="sm" loading={importer.isPending} disabled={csv.trim() === ""} onClick={() => run(false)}>
+              <Button type="button" size="sm" className="w-full sm:w-auto h-10 sm:h-9" loading={importer.isPending} disabled={csv.trim() === ""} onClick={() => run(false)}>
                 Import
               </Button>
             </>

@@ -45,7 +45,7 @@ export const AttentionAndDecision: React.FC<AttentionAndDecisionProps> = ({
       {items && (
         <section
           aria-labelledby="attention-title"
-          className="flex-1 min-w-0 bg-white border border-[#EAEAEA] rounded-[12px] px-6 pt-5 pb-2 flex flex-col justify-between"
+          className="flex-1 min-w-0 bg-white border border-[#EAEAEA] rounded-[12px] px-4 sm:px-6 pt-5 pb-2 flex flex-col justify-between"
         >
           <div className="flex flex-col gap-1 pb-4">
             <h2 id="attention-title" className="text-[18px] font-semibold text-[#000000] leading-[145%]">
@@ -65,22 +65,22 @@ export const AttentionAndDecision: React.FC<AttentionAndDecisionProps> = ({
               {items.map((item) => (
                 <li
                   key={item.issueKey}
-                  className="flex items-center justify-between h-[66px] border-t border-[#EAEAEA] gap-3"
+                  className="flex flex-col sm:flex-row sm:items-center justify-between min-h-[66px] lg:h-[66px] border-t border-[#EAEAEA] gap-2 sm:gap-3 py-3 sm:py-0"
                 >
-                  <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
                     <div className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[8px] bg-[#F5F5F5]">
                       {iconFor(item.issueKey)}
                     </div>
-                    <div className="flex flex-col gap-[3px] min-w-0">
+                    <div className="flex flex-col gap-[3px] min-w-0 flex-1">
                       <span className="text-[13px] font-semibold text-[#000000] leading-[145%]">{item.title}</span>
-                      <span className="text-[12px] font-normal text-[#666666] leading-[145%] truncate">
+                      <span className="text-[12px] font-normal text-[#666666] leading-[145%] truncate sm:whitespace-normal">
                         {item.summary}
                       </span>
                     </div>
                   </div>
                   <Link
                     to={toAppPath(item.action.href)}
-                    className={`text-[12px] font-medium hover:underline shrink-0 leading-[145%] ${
+                    className={`text-[12px] font-medium hover:underline shrink-0 leading-[145%] min-h-[44px] sm:min-h-0 flex items-center self-start sm:self-auto ${
                       AMBER_KEYS.has(item.issueKey) ? "text-[#F59E0B]" : "text-[#1D4ED8]"
                     }`}
                   >
@@ -97,7 +97,7 @@ export const AttentionAndDecision: React.FC<AttentionAndDecisionProps> = ({
         <section
           aria-labelledby="recommendation-title"
           style={{ background: "linear-gradient(107.52deg, #E4A0FF 0.96%, #2563EB 121.91%)" }}
-          className={`w-full ${items ? "lg:w-[368px]" : ""} rounded-[12px] p-6 flex flex-col justify-between shrink-0`}
+          className={`w-full ${items ? "lg:w-[368px]" : ""} rounded-[12px] p-5 sm:p-6 flex flex-col justify-between shrink-0`}
         >
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-medium uppercase tracking-normal text-white">Recommended action</span>
@@ -105,13 +105,13 @@ export const AttentionAndDecision: React.FC<AttentionAndDecisionProps> = ({
           </div>
 
           <div className="flex flex-col gap-3 my-3">
-            <h3 id="recommendation-title" className="text-[22px] font-semibold text-[#000000] leading-[135%]">
+            <h3 id="recommendation-title" className="text-[20px] sm:text-[22px] font-semibold text-[#000000] leading-[135%]">
               {recommendation.title}
             </h3>
             <p className="text-[13px] font-normal text-white leading-[145%]">{recommendation.rationale}</p>
           </div>
 
-          <div className="flex flex-col gap-5 pt-1">
+          <div className="flex flex-col gap-3 sm:gap-5 pt-1">
             {dismissError && (
               <p role="alert" className="text-[12px] font-medium text-white leading-[145%]">
                 {dismissError}
@@ -119,7 +119,7 @@ export const AttentionAndDecision: React.FC<AttentionAndDecisionProps> = ({
             )}
             <Link
               to={ROUTES.RECOMMENDATIONS}
-              className="flex h-10 w-full items-center justify-center rounded-[8px] bg-[#000000] text-[12px] font-semibold text-white hover:bg-neutral-800 transition-colors"
+              className="flex h-11 sm:h-10 min-h-[44px] sm:min-h-0 w-full items-center justify-center rounded-[8px] bg-[#000000] text-[12px] font-semibold text-white hover:bg-neutral-800 transition-colors"
             >
               Review recommendation
             </Link>
@@ -127,7 +127,7 @@ export const AttentionAndDecision: React.FC<AttentionAndDecisionProps> = ({
               type="button"
               disabled={dismissing}
               onClick={() => onDismissRecommendation?.(recommendation.id)}
-              className="flex h-10 w-full items-center justify-center rounded-[8px] bg-white text-[12px] font-semibold text-[#000000] hover:bg-neutral-50 transition-colors disabled:opacity-60"
+              className="flex h-11 sm:h-10 min-h-[44px] sm:min-h-0 w-full items-center justify-center rounded-[8px] bg-white text-[12px] font-semibold text-[#000000] hover:bg-neutral-50 transition-colors disabled:opacity-60 cursor-pointer"
             >
               {dismissing ? "Dismissing…" : "Dismiss"}
             </button>

@@ -133,24 +133,24 @@ export function DescriptionEditor({ value, onChange, disabled, maxChars, error }
       <div
         className={`flex flex-col w-full min-h-[184px] border rounded-[8px] bg-white overflow-hidden transition-colors focus-within:border-[#000000] ${error || over ? "border-[#B42318]" : "border-[#BDBDBD]"}`}
       >
-        <div role="toolbar" aria-label="Description formatting" className="flex flex-row items-center px-3.5 gap-5 h-10 border-b border-[#EAEAEA] bg-white shrink-0">
-          <button type="button" className={toolbarButton} disabled={disabled} aria-pressed={active.bold} onMouseDown={keep} onClick={() => format("bold")}>
+        <div role="toolbar" aria-label="Description formatting" className="flex flex-row items-center px-3.5 gap-4 sm:gap-5 h-10 border-b border-[#EAEAEA] bg-white shrink-0 overflow-x-auto scrollbar-none">
+          <button type="button" className={`${toolbarButton} min-h-[36px] sm:min-h-0 inline-flex items-center shrink-0`} disabled={disabled} aria-pressed={active.bold} onMouseDown={keep} onClick={() => format("bold")}>
             Bold
           </button>
-          <button type="button" className={toolbarButton} disabled={disabled} aria-pressed={active.italic} onMouseDown={keep} onClick={() => format("italic")}>
+          <button type="button" className={`${toolbarButton} min-h-[36px] sm:min-h-0 inline-flex items-center shrink-0`} disabled={disabled} aria-pressed={active.italic} onMouseDown={keep} onClick={() => format("italic")}>
             Italic
           </button>
-          <button type="button" className={toolbarButton} disabled={disabled} aria-pressed={active.insertUnorderedList} onMouseDown={keep} onClick={() => format("insertUnorderedList")}>
+          <button type="button" className={`${toolbarButton} min-h-[36px] sm:min-h-0 inline-flex items-center shrink-0`} disabled={disabled} aria-pressed={active.insertUnorderedList} onMouseDown={keep} onClick={() => format("insertUnorderedList")}>
             Bullets
           </button>
-          <button type="button" className={toolbarButton} disabled={disabled} aria-expanded={linkOpen} onMouseDown={keep} onClick={openLink}>
+          <button type="button" className={`${toolbarButton} min-h-[36px] sm:min-h-0 inline-flex items-center shrink-0`} disabled={disabled} aria-expanded={linkOpen} onMouseDown={keep} onClick={openLink}>
             Link
           </button>
         </div>
 
         {linkOpen ? (
-          <div className="flex flex-row items-center gap-2 px-3.5 py-2 border-b border-[#EAEAEA] bg-[#FAFAFA]">
-            <label htmlFor="cp-link-url" className="text-[12px] text-[#333333]">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 px-3.5 py-2 border-b border-[#EAEAEA] bg-[#FAFAFA]">
+            <label htmlFor="cp-link-url" className="text-[12px] text-[#333333] shrink-0">
               Link address
             </label>
             <input
@@ -167,14 +167,16 @@ export function DescriptionEditor({ value, onChange, disabled, maxChars, error }
                 if (e.key === "Escape") setLinkOpen(false);
               }}
               aria-invalid={linkError ? true : undefined}
-              className="flex-1 h-8 px-2 border border-[#BDBDBD] rounded-[6px] text-[12px] outline-none focus:border-[#000000]"
+              className="flex-1 h-8 min-h-[36px] sm:min-h-[32px] px-2 border border-[#BDBDBD] rounded-[6px] text-[12px] outline-none focus:border-[#000000]"
             />
-            <button type="button" className="text-[12px] font-semibold text-[#000000] hover:underline cursor-pointer" onClick={applyLink}>
-              Add link
-            </button>
-            <button type="button" className="text-[12px] text-[#666666] hover:underline cursor-pointer" onClick={() => setLinkOpen(false)}>
-              Cancel
-            </button>
+            <div className="flex items-center gap-2 justify-end sm:justify-start">
+              <button type="button" className="text-[12px] font-semibold text-[#000000] hover:underline cursor-pointer min-h-[36px] sm:min-h-0 inline-flex items-center" onClick={applyLink}>
+                Add link
+              </button>
+              <button type="button" className="text-[12px] text-[#666666] hover:underline cursor-pointer min-h-[36px] sm:min-h-0 inline-flex items-center" onClick={() => setLinkOpen(false)}>
+                Cancel
+              </button>
+            </div>
           </div>
         ) : null}
         {linkError && linkOpen ? (

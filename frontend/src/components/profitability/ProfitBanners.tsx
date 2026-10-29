@@ -13,12 +13,12 @@ const TONES = {
 
 function Banner({ tone, title, children, action }: { tone: keyof typeof TONES; title: string; children?: ReactNode; action?: ReactNode }) {
   return (
-    <div role={tone === "info" ? "status" : "alert"} className={cn("flex flex-wrap items-start justify-between gap-3 rounded-lg border p-3.5 text-xs", TONES[tone])}>
+    <div role={tone === "info" ? "status" : "alert"} className={cn("flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-lg border p-3.5 text-xs", TONES[tone])}>
       <div className="min-w-0 flex-1 space-y-1">
         <p className="font-semibold">{title}</p>
         {children}
       </div>
-      {action}
+      {action && <div className="w-full sm:w-auto shrink-0">{action}</div>}
     </div>
   );
 }
@@ -52,7 +52,7 @@ export function ProfitBanners({ data, canWrite, onAddSpend }: Props) {
           title="Net contribution is not shown because some costs are missing"
           action={
             adMissing && canWrite ? (
-              <Button size="sm" variant="outline" className="shrink-0 bg-background text-xs" onClick={onAddSpend}>
+              <Button size="sm" variant="outline" className="w-full sm:w-auto shrink-0 bg-background text-xs h-9 sm:h-8" onClick={onAddSpend}>
                 Record advertising spend
               </Button>
             ) : undefined

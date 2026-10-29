@@ -98,7 +98,7 @@ export function BrandField({ value, onChange, brandRecord, disabled, error, maxL
   ) : null;
 
   return (
-    <div className="flex flex-col gap-1.5 flex-1">
+    <div className="flex flex-col gap-1.5 flex-1 min-w-0 w-full sm:w-auto">
       <SelectField
         id="cp-brand"
         label="Brand"
@@ -129,7 +129,7 @@ export function BrandField({ value, onChange, brandRecord, disabled, error, maxL
       </SelectField>
       {adding ? (
         <FieldShell id="cp-new-brand" label="New brand name">
-          <div className="flex flex-row items-center gap-2">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
             <div className={boxClass(null, "flex-1")}>
               <input
                 id="cp-new-brand"

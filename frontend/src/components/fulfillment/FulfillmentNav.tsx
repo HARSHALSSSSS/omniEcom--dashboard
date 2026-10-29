@@ -1,5 +1,6 @@
+import { useMemo } from "react";
 import { cn } from "@/utils/cn";
-import { formatNumber } from "@/utils/format";
+import { formatInZone, formatNumber } from "@/utils/format";
 import { FULFILLMENT_TABS, type FulfillmentTab, type QueueCounts } from "@/types/fulfillment";
 import { TAB_LABELS } from "./fulfillmentParams";
 import { CheckCircle2, ChevronLeft, ChevronRight, Package, Send } from "lucide-react";
@@ -17,10 +18,11 @@ interface FulfillmentTabsProps {
   active: FulfillmentTab;
   counts: QueueCounts | undefined;
   onChange: (tab: FulfillmentTab) => void;
+  updatedAt?: number;
 }
 
 /** the warehouse stages; the counts come from the queue itself, so a tab never shows a different number than its list */
-export function FulfillmentTabs({ active, counts, onChange }: FulfillmentTabsProps) {
+export function FulfillmentTabs({ active, counts, onChange, updatedAt }: FulfillmentTabsProps) {
   // Aggregate counts for Figma primary modes
   const pickTotal = counts ? counts.awaiting_pick + counts.picking : 0;
   const packTotal = counts?.packing ?? 0;
@@ -29,6 +31,11 @@ export function FulfillmentTabs({ active, counts, onChange }: FulfillmentTabsPro
   const isPickActive = active === "all" || active === "awaiting_pick" || active === "picking";
   const isPackActive = active === "packing";
   const isDispatchActive = active === "ready_to_ship";
+
+  const updatedLabel = useMemo(() => {
+    const ts = updatedAt && updatedAt > 0 ? updatedAt : Date.now();
+    return formatInZone(new Date(ts).toISOString(), { hour: "numeric", minute: "2-digit", hour12: true });
+  }, [updatedAt]);
 
   return (
     <div className="space-y-3">
@@ -87,7 +94,7 @@ export function FulfillmentTabs({ active, counts, onChange }: FulfillmentTabsPro
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
           </span>
-          <span>Live floor · Updated 12:43 PM</span>
+          <span>Live floor · Updated {updatedLabel}</span>
         </div>
       </div>
 

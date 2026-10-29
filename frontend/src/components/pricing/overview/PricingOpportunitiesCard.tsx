@@ -66,7 +66,7 @@ export function PricingOpportunitiesCard({ proposals, loading, error, onRetry, o
       {/* Table */}
       {!loading && !error && total > 0 && (
         <div className="overflow-x-auto">
-          <table className="w-full text-xs text-left">
+          <table className="w-full min-w-[540px] text-xs text-left">
             <thead>
               <tr className="border-b border-neutral-200 text-muted-foreground font-medium">
                 <th className="pb-2 font-medium">Product / Channel</th>

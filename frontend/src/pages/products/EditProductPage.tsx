@@ -19,7 +19,7 @@ import type { AiMode } from "@/types/productEdit";
 const STATUS_LABEL: Record<string, string> = { active: "Active", draft: "Draft", archived: "Archived" };
 
 const actionClass = (enabled: boolean, primary: boolean) =>
-  `flex items-center justify-center h-9 px-4 rounded-[8px] text-[12px] font-semibold leading-[145%] transition-colors ${
+  `flex items-center justify-center min-h-[44px] sm:min-h-9 h-auto sm:h-9 px-4 rounded-[8px] text-[12px] font-semibold leading-[145%] transition-colors ${
     enabled
       ? primary
         ? "bg-[#000000] text-white hover:bg-neutral-800 cursor-pointer"
@@ -106,7 +106,7 @@ export default function EditProductPage() {
           </Link>
         </nav>
 
-        <div className="flex flex-row items-center justify-between gap-3">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-3">
           <div className="flex flex-col gap-1">
             <div className="flex flex-row items-center gap-3.5">
               <h1 className="text-[26px] font-semibold text-[#000000] leading-[145%]">Edit product</h1>
@@ -125,7 +125,9 @@ export default function EditProductPage() {
               </span>
             </div>
           </div>
-          {actions}
+          <div className="w-full sm:w-auto flex justify-end">
+            {actions}
+          </div>
         </div>
       </div>
 
@@ -150,7 +152,7 @@ export default function EditProductPage() {
         </div>
       )}
 
-      <div className="flex flex-row items-start pt-6 gap-6 w-full flex-1">
+      <div className="flex flex-col lg:flex-row items-start pt-6 gap-6 w-full flex-1">
         <EditSidebar editor={editor} />
 
         <ProductInformation
@@ -160,7 +162,7 @@ export default function EditProductPage() {
           aiPanel={canWrite ? <AiPanel productId={product.id} request={ai} getText={() => htmlToPlain(values.description)} onAccept={ctl.setDescriptionHtml} onClose={() => setAi(null)} /> : null}
         />
 
-        <div className="flex flex-col gap-5 w-[248px] border-l border-[#EAEAEA] pl-6 shrink-0">
+        <div className="flex flex-col gap-5 w-full lg:w-[248px] border-t lg:border-t-0 lg:border-l border-[#EAEAEA] pt-6 lg:pt-0 pl-0 lg:pl-6 shrink-0">
           <ImpactPanel productId={product.id} dirty={dirty} impact={ctl.impact} pending={ctl.impactPending} failed={ctl.impactError} lastSave={ctl.lastSave} notice={ctl.notice} />
           <div className="w-full h-[1px] bg-[#EAEAEA]" />
           <ReadinessPanel readiness={editor.readiness} />
@@ -170,9 +172,9 @@ export default function EditProductPage() {
       </div>
 
       <div
-        className={`fixed bottom-0 right-0 z-20 flex flex-row items-center justify-between h-[72px] px-12 bg-white border-t border-[#EAEAEA] transition-all duration-300 ${sidebarCollapsed ? "left-14" : "left-[224px]"}`}
+        className={`fixed bottom-0 right-0 z-20 flex flex-col sm:flex-row items-stretch sm:items-center justify-between min-h-[72px] py-3 sm:py-0 px-4 sm:px-6 md:px-12 bg-white border-t border-[#EAEAEA] transition-all duration-300 left-0 ${sidebarCollapsed ? "md:left-14" : "md:left-[224px]"}`}
       >
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 mb-2 sm:mb-0">
           {!dirty && justSaved && <Check className="w-3.5 h-3.5 text-[#666666] stroke-[2.5]" aria-hidden="true" />}
           <span className="text-[12px] font-normal text-[#666666] leading-[145%]">{dirty ? "Unsaved changes" : "All changes saved"}</span>
         </div>

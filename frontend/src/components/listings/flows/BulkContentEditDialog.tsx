@@ -109,7 +109,7 @@ function Editor({ listingIds, onClose, onDone }: Omit<Props, "open">) {
   const applied = result !== null && !result.dryRun;
 
   return (
-    <DialogContent className="max-h-[90vh] max-w-xl overflow-y-auto">
+    <DialogContent className="max-h-[90vh] max-w-[calc(100vw-32px)] sm:max-w-xl overflow-y-auto">
       <DialogHeader>
         <DialogTitle>{applied ? "Content changed" : "Edit content"}</DialogTitle>
         <DialogDescription>
@@ -202,27 +202,27 @@ function Editor({ listingIds, onClose, onDone }: Omit<Props, "open">) {
         </p>
       )}
 
-      <DialogFooter className="mt-2 gap-2 sm:gap-0">
+      <DialogFooter className="mt-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2">
         {applied ? (
-          <Button type="button" size="sm" className="text-xs" onClick={onClose}>
+          <Button type="button" size="sm" className="text-xs min-h-[44px] sm:min-h-9" onClick={onClose}>
             Done
           </Button>
         ) : result ? (
           <>
-            <Button type="button" variant="outline" size="sm" className="text-xs" disabled={busy !== null} onClick={() => setResult(null)}>
+            <Button type="button" variant="outline" size="sm" className="text-xs min-h-[44px] sm:min-h-9" disabled={busy !== null} onClick={() => setResult(null)}>
               Back
             </Button>
-            <Button type="button" size="sm" className="text-xs" disabled={busy !== null || result.summary.succeeded === 0} onClick={() => void run(false)}>
+            <Button type="button" size="sm" className="text-xs min-h-[44px] sm:min-h-9" disabled={busy !== null || result.summary.succeeded === 0} onClick={() => void run(false)}>
               {busy === "apply" && <Loader2 className="mr-1.5 h-3 w-3 animate-spin" aria-hidden />}
               Apply to {result.summary.succeeded} {result.summary.succeeded === 1 ? "listing" : "listings"}
             </Button>
           </>
         ) : (
           <>
-            <Button type="button" variant="outline" size="sm" className="text-xs" disabled={busy !== null} onClick={onClose}>
+            <Button type="button" variant="outline" size="sm" className="text-xs min-h-[44px] sm:min-h-9" disabled={busy !== null} onClick={onClose}>
               Cancel
             </Button>
-            <Button type="button" size="sm" className="text-xs" disabled={busy !== null || count === 0} onClick={() => void run(true)}>
+            <Button type="button" size="sm" className="text-xs min-h-[44px] sm:min-h-9" disabled={busy !== null || count === 0} onClick={() => void run(true)}>
               {busy === "preview" && <Loader2 className="mr-1.5 h-3 w-3 animate-spin" aria-hidden />}
               Preview changes
             </Button>

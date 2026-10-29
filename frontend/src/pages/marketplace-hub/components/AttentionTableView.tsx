@@ -47,7 +47,7 @@ function AttentionRow({ item, onViewDetails }: { item: ChannelConnection; onView
             disabled={!a.canWrite}
             title={a.canWrite ? undefined : "Your role cannot change marketplace connections."}
             onClick={() => a.openDialog("reconnect")}
-            className="h-8 px-4 rounded-lg bg-[#121212] text-white text-[12px] font-semibold hover:bg-neutral-800 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            className="h-9 sm:h-8 px-4 rounded-lg bg-[#121212] text-white text-[12px] font-semibold hover:bg-neutral-800 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Reconnect
           </button>
@@ -57,12 +57,12 @@ function AttentionRow({ item, onViewDetails }: { item: ChannelConnection; onView
             disabled={Boolean(a.syncReason) || a.syncing}
             title={a.syncReason ?? undefined}
             onClick={a.startSync}
-            className="h-8 px-4 rounded-lg border border-[#BDBDBD] text-[12px] font-semibold text-[#121212] hover:bg-neutral-50 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            className="h-9 sm:h-8 px-4 rounded-lg border border-[#BDBDBD] text-[12px] font-semibold text-[#121212] hover:bg-neutral-50 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Retry sync
           </button>
         )}
-        <button type="button" onClick={() => onViewDetails(item.id)} className="text-[12px] font-medium text-[#121212] hover:underline cursor-pointer">
+        <button type="button" onClick={() => onViewDetails(item.id)} className="text-[12px] font-medium text-[#121212] hover:underline cursor-pointer py-1 sm:py-0">
           View details →
         </button>
       </div>
@@ -77,17 +77,21 @@ export const AttentionTableView: React.FC<AttentionTableViewProps> = ({ connecti
   return (
     <div className="w-full space-y-6">
       <div className="w-full border border-[#E5E5E5] rounded-xl overflow-hidden bg-white">
-        <div className="grid grid-cols-12 px-6 py-3 bg-white border-b border-[#E5E5E5] text-[11px] font-medium text-[#737373]">
-          <div className="col-span-3">Channel</div>
-          <div className="col-span-7">Connection health</div>
-          <div className="col-span-2 text-right">Actions</div>
-        </div>
+        <div className="overflow-x-auto">
+          <div className="min-w-[720px] md:min-w-0">
+            <div className="grid grid-cols-12 px-6 py-3 bg-white border-b border-[#E5E5E5] text-[11px] font-medium text-[#737373]">
+              <div className="col-span-3">Channel</div>
+              <div className="col-span-7">Connection health</div>
+              <div className="col-span-2 text-right">Actions</div>
+            </div>
 
-        <div className="divide-y divide-[#E5E5E5]">
-          {attentionItems.length === 0 && <div className="px-6 py-10 text-center text-[13px] text-[#737373]">No connection needs attention.</div>}
-          {attentionItems.map((item) => (
-            <AttentionRow key={item.id} item={item} onViewDetails={onViewDetails} />
-          ))}
+            <div className="divide-y divide-[#E5E5E5]">
+              {attentionItems.length === 0 && <div className="px-6 py-10 text-center text-[13px] text-[#737373]">No connection needs attention.</div>}
+              {attentionItems.map((item) => (
+                <AttentionRow key={item.id} item={item} onViewDetails={onViewDetails} />
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 

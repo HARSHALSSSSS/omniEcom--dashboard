@@ -50,23 +50,25 @@ export default function DashboardPage() {
 
   if (isError || !data) {
     return (
-      <div
-        role="alert"
-        className="flex flex-col items-start gap-3 w-full bg-white border border-[#EAEAEA] rounded-[12px] p-6"
-      >
-        <div className="flex items-center gap-2 text-[#000000]">
-          <AlertCircle className="h-5 w-5 text-[#EF4444]" aria-hidden="true" />
-          <h1 className="text-[18px] font-semibold leading-[145%]">We couldn&apos;t load your dashboard</h1>
-        </div>
-        <p className="text-[13px] text-[#666666] leading-[145%]">{errorMessage(error)}</p>
-        <button
-          type="button"
-          onClick={() => void refetch()}
-          disabled={isFetching}
-          className="inline-flex h-10 items-center justify-center rounded-[8px] bg-[#000000] px-4 text-[12px] font-semibold text-white hover:bg-neutral-800 transition-colors disabled:opacity-60"
+      <div className="flex w-full min-h-[60vh] items-center justify-center p-4">
+        <div
+          role="alert"
+          className="flex flex-col items-center justify-center text-center gap-3 w-full max-w-[520px] bg-white border border-[#EAEAEA] rounded-[16px] p-8 shadow-xs"
         >
-          {isFetching ? "Retrying…" : "Try again"}
-        </button>
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-[#EF4444] mb-1">
+            <AlertCircle className="h-6 w-6" aria-hidden="true" />
+          </div>
+          <h1 className="text-[18px] font-semibold leading-[145%] text-[#000000]">We couldn&apos;t load your dashboard</h1>
+          <p className="text-[13px] text-[#666666] leading-[150%] max-w-[420px]">{errorMessage(error)}</p>
+          <button
+            type="button"
+            onClick={() => void refetch()}
+            disabled={isFetching}
+            className="mt-2 inline-flex h-10 items-center justify-center rounded-[8px] bg-[#000000] px-5 text-[13px] font-medium text-white hover:bg-neutral-800 transition-colors disabled:opacity-60 cursor-pointer"
+          >
+            {isFetching ? "Retrying…" : "Try again"}
+          </button>
+        </div>
       </div>
     );
   }

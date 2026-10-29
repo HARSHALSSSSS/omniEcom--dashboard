@@ -372,12 +372,12 @@ export function OrdersSection(props: OrdersSectionProps) {
         </div>
       )}
 
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-[16px] font-semibold text-black">Orders to Ship</h2>
           <p className="text-[11px] text-[#666666]">Packed orders waiting for a shipping decision · no shipping prices or SLA promises</p>
         </div>
-        <span className="text-[11px] text-[#666666]">{readyToShip === undefined ? "—" : formatNumber(readyToShip)} ready to ship</span>
+        <span className="shrink-0 text-[11px] text-[#666666]">{readyToShip === undefined ? "—" : formatNumber(readyToShip)} ready to ship</span>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -399,7 +399,7 @@ export function OrdersSection(props: OrdersSectionProps) {
         )}
       </div>
 
-      <div role="toolbar" aria-label="Bulk actions" className="flex flex-wrap items-center gap-4 border-t border-[#EAEAEA] pt-2 text-[11px]">
+      <div role="toolbar" aria-label="Bulk actions" className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-[#EAEAEA] pt-2 text-[11px]">
         <label className="flex cursor-pointer items-center gap-1.5">
           <input type="checkbox" checked={rows.length > 0 && rows.every((r) => selected.has(r.fulfillmentId))} disabled={off || rows.length === 0} onChange={toggleAll} className="h-3 w-3 rounded border-[#BDBDBD] accent-black" />
           <span className="text-black">Select all</span>

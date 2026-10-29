@@ -19,14 +19,14 @@ export function RangeControls({ preset, range, rangeError, customFrom, customTo,
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-3">
-        <div role="group" aria-label="Date range" className="inline-flex flex-wrap items-center rounded-lg border border-border bg-muted p-1">
+        <div role="group" aria-label="Date range" className="inline-flex max-w-full overflow-x-auto flex-nowrap sm:flex-wrap items-center rounded-lg border border-border bg-muted p-1 [-webkit-overflow-scrolling:touch]">
           {RANGE_PRESETS.map((p) => (
             <button
               key={p}
               type="button"
               aria-pressed={preset === p}
               onClick={() => onPreset(p)}
-              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all ${preset === p ? "bg-background font-semibold text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+              className={`shrink-0 rounded-md px-3 py-2 sm:py-1.5 text-xs font-medium transition-all ${preset === p ? "bg-background font-semibold text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
             >
               {PRESET_LABELS[p]}
             </button>
@@ -40,18 +40,18 @@ export function RangeControls({ preset, range, rangeError, customFrom, customTo,
       </div>
 
       {preset === "custom" && (
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="space-y-1">
+        <div className="flex flex-col sm:flex-row flex-wrap sm:items-end gap-3">
+          <div className="space-y-1 w-full sm:w-auto">
             <label htmlFor="profit-from" className="block text-[11px] font-medium text-muted-foreground">
               From
             </label>
-            <Input id="profit-from" type="date" value={customFrom} max={customTo || undefined} onChange={(e) => onCustom({ from: e.target.value })} error={Boolean(rangeError)} className="w-40" />
+            <Input id="profit-from" type="date" value={customFrom} max={customTo || undefined} onChange={(e) => onCustom({ from: e.target.value })} error={Boolean(rangeError)} className="w-full sm:w-40" />
           </div>
-          <div className="space-y-1">
+          <div className="space-y-1 w-full sm:w-auto">
             <label htmlFor="profit-to" className="block text-[11px] font-medium text-muted-foreground">
               To
             </label>
-            <Input id="profit-to" type="date" value={customTo} min={customFrom || undefined} onChange={(e) => onCustom({ to: e.target.value })} error={Boolean(rangeError)} className="w-40" />
+            <Input id="profit-to" type="date" value={customTo} min={customFrom || undefined} onChange={(e) => onCustom({ to: e.target.value })} error={Boolean(rangeError)} className="w-full sm:w-40" />
           </div>
           {rangeError && (
             <p role="alert" className="pb-2 text-xs text-destructive">
