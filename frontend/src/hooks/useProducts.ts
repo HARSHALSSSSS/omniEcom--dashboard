@@ -171,7 +171,7 @@ export function useExportCatalog() {
 export function useProduct(id: string) {
   return useQuery({
     queryKey: PRODUCT_QUERY_KEYS.detail(id),
-    queryFn: () => productsApi.getProduct(id),
+    queryFn: ({ signal }) => productsApi.getProduct(id, signal),
     enabled: Boolean(id),
   });
 }

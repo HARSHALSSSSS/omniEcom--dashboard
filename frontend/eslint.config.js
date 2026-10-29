@@ -21,6 +21,7 @@ export default tseslint.config(
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
+      "react-hooks/exhaustive-deps": "warn",
       "react-refresh/only-export-components": [
         "warn",
         { allowConstantExport: true },
@@ -34,6 +35,11 @@ export default tseslint.config(
       "no-console": ["warn", { allow: ["warn", "error"] }],
       "prefer-const": "error",
       "security/detect-object-injection": "off",
+      "security/detect-eval-with-expression": "error",
+      "security/detect-no-csrf-before-method-override": "error",
+      "security/detect-possible-timing-attacks": "error",
+      "security/detect-bidi-characters": "error",
+      "security/detect-unsafe-regex": "warn",
     },
   },
   {

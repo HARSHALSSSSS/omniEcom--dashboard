@@ -3,15 +3,39 @@ import { ImageOff } from "lucide-react";
 import { variantsApi } from "@/api/variants.api";
 import { cn } from "@/utils/cn";
 
+const MAX_IMAGE_CACHE = 100;
 const cache = new Map<string, Promise<string>>();
 
 function objectUrlFor(url: string): Promise<string> {
   let hit = cache.get(url);
-  if (!hit) {
-    hit = variantsApi.image(url).then((blob) => URL.createObjectURL(blob));
-    hit.catch(() => cache.delete(url));
+  if (hit) {
+    // Re-insert to keep LRU order
+    cache.delete(url);
     cache.set(url, hit);
+    return hit;
   }
+
+  // Evict oldest entry when reaching capacity
+  if (cache.size >= MAX_IMAGE_CACHE) {
+    const oldestKey = cache.keys().next().value;
+    if (oldestKey) {
+      const oldestPromise = cache.get(oldestKey);
+      cache.delete(oldestKey);
+      oldestPromise
+        ?.then((objUrl) => {
+          try {
+            URL.revokeObjectURL(objUrl);
+          } catch {
+            // ignore revoke errors
+          }
+        })
+        .catch(() => {});
+    }
+  }
+
+  hit = variantsApi.image(url).then((blob) => URL.createObjectURL(blob));
+  hit.catch(() => cache.delete(url));
+  cache.set(url, hit);
   return hit;
 }
 

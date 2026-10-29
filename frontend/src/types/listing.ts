@@ -311,7 +311,8 @@ export interface BulkCreateResponse {
 }
 
 export interface BulkCreateInput {
-  productIds: string[];
+  productIds?: string[];
+  variantIds?: string[];
   accountIds: string[];
 }
 

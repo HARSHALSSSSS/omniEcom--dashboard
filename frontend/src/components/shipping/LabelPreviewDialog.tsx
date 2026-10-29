@@ -1,4 +1,5 @@
 import React, { useMemo } from "react";
+import DOMPurify from "dompurify";
 import { AlertCircle, Check, Copy, Download, Loader2, Printer } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -122,7 +123,7 @@ export function LabelPreviewDialog({ shipmentId, onClose }: LabelPreviewDialogPr
     if (isPdf && labelData) {
       const pdfBlob = base64ToBlob(labelData.content, "application/pdf");
       const url = URL.createObjectURL(pdfBlob);
-      const printWindow = window.open(url, "_blank");
+      const printWindow = window.open(url, "_blank", "noopener,noreferrer");
       printWindow?.focus();
       return;
     }
@@ -131,6 +132,8 @@ export function LabelPreviewDialog({ shipmentId, onClose }: LabelPreviewDialogPr
     if (!printableElement) return;
 
     const printFrame = document.createElement("iframe");
+    printFrame.setAttribute("aria-hidden", "true");
+    printFrame.setAttribute("sandbox", "allow-modals allow-same-origin");
     printFrame.style.position = "fixed";
     printFrame.style.right = "0";
     printFrame.style.bottom = "0";
@@ -142,12 +145,14 @@ export function LabelPreviewDialog({ shipmentId, onClose }: LabelPreviewDialogPr
     const doc = printFrame.contentWindow?.document;
     if (!doc) return;
 
-    doc.open();
-    doc.write(`
+    // Sanitize AWB for title tag insertion (alphanumeric and safe punctuation only)
+    const safeAwb = (parsed?.awb ?? "Print").replace(/[^a-zA-Z0-9_\-.\s]/g, "");
+    const rawHtml = `
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Shipping Label - ${parsed?.awb ?? "Print"}</title>
+          <meta charset="utf-8" />
+          <title>Shipping Label - ${safeAwb}</title>
           <style>
             @page {
               size: 4in 6in;
@@ -183,7 +188,20 @@ export function LabelPreviewDialog({ shipmentId, onClose }: LabelPreviewDialogPr
           </div>
         </body>
       </html>
-    `);
+    `;
+
+    // Sanitize full HTML document before writing to the print frame to prevent DOM XSS
+    const cleanHtml = DOMPurify.sanitize(rawHtml, {
+      WHOLE_DOCUMENT: true,
+      ALLOWED_TAGS: [
+        "html", "head", "body", "meta", "title", "style",
+        "div", "span", "p", "strong", "b", "em", "i", "table", "thead", "tbody", "tr", "th", "td", "img", "br", "hr",
+      ],
+      ALLOWED_ATTR: ["charset", "class", "id", "style", "src", "alt", "width", "height"],
+    });
+
+    doc.open();
+    doc.write(cleanHtml);
     doc.close();
 
     setTimeout(() => {

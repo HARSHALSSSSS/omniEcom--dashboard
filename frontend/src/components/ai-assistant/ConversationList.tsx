@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useConversationList, useDeleteConversation, useRenameConversation, useSetConversationStatus } from "@/hooks/useAssistant";
+import { useDebounced } from "@/hooks/useDebounced";
 import { toast } from "@/hooks/useToast";
 import { cn } from "@/utils/cn";
 import { formatRelativeTime } from "@/utils/format";
@@ -86,17 +87,12 @@ function RenameDialog({ target, onClose }: { target: AssistantConversation | nul
 export function ConversationList({ selectedId, onSelect, onNew, onGone, disabled }: ConversationListProps) {
   const [filter, setFilter] = useState<ConversationFilter>("active");
   const [search, setSearch] = useState("");
-  const [q, setQ] = useState("");
+  const q = useDebounced(search.trim(), 300, { minLength: 2 });
   const [renaming, setRenaming] = useState<AssistantConversation | null>(null);
   const [deleting, setDeleting] = useState<AssistantConversation | null>(null);
   const list = useConversationList({ status: filter, q }, true);
   const setStatus = useSetConversationStatus();
   const remove = useDeleteConversation();
-
-  useEffect(() => {
-    const t = setTimeout(() => setQ(search.trim()), 300);
-    return () => clearTimeout(t);
-  }, [search]);
 
   const items = list.data?.pages.flatMap((p) => p.items) ?? [];
   const total = list.data?.pages[0]?.total ?? 0;

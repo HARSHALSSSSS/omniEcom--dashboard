@@ -119,7 +119,7 @@ export function usePickerVariants(q: string, enabled: boolean) {
     initialPageParam: null as string | null,
     getNextPageParam: (last) => (last.hasMore ? last.nextCursor : undefined),
     staleTime: 30_000,
-    enabled,
+    enabled: enabled && (q.trim().length === 0 || q.trim().length >= 2),
   });
 }
 

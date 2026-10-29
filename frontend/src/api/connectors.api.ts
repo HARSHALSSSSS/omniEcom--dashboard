@@ -1,6 +1,6 @@
 import { client, unwrap } from "./client";
 import { ENDPOINTS } from "./endpoints";
-import { isSafeUrl } from "@/utils/security";
+import { isSafeExternalRedirect, TRUSTED_OAUTH_DOMAINS } from "@/utils/security";
 import type {
   ChannelConnection,
   EntitySync,
@@ -163,8 +163,8 @@ function mapDetailToConnection(detail: HubAccountDetail): ChannelConnection {
 }
 
 export const connectorsApi = {
-  getConnections: async (): Promise<ConnectionsListResponse> => {
-    const res = await client.get(ENDPOINTS.HUB_ACCOUNTS);
+  getConnections: async (signal?: AbortSignal): Promise<ConnectionsListResponse> => {
+    const res = await client.get(ENDPOINTS.HUB_ACCOUNTS, { signal });
     const accounts = unwrap<HubAccounts>(res);
     const data = (accounts.items || []).map(mapCardToConnection);
     return {
@@ -178,14 +178,14 @@ export const connectorsApi = {
     };
   },
 
-  getConnection: async (id: string): Promise<ChannelConnection> => {
-    const res = await client.get(ENDPOINTS.HUB_ACCOUNT(id));
+  getConnection: async (id: string, signal?: AbortSignal): Promise<ChannelConnection> => {
+    const res = await client.get(ENDPOINTS.HUB_ACCOUNT(id), { signal });
     const detail = unwrap<HubAccountDetail>(res);
     return mapDetailToConnection(detail);
   },
 
-  getDirectory: async (): Promise<ConnectorDirectoryItem[]> => {
-    const res = await client.get(ENDPOINTS.HUB_DIRECTORY);
+  getDirectory: async (signal?: AbortSignal): Promise<ConnectorDirectoryItem[]> => {
+    const res = await client.get(ENDPOINTS.HUB_DIRECTORY, { signal });
     const dir = unwrap<Directory>(res);
     return (dir.items || []).map((item) => {
       const cleanName = item.name
@@ -313,7 +313,7 @@ export const connectorsApi = {
       };
     }
 
-    if (result.redirect?.authorizationUrl && isSafeUrl(result.redirect.authorizationUrl)) {
+    if (result.redirect?.authorizationUrl && isSafeExternalRedirect(result.redirect.authorizationUrl, TRUSTED_OAUTH_DOMAINS)) {
       window.location.href = result.redirect.authorizationUrl;
     }
 
@@ -338,8 +338,8 @@ export const connectorsApi = {
     await client.post(ENDPOINTS.MARKETPLACE_ACCOUNT_DISCONNECT(connectionId));
   },
 
-  getHealthOverview: async (): Promise<HealthOverviewResponse["data"]> => {
-    const res = await client.get(ENDPOINTS.HUB_HEALTH);
+  getHealthOverview: async (signal?: AbortSignal): Promise<HealthOverviewResponse["data"]> => {
+    const res = await client.get(ENDPOINTS.HUB_HEALTH, { signal });
     const health = unwrap<HubHealth>(res);
 
     const netStatus = health.networkStatus === "not_connected" ? "optimal" : health.networkStatus;
@@ -368,8 +368,8 @@ export const connectorsApi = {
   },
 
   /** the 100 newest sync runs; the screens keep the ones of the last 24 hours */
-  getRecentSyncJobs: async (): Promise<HubSyncJob[]> => {
-    const res = await client.get(`${ENDPOINTS.SYNC_JOBS}?limit=100`);
+  getRecentSyncJobs: async (signal?: AbortSignal): Promise<HubSyncJob[]> => {
+    const res = await client.get(`${ENDPOINTS.SYNC_JOBS}?limit=100`, { signal });
     return unwrap<HubSyncJob[]>(res) ?? [];
   },
 

@@ -12,10 +12,10 @@ interface BulkResult {
 
 /** Catalogue-level listing screens. Reads are new aggregate endpoints; every write goes through the existing listing endpoints. */
 export const listingAuditApi = {
-  getReadiness: async (): Promise<ReadinessAudit> => unwrap(await client.get(`${API_BASE}/listings/audit/readiness`)),
-  getPublishing: async (): Promise<PublishingPreparation> => unwrap(await client.get(`${API_BASE}/listings/audit/publishing`)),
-  getSync: async (id: string): Promise<ListingSync> => unwrap(await client.get(`${ENDPOINTS.LISTING(id)}/sync`)),
-  getChannels: async (id: string): Promise<ListingChannels> => unwrap(await client.get(`${ENDPOINTS.LISTING(id)}/channels`)),
+  getReadiness: async (signal?: AbortSignal): Promise<ReadinessAudit> => unwrap(await client.get(`${API_BASE}/listings/audit/readiness`, signal ? { signal } : undefined)),
+  getPublishing: async (signal?: AbortSignal): Promise<PublishingPreparation> => unwrap(await client.get(`${API_BASE}/listings/audit/publishing`, signal ? { signal } : undefined)),
+  getSync: async (id: string, signal?: AbortSignal): Promise<ListingSync> => unwrap(await client.get(`${ENDPOINTS.LISTING(id)}/sync`, signal ? { signal } : undefined)),
+  getChannels: async (id: string, signal?: AbortSignal): Promise<ListingChannels> => unwrap(await client.get(`${ENDPOINTS.LISTING(id)}/channels`, signal ? { signal } : undefined)),
 
   /** PATCH /listings/{id}: one attribute override on one listing */
   setAttribute: async (id: string, attribute: string, value: string): Promise<void> => {

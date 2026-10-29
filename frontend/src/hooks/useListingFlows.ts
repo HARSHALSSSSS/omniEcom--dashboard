@@ -22,8 +22,7 @@ export const useFlowDetails = (listingId: string | null) =>
     queryKey: flowKeys.details(listingId ?? ""),
     queryFn: () => listingFlowsApi.details(listingId as string),
     enabled: !!listingId,
-    staleTime: 0,
-    refetchOnMount: "always",
+    staleTime: 15_000,
     retry: false,
   });
 
@@ -68,8 +67,7 @@ export const useListingChannelsView = (listingId: string | null) =>
     queryKey: flowKeys.channels(listingId ?? ""),
     queryFn: () => listingFlowsApi.channels(listingId as string),
     enabled: !!listingId,
-    staleTime: 0,
-    refetchOnMount: "always",
+    staleTime: 30_000,
   });
 
 export const useUnlistedContext = (variantId: string | null, accountId: string | null) =>
@@ -77,8 +75,7 @@ export const useUnlistedContext = (variantId: string | null, accountId: string |
     queryKey: flowKeys.unlisted(variantId ?? "", accountId ?? ""),
     queryFn: () => listingFlowsApi.unlistedContext(variantId as string, accountId as string),
     enabled: !!variantId && !!accountId,
-    staleTime: 0,
-    refetchOnMount: "always",
+    staleTime: 15_000,
   });
 
 export const useListingSelection = (ids: string[]) =>
@@ -86,8 +83,7 @@ export const useListingSelection = (ids: string[]) =>
     queryKey: flowKeys.selection(ids),
     queryFn: () => listingFlowsApi.selection(ids),
     enabled: ids.length > 0,
-    staleTime: 0,
-    refetchOnMount: "always",
+    staleTime: 15_000,
   });
 
 /** every write here changes the listing on screen, the lists behind it and the sidebar badges */

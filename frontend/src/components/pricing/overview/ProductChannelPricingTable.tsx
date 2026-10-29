@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/utils/cn";
 import { PricingPagination } from "@/components/pricing/PricingPagination";
 import { usePriceTable } from "@/hooks/usePricing";
+import { useDebounced } from "@/hooks/useDebounced";
 import { formatDate, formatINR, formatNumber } from "@/utils/format";
 import { errorMessage } from "@/api/errors";
 import type { ChannelMargin, MarginOverview, PriceTableQuery, PriceTableRow, PriceTableSort, PriceTableState } from "@/types/pricing";
@@ -29,17 +30,13 @@ const NEXT_SORT: Record<PriceTableSort, PriceTableSort> = { product: "margin_asc
 export function ProductChannelPricingTable({ channels, totals, onSelectPriceItem, onQueryChange }: ProductChannelPricingTableProps) {
   const [filterPill, setFilterPill] = useState<FilterPill>("all");
   const [searchInput, setSearchInput] = useState("");
-  const [search, setSearch] = useState("");
+  const search = useDebounced(searchInput.trim(), 300, { minLength: 2 });
   const [channelFilter, setChannelFilter] = useState("");
   const [sort, setSort] = useState<PriceTableSort>("product");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
-  // typing is debounced; a new search, filter or sort goes back to page 1
-  useEffect(() => {
-    const t = setTimeout(() => setSearch(searchInput.trim()), 300);
-    return () => clearTimeout(t);
-  }, [searchInput]);
+  // a new search, filter or sort goes back to page 1
   useEffect(() => {
     setPage(1);
   }, [filterPill, channelFilter, search, sort]);

@@ -42,7 +42,7 @@ export const useCategoryTree = () =>
 export const useBrands = () =>
   useQuery({ queryKey: CREATION_KEYS.brands, queryFn: ({ signal }) => productCreationApi.brands(signal), staleTime: 5 * 60 * 1000 });
 export const useDrafts = (enabled: boolean) =>
-  useQuery({ queryKey: CREATION_KEYS.drafts, queryFn: () => productCreationApi.listDrafts(5), enabled, staleTime: 0, refetchOnMount: "always" });
+  useQuery({ queryKey: CREATION_KEYS.drafts, queryFn: () => productCreationApi.listDrafts(5), enabled, staleTime: 15_000 });
 export const useStandardCategories = (q: string) =>
   useQuery({
     queryKey: CREATION_KEYS.standardCategories(q),

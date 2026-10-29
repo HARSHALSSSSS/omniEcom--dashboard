@@ -47,13 +47,15 @@ export function useAssistantInsights(enabled: boolean) {
 export function useConversationList(query: Omit<ConversationsQuery, "page" | "pageSize">, enabled: boolean) {
   const b = useBusinessId();
   const q = { ...query, pageSize: CONVERSATIONS_PAGE_SIZE };
+  const queryText = query.q?.trim() ?? "";
+  const isQueryValid = queryText.length === 0 || queryText.length >= 2;
   return useInfiniteQuery({
     queryKey: assistantKeys.conversations(b, q),
     queryFn: ({ pageParam, signal }) => assistantApi.conversations({ ...q, page: pageParam }, signal),
     initialPageParam: 1,
     getNextPageParam: (last) => (last.page < last.pages ? last.page + 1 : undefined),
     staleTime: 10_000,
-    enabled,
+    enabled: enabled && isQueryValid,
   });
 }
 

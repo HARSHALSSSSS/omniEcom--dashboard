@@ -39,7 +39,11 @@ export const humanize = (value: string): string => value.charAt(0).toUpperCase()
 /** minor units from what a person typed in major units ("1,234.50" to 123450); null when it is not an amount */
 export function toMinor(text: string): number | null {
   const cleaned = text.replace(/,/g, "").trim();
-  if (!/^\d+(\.\d{1,2})?$/.test(cleaned)) return null;
+  const parts = cleaned.split(".");
+  if (parts.length > 2 || parts.length === 0) return null;
+  const [whole, frac] = parts;
+  if (!whole || !/^\d+$/.test(whole)) return null;
+  if (frac !== undefined && !/^\d{1,2}$/.test(frac)) return null;
   return Math.round(Number(cleaned) * 100);
 }
 

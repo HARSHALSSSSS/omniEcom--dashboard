@@ -38,7 +38,10 @@ export function RegionalTab({ s, v, ctl }: TabProps) {
   const lockedCurrency = s.regional.locked.includes("currency");
   const lockedZone = s.regional.locked.includes("timezone");
   const zones = useMemo(() => timeZones(v.timezone), [v.timezone]);
-  const currencies = COMMON_CURRENCIES.includes(v.currency) ? COMMON_CURRENCIES : [v.currency, ...COMMON_CURRENCIES];
+  const currencies = useMemo(
+    () => (COMMON_CURRENCIES.includes(v.currency) ? COMMON_CURRENCIES : [v.currency, ...COMMON_CURRENCIES]),
+    [v.currency],
+  );
   const err = ctl.fieldErrors;
 
   const navigate = useNavigate();

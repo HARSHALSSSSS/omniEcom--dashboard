@@ -40,7 +40,7 @@ export function AuthThumbnail({ url, alt, initials, compact = false }: AuthThumb
   }, [blob]);
 
   if (src) {
-    return <img src={src} alt={alt} className={`${box} rounded-[8px] object-cover bg-[#F5F5F5] shrink-0 border border-[#EAEAEA]`} />;
+    return <img src={src} alt={alt} loading="lazy" className={`${box} rounded-[8px] object-cover bg-[#F5F5F5] shrink-0 border border-[#EAEAEA]`} />;
   }
   const loading = Boolean(url) && !isError;
   return (

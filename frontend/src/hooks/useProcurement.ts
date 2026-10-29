@@ -75,7 +75,7 @@ export function useVariantSearch(supplierId: string | undefined, q: string, supp
     queryFn: ({ signal }) => procurementApi.searchVariants({ supplierId, q: q || undefined, suppliedOnly }, signal),
     staleTime: 15_000,
     placeholderData: keepPreviousData,
-    enabled,
+    enabled: enabled && (q.trim().length === 0 || q.trim().length >= 2),
   });
 }
 

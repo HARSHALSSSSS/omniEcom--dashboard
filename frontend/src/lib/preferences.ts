@@ -1,4 +1,5 @@
 import { useWorkspaceStore } from "@/store/workspace.store";
+import { isSafeInternalRedirect } from "@/utils/security";
 
 /** the workspace defaults of Settings > General, read where a screen needs its starting point (the URL always wins over them) */
 const prefs = () => useWorkspaceStore.getState().shell?.business.preferences;
@@ -12,7 +13,7 @@ export function preferredPageSize(allowed: readonly number[], fallback: number):
 /** the screen to open after signing in (undefined = the dashboard) */
 export function preferredLandingRoute(): string | undefined {
   const route = prefs()?.defaultRoute;
-  return route && route.startsWith("/") ? route : undefined;
+  return route && isSafeInternalRedirect(route) ? route : undefined;
 }
 
 export type PreferredPeriod = "7d" | "30d" | "qtd" | "fytd";

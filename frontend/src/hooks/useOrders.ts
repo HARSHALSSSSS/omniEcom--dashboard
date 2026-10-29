@@ -66,7 +66,7 @@ export function useOrdersActivity(limit = 5) {
 
 export function useOrderViews() {
   const businessId = useBusinessId();
-  return useQuery({ queryKey: ORDER_KEYS.views(businessId), queryFn: ordersApi.views, staleTime: 60_000 });
+  return useQuery({ queryKey: ORDER_KEYS.views(businessId), queryFn: ({ signal }) => ordersApi.views(signal), staleTime: 60_000 });
 }
 
 export function useCreateOrderView() {
@@ -104,16 +104,16 @@ export function useNextActions(id: string | null) {
 /** connected accounts and the marketplaces' names (tabs, chips, sync) */
 export function useOrderChannels() {
   const businessId = useBusinessId();
-  return useQuery({ queryKey: ORDER_KEYS.channels(businessId), queryFn: ordersApi.channels, staleTime: 5 * 60_000, retry: false });
+  return useQuery({ queryKey: ORDER_KEYS.channels(businessId), queryFn: ({ signal }) => ordersApi.channels(signal), staleTime: 5 * 60_000, retry: false });
 }
 
 export function useWarehouseOptions(enabled: boolean) {
   const businessId = useBusinessId();
-  return useQuery({ queryKey: ORDER_KEYS.warehouses(businessId), queryFn: ordersApi.warehouses, enabled, staleTime: 5 * 60_000 });
+  return useQuery({ queryKey: ORDER_KEYS.warehouses(businessId), queryFn: ({ signal }) => ordersApi.warehouses(signal), enabled, staleTime: 5 * 60_000 });
 }
 
 export function useCancellationReasons(enabled: boolean) {
-  return useQuery({ queryKey: ORDER_KEYS.reasons, queryFn: ordersApi.cancellationReasons, enabled, staleTime: 10 * 60_000 });
+  return useQuery({ queryKey: ORDER_KEYS.reasons, queryFn: ({ signal }) => ordersApi.cancellationReasons(signal), enabled, staleTime: 10 * 60_000 });
 }
 
 /** every write changes the counts on the screen and the Orders badge in the sidebar */
@@ -153,8 +153,8 @@ export function useExportOrders() {
 }
 
 const TERMINAL: ReadonlyArray<SyncJob["status"]> = ["succeeded", "partially_failed", "failed", "dead_lettered", "cancelled"];
-export const SYNC_POLL_MS = 1500;
-const SYNC_MAX_POLLS = 60;
+export const SYNC_POLL_MS = 2000;
+const SYNC_MAX_POLLS = 45;
 
 /** Waits `ms` milliseconds, but resolves early if `signal` is aborted. */
 const wait = (ms: number, signal?: AbortSignal) =>

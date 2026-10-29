@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useGuardedMutation } from "@/hooks/useSubmitGuard";
 import { returnsApi } from "@/api/returns.api";
@@ -30,9 +31,9 @@ export const RETURN_KEYS = {
 const useBusinessId = () => useWorkspaceStore((s) => s.shell?.business.id);
 
 /** KPI tiles and stage counts for the last `days` days */
-export function useReturnsSummary(days: number) {
+export function useReturnsSummary(days: number, enabled = true) {
   const businessId = useBusinessId();
-  return useQuery({ queryKey: RETURN_KEYS.summary(businessId, days), queryFn: ({ signal }) => returnsApi.summary(days, signal), staleTime: 30_000, placeholderData: keepPreviousData });
+  return useQuery({ queryKey: RETURN_KEYS.summary(businessId, days), queryFn: ({ signal }) => returnsApi.summary(days, signal), staleTime: 30_000, placeholderData: keepPreviousData, enabled });
 }
 
 /** whether a return can be created from here (a connected store that allows it) */
@@ -163,9 +164,14 @@ export function useAssignInspection() {
 }
 
 /** how often the running sync jobs are looked at, and how long we wait before leaving them to finish in the background */
-export const SYNC_POLL_MS = 1000;
-const SYNC_MAX_POLLS = 180;
-const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+export const SYNC_POLL_MS = 2000;
+const SYNC_MAX_POLLS = 90;
+const wait = (ms: number, signal?: AbortSignal) =>
+  new Promise<void>((resolve) => {
+    if (signal?.aborted) { resolve(); return; }
+    const t = setTimeout(resolve, ms);
+    signal?.addEventListener("abort", () => { clearTimeout(t); resolve(); }, { once: true });
+  });
 
 export interface SyncReturnsInput {
   /** called with the report after the jobs were queued and after every poll */
@@ -180,29 +186,42 @@ export interface SyncReturnsInput {
  */
 export function useSyncReturns() {
   const afterWrite = useAfterWrite();
+  const controllerRef = useRef<AbortController | null>(null);
+
   return useGuardedMutation({
     mutationFn: async ({ onUpdate, since }: SyncReturnsInput = {}): Promise<SyncReport> => {
-      const startedAt = Date.now();
-      const started = await returnsApi.sync(since ? { since } : {});
-      const accounts: SyncAccountReport[] = started.jobs.map((j) => ({ accountId: j.accountId, accountName: j.accountName, marketplace: j.marketplace, alreadyQueued: j.alreadyQueued, job: null }));
-      const report = (finished: boolean, stillRunning = false): SyncReport => ({ startedAt, accounts: accounts.map((a) => ({ ...a })), skipped: started.skipped, finished, stillRunning, nothingToSync: started.jobs.length === 0 });
-      onUpdate?.(report(started.jobs.length === 0));
-      if (started.jobs.length === 0) return report(true);
-      let polls = 0;
-      for (;;) {
-        await Promise.all(
-          started.jobs.map(async (j, i) => {
-            const account = accounts[i];
-            if (!account || (account.job && SYNC_JOB_DONE.includes(account.job.status))) return;
-            account.job = await returnsApi.syncJob(j.jobId);
-          }),
-        );
-        const finished = accounts.every((a) => a.job !== null && SYNC_JOB_DONE.includes(a.job.status));
-        const out = report(finished, !finished && polls + 1 >= SYNC_MAX_POLLS);
-        onUpdate?.(out);
-        if (finished || out.stillRunning) return out;
-        polls++;
-        await wait(SYNC_POLL_MS);
+      controllerRef.current?.abort();
+      const controller = new AbortController();
+      controllerRef.current = controller;
+      const { signal } = controller;
+
+      try {
+        const startedAt = Date.now();
+        const started = await returnsApi.sync(since ? { since } : {});
+        const accounts: SyncAccountReport[] = started.jobs.map((j) => ({ accountId: j.accountId, accountName: j.accountName, marketplace: j.marketplace, alreadyQueued: j.alreadyQueued, job: null }));
+        const report = (finished: boolean, stillRunning = false): SyncReport => ({ startedAt, accounts: accounts.map((a) => ({ ...a })), skipped: started.skipped, finished, stillRunning, nothingToSync: started.jobs.length === 0 });
+        onUpdate?.(report(started.jobs.length === 0));
+        if (started.jobs.length === 0) return report(true);
+        let polls = 0;
+        for (;;) {
+          if (signal.aborted) return report(false, true);
+          await Promise.all(
+            started.jobs.map(async (j, i) => {
+              const account = accounts[i];
+              if (!account || (account.job && SYNC_JOB_DONE.includes(account.job.status))) return;
+              account.job = await returnsApi.syncJob(j.jobId);
+            }),
+          );
+          if (signal.aborted) return report(false, true);
+          const finished = accounts.every((a) => a.job !== null && SYNC_JOB_DONE.includes(a.job.status));
+          const out = report(finished, !finished && polls + 1 >= SYNC_MAX_POLLS);
+          onUpdate?.(out);
+          if (finished || out.stillRunning) return out;
+          polls++;
+          await wait(SYNC_POLL_MS, signal);
+        }
+      } finally {
+        if (controllerRef.current === controller) controllerRef.current = null;
       }
     },
     onSettled: afterWrite,

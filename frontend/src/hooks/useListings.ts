@@ -101,6 +101,7 @@ export function useJobStatus(jobId: string | null) {
     queryFn: () => listingsApi.syncJob(jobId as string),
     enabled: Boolean(jobId),
     refetchInterval: (q) => (q.state.data && isTerminalJob(q.state.data.status) ? false : JOB_POLL_MS),
+    refetchIntervalInBackground: false,
     retry: false,
   });
 }

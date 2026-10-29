@@ -12,6 +12,7 @@ import { useStudio } from "@/hooks/useListingStudio";
 import type { CompletenessRow } from "@/types/listingFlows";
 import type { ListingStudio } from "@/types/listingStudio";
 import { formatINR } from "@/utils/format";
+import { isSafeUrl } from "@/utils/security";
 
 export interface ListingDetailDrawerProps {
   listingId: string | null;
@@ -192,7 +193,7 @@ function DrawerBody({ studio, frame, onClose }: { studio: ListingStudio; frame: 
         <div className="space-y-2.5 rounded-xl border border-neutral-100 bg-[#F8F9FA] p-3.5">
           <span className="block text-[10px] font-semibold uppercase leading-none tracking-wider text-neutral-400">LISTING PREVIEW</span>
           <div className="flex items-center gap-3">
-            {image ? (
+            {image && isSafeUrl(image) ? (
               <img src={image} alt={listing.productTitle} className="h-14 w-14 shrink-0 rounded-lg border border-neutral-200/60 bg-neutral-200 object-cover" />
             ) : (
               <div aria-hidden className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border border-neutral-200/60 bg-neutral-200 text-xs font-semibold text-neutral-500">

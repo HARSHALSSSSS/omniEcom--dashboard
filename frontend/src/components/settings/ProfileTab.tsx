@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { useGuardedMutation } from "@/hooks/useSubmitGuard";
 import { toast } from "@/hooks/useToast";
 import { errorMessage } from "@/api/errors";
-import { hubApi } from "@/api/hub.api";
+import { useHubAccounts } from "@/hooks/useHub";
 import { settingsApi } from "@/api/settings.api";
 import { refreshShell } from "@/lib/session";
 import { ROUTES } from "@/constants/routes";
@@ -45,7 +45,7 @@ export function ProfileTab({ s }: { s?: SettingsOverview | null } = {}) {
 
   const profile = useQuery({ queryKey: PROFILE_KEY, queryFn: ({ signal }) => settingsApi.profile(signal), staleTime: 30_000 });
   const sessions = useQuery({ queryKey: SESSIONS_KEY, queryFn: () => settingsApi.sessions(), staleTime: 30_000, retry: false });
-  const accounts = useQuery({ queryKey: ["hub", "accounts", "profile-tab"], queryFn: () => hubApi.accounts(), staleTime: 60_000, retry: false });
+  const accounts = useHubAccounts();
 
   const me = profile.data?.user;
   const fullNameNow = me?.fullName ?? storeUser?.fullName ?? shell?.user?.name ?? "";

@@ -136,7 +136,7 @@ export const listingsApi = {
     return page.items.map((p) => ({ id: p.id, title: p.title, sku: p.productCode, variantCount: p.variantCount, thumbnailUrl: p.summary.thumbnailUrl }));
   },
 
-  syncJob: async (jobId: string) => unwrap<SyncJobView>(await client.get(ENDPOINTS.SYNC_JOB(jobId))),
+  syncJob: async (jobId: string, signal?: AbortSignal) => unwrap<SyncJobView>(await client.get(ENDPOINTS.SYNC_JOB(jobId), { signal })),
 
   /** connected accounts and the marketplaces' own names (filters, create-listing targets) */
   channels: async (signal?: AbortSignal): Promise<ListingChannels> => {

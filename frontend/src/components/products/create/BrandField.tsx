@@ -39,8 +39,11 @@ export function BrandField({ value, onChange, brandRecord, disabled, error, maxL
   const known = !!match;
   const needsConfirm = !!value && !!record && !record.confirmed;
 
+  const acquire = useSubmitLock();
   const confirm = async () => {
     if (!record) return;
+    const release = acquire();
+    if (!release) return;
     setBusy(true);
     setProblem(null);
     try {
@@ -51,11 +54,11 @@ export function BrandField({ value, onChange, brandRecord, disabled, error, maxL
     } catch (e) {
       setProblem(errorMessage(e, "Could not confirm the brand."));
     } finally {
+      release();
       setBusy(false);
     }
   };
 
-  const acquire = useSubmitLock();
   const create = async () => {
     const name = draft.trim().replace(/\s+/g, " ");
     if (!name) {
