@@ -3,7 +3,6 @@ import { Download, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { downloadRunFile } from "./downloadRun";
 import { CATEGORY_LABEL, FORMAT_LABEL, FORMAT_SHORT, paramSummary } from "./reportsFormat";
-import { FIELD_SELECT } from "@/components/procurement/procurementUi";
 import { formatDateTime } from "@/utils/format";
 import type { Catalog, CatalogEntry, FeaturedReport, ReportFormat } from "@/types/reports";
 

@@ -5,7 +5,7 @@ import { saveBlob } from "@/components/products/list/saveBlob";
 import { errorMessage } from "@/api/errors";
 import { AnalyticsSection } from "@/components/returns/AnalyticsSection";
 import { AttentionSection } from "@/components/returns/AttentionSection";
-import { BTN_DARK, BTN_LIGHT, Notice, SELECT_MD } from "@/components/returns/design";
+import { Notice } from "@/components/returns/design";
 import { InspectionView } from "@/components/returns/InspectionView";
 import { GlanceTiles, LifecycleRail, SignalRail } from "@/components/returns/LifecycleRail";
 import { LedgerSection } from "@/components/returns/LedgerSection";

@@ -29,12 +29,18 @@ importers:
       '@oms/connector-flipkart':
         specifier: workspace:*
         version: link:integrations/marketplace/flipkart
+      '@oms/connector-meesho':
+        specifier: workspace:*
+        version: link:integrations/marketplace/meesho
       '@oms/connector-mock':
         specifier: workspace:*
         version: link:integrations/marketplace/mock
       '@oms/connector-myntra':
         specifier: workspace:*
         version: link:integrations/marketplace/myntra
+      '@oms/connector-shopify':
+        specifier: workspace:*
+        version: link:integrations/marketplace/shopify
       '@oms/connector-snapdeal':
         specifier: workspace:*
         version: link:integrations/marketplace/snapdeal

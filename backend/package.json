@@ -69,6 +69,8 @@
     "@oms/connector-myntra": "workspace:*",
     "@oms/connector-snapdeal": "workspace:*",
     "@oms/connector-mock": "workspace:*",
+    "@oms/connector-meesho": "workspace:*",
+    "@oms/connector-shopify": "workspace:*",
     "@oms/mod-sync": "workspace:*",
     "@oms/mod-warehouses": "workspace:*",
     "@oms/mod-inventory": "workspace:*",
