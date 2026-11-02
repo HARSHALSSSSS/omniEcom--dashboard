@@ -11,6 +11,6 @@
   },
   "dependencies": {
     "zod": "^4.6.6",
-    "dotenv": "^18.0.5"
+    "dotenv": "^18.0.9"
   }
 }
