@@ -3,6 +3,19 @@ import ReactDOM from "react-dom/client";
 import App from "./app/App";
 import "./styles/globals.css";
 
+// Auto-recover if a new production deployment changed chunk hashes
+if (typeof window !== "undefined") {
+  window.addEventListener("vite:preloadError", () => {
+    const retryKey = "vite_preload_retry";
+    const lastRetry = sessionStorage.getItem(retryKey);
+    const now = Date.now();
+    if (!lastRetry || now - Number(lastRetry) > 10000) {
+      sessionStorage.setItem(retryKey, String(now));
+      window.location.reload();
+    }
+  });
+}
+
 async function prepare() {
   if (import.meta.env.VITE_USE_MOCKS === "true") {
     const { worker } = await import("./mocks/browser");

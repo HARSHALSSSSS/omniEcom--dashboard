@@ -23,6 +23,20 @@ export class ErrorBoundary extends Component<Props, State> {
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Uncaught error in component tree:", error, errorInfo);
+    const msg = error?.message ?? "";
+    if (
+      msg.includes("error loading dynamically imported module") ||
+      msg.includes("Failed to fetch dynamically imported module") ||
+      msg.includes("Importing a module script failed")
+    ) {
+      const key = "boundary_chunk_retry";
+      const lastRetry = sessionStorage.getItem(key);
+      const now = Date.now();
+      if (!lastRetry || now - Number(lastRetry) > 10000) {
+        sessionStorage.setItem(key, String(now));
+        window.location.reload();
+      }
+    }
   }
 
   private handleReset = () => {
