@@ -10,7 +10,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "fastify": "^5.12.5",
+    "fastify": "^5.12.7",
     "@oms/shared": "workspace:*",
     "@oms/database": "workspace:*",
     "@oms/config": "workspace:*",
