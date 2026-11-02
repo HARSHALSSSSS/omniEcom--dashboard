@@ -79,9 +79,9 @@ export function useVariantSearch(supplierId: string | undefined, q: string, supp
   });
 }
 
-export function useProcurementWarehouses() {
+export function useProcurementWarehouses(enabled = true) {
   const b = useBusinessId();
-  return useQuery({ queryKey: procurementKeys.warehouses(b), queryFn: ({ signal }) => procurementApi.warehouses(signal), staleTime: 5 * 60_000, retry: false });
+  return useQuery({ queryKey: procurementKeys.warehouses(b), queryFn: ({ signal }) => procurementApi.warehouses(signal), staleTime: 5 * 60_000, retry: false, enabled });
 }
 
 /** a purchase order or supplier changed: every procurement list, tile and open drawer refreshes */

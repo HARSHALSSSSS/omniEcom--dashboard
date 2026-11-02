@@ -7,6 +7,7 @@ import { useWorkspaceStore } from "@/store/workspace.store";
 import { ROUTES } from "@/constants/routes";
 import { cn } from "@/utils/cn";
 import { signOut } from "@/lib/session";
+import { prefetchRoute } from "@/app/routePrefetch";
 
 export const Sidebar: React.FC = () => {
   const navigate = useNavigate();
@@ -89,6 +90,7 @@ export const Sidebar: React.FC = () => {
                   <li key={item.href} className="shrink-0">
                     <NavLink
                       to={item.href}
+                      onMouseEnter={() => prefetchRoute(item.href)}
                       title={sidebarCollapsed ? item.label : undefined}
                       className={({ isActive }) =>
                         cn(
@@ -154,6 +156,7 @@ export const Sidebar: React.FC = () => {
               <li key={item.href} className="shrink-0">
                 <NavLink
                   to={item.href}
+                  onMouseEnter={() => prefetchRoute(item.href)}
                   title={sidebarCollapsed ? item.label : undefined}
                   className={({ isActive }) =>
                     cn(

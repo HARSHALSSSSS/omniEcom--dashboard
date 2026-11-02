@@ -47,9 +47,9 @@ export default function ProcurementPage() {
   const supplierQuery = supplierQueryOf(url);
   const orders = usePurchaseOrders(poQuery, tab === "orders" || tab === "overview");
   const suppliers = useSuppliers(supplierQuery, tab === "suppliers" || tab === "overview");
-  const supplierChoices = useActiveSuppliers(tab === "orders" || tab === "overview");
+  const supplierChoices = useActiveSuppliers(tab === "orders");
   const suggestions = useReorderSuggestions(tab === "overview" || tab === "reorder");
-  const warehouses = useProcurementWarehouses();
+  const warehouses = useProcurementWarehouses(tab === "orders");
 
   const [poForm, setPoForm] = useState<PoFormTarget | null>(null);
   const [supplierForm, setSupplierForm] = useState<SupplierFormTarget | null>(null);
