@@ -1,0 +1,43 @@
+{
+  "name": "@oms/all-in-one",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "tsup",
+    "start": "node dist/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.3.0",
+    "@fastify/helmet": "^13.1.1",
+    "@fastify/rate-limit": "^11.2.0",
+    "@fastify/sensible": "^6.0.6",
+    "@fastify/swagger": "^9.9.1",
+    "@fastify/swagger-ui": "^6.1.1",
+    "@oms/auth": "workspace:*",
+    "@oms/config": "workspace:*",
+    "@oms/connectors": "workspace:*",
+    "@oms/contracts": "workspace:*",
+    "@oms/database": "workspace:*",
+    "@oms/logging": "workspace:*",
+    "@oms/marketplace-core": "workspace:*",
+    "@oms/messaging": "workspace:*",
+    "@oms/module-kit": "workspace:*",
+    "@oms/modules-registry": "workspace:*",
+    "@oms/observability": "workspace:*",
+    "@oms/runtime": "workspace:*",
+    "@oms/shared": "workspace:*",
+    "@oms/storage": "workspace:*",
+    "drizzle-orm": "^0.45.3",
+    "fastify": "^5.12.5",
+    "fastify-plugin": "^6.0.0",
+    "fastify-type-provider-zod": "^7.0.0",
+    "ioredis": "^6.0.0",
+    "zod": "^4.6.6"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.1"
+  }
+}
