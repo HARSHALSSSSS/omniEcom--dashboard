@@ -51,7 +51,7 @@ function Tile({ label, value, delta, note }: TileProps) {
   return (
     <div className="space-y-1 rounded-xl border border-border bg-card p-4">
       <span className="text-xs text-muted-foreground">{label}</span>
-      <div className="font-mono text-xl sm:text-2xl font-extrabold text-foreground">{value}</div>
+      <div className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">{value}</div>
       <DeltaLine delta={delta} />
       <p className="text-[11px] text-muted-foreground">{delta.note && delta.tone !== "none" ? `${delta.note} · ${note}` : note}</p>
     </div>

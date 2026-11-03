@@ -50,6 +50,7 @@ export const ROUTES = {
 
   // Settings
   SETTINGS: "/settings",
+  SETTINGS_PROFILE: "/settings/profile",
 
   // Errors & Fallbacks
   NOT_FOUND: "/404",

@@ -8,33 +8,17 @@ interface RevenueWaterfallSectionProps {
 }
 
 /**
- * Where the revenue goes, step by step from the P&L bridge: gross revenue, then every deduction hanging from where the last one ended, then the
- * contribution. A step nobody knows yet is drawn as a dashed placeholder with a dash, never as zero. (The earlier "reported contribution" bar is not
- * shown: no source records a reported figure to compare the calculation with.)
+ * Where the revenue goes: step by step breakdown of gross revenue and deductions, with each bar starting from the bottom baseline.
+ * A step nobody knows yet is drawn as a dashed placeholder with a dash, never as zero.
  */
 export const RevenueWaterfallSection: React.FC<RevenueWaterfallSectionProps> = ({ data }) => {
   const steps = data?.steps ?? [];
   const top = Math.max(data?.grossRevenueMinor ?? 0, 1);
-  let running = 0;
   const bars = steps.map((s) => {
     const amount = s.amountMinor;
-    let from = 0;
-    let to = 0;
-    if (amount !== null) {
-      if (s.type === "positive") {
-        from = 0;
-        to = amount;
-        running = amount;
-      } else if (s.type === "negative") {
-        from = running + amount;
-        to = running;
-        running += amount;
-      } else {
-        from = 0;
-        to = Math.max(amount, 0);
-      }
-    }
-    return { s, bottom: Math.max(0, (from / top) * 100), height: Math.max(amount === null ? 0 : 1.5, ((to - from) / top) * 100) };
+    const absVal = amount !== null ? Math.abs(amount) : 0;
+    const height = amount === null ? 0 : Math.max(1.5, (absVal / top) * 100);
+    return { s, height };
   });
 
   return (
@@ -48,7 +32,7 @@ export const RevenueWaterfallSection: React.FC<RevenueWaterfallSectionProps> = (
       </div>
 
       <div className="flex h-56 items-end gap-2 sm:gap-3 overflow-x-auto border-b border-border pb-1 [-webkit-overflow-scrolling:touch]">
-        {bars.map(({ s, bottom, height }) => (
+        {bars.map(({ s, height }) => (
           <div key={s.key} className="flex min-w-[76px] sm:min-w-[84px] flex-1 flex-col items-center gap-1 shrink-0" title={s.tooltip}>
             <span className="font-mono text-[11px] font-semibold text-foreground">{s.amountMinor === null ? DASH : s.type === "negative" ? `-${money(Math.abs(s.amountMinor))}` : money(s.amountMinor)}</span>
             <div className="relative h-40 w-full">
@@ -56,8 +40,8 @@ export const RevenueWaterfallSection: React.FC<RevenueWaterfallSectionProps> = (
                 <div className="absolute inset-x-3 bottom-0 h-3 rounded border border-dashed border-muted-foreground/50" />
               ) : (
                 <div
-                  className={`absolute inset-x-3 rounded-t ${s.type === "positive" ? "bg-foreground" : s.type === "negative" ? "bg-rose-400" : "bg-emerald-600"} ${s.basis === "estimated" ? "opacity-70" : ""}`}
-                  style={{ bottom: `${bottom}%`, height: `${height}%` }}
+                  className={`absolute inset-x-3 bottom-0 rounded-t ${s.type === "positive" ? "bg-foreground" : s.type === "negative" ? "bg-rose-400" : "bg-emerald-600"} ${s.basis === "estimated" ? "opacity-70" : ""}`}
+                  style={{ height: `${height}%` }}
                 />
               )}
             </div>

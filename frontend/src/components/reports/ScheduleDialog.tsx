@@ -89,7 +89,7 @@ export function ScheduleDialog({ target, catalog, timezone, onClose, onSaved }: 
   return (
     <>
       <Dialog open={target !== null} onOpenChange={(o) => !o && requestClose()}>
-        <DialogContent className="max-h-[92vh] max-w-xl overflow-y-auto" onInteractOutside={(e) => dirty && e.preventDefault()}>
+        <DialogContent className="max-h-[92vh] max-w-xl overflow-y-auto font-poppins" onInteractOutside={(e) => dirty && e.preventDefault()}>
           {target && (
             <ScheduleForm
               key={target.kind === "edit" ? target.schedule.id : "new"}

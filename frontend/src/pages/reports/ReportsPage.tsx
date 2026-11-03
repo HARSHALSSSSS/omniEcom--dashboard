@@ -154,7 +154,7 @@ export default function ReportsPage() {
   const visibleTabs: ReportsTab[] = tab === "history" ? ["overview", "reports", "history", "schedules"] : ["overview", "reports", "schedules"];
 
   return (
-    <div className="w-full space-y-6 pb-16">
+    <div className="w-full space-y-6 pb-16 font-poppins">
       <PageHeader
         eyebrow="Workspace / Reports"
         title="Reports"

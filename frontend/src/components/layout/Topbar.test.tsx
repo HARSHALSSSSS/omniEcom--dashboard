@@ -64,4 +64,10 @@ describe("Topbar breadcrumb on a product", () => {
     renderBar("/products/new");
     expect(overview).not.toHaveBeenCalled();
   });
+
+  it("links the user avatar to the profile settings page", () => {
+    renderBar("/");
+    const profileLink = screen.getByRole("link", { name: "Profile settings" });
+    expect(profileLink).toHaveAttribute("href", "/settings/profile");
+  });
 });

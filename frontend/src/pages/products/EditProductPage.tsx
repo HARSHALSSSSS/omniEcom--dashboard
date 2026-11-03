@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { AlertTriangle, Check } from "lucide-react";
 import { ROUTES } from "@/constants/routes";
 import { errorMessage, isApiError } from "@/api/errors";
@@ -13,6 +13,7 @@ import { ImpactPanel } from "@/components/products/edit/ImpactPanel";
 import { InsightsPanel } from "@/components/products/edit/InsightsPanel";
 import { ProductInformation } from "@/components/products/edit/ProductInformation";
 import { ReadinessPanel } from "@/components/products/edit/ReadinessPanel";
+import { MediaTab } from "@/components/products/detail/MediaTab";
 import { FIELD_LABEL, htmlToPlain, modifiedKeys, toFormValues } from "@/components/products/edit/form";
 import type { AiMode } from "@/types/productEdit";
 
@@ -31,6 +32,20 @@ const BACK_LINK = "inline-flex h-9 items-center rounded-[8px] border border-[#66
 
 export default function EditProductPage() {
   const { id = "" } = useParams<{ id: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const currentTab = tabParam === "media" ? "media" : tabParam === "details" ? "details" : "overview";
+
+  const handleTabChange = (nextTab: string) => {
+    const p = new URLSearchParams(searchParams);
+    if (nextTab === "overview") {
+      p.delete("tab");
+    } else {
+      p.set("tab", nextTab);
+    }
+    setSearchParams(p);
+  };
+
   const { toast } = useToast();
   const { sidebarCollapsed } = useUiStore();
   const ctl = useEditController(id);
@@ -104,6 +119,18 @@ export default function EditProductPage() {
           <Link to={`${ROUTES.PRODUCTS}/${product.id}`} className="hover:text-[#000000] transition-colors cursor-pointer">
             {product.title}
           </Link>
+          {currentTab === "media" && (
+            <>
+              <span aria-hidden="true">/</span>
+              <span className="text-[#000000]">Media</span>
+            </>
+          )}
+          {currentTab === "details" && (
+            <>
+              <span aria-hidden="true">/</span>
+              <span className="text-[#000000]">Details</span>
+            </>
+          )}
         </nav>
 
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-3">
@@ -153,22 +180,32 @@ export default function EditProductPage() {
       )}
 
       <div className="flex flex-col lg:flex-row items-start pt-6 gap-6 w-full flex-1">
-        <EditSidebar editor={editor} />
+        <EditSidebar editor={editor} activeTab={currentTab} onTabChange={handleTabChange} />
 
-        <ProductInformation
-          ctl={ctl}
-          onImproveWithAi={() => (ai ? setAi(null) : openAi("rewrite"))}
-          aiOpen={!!ai}
-          aiPanel={canWrite ? <AiPanel productId={product.id} request={ai} getText={() => htmlToPlain(values.description)} onAccept={ctl.setDescriptionHtml} onClose={() => setAi(null)} /> : null}
-        />
+        <div className={`flex-1 min-w-0 w-full flex flex-col lg:flex-row items-start gap-6 ${currentTab === "media" ? "hidden" : ""}`}>
+          <ProductInformation
+            ctl={ctl}
+            onImproveWithAi={() => (ai ? setAi(null) : openAi("rewrite"))}
+            aiOpen={!!ai}
+            aiPanel={canWrite ? <AiPanel productId={product.id} request={ai} getText={() => htmlToPlain(values.description)} onAccept={ctl.setDescriptionHtml} onClose={() => setAi(null)} /> : null}
+            onManageMedia={() => handleTabChange("media")}
+            activeSection={currentTab === "details" ? "details" : "overview"}
+          />
 
-        <div className="flex flex-col gap-5 w-full lg:w-[248px] border-t lg:border-t-0 lg:border-l border-[#EAEAEA] pt-6 lg:pt-0 pl-0 lg:pl-6 shrink-0">
-          <ImpactPanel productId={product.id} dirty={dirty} impact={ctl.impact} pending={ctl.impactPending} failed={ctl.impactError} lastSave={ctl.lastSave} notice={ctl.notice} />
-          <div className="w-full h-[1px] bg-[#EAEAEA]" />
-          <ReadinessPanel readiness={editor.readiness} />
-          <div className="w-full h-[1px] bg-[#EAEAEA]" />
-          <InsightsPanel productId={product.id} editor={editor} canWrite={canWrite} onReviewSuggestion={() => openAi("benefits")} />
+          <div className="flex flex-col gap-5 w-full lg:w-[248px] border-t lg:border-t-0 lg:border-l border-[#EAEAEA] pt-6 lg:pt-0 pl-0 lg:pl-6 shrink-0">
+            <ImpactPanel productId={product.id} dirty={dirty} impact={ctl.impact} pending={ctl.impactPending} failed={ctl.impactError} lastSave={ctl.lastSave} notice={ctl.notice} />
+            <div className="w-full h-[1px] bg-[#EAEAEA]" />
+            <ReadinessPanel readiness={editor.readiness} />
+            <div className="w-full h-[1px] bg-[#EAEAEA]" />
+            <InsightsPanel productId={product.id} editor={editor} canWrite={canWrite} onReviewSuggestion={() => openAi("benefits")} />
+          </div>
         </div>
+
+        {currentTab === "media" && (
+          <div className="flex-1 min-w-0 w-full">
+            <MediaTab id={product.id} title={product.title} />
+          </div>
+        )}
       </div>
 
       <div

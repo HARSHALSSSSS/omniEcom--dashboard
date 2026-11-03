@@ -266,6 +266,14 @@ function PoForm({ order, presetSupplierId, refetch, onDirty, onCancel, onSaved }
   );
   const currency = order?.currency ?? "INR";
 
+  const isFormValid = Boolean(
+    form.supplierId.trim() &&
+    form.warehouseId.trim() &&
+    form.lines.length > 0 &&
+    rows.every((r) => !r.qtyError && !r.costError) &&
+    shippingMinor !== null
+  );
+
   const validate = (): boolean => {
     const next: Record<string, string> = {};
     if (!form.supplierId) next.supplier = "Choose a supplier";
@@ -429,7 +437,7 @@ function PoForm({ order, presetSupplierId, refetch, onDirty, onCancel, onSaved }
               </span>
             )}
           </Field>
-          <Field id="po-expected" label="Expected delivery" required hint="Optional. Left empty, approval sets it from the supplier lead time." error={expectedError}>
+          <Field id="po-expected" label="Expected delivery" hint="Optional. Left empty, approval sets it from the supplier lead time." error={expectedError}>
             <Input id="po-expected" type="date" value={form.expected} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set("expected", e.target.value)} className="text-xs" />
           </Field>
           <Field id="po-shipping" label="Shipping charges" hint="Added to the total, not taxed" error={errors.shipping || fieldError(serverFields, "shippingMinor")}>
@@ -568,8 +576,9 @@ function PoForm({ order, presetSupplierId, refetch, onDirty, onCancel, onSaved }
             type="submit"
             size="sm"
             loading={busy}
+            disabled={!isFormValid || busy}
             aria-label={order ? "Save changes" : "Create draft"}
-            className="bg-slate-900 px-4 text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900"
+            className="bg-slate-900 px-4 text-white hover:bg-slate-800 disabled:opacity-50 disabled:pointer-events-none dark:bg-slate-100 dark:text-slate-900"
           >
             {order ? "Save changes" : "+ Create Purchase Order"}
           </Button>

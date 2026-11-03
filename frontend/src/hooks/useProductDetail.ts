@@ -79,6 +79,7 @@ function useRefreshProduct(id: string) {
   const queryClient = useQueryClient();
   return () => {
     void queryClient.invalidateQueries({ queryKey: productDetailKeys.product(id) });
+    void queryClient.invalidateQueries({ queryKey: ["product-edit", id] });
     void queryClient.invalidateQueries({ queryKey: ["products"] });
   };
 }

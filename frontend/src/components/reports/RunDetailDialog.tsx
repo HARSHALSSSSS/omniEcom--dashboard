@@ -22,7 +22,7 @@ export function RunDetailDialog({ runId, catalog, onClose }: Props) {
   const run = query.data;
   return (
     <Dialog open={Boolean(runId)} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[92vh] max-w-lg overflow-y-auto">
+      <DialogContent className="max-h-[92vh] max-w-lg overflow-y-auto font-poppins">
         <DialogHeader>
           <DialogTitle>{run?.reportTitle ?? "Report run"}</DialogTitle>
           <DialogDescription>{run ? `Requested ${formatDateTime(run.createdAt)}` : "Loading the run"}</DialogDescription>

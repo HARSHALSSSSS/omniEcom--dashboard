@@ -21,6 +21,7 @@ const LOADERS: Record<string, () => Promise<unknown>> = {
   [ROUTES.AI_ASSISTANT]: () => import("@/pages/ai-assistant/AiAssistantPage"),
   [ROUTES.AUTOMATION]: () => import("@/pages/automation/AutomationPage"),
   [ROUTES.SETTINGS]: () => import("@/pages/settings/SettingsPage"),
+  [ROUTES.SETTINGS_PROFILE]: () => import("@/pages/settings/SettingsPage"),
 };
 
 const prefetched = new Set<string>();

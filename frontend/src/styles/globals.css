@@ -133,6 +133,9 @@
 }
 
 @layer utilities {
+  .font-poppins {
+    font-family: "Poppins", system-ui, sans-serif;
+  }
   .no-scrollbar::-webkit-scrollbar {
     display: none;
   }

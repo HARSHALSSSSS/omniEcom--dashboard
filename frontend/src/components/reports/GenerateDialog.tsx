@@ -26,7 +26,7 @@ interface Props {
 export function GenerateDialog({ target, periods, onClose, onGenerate }: Props) {
   return (
     <Dialog open={target !== null} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[92vh] max-w-xl overflow-y-auto">
+      <DialogContent className="max-h-[92vh] max-w-xl overflow-y-auto font-poppins">
         {target && <GenerateForm key={target.entry.type} target={target} periods={periods} onClose={onClose} onGenerate={onGenerate} />}
       </DialogContent>
     </Dialog>

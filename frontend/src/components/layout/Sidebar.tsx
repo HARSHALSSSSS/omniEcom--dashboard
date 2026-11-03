@@ -1,5 +1,5 @@
 import React from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+import { Link, NavLink, useNavigate } from "react-router-dom";
 import { PanelLeft, LogOut } from "lucide-react";
 import { NAV_GROUPS, NAV_BOTTOM } from "@/constants/navigation";
 import { useUiStore } from "@/store/ui.store";
@@ -179,26 +179,36 @@ export const Sidebar: React.FC = () => {
         {/* User profile / Business Switcher */}
         <div
           className={cn(
-            "flex items-center gap-2 md:gap-2.5 rounded-lg p-1.5 md:p-2 hover:bg-neutral-50 cursor-pointer transition-colors md:pt-2 md:border-t md:border-[#EAEAEA]/60 shrink-0",
+            "flex items-center justify-between rounded-lg p-1.5 md:p-2 hover:bg-neutral-50 transition-colors md:pt-2 md:border-t md:border-[#EAEAEA]/60 shrink-0",
             sidebarCollapsed && "md:justify-center md:p-1",
           )}
         >
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-neutral-200 text-xs font-semibold text-neutral-800">
-            {initial}
-          </div>
-          <div className={cn("flex flex-1 flex-col overflow-hidden text-left", sidebarCollapsed && "md:hidden")}>
-            <span className="text-[12px] font-semibold text-[#0A0A0A] truncate">
-              {displayName}
-            </span>
-            <span className="text-[10px] text-[#666666] truncate">
-              {displayRole}
-            </span>
-          </div>
+          <Link
+            to={ROUTES.SETTINGS_PROFILE}
+            onMouseEnter={() => prefetchRoute(ROUTES.SETTINGS_PROFILE)}
+            title={sidebarCollapsed ? `${displayName || "Profile"} (Settings)` : "Profile settings"}
+            className={cn(
+              "flex flex-1 items-center gap-2 md:gap-2.5 min-w-0 text-left cursor-pointer",
+              sidebarCollapsed && "justify-center",
+            )}
+          >
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-neutral-200 text-xs font-semibold text-neutral-800">
+              {initial}
+            </div>
+            <div className={cn("flex flex-1 flex-col overflow-hidden text-left", sidebarCollapsed && "md:hidden")}>
+              <span className="text-[12px] font-semibold text-[#0A0A0A] truncate">
+                {displayName}
+              </span>
+              <span className="text-[10px] text-[#666666] truncate">
+                {displayRole}
+              </span>
+            </div>
+          </Link>
           <button
             type="button"
             onClick={handleSignOut}
             title="Sign out"
-            className={cn("p-1 text-[#666666] hover:text-red-600 rounded transition-colors", sidebarCollapsed && "md:hidden")}
+            className={cn("p-1 text-[#666666] hover:text-red-600 rounded transition-colors shrink-0", sidebarCollapsed && "md:hidden")}
           >
             <LogOut className="h-3.5 w-3.5" />
           </button>

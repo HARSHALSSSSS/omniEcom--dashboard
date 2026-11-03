@@ -5,6 +5,7 @@ import { useUiStore } from "@/store/ui.store";
 import { useWorkspaceStore } from "@/store/workspace.store";
 import { ROUTES } from "@/constants/routes";
 import { useProductOverview } from "@/hooks/useProductDetail";
+import { prefetchRoute } from "@/app/routePrefetch";
 
 export const Topbar: React.FC = () => {
   const location = useLocation();
@@ -283,11 +284,12 @@ export const Topbar: React.FC = () => {
         {/* AI assistant trigger */}
         <Link
           to={ROUTES.AI_ASSISTANT}
-          className="flex h-9 sm:h-auto items-center gap-[5px] text-[12px] text-[#000000] hover:opacity-80 transition-opacity px-1 sm:px-0"
+          style={{ background: "linear-gradient(98deg, #E9D5FF 0%, #DBEAFE 48%, #93C5FD 100%)" }}
+          className="flex h-7 items-center gap-1.5 text-[12px] font-medium text-[#111111] hover:opacity-90 transition-opacity px-2.5 rounded-full shadow-xs"
           title="AI Assistant"
         >
-          <span className="text-[#666666]">✦</span>
-          <span className="text-[12px] font-normal hidden sm:inline">AI</span>
+          <span className="text-[11px] leading-none text-[#222222]">✦</span>
+          <span className="text-[12px] font-medium">AI</span>
         </Link>
 
         {/* Business switcher */}
@@ -299,9 +301,15 @@ export const Topbar: React.FC = () => {
         </div>
 
         {/* User avatar circle */}
-        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#F5F5F5] text-[12px] font-normal text-[#000000] shrink-0">
+        <Link
+          to={ROUTES.SETTINGS_PROFILE}
+          onMouseEnter={() => prefetchRoute(ROUTES.SETTINGS_PROFILE)}
+          className="flex h-7 w-7 items-center justify-center rounded-full bg-[#F5F5F5] text-[12px] font-normal text-[#000000] shrink-0 hover:bg-neutral-200/80 transition-colors cursor-pointer"
+          title="Profile settings"
+          aria-label="Profile settings"
+        >
           {userInitial}
-        </div>
+        </Link>
       </div>
     </header>
   );

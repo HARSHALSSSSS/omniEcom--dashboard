@@ -1,4 +1,4 @@
-import { useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { ArrowDown, Lock, Sparkles, X } from "lucide-react";
 import { ROUTES } from "@/constants/routes";
@@ -28,11 +28,21 @@ interface Props {
   /** the Improve with AI panel, shown under the description */
   aiPanel?: ReactNode;
   aiOpen?: boolean;
+  onManageMedia?: () => void;
+  activeSection?: "overview" | "details";
 }
 
-export function ProductInformation({ ctl, onImproveWithAi, aiPanel, aiOpen }: Props) {
+export function ProductInformation({ ctl, onImproveWithAi, aiPanel, aiOpen, onManageMedia, activeSection }: Props) {
   const { editor, values, base, modified, fieldErrors, canWrite, categoryName } = ctl;
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(activeSection === "details");
+
+  useEffect(() => {
+    if (activeSection === "details") {
+      setOpen(true);
+      const el = document.getElementById("section-additional-attributes");
+      el?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+    }
+  }, [activeSection]);
   const [tagDraft, setTagDraft] = useState("");
   const brands = useBrands();
   if (!editor || !values || !base) return null;
@@ -148,7 +158,16 @@ export function ProductInformation({ ctl, onImproveWithAi, aiPanel, aiOpen }: Pr
           <p className="text-[11px] font-normal text-[#666666] leading-[145%]">
             {editor.media.total} {editor.media.total === 1 ? "image" : "images"}
           </p>
-          <Link to={`${ROUTES.PRODUCTS}/${product.id}?tab=media`} className="text-[11px] font-normal text-[#000000] hover:underline cursor-pointer text-left pt-1">
+          <Link
+            to={`${ROUTES.PRODUCTS}/${product.id}/edit?tab=media`}
+            onClick={(e) => {
+              if (onManageMedia) {
+                e.preventDefault();
+                onManageMedia();
+              }
+            }}
+            className="text-[11px] font-normal text-[#000000] hover:underline cursor-pointer text-left pt-1"
+          >
             Manage media
           </Link>
         </div>
@@ -296,7 +315,7 @@ export function ProductInformation({ ctl, onImproveWithAi, aiPanel, aiOpen }: Pr
       </div>
 
       <div className="flex flex-col gap-4 w-full pt-4 border-t border-[#EAEAEA]">
-        <div className="flex flex-row justify-between items-center w-full">
+        <div id="section-additional-attributes" className="flex flex-row justify-between items-center w-full scroll-mt-20">
           <button
             type="button"
             aria-expanded={open}

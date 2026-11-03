@@ -24,7 +24,15 @@ vi.mock("@/api/productEdit.api", () => ({ productEditApi: api }));
 const brandsApi = vi.hoisted(() => ({ brands: vi.fn() }));
 vi.mock("@/api/productCreation.api", () => ({ productCreationApi: brandsApi }));
 // product images sit behind the bearer token: a missing image shows the neutral box
-vi.mock("@/api/productDetail.api", () => ({ productDetailApi: { imageBlob: vi.fn().mockRejectedValue(new Error("no image")) } }));
+vi.mock("@/api/productDetail.api", () => ({
+  productDetailApi: {
+    imageBlob: vi.fn().mockRejectedValue(new Error("no image")),
+    images: vi.fn().mockResolvedValue([]),
+    updateDocument: vi.fn().mockResolvedValue({}),
+    deleteDocument: vi.fn().mockResolvedValue({}),
+    uploadImage: vi.fn().mockResolvedValue({}),
+  },
+}));
 
 import EditProductPage from "./EditProductPage";
 
@@ -317,7 +325,8 @@ describe("EditProductPage", () => {
     const nav = screen.getByRole("navigation", { name: "Product" });
     expect(within(nav).getByRole("link", { name: /Variants/ })).toHaveAttribute("href", `/products/${ID}/variants`);
     expect(within(nav).getByRole("link", { name: /Listings/ })).toHaveAttribute("href", `/listings?productId=${ID}`);
-    expect(within(nav).getByRole("link", { name: /Media/ })).toHaveAttribute("href", `/products/${ID}?tab=media`);
+    expect(within(nav).getByRole("link", { name: /Media/ })).toHaveAttribute("href", `/products/${ID}/edit?tab=media`);
+    expect(within(nav).getByRole("link", { name: /Details/ })).toHaveAttribute("href", `/products/${ID}/edit?tab=details`);
 
     expect(screen.getByText("92% complete")).toBeInTheDocument();
     expect(screen.getByText("1 marketplace listing needs content review.")).toBeInTheDocument();
@@ -836,6 +845,51 @@ describe("EditProductPage", () => {
     expect(await screen.findByRole("heading", { name: "Could not load this product" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Try again" }));
     expect(await screen.findByLabelText("Product name")).toBeInTheDocument();
+  });
+
+  it("switches to the in-page media tab without navigating away or losing dirty edits", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    const titleInput = await screen.findByLabelText("Product name");
+
+    // Make an edit
+    await user.clear(titleInput);
+    await user.type(titleInput, "My In-Progress Product Name");
+    expect(screen.getAllByText("Unsaved changes")).toHaveLength(2);
+
+    // Switch to Media tab via sidebar
+    const nav = screen.getByRole("navigation", { name: "Product" });
+    const mediaLink = within(nav).getByRole("link", { name: /Media/ });
+    await user.click(mediaLink);
+
+    // Media tab is displayed inline, breadcrumb updated
+    expect(await screen.findByRole("heading", { name: "Product media" })).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "Breadcrumb" })).toHaveTextContent("Products/Premium Travel Bag/Media");
+    expect(screen.getAllByText("Unsaved changes")).toHaveLength(2);
+
+    // Switch back to Overview
+    const overviewLink = within(nav).getByRole("link", { name: /Overview/ });
+    await user.click(overviewLink);
+
+    // Form inputs and dirty state are preserved
+    expect(screen.getByLabelText("Product name")).toHaveValue("My In-Progress Product Name");
+    expect(screen.getAllByText("Unsaved changes")).toHaveLength(2);
+  });
+
+  it("switches to the in-page details tab, auto-opens additional attributes and preserves edits", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByLabelText("Product name");
+
+    const nav = screen.getByRole("navigation", { name: "Product" });
+    const detailsLink = within(nav).getByRole("link", { name: /Details/ });
+    await user.click(detailsLink);
+
+    // Breadcrumb updated
+    expect(screen.getByRole("navigation", { name: "Breadcrumb" })).toHaveTextContent("Products/Premium Travel Bag/Details");
+
+    // Additional attributes is auto-expanded
+    expect(await screen.findByLabelText("Material")).toBeInTheDocument();
   });
 });
 
