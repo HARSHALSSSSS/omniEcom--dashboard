@@ -3,6 +3,7 @@ import { Outlet } from "react-router-dom";
 import { refreshShell } from "@/lib/session";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
+import { MobileNavDrawer } from "./MobileNavDrawer";
 import { GlobalSearch } from "./GlobalSearch";
 import { NotificationsPanel } from "./NotificationsPanel";
 import { EmailVerificationBanner } from "./EmailVerificationBanner";
@@ -25,17 +26,12 @@ export default function AppShell() {
 
   return (
     <div className="flex flex-col md:flex-row h-screen w-full overflow-hidden bg-white">
-      {/* Mobile Topbar */}
-      <div className="md:hidden shrink-0">
-        <Topbar />
-      </div>
-
-      {/* Sidebar */}
+      {/* Desktop Sidebar (hidden on mobile) */}
       <Sidebar />
 
       {/* Main app column */}
       <div className="flex flex-1 flex-col overflow-hidden min-w-0">
-        <div className="hidden md:block shrink-0">
+        <div className="shrink-0">
           <Topbar />
         </div>
         <EmailVerificationBanner />
@@ -47,6 +43,9 @@ export default function AppShell() {
           </div>
         </main>
       </div>
+
+      {/* Mobile Slide-Out Navigation Drawer */}
+      <MobileNavDrawer />
 
       {/* ⌘K Global search dialog */}
       <GlobalSearch />

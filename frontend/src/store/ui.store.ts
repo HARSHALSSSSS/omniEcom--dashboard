@@ -15,6 +15,10 @@ interface UiStore {
   notificationsPanelOpen: boolean;
   setNotificationsPanelOpen: (open: boolean) => void;
   toggleNotificationsPanel: () => void;
+
+  mobileNavOpen: boolean;
+  setMobileNavOpen: (open: boolean) => void;
+  toggleMobileNav: () => void;
 }
 
 /**
@@ -38,4 +42,8 @@ export const useUiStore = create<UiStore>((set) => ({
   setNotificationsPanelOpen: (open) => set({ notificationsPanelOpen: open }),
   toggleNotificationsPanel: () =>
     set((s) => ({ notificationsPanelOpen: !s.notificationsPanelOpen })),
+
+  mobileNavOpen: false,
+  setMobileNavOpen: (open) => set({ mobileNavOpen: open }),
+  toggleMobileNav: () => set((s) => ({ mobileNavOpen: !s.mobileNavOpen })),
 }));

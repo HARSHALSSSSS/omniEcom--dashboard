@@ -1,6 +1,6 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Bell, Search, ChevronDown } from "lucide-react";
+import { Bell, Search, ChevronDown, Menu } from "lucide-react";
 import { useUiStore } from "@/store/ui.store";
 import { useWorkspaceStore } from "@/store/workspace.store";
 import { ROUTES } from "@/constants/routes";
@@ -9,7 +9,7 @@ import { prefetchRoute } from "@/app/routePrefetch";
 
 export const Topbar: React.FC = () => {
   const location = useLocation();
-  const { setGlobalSearchOpen } = useUiStore();
+  const { setGlobalSearchOpen, setMobileNavOpen } = useUiStore();
   const { user, shell } = useWorkspaceStore();
 
   const businessName = shell?.business.name ?? user?.businessName ?? "";
@@ -56,8 +56,16 @@ export const Topbar: React.FC = () => {
 
   return (
     <header className="flex h-14 md:h-[72px] items-center justify-between border-b border-[#EAEAEA] bg-white px-3 sm:px-6 lg:px-8 z-20 shrink-0 font-['Inter',sans-serif] gap-2">
-      {/* Left: Breadcrumbs */}
+      {/* Left: Hamburger (mobile) & Breadcrumbs */}
       <div className="flex items-center gap-1.5 sm:gap-3 text-[12px] leading-[17px] min-w-0 truncate">
+        <button
+          type="button"
+          onClick={() => setMobileNavOpen(true)}
+          className="flex h-9 w-9 items-center justify-center rounded-lg text-[#666666] hover:bg-neutral-100 hover:text-[#000000] md:hidden shrink-0 transition-colors -ml-1 sm:ml-0"
+          aria-label="Open navigation menu"
+        >
+          <Menu className="h-5 w-5 stroke-[1.75px]" />
+        </button>
 
         {isCreateProduct ? (
           <>
@@ -285,7 +293,7 @@ export const Topbar: React.FC = () => {
         <Link
           to={ROUTES.AI_ASSISTANT}
           style={{ background: "linear-gradient(98deg, #E9D5FF 0%, #DBEAFE 48%, #93C5FD 100%)" }}
-          className="flex h-7 items-center gap-1.5 text-[12px] font-medium text-[#111111] hover:opacity-90 transition-opacity px-2.5 rounded-full shadow-xs"
+          className="hidden sm:flex h-7 items-center gap-1.5 text-[12px] font-medium text-[#111111] hover:opacity-90 transition-opacity px-2.5 rounded-full shadow-xs"
           title="AI Assistant"
         >
           <span className="text-[11px] leading-none text-[#222222]">✦</span>
@@ -293,7 +301,7 @@ export const Topbar: React.FC = () => {
         </Link>
 
         {/* Business switcher */}
-        <div className="flex items-center gap-1 sm:gap-2 cursor-pointer hover:opacity-80 transition-opacity">
+        <div className="hidden md:flex items-center gap-1 sm:gap-2 cursor-pointer hover:opacity-80 transition-opacity">
           <span className="text-[12px] font-semibold text-[#000000] max-w-[70px] sm:max-w-[120px] lg:max-w-none truncate">
             {businessName}
           </span>

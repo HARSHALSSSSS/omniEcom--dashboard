@@ -70,4 +70,10 @@ describe("Topbar breadcrumb on a product", () => {
     const profileLink = screen.getByRole("link", { name: "Profile settings" });
     expect(profileLink).toHaveAttribute("href", "/settings/profile");
   });
+
+  it("renders the hamburger menu button to open mobile navigation", () => {
+    renderBar("/");
+    const menuBtn = screen.getByRole("button", { name: "Open navigation menu" });
+    expect(menuBtn).toBeInTheDocument();
+  });
 });
