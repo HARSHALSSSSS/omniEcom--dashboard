@@ -7,6 +7,7 @@ import { ChannelsTable } from "@/components/profitability/ChannelsTable";
 import { ProfitBanners } from "@/components/profitability/ProfitBanners";
 import { ProfitKpis } from "@/components/profitability/ProfitKpis";
 import { RangeControls } from "@/components/profitability/RangeControls";
+import { ProfitDateRangeDropdown } from "@/components/profitability/ProfitDateRangeDropdown";
 import { SpendFormDialog } from "@/components/profitability/SpendFormDialog";
 import { SpendImportDialog } from "@/components/profitability/SpendImportDialog";
 import { SpendPanel } from "@/components/profitability/SpendPanel";
@@ -71,7 +72,6 @@ export default function ProfitabilityPage() {
 
   const [selectedProduct, setSelectedProduct] = useState<ProductProfit | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [rangeDropdownOpen, setRangeDropdownOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
 
   const [formOpen, setFormOpen] = useState(false);
@@ -96,7 +96,6 @@ export default function ProfitabilityPage() {
       const shown = range ?? presetRange("30d", new Date().toISOString().slice(0, 10));
       update({ range: "custom", from: shown.from, to: shown.to });
     } else update({ range: next });
-    setRangeDropdownOpen(false);
   };
 
   const runDelete = (row: SpendRow) =>
@@ -148,52 +147,6 @@ export default function ProfitabilityPage() {
               <Download className="h-3.5 w-3.5" />
               <span>Export</span>
             </Button>
-
-            {/* Date range dropdown */}
-            <div className="relative">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setRangeDropdownOpen(!rangeDropdownOpen)}
-                className="h-9 sm:h-8 gap-1.5 text-xs font-medium border-border max-w-[230px] sm:max-w-none truncate"
-              >
-                <span className="truncate">Date range - {preset === "30d" ? "Last 30 days" : preset === "90d" ? "Last 90 days" : preset === "mtd" ? "This month" : preset === "last_month" ? "Last month" : preset === "ytd" ? "This year" : "Custom"}</span>
-                <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-              </Button>
-
-              {rangeDropdownOpen && (
-                <div className="absolute right-0 top-full mt-1 w-44 max-w-[calc(100vw-2rem)] rounded-md border border-border bg-card p-1 shadow-lg z-20 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => pickPreset("30d")}
-                    className="w-full text-left px-2.5 py-1.5 rounded hover:bg-muted font-medium"
-                  >
-                    Last 30 days
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => pickPreset("90d")}
-                    className="w-full text-left px-2.5 py-1.5 rounded hover:bg-muted font-medium"
-                  >
-                    Last 90 days
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => pickPreset("mtd")}
-                    className="w-full text-left px-2.5 py-1.5 rounded hover:bg-muted font-medium"
-                  >
-                    This month
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => pickPreset("custom")}
-                    className="w-full text-left px-2.5 py-1.5 rounded hover:bg-muted font-medium"
-                  >
-                    Custom range
-                  </button>
-                </div>
-              )}
-            </div>
 
             {/* More Menu */}
             <div className="relative">
@@ -294,46 +247,20 @@ export default function ProfitabilityPage() {
           </button>
         </div>
 
-        {/* Right Info & Period Selector */}
-        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 text-xs w-full md:w-auto">
-          <span className="text-muted-foreground shrink-0">{range ? `${rangeLabel(range)} · ${currency}` : "No dates chosen"}</span>
-          <span className="hidden sm:inline text-border">|</span>
-          <div className="flex flex-wrap items-center gap-1 sm:gap-2 font-medium">
-            <span className="text-muted-foreground">Period options:</span>
-            <button
-              type="button"
-              onClick={() => {
-                const today = new Date().toISOString().slice(0, 10);
-                const d = new Date();
-                d.setDate(d.getDate() - 6);
-                update({ range: "custom", from: d.toISOString().slice(0, 10), to: today });
-              }}
-              className="px-2 py-1 min-h-[32px] sm:min-h-0 rounded text-muted-foreground hover:text-foreground"
-            >
-              7 days
-            </button>
-            <button
-              type="button"
-              onClick={() => pickPreset("30d")}
-              className={`px-2 py-1 min-h-[32px] sm:min-h-0 rounded ${preset === "30d" ? "font-bold text-foreground bg-muted" : "text-muted-foreground hover:text-foreground"}`}
-            >
-              30 days
-            </button>
-            <button
-              type="button"
-              onClick={() => pickPreset("90d")}
-              className={`px-2 py-1 min-h-[32px] sm:min-h-0 rounded ${preset === "90d" ? "font-bold text-foreground bg-muted" : "text-muted-foreground hover:text-foreground"}`}
-            >
-              90 days
-            </button>
-            <button
-              type="button"
-              onClick={() => pickPreset("custom")}
-              className={`px-2 py-1 min-h-[32px] sm:min-h-0 rounded ${preset === "custom" ? "font-bold text-foreground bg-muted" : "text-muted-foreground hover:text-foreground"}`}
-            >
-              Custom
-            </button>
-          </div>
+        {/* Right Date Range Selector */}
+        <div className="flex items-center justify-start sm:justify-end gap-2 w-full md:w-auto">
+          <ProfitDateRangeDropdown
+            preset={preset}
+            range={range}
+            rangeError={rangeError}
+            customFrom={url.customFrom}
+            customTo={url.customTo}
+            currency={currency}
+            compare={compare}
+            onPreset={pickPreset}
+            onCustom={(patch) => update({ range: "custom", from: patch.from ?? url.customFrom, to: patch.to ?? url.customTo })}
+            onCompare={(on) => update({ compare: on ? null : "off" })}
+          />
         </div>
       </div>
 

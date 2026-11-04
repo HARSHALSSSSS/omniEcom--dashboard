@@ -40,6 +40,8 @@ export function filterParams(f: OrderFilters): Record<string, string> {
   if (f.fulfillment?.length) out["filter[fulfillmentStatus]"] = f.fulfillment.join(",");
   if (f.attention?.length) out["filter[attention]"] = f.attention.join(",");
   if (f.date) out["filter[date]"] = f.date;
+  if (f.placedFrom) out["filter[placedFrom]"] = f.placedFrom;
+  if (f.placedTo) out["filter[placedTo]"] = f.placedTo;
   return out;
 }
 

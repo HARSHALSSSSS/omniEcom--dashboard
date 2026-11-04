@@ -1,12 +1,10 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { ChevronDown, Search } from "lucide-react";
 import {
-  DATE_FILTERS,
   FULFILLMENT_FILTERS,
   ORDER_STATUSES,
   PAYMENT_FILTERS,
   type AttentionKey,
-  type DateFilter,
   type FulfillmentFilter,
   type MarketplaceRef,
   type OrderFilters as Filters,
@@ -18,7 +16,6 @@ import {
 } from "@/types/orders";
 import {
   ATTENTION_LABELS,
-  DATE_LABELS,
   FULFILLMENT_LABELS,
   PAYMENT_LABELS,
   SLA_FILTER_OPTIONS,
@@ -27,6 +24,7 @@ import {
   describeFilters,
 } from "./orderParams";
 import { OrderSavedViews } from "./OrderSavedViews";
+import { OrderDateDropdown } from "./OrderDateDropdown";
 
 const STATUS_NAME: Record<OrderStatus, string> = {
   new: "New",
@@ -85,7 +83,7 @@ interface OrderFiltersProps {
   onSla: (states: SlaState[]) => void;
   onPayment: (payment: PaymentFilter | null) => void;
   onFulfillment: (values: FulfillmentFilter[]) => void;
-  onDate: (date: DateFilter | null) => void;
+  onDate: (date: string | null | { date?: string | null; placedFrom?: string | null; placedTo?: string | null }) => void;
   onAttention: (keys: AttentionKey[]) => void;
   onSort: (sort: OrderSort) => void;
   onClear: () => void;
@@ -242,20 +240,12 @@ export function OrderFilters({
           ))}
         </FilterSelect>
 
-        <FilterSelect
-          label="Date"
-          ariaLabel="Date"
-          value={filters.date ?? ""}
-          valueText={filters.date ? DATE_LABELS[filters.date] : undefined}
-          onChange={(v) => onDate((v || null) as DateFilter | null)}
-        >
-          <option value="">Any date</option>
-          {DATE_FILTERS.map((d) => (
-            <option key={d} value={d}>
-              {DATE_LABELS[d]}
-            </option>
-          ))}
-        </FilterSelect>
+        <OrderDateDropdown
+          date={filters.date}
+          placedFrom={filters.placedFrom}
+          placedTo={filters.placedTo}
+          onChange={onDate}
+        />
 
         <FilterSelect
           label="Sort"

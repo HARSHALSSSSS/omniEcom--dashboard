@@ -198,7 +198,13 @@ export default function OrdersPage() {
             onSla={(states) => update({ sla: states.join(",") })}
             onPayment={(payment) => update({ payment })}
             onFulfillment={(values) => update({ fulfillment: values.join(",") })}
-            onDate={(date) => update({ date })}
+            onDate={(val) => {
+              if (typeof val === "string" || val === null) {
+                update({ date: val, placedFrom: null, placedTo: null });
+              } else {
+                update(val);
+              }
+            }}
             onAttention={(keys) => update({ chip: keys.join(",") })}
             onSort={(s) => update({ sort: s === "-placedAt" ? null : s })}
             onClear={clearFilters}

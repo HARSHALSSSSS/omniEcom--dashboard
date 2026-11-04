@@ -2,7 +2,6 @@ import { useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   ATTENTION_KEYS,
-  DATE_FILTERS,
   FULFILLMENT_FILTERS,
   ORDER_SORTS,
   ORDER_STATUSES,
@@ -122,6 +121,8 @@ const ALIASES = {
   fulfillment: ["fulfillment", "filter[fulfillmentStatus]"],
   chip: ["chip", "filter[attention]"],
   date: ["date", "filter[date]"],
+  placedFrom: ["placedFrom", "from", "filter[placedFrom]"],
+  placedTo: ["placedTo", "to", "filter[placedTo]"],
 } as const;
 type Key = keyof typeof ALIASES;
 
@@ -153,7 +154,9 @@ export function readUrlState(params: URLSearchParams): OrdersUrlState {
       payment: oneOf(read(params, "payment"), PAYMENT_FILTERS),
       fulfillment: listOf(read(params, "fulfillment"), FULFILLMENT_FILTERS),
       attention: listOf(read(params, "chip"), ATTENTION_KEYS),
-      date: oneOf(read(params, "date"), DATE_FILTERS),
+      date: read(params, "date") || undefined,
+      placedFrom: read(params, "placedFrom") || undefined,
+      placedTo: read(params, "placedTo") || undefined,
     },
     sort: oneOf(params.get("sort"), ORDER_SORTS) ?? "-placedAt",
     page: Number.isInteger(page) && page > 1 ? page : 1,
@@ -166,7 +169,7 @@ export const ledgerQueryOf = (s: OrdersUrlState): LedgerQuery => ({ ...s.filters
 
 /** true when something narrows the list beyond "all orders" */
 export const isFiltered = (f: OrderFilters): boolean =>
-  Boolean(f.q || f.tab || f.marketplace?.length || f.status?.length || f.slaState?.length || f.payment || f.fulfillment?.length || f.attention?.length || f.date);
+  Boolean(f.q || f.tab || f.marketplace?.length || f.status?.length || f.slaState?.length || f.payment || f.fulfillment?.length || f.attention?.length || f.date || f.placedFrom || f.placedTo);
 
 /** a short sentence for "Filtered by ..." (what the list is narrowed by, besides the tab and the search box) */
 export function describeFilters(f: OrderFilters, channelName: (code: string) => string): string[] {
@@ -176,7 +179,16 @@ export function describeFilters(f: OrderFilters, channelName: (code: string) => 
   if (f.slaState?.length) parts.push(`SLA ${f.slaState.map((s) => SLA_LABELS[s]).join(" + ").toLowerCase()}`);
   if (f.payment) parts.push(PAYMENT_LABELS[f.payment]);
   if (f.fulfillment?.length) parts.push(f.fulfillment.map((x) => FULFILLMENT_LABELS[x]).join(" + "));
-  if (f.date) parts.push(DATE_LABELS[f.date]);
+  if (f.date) parts.push(DATE_LABELS[f.date as DateFilter] ?? f.date);
+  if (f.placedFrom && f.placedTo) {
+    const fromStr = f.placedFrom.slice(0, 10);
+    const toStr = f.placedTo.slice(0, 10);
+    parts.push(fromStr === toStr ? fromStr : `${fromStr} to ${toStr}`);
+  } else if (f.placedFrom) {
+    parts.push(`From ${f.placedFrom.slice(0, 10)}`);
+  } else if (f.placedTo) {
+    parts.push(`Until ${f.placedTo.slice(0, 10)}`);
+  }
   if (f.attention?.length) parts.push(f.attention.map((a) => ATTENTION_LABELS[a]).join(" + "));
   if (f.q) parts.push(`"${f.q}"`);
   return parts;
@@ -193,6 +205,8 @@ export function viewFiltersOf(f: OrderFilters): Record<string, unknown> {
   if (f.fulfillment?.length) out.fulfillment = f.fulfillment;
   if (f.attention?.length) out.attention = f.attention;
   if (f.date) out.date = f.date;
+  if (f.placedFrom) out.placedFrom = f.placedFrom;
+  if (f.placedTo) out.placedTo = f.placedTo;
   return out;
 }
 
@@ -216,6 +230,8 @@ export function patchOfView(filters: Record<string, unknown>, sort: string | nul
     fulfillment: csv(filters.fulfillment),
     chip: csv(filters.attention),
     date: one(filters.date),
+    placedFrom: one(filters.placedFrom),
+    placedTo: one(filters.placedTo),
     attention: null,
     sort: sort && sort !== "-placedAt" ? sort : null,
   };
@@ -248,7 +264,7 @@ export function useOrdersUrlState() {
   );
 
   const clearFilters = useCallback(
-    () => update({ q: null, tab: null, marketplace: null, status: null, sla: null, payment: null, fulfillment: null, chip: null, date: null, attention: null }),
+    () => update({ q: null, tab: null, marketplace: null, status: null, sla: null, payment: null, fulfillment: null, chip: null, date: null, placedFrom: null, placedTo: null, attention: null }),
     [update],
   );
 

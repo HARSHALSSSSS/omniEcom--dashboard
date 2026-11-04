@@ -174,7 +174,9 @@ export interface OrderFilters {
   payment?: PaymentFilter;
   fulfillment?: FulfillmentFilter[];
   attention?: AttentionKey[];
-  date?: DateFilter;
+  date?: string;
+  placedFrom?: string;
+  placedTo?: string;
 }
 
 export interface LedgerQuery extends OrderFilters {
