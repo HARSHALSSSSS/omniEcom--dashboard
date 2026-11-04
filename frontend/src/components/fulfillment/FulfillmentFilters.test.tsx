@@ -24,7 +24,8 @@ const DEFAULT_STATE: FulfillmentUrlState = {
   hasException: undefined,
   exceptionStatus: "open",
   page: 1,
-  size: 25,
+  pageSize: 25,
+  drawerId: null,
 };
 
 describe("FulfillmentFilters", () => {
