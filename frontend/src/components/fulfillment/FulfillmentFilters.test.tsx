@@ -6,8 +6,8 @@ import type { FulfillmentUrlState } from "./fulfillmentParams";
 import type { CarrierOption, WarehouseOption } from "@/types/fulfillment";
 
 const MOCK_WAREHOUSES: WarehouseOption[] = [
-  { id: "wh-1", name: "Home Inventory" },
-  { id: "wh-2", name: "Mumbai Hub" },
+  { id: "wh-1", name: "Home Inventory", code: "WH-1" },
+  { id: "wh-2", name: "Mumbai Hub", code: "WH-2" },
 ];
 
 const MOCK_CARRIERS: CarrierOption[] = [
@@ -16,11 +16,11 @@ const MOCK_CARRIERS: CarrierOption[] = [
 ];
 
 const DEFAULT_STATE: FulfillmentUrlState = {
-  tab: "pick",
+  tab: "awaiting_pick",
   q: "",
-  warehouse: null,
-  carrier: null,
-  priority: null,
+  warehouse: undefined,
+  carrier: undefined,
+  priority: undefined,
   hasException: undefined,
   exceptionStatus: "open",
   page: 1,
