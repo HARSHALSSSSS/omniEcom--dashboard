@@ -22,7 +22,7 @@
     "@oms/storage": "workspace:*",
     "@oms/module-kit": "workspace:*",
     "@oms/runtime": "workspace:*",
-    "drizzle-orm": "^0.45.3"
+    "drizzle-orm": "^0.45.4"
   },
   "devDependencies": {
     "tsup": "^8.5.1"
